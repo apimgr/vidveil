@@ -3,30 +3,49 @@
 package cmd
 
 import (
+	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
+	"github.com/apimgr/vidveil/src/client/api"
 	"github.com/apimgr/vidveil/src/client/path"
+	"github.com/apimgr/vidveil/src/config"
 )
-
-// CLIUpdateBranchFile is the on-disk record of the user-selected update channel.
-const CLIUpdateBranchFile = "update-branch"
 
 // CLIUpdateValidBranches enumerates branches per AI.md PART 22.
 var CLIUpdateValidBranches = map[string]bool{
-	"stable": true,
-	"beta":   true,
-	"daily":  true,
+	"stable":      true,
+	"beta":        true,
+	"devel":       true,
+	"daily":       true,
+	"rolling":     true,
+	"dev":         true,
+	"development": true,
+}
+
+const cliUpdateRestartedEnv = "VIDVEIL_CLI_UPDATE_RESTARTED"
+
+const cliUpdateHTTPTimeout = 30 * time.Second
+
+func cliUpdateContext(parent context.Context) (context.Context, context.CancelFunc) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	return context.WithTimeout(parent, cliUpdateHTTPTimeout)
 }
 
 // CLIGitHubRelease mirrors the fields from the GitHub releases API used for self-update.
@@ -54,6 +73,7 @@ type CLIUpdateInfo struct {
 	DownloadURL     string
 	ChecksumURL     string
 	AssetName       string
+	Checksum        string
 }
 
 // RunCLIUpdateCommand handles --update [check|yes|branch <name>|--help] per AI.md PART 32.
@@ -90,12 +110,13 @@ func printCLIUpdateHelp() {
   %s --update              Check and perform in-place update with re-exec
   %s --update yes          Same as --update (default)
   %s --update check        Check for updates without installing
-  %s --update branch NAME  Set update branch (stable, beta, daily)
+  %s --update branch NAME  Set update branch (stable, beta, devel)
 
 Update Branches:
   stable (default)  Release builds (v*, *.*.*)
   beta              Pre-release builds (*-beta)
-  daily             Daily builds (YYYYMMDDHHMMSS)
+  devel             Rolling development builds
+  daily, rolling, dev, development  Aliases for devel
 `, BinaryName, BinaryName, BinaryName, BinaryName)
 }
 
@@ -150,17 +171,27 @@ func runCLIUpdateApply() error {
 
 	fmt.Println()
 	fmt.Println("Downloading update...")
-	tmpPath, err := downloadCLIBinary(info.DownloadURL)
+	log.Printf("event=cli.update_started version=%s", info.LatestVersion)
+	token := ""
+	if cliConfig != nil {
+		token = cliConfig.Server.Token
+	}
+	if envToken := getCLIAuthTokenFromEnv(); envToken != "" {
+		token = envToken
+	}
+	tmpPath, err := downloadCLIBinary(info.DownloadURL, token)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
-	defer os.Remove(tmpPath)
+	defer func() {
+		if err := removeCLIUpdateTemp(tmpPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: clean up update temporary file: %v\n", err)
+		}
+	}()
 
-	if info.ChecksumURL == "" {
-		return fmt.Errorf("release has no checksums.txt asset; refusing to install unverified binary")
-	}
 	fmt.Println("Verifying SHA-256 checksum...")
-	if err := verifyCLIChecksum(tmpPath, info.ChecksumURL, info.AssetName); err != nil {
+	if err := verifyCLIBinaryChecksum(tmpPath, info.Checksum); err != nil {
+		log.Printf("event=cli.update_checksum_invalid")
 		return fmt.Errorf("checksum verification failed: %w", err)
 	}
 
@@ -170,7 +201,7 @@ func runCLIUpdateApply() error {
 	}
 
 	if err := replaceCLIBinary(execPath, tmpPath); err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "permission") {
+		if isCLIBinaryPermissionError(err) {
 			fmt.Fprintf(os.Stderr, "you do not have permission to update %s; ask your admin or move the binary to a writable path\n", execPath)
 			return err
 		}
@@ -178,92 +209,217 @@ func runCLIUpdateApply() error {
 	}
 
 	fmt.Println("Update installed; re-executing...")
-	if execErr := syscall.Exec(execPath, os.Args, os.Environ()); execErr != nil {
-		fmt.Fprintf(os.Stderr, "re-exec failed; please rerun the command manually: %v\n", execErr)
-		return execErr
+	if err := restartCLI(execPath); err != nil {
+		fmt.Fprintf(os.Stderr, "re-exec failed; please rerun the command manually: %v\n", err)
+		return err
 	}
 	return nil
+}
+
+func isCLIBinaryPermissionError(err error) bool {
+	return os.IsPermission(err) || errors.Is(err, fs.ErrPermission)
+}
+
+// logCLIUpdateCompletionIfRestarted records completion in the newly started
+// process so Unix exec replacement and Windows child restart share one event.
+func logCLIUpdateCompletionIfRestarted() {
+	if os.Getenv(cliUpdateRestartedEnv) != "1" {
+		return
+	}
+	_ = os.Unsetenv(cliUpdateRestartedEnv)
+	log.Printf("event=cli.update_completed version=%s", Version)
 }
 
 func runCLIUpdateBranch(branch string) error {
-	branch = strings.TrimSpace(strings.ToLower(branch))
-	if !CLIUpdateValidBranches[branch] {
-		return fmt.Errorf("invalid branch: %q (valid: stable, beta, daily)", branch)
+	canonical, valid := config.NormalizeUpdateChannel(branch)
+	if strings.TrimSpace(branch) == "" || !valid {
+		return fmt.Errorf("invalid branch: %q (valid: stable, beta, devel)", branch)
 	}
-	if err := SetCLIUpdateBranch(branch); err != nil {
+	if err := SetCLIUpdateBranch(canonical); err != nil {
 		return err
 	}
-	fmt.Printf("Update branch set to: %s\n", branch)
+	fmt.Printf("Update branch set to: %s\n", canonical)
 	return nil
 }
 
-// SetCLIUpdateBranch persists the selected branch to the CLI config dir.
+// SetCLIUpdateBranch persists the selected channel in cli.yml.
 func SetCLIUpdateBranch(branch string) error {
-	configDir := path.ConfigDir()
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return fmt.Errorf("creating config directory: %w", err)
+	canonical, valid := config.NormalizeUpdateChannel(branch)
+	if !valid {
+		return fmt.Errorf("invalid update channel: %q", branch)
 	}
-	branchFile := filepath.Join(configDir, CLIUpdateBranchFile)
-	if err := os.WriteFile(branchFile, []byte(branch+"\n"), 0600); err != nil {
-		return fmt.Errorf("writing branch file: %w", err)
+	if cliConfig == nil {
+		if err := LoadCLIConfigFromFile(); err != nil {
+			return fmt.Errorf("loading CLI config: %w", err)
+		}
+	}
+	cliConfig.Update.Channel = canonical
+	if err := writeCLIConfigFile(*cliConfig, getCLIConfigFilePath()); err != nil {
+		return fmt.Errorf("saving update channel: %w", err)
 	}
 	return nil
 }
 
-// GetCLIUpdateBranch returns the persisted branch (defaulting to stable).
+// GetCLIUpdateBranch returns the configured update channel (defaulting to stable).
 func GetCLIUpdateBranch() string {
-	branchFile := filepath.Join(path.ConfigDir(), CLIUpdateBranchFile)
-	data, err := os.ReadFile(branchFile)
-	if err != nil {
+	if cliConfig == nil {
+		if err := LoadCLIConfigFromFile(); err != nil {
+			return "stable"
+		}
+	}
+	branch := strings.TrimSpace(cliConfig.Update.Channel)
+	canonical, valid := config.NormalizeUpdateChannel(branch)
+	if !valid {
 		return "stable"
 	}
-	branch := strings.TrimSpace(string(data))
-	if !CLIUpdateValidBranches[branch] {
-		return "stable"
-	}
-	return branch
+	return canonical
 }
 
-// CheckCLIUpdate fetches release metadata for the active branch and resolves the artifact URL.
+// CheckCLIUpdate reads release metadata from the configured server's autodiscover API.
 func CheckCLIUpdate() (*CLIUpdateInfo, error) {
 	branch := GetCLIUpdateBranch()
-
-	var release *CLIGitHubRelease
-	var err error
-	switch branch {
-	case "beta":
-		release, err = fetchLatestCLIBetaRelease()
-	case "daily":
-		release, err = fetchLatestCLIDailyRelease()
-	default:
-		release, err = fetchLatestCLIStableRelease()
+	client := apiClient
+	if client == nil {
+		serverAddress := ""
+		if cliConfig != nil {
+			serverAddress = cliConfig.Server.Address
+		}
+		if serverAddress == "" {
+			serverAddress = getCLIServerAddressFromEnv()
+		}
+		if serverAddress == "" {
+			return nil, fmt.Errorf("server is not configured; set --server or cli.yml server.primary")
+		}
+		token := ""
+		if cliConfig != nil {
+			token = cliConfig.Server.Token
+		}
+		if envToken := getCLIAuthTokenFromEnv(); envToken != "" {
+			token = envToken
+		}
+		client = api.NewAPIClient(serverAddress, token, 30, "v1")
 	}
+	discovery, err := client.AutodiscoverChannel(branch)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("discovering CLI update: %w", err)
 	}
-
+	platform := runtime.GOOS + "-" + runtime.GOARCH
+	versionInfo, ok := discovery.CLIVersions[platform]
+	if len(discovery.CLIVersions) == 0 {
+		currentVersion := strings.TrimPrefix(Version, "v")
+		baseURL := strings.TrimRight(client.GetBaseURL(), "/")
+		return &CLIUpdateInfo{
+			CurrentVersion:  currentVersion,
+			LatestVersion:   currentVersion,
+			UpdateAvailable: false,
+			ReleaseURL:      baseURL,
+		}, nil
+	}
+	if !ok || versionInfo.Version == "" {
+		return nil, fmt.Errorf("server has no CLI release for %s on channel %s", platform, branch)
+	}
 	currentVersion := strings.TrimPrefix(Version, "v")
-	latestVersion := strings.TrimPrefix(release.TagName, "v")
+	latestVersion := strings.TrimPrefix(versionInfo.Version, "v")
+	filename := BinaryName + "-" + platform
+	if runtime.GOOS == "windows" {
+		filename += ".exe"
+	}
+	baseURL := strings.TrimRight(client.GetBaseURL(), "/")
 	info := &CLIUpdateInfo{
 		CurrentVersion:  currentVersion,
 		LatestVersion:   latestVersion,
-		UpdateAvailable: latestVersion != currentVersion && compareCLIVersions(latestVersion, currentVersion) > 0,
-		ReleaseURL:      release.HTMLURL,
-	}
-
-	// Per AI.md PART 22 checksums come from the release's checksums.txt asset
-	// (lines "{sha256}  {filename}"), NOT a per-file .sha256 sidecar.
-	binaryAssetName := cliReleaseBinaryName()
-	info.AssetName = binaryAssetName
-	for _, asset := range release.Assets {
-		switch asset.Name {
-		case binaryAssetName:
-			info.DownloadURL = asset.BrowserDownloadURL
-		case "checksums.txt":
-			info.ChecksumURL = asset.BrowserDownloadURL
-		}
+		UpdateAvailable: isCLIUpdateNewer(branch, latestVersion, currentVersion),
+		ReleaseURL:      baseURL,
+		DownloadURL:     baseURL + "/cli/binaries/" + strings.TrimSuffix(filename, ".exe") + "?channel=" + branch,
+		AssetName:       filename,
+		Checksum:        strings.ToLower(versionInfo.SHA256),
 	}
 	return info, nil
+}
+
+// cliMinimumVersionError blocks normal CLI requests when a server requires a
+// newer client. An empty minimum means the server has not configured a floor.
+func cliMinimumVersionError(currentVersion, minimumVersion string) error {
+	minimumVersion = strings.TrimPrefix(strings.TrimSpace(minimumVersion), "v")
+	if minimumVersion == "" || compareCLIVersions(currentVersion, minimumVersion) >= 0 {
+		return nil
+	}
+	return fmt.Errorf("this CLI is too old; the server requires %s — run '%s --update yes' to upgrade", minimumVersion, BinaryName)
+}
+
+// shouldAutoUpdateCLI decides whether a newer version is installed silently.
+func shouldAutoUpdateCLI(updateAvailable, autoUpdateEnabled, interactive bool) bool {
+	return updateAvailable && autoUpdateEnabled && !interactive
+}
+
+// promptForCLIUpdate asks an interactive user whether to install an available
+// update before the requested CLI operation proceeds.
+func promptForCLIUpdate(reader io.Reader, writer io.Writer) (bool, error) {
+	if _, err := fmt.Fprintf(writer, "A CLI update is available. Install it now? [y/N] "); err != nil {
+		return false, err
+	}
+	answer, err := bufio.NewReader(reader).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return false, fmt.Errorf("reading update confirmation: %w", err)
+	}
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "y", "yes":
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+// checkCLIUpdateBeforeRequests checks the server's update policy before the
+// command makes any ordinary API requests. Autodiscover remains available to
+// clients below the configured minimum so they can upgrade.
+func checkCLIUpdateBeforeRequests(interactive bool) error {
+	if apiClient == nil || cliConfig == nil || strings.TrimSpace(cliConfig.Server.Address) == "" {
+		return nil
+	}
+	discovery, err := apiClient.AutodiscoverChannel(GetCLIUpdateBranch())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: CLI update check failed: %v\n", err)
+		return nil
+	}
+	if err := cliMinimumVersionError(Version, discovery.CLIMinVersion); err != nil {
+		log.Printf("event=cli.update_forced")
+		fmt.Fprintln(os.Stderr, err)
+		return err
+	}
+	platform := runtime.GOOS + "-" + runtime.GOARCH
+	versionInfo, ok := discovery.CLIVersions[platform]
+	if !ok || versionInfo.Version == "" {
+		return nil
+	}
+	currentVersion := strings.TrimPrefix(Version, "v")
+	latestVersion := strings.TrimPrefix(versionInfo.Version, "v")
+	if !isCLIUpdateNewer(GetCLIUpdateBranch(), latestVersion, currentVersion) {
+		return nil
+	}
+
+	install := shouldAutoUpdateCLI(true, cliConfig.Update.Auto, interactive)
+	if interactive {
+		install, err = promptForCLIUpdate(os.Stdin, os.Stderr)
+		if err != nil {
+			return err
+		}
+	}
+	if install {
+		return runCLIUpdateApply()
+	}
+	fmt.Fprintf(os.Stderr, "CLI update %s is available; run '%s --update yes' to install it\n", latestVersion, BinaryName)
+	return nil
+}
+
+// Daily builds use commit IDs as versions, which have no chronological order.
+// Any different published commit on the rolling devel channel is an update.
+func isCLIUpdateNewer(channel, latestVersion, currentVersion string) bool {
+	channel, _ = config.NormalizeUpdateChannel(channel)
+	if channel == "devel" {
+		return latestVersion != currentVersion
+	}
+	return compareCLIVersions(latestVersion, currentVersion) > 0
 }
 
 func cliReleaseBinaryName() string {
@@ -275,12 +431,25 @@ func cliReleaseBinaryName() string {
 }
 
 func fetchLatestCLIStableRelease() (*CLIGitHubRelease, error) {
+	ctx, cancel := cliUpdateContext(context.Background())
+	defer cancel()
+	return fetchLatestCLIStableReleaseContext(ctx)
+}
+
+func fetchLatestCLIStableReleaseContext(ctx context.Context) (*CLIGitHubRelease, error) {
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", path.GitHubOrg(), path.GitHubRepo())
-	resp, err := http.Get(apiURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating latest release request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetching latest release: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
@@ -292,12 +461,25 @@ func fetchLatestCLIStableRelease() (*CLIGitHubRelease, error) {
 }
 
 func fetchAllCLIReleases() ([]CLIGitHubRelease, error) {
+	ctx, cancel := cliUpdateContext(context.Background())
+	defer cancel()
+	return fetchAllCLIReleasesContext(ctx)
+}
+
+func fetchAllCLIReleasesContext(ctx context.Context) ([]CLIGitHubRelease, error) {
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=50", path.GitHubOrg(), path.GitHubRepo())
-	resp, err := http.Get(apiURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating release list request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetching releases: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
@@ -309,19 +491,19 @@ func fetchAllCLIReleases() ([]CLIGitHubRelease, error) {
 }
 
 // matchesCLIBranch implements cumulative update channels per AI.md PART 22:
-// stable matches every channel; beta = {stable, beta}; daily = {stable, beta,
-// daily}. Daily builds are 14-digit timestamps (YYYYMMDDHHMMSS) with no dots.
+// stable matches every channel; beta = {stable, beta}; devel = {stable, beta,
+// devel}.
 func matchesCLIBranch(r CLIGitHubRelease, branch string) bool {
 	if !r.Prerelease {
 		return true
 	}
 	isBeta := strings.HasSuffix(r.TagName, "-beta")
-	isDaily := len(r.TagName) == 14 && !strings.Contains(r.TagName, ".")
+	isDevel := r.TagName == "devel"
 	switch branch {
 	case "beta":
 		return isBeta
-	case "daily":
-		return isBeta || isDaily
+	case "devel":
+		return isBeta || isDevel
 	default:
 		return false
 	}
@@ -330,7 +512,13 @@ func matchesCLIBranch(r CLIGitHubRelease, branch string) bool {
 // fetchLatestCLIBetaRelease returns the newest of {stable, beta}. Releases are
 // returned newest-first, so the first match wins.
 func fetchLatestCLIBetaRelease() (*CLIGitHubRelease, error) {
-	releases, err := fetchAllCLIReleases()
+	ctx, cancel := cliUpdateContext(context.Background())
+	defer cancel()
+	return fetchLatestCLIBetaReleaseContext(ctx)
+}
+
+func fetchLatestCLIBetaReleaseContext(ctx context.Context) (*CLIGitHubRelease, error) {
+	releases, err := fetchAllCLIReleasesContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -339,65 +527,112 @@ func fetchLatestCLIBetaRelease() (*CLIGitHubRelease, error) {
 			return &releases[i], nil
 		}
 	}
-	return nil, fmt.Errorf("no beta releases found")
+	return nil, nil
 }
 
-// fetchLatestCLIDailyRelease returns the newest of {stable, beta, daily}.
+// fetchLatestCLIDevelRelease returns the newest of {stable, beta, devel}.
 // Releases are returned newest-first, so the first match wins.
-func fetchLatestCLIDailyRelease() (*CLIGitHubRelease, error) {
-	releases, err := fetchAllCLIReleases()
+func fetchLatestCLIDevelRelease() (*CLIGitHubRelease, error) {
+	ctx, cancel := cliUpdateContext(context.Background())
+	defer cancel()
+	return fetchLatestCLIDevelReleaseContext(ctx)
+}
+
+func fetchLatestCLIDevelReleaseContext(ctx context.Context) (*CLIGitHubRelease, error) {
+	releases, err := fetchAllCLIReleasesContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	for i := range releases {
-		if matchesCLIBranch(releases[i], "daily") {
+		if matchesCLIBranch(releases[i], "devel") {
 			return &releases[i], nil
 		}
 	}
-	return nil, fmt.Errorf("no daily releases found")
+	return nil, nil
 }
 
-func downloadCLIBinary(downloadURL string) (string, error) {
-	resp, err := http.Get(downloadURL)
+func downloadCLIBinary(downloadURL string, tokenValues ...string) (string, error) {
+	ctx, cancel := cliUpdateContext(context.Background())
+	defer cancel()
+	return downloadCLIBinaryContext(ctx, downloadURL, tokenValues...)
+}
+
+func downloadCLIBinaryContext(ctx context.Context, downloadURL string, tokenValues ...string) (string, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("creating download request: %w", err)
+	}
+	request.Header.Set("Accept", "application/octet-stream")
+	request.Header.Set("User-Agent", BinaryName+"/"+Version)
+	if len(tokenValues) > 0 && strings.TrimSpace(tokenValues[0]) != "" {
+		request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(tokenValues[0]))
+	}
+	resp, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return "", fmt.Errorf("downloading binary: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("download status %d", resp.StatusCode)
 	}
 
-	tmpDir := filepath.Join(os.TempDir(), path.GitHubOrg())
-	if err := os.MkdirAll(tmpDir, 0700); err != nil {
+	tmpBase := filepath.Join(os.TempDir(), path.GitHubOrg())
+	if err := os.MkdirAll(tmpBase, 0700); err != nil {
+		return "", fmt.Errorf("creating temp base dir: %w", err)
+	}
+	tmpDir, err := os.MkdirTemp(tmpBase, path.InternalName()+"-")
+	if err != nil {
 		return "", fmt.Errorf("creating temp dir: %w", err)
 	}
-	tmpFile, err := os.CreateTemp(tmpDir, BinaryName+".update.*")
+	tmpFile, err := os.CreateTemp(tmpDir, "update-*")
 	if err != nil {
+		if cleanupErr := os.Remove(tmpDir); cleanupErr != nil && !os.IsNotExist(cleanupErr) {
+			err = errors.Join(err, fmt.Errorf("remove temp directory: %w", cleanupErr))
+		}
 		return "", fmt.Errorf("creating temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
 	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpPath)
-		return "", fmt.Errorf("writing temp file: %w", err)
+		closeErr := tmpFile.Close()
+		return "", fmt.Errorf("writing temp file: %w", errors.Join(err, closeErr, removeCLIUpdateTemp(tmpPath)))
 	}
 	if err := tmpFile.Close(); err != nil {
-		os.Remove(tmpPath)
-		return "", fmt.Errorf("closing temp file: %w", err)
+		return "", fmt.Errorf("closing temp file: %w", errors.Join(err, removeCLIUpdateTemp(tmpPath)))
 	}
 	if err := os.Chmod(tmpPath, 0755); err != nil {
-		os.Remove(tmpPath)
-		return "", fmt.Errorf("chmod temp file: %w", err)
+		return "", fmt.Errorf("chmod temp file: %w", errors.Join(err, removeCLIUpdateTemp(tmpPath)))
 	}
 	return tmpPath, nil
 }
 
+// removeCLIUpdateTemp removes the downloaded update and its empty private dir.
+func removeCLIUpdateTemp(tmpPath string) error {
+	var cleanupErr error
+	if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+		cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove temporary file: %w", err))
+	}
+	if err := os.Remove(filepath.Dir(tmpPath)); err != nil && !os.IsNotExist(err) {
+		cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove temporary directory: %w", err))
+	}
+	return cleanupErr
+}
+
 func verifyCLIChecksum(binaryPath, checksumURL, assetName string) error {
-	resp, err := http.Get(checksumURL)
+	ctx, cancel := cliUpdateContext(context.Background())
+	defer cancel()
+	return verifyCLIChecksumContext(ctx, binaryPath, checksumURL, assetName)
+}
+
+func verifyCLIChecksumContext(ctx context.Context, binaryPath, checksumURL, assetName string) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating checksum request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return fmt.Errorf("downloading checksum: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("checksum download status %d", resp.StatusCode)
 	}
@@ -422,7 +657,7 @@ func verifyCLIChecksum(binaryPath, checksumURL, assetName string) error {
 	if err != nil {
 		return fmt.Errorf("opening downloaded binary: %w", err)
 	}
-	defer binaryFile.Close()
+	defer func() { _ = binaryFile.Close() }()
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, binaryFile); err != nil {
 		return fmt.Errorf("hashing downloaded binary: %w", err)
@@ -434,46 +669,91 @@ func verifyCLIChecksum(binaryPath, checksumURL, assetName string) error {
 	return nil
 }
 
-func replaceCLIBinary(execPath, newBinaryPath string) error {
-	info, err := os.Stat(execPath)
+func verifyCLIBinaryChecksum(binaryPath, expected string) error {
+	if len(expected) != sha256.Size*2 {
+		return fmt.Errorf("invalid expected SHA-256 checksum")
+	}
+	binaryFile, err := os.Open(binaryPath)
 	if err != nil {
-		return fmt.Errorf("stating current binary: %w", err)
+		return fmt.Errorf("opening downloaded binary: %w", err)
 	}
-	if runtime.GOOS == "windows" {
-		oldPath := execPath + ".old"
-		_ = os.Remove(oldPath)
-		if err := os.Rename(execPath, oldPath); err != nil {
-			return fmt.Errorf("renaming current binary: %w", err)
-		}
-		if err := os.Rename(newBinaryPath, execPath); err != nil {
-			_ = os.Rename(oldPath, execPath)
-			return fmt.Errorf("moving new binary: %w", err)
-		}
-		return os.Chmod(execPath, info.Mode())
+	defer func() { _ = binaryFile.Close() }()
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, binaryFile); err != nil {
+		return fmt.Errorf("hashing downloaded binary: %w", err)
 	}
-	if err := os.Rename(newBinaryPath, execPath); err != nil {
-		return fmt.Errorf("replacing binary: %w", err)
+	actual := hex.EncodeToString(hasher.Sum(nil))
+	if !strings.EqualFold(actual, expected) {
+		return fmt.Errorf("sha-256 mismatch (expected %s, got %s)", expected, actual)
 	}
-	return os.Chmod(execPath, info.Mode())
+	return nil
 }
 
 func compareCLIVersions(a, b string) int {
-	aParts := strings.Split(a, ".")
-	bParts := strings.Split(b, ".")
-	for i := 0; i < 3; i++ {
-		var aNum, bNum int
-		if i < len(aParts) {
-			fmt.Sscanf(aParts[i], "%d", &aNum)
-		}
-		if i < len(bParts) {
-			fmt.Sscanf(bParts[i], "%d", &bNum)
-		}
-		if aNum > bNum {
+	aNumbers, aPrerelease, aValid := parseCLIVersion(a)
+	bNumbers, bPrerelease, bValid := parseCLIVersion(b)
+	if aValid != bValid {
+		if aValid {
 			return 1
 		}
-		if aNum < bNum {
+		return -1
+	}
+	if !aValid {
+		if a == b {
+			return 0
+		}
+		return strings.Compare(a, b)
+	}
+	for index := range aNumbers {
+		if aNumbers[index] > bNumbers[index] {
+			return 1
+		}
+		if aNumbers[index] < bNumbers[index] {
 			return -1
 		}
 	}
-	return 0
+	if aPrerelease == bPrerelease {
+		return 0
+	}
+	if aPrerelease {
+		return -1
+	}
+	return 1
+}
+
+func parseCLIVersion(version string) ([3]int, bool, bool) {
+	var numbers [3]int
+	version = strings.TrimPrefix(strings.TrimSpace(version), "v")
+	if len(version) == 14 && allVersionDigits(version) {
+		return numbers, false, false
+	}
+	core, prerelease, _ := strings.Cut(version, "-")
+	core, _, _ = strings.Cut(core, "+")
+	parts := strings.Split(core, ".")
+	if len(parts) < 1 || len(parts) > 3 {
+		return numbers, false, false
+	}
+	for index, part := range parts {
+		if part == "" {
+			return numbers, false, false
+		}
+		parsed, err := strconv.Atoi(part)
+		if err != nil || parsed < 0 {
+			return numbers, false, false
+		}
+		numbers[index] = parsed
+	}
+	for index := len(parts); index < len(numbers); index++ {
+		numbers[index] = 0
+	}
+	return numbers, prerelease != "", true
+}
+
+func allVersionDigits(value string) bool {
+	for _, character := range value {
+		if character < '0' || character > '9' {
+			return false
+		}
+	}
+	return value != ""
 }

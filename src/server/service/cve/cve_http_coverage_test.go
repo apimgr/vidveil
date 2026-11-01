@@ -49,7 +49,9 @@ func newCVEServiceForTest(t *testing.T, appCfg *config.AppConfig) *CVEService {
 func TestDownloadCVEFeed_EmptyItems(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(minimalNVDJSON))
+		if _, err := w.Write([]byte(minimalNVDJSON)); err != nil {
+			t.Errorf("write test response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -63,7 +65,9 @@ func TestDownloadCVEFeed_EmptyItems(t *testing.T) {
 func TestDownloadCVEFeed_WithCVEItem(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(minimalNVDJSONWithItem))
+		if _, err := w.Write([]byte(minimalNVDJSONWithItem)); err != nil {
+			t.Errorf("write test response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -93,7 +97,9 @@ func TestDownloadCVEFeed_ServerError(t *testing.T) {
 func TestDownloadCVEFeed_BadJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("not-json"))
+		if _, err := w.Write([]byte("not-json")); err != nil {
+			t.Errorf("write test response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -118,7 +124,9 @@ func TestDownloadCVEFeed_InvalidURL(t *testing.T) {
 func TestUpdate_Enabled_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(minimalNVDJSON))
+		if _, err := w.Write([]byte(minimalNVDJSON)); err != nil {
+			t.Errorf("write test response: %v", err)
+		}
 	}))
 	defer srv.Close()
 

@@ -23,7 +23,6 @@ var embeddedTemplates embed.FS
 
 // Default templates per AI.md PART 17.
 // Only system/operator notification templates — no account-related emails.
-// VidVeil has no user accounts (PARTS 34-36 not implemented).
 var defaultTemplates = map[string]string{
 	"security_alert": `Subject: Security Alert - {app_name}
 ---
@@ -363,7 +362,7 @@ func (s *EmailService) getGlobalVars() map[string]string {
 		"i2p_url":               "",
 		"i2p_address":           "",
 		"notification_reply_to": s.appConfig.Server.Notifications.Email.ReplyTo,
-		"admin_email":           s.appConfig.Server.Admin.Email,
+		"admin_email":           s.appConfig.Server.Contact.Admin.Email,
 		"timestamp":             time.Now().Format(time.RFC3339),
 		"year":                  fmt.Sprintf("%d", time.Now().Year()),
 	}
@@ -446,12 +445,12 @@ func (s *EmailService) sendEmail(to, subject, body string) error {
 	// Build message. Sanitize every caller/config-derived header value here as
 	// the final defense, including SendRaw subjects that bypass applyVars.
 	var msg bytes.Buffer
-	msg.WriteString(fmt.Sprintf("From: %s\r\n", fromHeader))
-	msg.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeEmailHeader(to)))
+	_, _ = fmt.Fprintf(&msg, "From: %s\r\n", fromHeader)
+	_, _ = fmt.Fprintf(&msg, "To: %s\r\n", sanitizeEmailHeader(to))
 	if replyTo := strings.TrimSpace(s.appConfig.Server.Notifications.Email.ReplyTo); replyTo != "" {
-		msg.WriteString(fmt.Sprintf("Reply-To: %s\r\n", sanitizeEmailHeader(replyTo)))
+		_, _ = fmt.Fprintf(&msg, "Reply-To: %s\r\n", sanitizeEmailHeader(replyTo))
 	}
-	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", sanitizeEmailHeader(subject)))
+	_, _ = fmt.Fprintf(&msg, "Subject: %s\r\n", sanitizeEmailHeader(subject))
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
 	msg.WriteString("\r\n")
@@ -493,13 +492,13 @@ func (s *EmailService) sendTLS(addr, host string, auth smtp.Auth, from, to strin
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if auth != nil {
 		if err := client.Auth(auth); err != nil {
@@ -549,7 +548,7 @@ func buildSMTPAutodetectHosts(fqdn string) []string {
 		if udp, ok := conn.LocalAddr().(*net.UDPAddr); ok && !udp.IP.IsLoopback() && !udp.IP.IsPrivate() {
 			hosts = append(hosts, udp.IP.String())
 		}
-		conn.Close()
+		_ = conn.Close()
 	}
 	if fqdn != "" && fqdn != "localhost" {
 		hosts = append(hosts, "mail."+fqdn, "smtp."+fqdn)
@@ -602,10 +601,12 @@ func testSMTPConnection(host string, port int) bool {
 	if err != nil {
 		return false
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Set read/write deadline
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return false
+	}
 
 	// For port 465 (SMTPS), wrap in TLS first
 	if port == 465 {
@@ -625,7 +626,7 @@ func testSMTPConnection(host string, port int) bool {
 	if err != nil {
 		return false
 	}
-	defer client.Quit()
+	defer func() { _ = client.Quit() }()
 
 	// EHLO handshake - this is what the spec requires
 	if err := client.Hello("localhost"); err != nil {
@@ -654,7 +655,7 @@ func getGatewayIP() string {
 	if err != nil {
 		return ""
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	// Gateway is typically at .1 of the same subnet

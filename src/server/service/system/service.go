@@ -12,11 +12,18 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	appPath "github.com/apimgr/vidveil/src/path"
 )
 
 // frozenInternalName is {internal_name} per AI.md PART 2 — frozen forever and
 // used for every on-disk service identity, never the renamed binary name.
 const frozenInternalName = "vidveil"
+
+// ServiceUserName returns the frozen system-account identity used by the server.
+func ServiceUserName() string {
+	return frozenInternalName
+}
 
 // ServiceManager handles system service installation per AI.md PART 23
 type ServiceManager struct {
@@ -58,12 +65,22 @@ func newServiceManagerWithOrg(appName, projectOrg, internalName, binaryPath, con
 
 // Install installs the service per AI.md PART 23
 func (sm *ServiceManager) Install() error {
+	if !IsRunningAsRoot() {
+		switch runtime.GOOS {
+		case "linux":
+			return sm.installUserSystemd()
+		case "darwin":
+			return sm.installUserLaunchAgent()
+		default:
+			return fmt.Errorf("user service installation is unsupported on %s", runtime.GOOS)
+		}
+	}
 	switch runtime.GOOS {
 	case "linux":
 		return sm.installLinux()
 	case "darwin":
 		return sm.installDarwin()
-	case "freebsd", "openbsd", "netbsd":
+	case "freebsd":
 		return sm.installBSD()
 	case "windows":
 		return sm.installWindows()
@@ -72,8 +89,74 @@ func (sm *ServiceManager) Install() error {
 	}
 }
 
+func (sm *ServiceManager) installUserSystemd() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve user home directory: %w", err)
+	}
+	unitDir := filepath.Join(homeDir, ".config", "systemd", "user")
+	if err := os.MkdirAll(unitDir, 0755); err != nil {
+		return fmt.Errorf("create user systemd directory: %w", err)
+	}
+	unitPath := filepath.Join(unitDir, sm.internalName+".service")
+	unit := fmt.Sprintf(`[Unit]
+Description=%s service
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%s
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+`, sm.appName, sm.binaryPath)
+	if err := os.WriteFile(unitPath, []byte(unit), 0644); err != nil {
+		return fmt.Errorf("write user systemd unit: %w", err)
+	}
+	if err := exec.Command("systemctl", "--user", "daemon-reload").Run(); err != nil {
+		return fmt.Errorf("reload user systemd units: %w", err)
+	}
+	if err := exec.Command("systemctl", "--user", "enable", "--now", sm.internalName).Run(); err != nil {
+		return fmt.Errorf("enable and start user systemd service: %w", err)
+	}
+	return nil
+}
+
+func (sm *ServiceManager) installUserLaunchAgent() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve user home directory: %w", err)
+	}
+	agentDir := filepath.Join(homeDir, "Library", "LaunchAgents")
+	if err := os.MkdirAll(agentDir, 0755); err != nil {
+		return fmt.Errorf("create user LaunchAgents directory: %w", err)
+	}
+	plistPath := filepath.Join(agentDir, sm.plistName+".plist")
+	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>%s</string>
+<key>ProgramArguments</key><array><string>%s</string></array>
+<key>RunAtLoad</key><true/>
+<key>KeepAlive</key><true/>
+</dict></plist>
+`, sm.plistName, sm.binaryPath)
+	if err := os.WriteFile(plistPath, []byte(plist), 0644); err != nil {
+		return fmt.Errorf("write user launch agent: %w", err)
+	}
+	if err := exec.Command("launchctl", "load", plistPath).Run(); err != nil {
+		return fmt.Errorf("load user launch agent: %w", err)
+	}
+	return nil
+}
+
 // Uninstall removes the service
 func (sm *ServiceManager) Uninstall() error {
+	if !IsRunningAsRoot() {
+		return sm.uninstallUserService()
+	}
 	switch runtime.GOOS {
 	case "linux":
 		return sm.uninstallLinux()
@@ -86,6 +169,212 @@ func (sm *ServiceManager) Uninstall() error {
 	default:
 		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
+}
+
+func (sm *ServiceManager) uninstallUserService() error {
+	if err := confirmUninstall(); err != nil {
+		return err
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve user home directory: %w", err)
+	}
+	switch runtime.GOOS {
+	case "linux":
+		unitPath := filepath.Join(homeDir, ".config", "systemd", "user", sm.internalName+".service")
+		if err := exec.Command("systemctl", "--user", "disable", "--now", sm.internalName).Run(); err != nil {
+			return fmt.Errorf("stop and disable user service: %w", err)
+		}
+		if err := removeIfExists(unitPath); err != nil {
+			return err
+		}
+		if err := exec.Command("systemctl", "--user", "daemon-reload").Run(); err != nil {
+			return fmt.Errorf("reload user systemd units: %w", err)
+		}
+	case "darwin":
+		plistPath := filepath.Join(homeDir, "Library", "LaunchAgents", sm.plistName+".plist")
+		if err := exec.Command("launchctl", "unload", plistPath).Run(); err != nil {
+			return fmt.Errorf("unload user launch agent: %w", err)
+		}
+		if err := removeIfExists(plistPath); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("user service uninstall is unsupported on %s", runtime.GOOS)
+	}
+	return sm.removeProjectDataAndAccount(false)
+}
+
+func (sm *ServiceManager) removeProjectDataAndAccount(removeAccount bool) error {
+	paths := appPath.GetAppPaths(sm.configDir, sm.dataDir)
+	accountCreated := false
+	if removeAccount {
+		marker := filepath.Join(paths.Config, ".service-account-created")
+		contents, err := os.ReadFile(marker)
+		if err == nil {
+			accountCreated = strings.TrimSpace(string(contents)) == sm.user
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("read service-account ownership marker: %w", err)
+		}
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve home directory for safe cleanup: %w", err)
+	}
+	dirs := []string{paths.Config, paths.Data, paths.Cache, paths.Log, paths.Backup}
+	seen := make(map[string]struct{}, len(dirs))
+	for _, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		absolute, err := filepath.Abs(filepath.Clean(dir))
+		if err != nil {
+			return fmt.Errorf("resolve cleanup path %q: %w", dir, err)
+		}
+		if err := validateProjectRemovalPath(absolute, homeDir); err != nil {
+			return err
+		}
+		if _, exists := seen[absolute]; exists {
+			continue
+		}
+		seen[absolute] = struct{}{}
+	}
+	for dir := range seen {
+		if err := removeIfExists(dir); err != nil {
+			return err
+		}
+	}
+	if paths.PIDFile != "" {
+		pidPath, err := filepath.Abs(filepath.Clean(paths.PIDFile))
+		if err != nil {
+			return fmt.Errorf("resolve PID-file cleanup path: %w", err)
+		}
+		if err := validateProjectRemovalPath(pidPath, homeDir); err != nil {
+			return err
+		}
+		if info, err := os.Lstat(pidPath); err == nil && info.IsDir() {
+			return fmt.Errorf("refusing to remove PID path that is a directory: %s", pidPath)
+		} else if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("inspect PID file %q: %w", pidPath, err)
+		}
+		if err := removeIfExists(pidPath); err != nil {
+			return err
+		}
+	}
+	if !removeAccount || !accountCreated || runtime.GOOS == "windows" {
+		return nil
+	}
+	if _, err := user.Lookup(sm.user); err != nil {
+		if _, unknown := err.(user.UnknownUserError); unknown {
+			return nil
+		}
+		return fmt.Errorf("look up service user %q before removal: %w", sm.user, err)
+	}
+	switch runtime.GOOS {
+	case "linux":
+		if err := exec.Command("userdel", sm.user).Run(); err != nil {
+			return fmt.Errorf("remove service user %q: %w", sm.user, err)
+		}
+		if err := exec.Command("groupdel", sm.group).Run(); err != nil {
+			return fmt.Errorf("remove service group %q: %w", sm.group, err)
+		}
+	case "darwin":
+		if err := exec.Command("dscl", ".", "-delete", "/Users/"+sm.user).Run(); err != nil {
+			return fmt.Errorf("remove service user %q: %w", sm.user, err)
+		}
+		if err := exec.Command("dscl", ".", "-delete", "/Groups/"+sm.group).Run(); err != nil {
+			return fmt.Errorf("remove service group %q: %w", sm.group, err)
+		}
+	case "freebsd":
+		if err := exec.Command("pw", "userdel", "-n", sm.user).Run(); err != nil {
+			return fmt.Errorf("remove service user %q: %w", sm.user, err)
+		}
+		if err := exec.Command("pw", "groupdel", "-n", sm.group).Run(); err != nil {
+			return fmt.Errorf("remove service group %q: %w", sm.group, err)
+		}
+	}
+	return nil
+}
+
+func markServiceUserCreated(configDir, username string) error {
+	if configDir == "" {
+		return fmt.Errorf("cannot record service-account ownership without a config directory")
+	}
+	marker := filepath.Join(configDir, ".service-account-created")
+	file, err := os.OpenFile(marker, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
+		return fmt.Errorf("record service-account ownership: %w", err)
+	}
+	if _, err := file.WriteString(username + "\n"); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("write service-account ownership marker: %w", err)
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("sync service-account ownership marker: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close service-account ownership marker: %w", err)
+	}
+	if IsRunningAsRoot() {
+		if err := os.Chown(marker, 0, 0); err != nil {
+			return fmt.Errorf("protect service-account ownership marker: %w", err)
+		}
+		if err := os.Chmod(marker, 0400); err != nil {
+			return fmt.Errorf("set service-account ownership marker permissions: %w", err)
+		}
+	}
+	return nil
+}
+
+func validateProjectRemovalPath(target, homeDir string) error {
+	target = filepath.Clean(target)
+	volumeRoot := filepath.VolumeName(target) + string(os.PathSeparator)
+	if target == volumeRoot {
+		return fmt.Errorf("refusing to remove filesystem root: %s", target)
+	}
+	probe := target
+	for {
+		resolved, err := filepath.EvalSymlinks(probe)
+		if err == nil {
+			resolved, err = filepath.Abs(resolved)
+			if err != nil {
+				return fmt.Errorf("resolve cleanup path %q: %w", probe, err)
+			}
+			if filepath.Clean(resolved) != filepath.Clean(probe) {
+				return fmt.Errorf("refusing cleanup through symlinked path %q", probe)
+			}
+			break
+		}
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("inspect cleanup path %q: %w", probe, err)
+		}
+		parent := filepath.Dir(probe)
+		if parent == probe {
+			break
+		}
+		probe = parent
+	}
+	if homeDir != "" {
+		home, err := filepath.Abs(filepath.Clean(homeDir))
+		if err == nil {
+			if target == home {
+				return fmt.Errorf("refusing to remove home directory: %s", target)
+			}
+			rel, err := filepath.Rel(target, home)
+			if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+				return fmt.Errorf("refusing to remove a parent of the home directory: %s", target)
+			}
+		}
+	}
+	return nil
+}
+
+func removeIfExists(path string) error {
+	if err := os.RemoveAll(path); err != nil {
+		return fmt.Errorf("remove %q: %w", path, err)
+	}
+	return nil
 }
 
 // Start starts the service
@@ -113,7 +402,7 @@ func (sm *ServiceManager) Disable() error {
 	switch runtime.GOOS {
 	case "linux":
 		if sm.hasSystemd() {
-			return exec.Command("systemctl", "disable", sm.internalName).Run()
+			return exec.Command("systemctl", systemdCommandArgs(!IsRunningAsRoot(), "disable", sm.internalName)...).Run()
 		}
 		// OpenRC: remove the service from the default runlevel
 		if sm.hasOpenRC() {
@@ -136,7 +425,10 @@ func (sm *ServiceManager) Disable() error {
 	case "darwin":
 		// macOS: unload the plist (stops and prevents autostart)
 		// Per AI.md PART 24: plist path uses {plist_name}
-		plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.plistName)
+		plistPath, err := sm.launchdPlistPath()
+		if err != nil {
+			return err
+		}
 		return exec.Command("launchctl", "unload", "-w", plistPath).Run()
 	case "freebsd", "openbsd", "netbsd":
 		// BSD: set enable=NO in rc.conf
@@ -154,10 +446,13 @@ func (sm *ServiceManager) GetServiceStatus() (string, error) {
 	switch runtime.GOOS {
 	case "linux":
 		if sm.hasSystemd() {
-			out, err := exec.Command("systemctl", "status", sm.internalName).CombinedOutput()
+			out, err := exec.Command("systemctl", systemdCommandArgs(!IsRunningAsRoot(), "status", sm.internalName)...).CombinedOutput()
 			if err != nil {
 				if strings.Contains(string(out), "inactive") {
 					return "stopped", nil
+				}
+				if strings.Contains(string(out), "could not be found") || strings.Contains(string(out), "not loaded") {
+					return "unknown", nil
 				}
 				return "unknown", err
 			}
@@ -184,7 +479,7 @@ func (sm *ServiceManager) runServiceCommand(action string) error {
 	switch runtime.GOOS {
 	case "linux":
 		if sm.hasSystemd() {
-			return exec.Command("systemctl", action, sm.internalName).Run()
+			return exec.Command("systemctl", systemdCommandArgs(!IsRunningAsRoot(), action, sm.internalName)...).Run()
 		}
 		if sm.hasOpenRC() {
 			return exec.Command("rc-service", sm.internalName, action).Run()
@@ -195,14 +490,19 @@ func (sm *ServiceManager) runServiceCommand(action string) error {
 		return exec.Command("service", sm.internalName, action).Run()
 	case "darwin":
 		// Per AI.md PART 24: plist path uses {plist_name}
-		plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.plistName)
+		plistPath, err := sm.launchdPlistPath()
+		if err != nil {
+			return err
+		}
 		switch action {
 		case "start":
 			return exec.Command("launchctl", "load", plistPath).Run()
 		case "stop":
 			return exec.Command("launchctl", "unload", plistPath).Run()
 		case "restart":
-			exec.Command("launchctl", "unload", plistPath).Run()
+			if err := exec.Command("launchctl", "unload", plistPath).Run(); err != nil {
+				return fmt.Errorf("unload service before restart: %w", err)
+			}
 			return exec.Command("launchctl", "load", plistPath).Run()
 		}
 	case "freebsd", "openbsd", "netbsd":
@@ -214,11 +514,41 @@ func (sm *ServiceManager) runServiceCommand(action string) error {
 		case "stop":
 			return exec.Command("sc", "stop", sm.internalName).Run()
 		case "restart":
-			exec.Command("sc", "stop", sm.internalName).Run()
+			if err := exec.Command("sc", "stop", sm.internalName).Run(); err != nil {
+				return fmt.Errorf("stop service before restart: %w", err)
+			}
 			return exec.Command("sc", "start", sm.internalName).Run()
 		}
 	}
 	return fmt.Errorf("unsupported action: %s", action)
+}
+
+func systemdCommandArgs(userService bool, args ...string) []string {
+	if userService {
+		return append([]string{"--user"}, args...)
+	}
+	return args
+}
+
+func (sm *ServiceManager) launchdPlistPath() (string, error) {
+	if IsRunningAsRoot() {
+		return launchdPlistPath("", true, sm.plistName)
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home directory for user launch agent: %w", err)
+	}
+	return launchdPlistPath(homeDir, false, sm.plistName)
+}
+
+func launchdPlistPath(homeDir string, systemService bool, plistName string) (string, error) {
+	if systemService {
+		return filepath.Join("/Library/LaunchDaemons", plistName+".plist"), nil
+	}
+	if homeDir == "" {
+		return "", fmt.Errorf("home directory is required for a user launch agent")
+	}
+	return filepath.Join(homeDir, "Library", "LaunchAgents", plistName+".plist"), nil
 }
 
 // hasSystemd checks if systemd is available
@@ -294,19 +624,41 @@ func (sm *ServiceManager) installLinux() error {
 
 // createLinuxUser creates system user per AI.md PART 23
 func (sm *ServiceManager) createLinuxUser() error {
+	existingUser, lookupErr := user.Lookup(sm.user)
+	if lookupErr != nil {
+		if _, unknown := lookupErr.(user.UnknownUserError); !unknown {
+			return fmt.Errorf("look up service user %q: %w", sm.user, lookupErr)
+		}
+	}
 
-	// Check if user exists
-	_, err := exec.Command("id", sm.user).CombinedOutput()
-	// User already exists
-	if err == nil {
+	paths := appPath.GetAppPaths(sm.configDir, sm.dataDir)
+	dirs := []string{
+		paths.Config,
+		paths.Data,
+		paths.Cache,
+		paths.Log,
+		paths.Backup,
+		appPath.GetMaintenanceLockDir(paths.Data),
+	}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("create service directory %q: %w", dir, err)
+		}
+	}
+	if existingUser != nil {
 		return nil
 	}
 
 	// Find available UID in 200-899 range per AI.md PART 23
-	uid := sm.findAvailableUID(200, 899)
+	uid, err := findAvailableSystemID()
+	if err != nil {
+		return err
+	}
 
 	// groupadd --system --gid {id} {name} per AI.md PART 23
-	exec.Command("groupadd", "--system", "--gid", strconv.Itoa(uid), sm.group).Run()
+	if err := exec.Command("groupadd", "--system", "--gid", strconv.Itoa(uid), sm.group).Run(); err != nil {
+		return fmt.Errorf("failed to create group: %w", err)
+	}
 
 	// useradd: --system, numeric --gid, --uid, --home-dir, --shell, --comment
 	// per AI.md PART 23 (--gid must be numeric, not a group name)
@@ -323,18 +675,14 @@ func (sm *ServiceManager) createLinuxUser() error {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
 
-	// Create and set ownership of directories per PART 23
-	// All directories must exist for systemd's ReadWritePaths to work
-	// Per PART 24: paths use {project_org}/{internal_name}
-	dirs := []string{
-		fmt.Sprintf("/etc/%s/%s", sm.projectOrg, sm.internalName),
-		fmt.Sprintf("/var/lib/%s/%s", sm.projectOrg, sm.internalName),
-		fmt.Sprintf("/var/cache/%s/%s", sm.projectOrg, sm.internalName),
-		fmt.Sprintf("/var/log/%s/%s", sm.projectOrg, sm.internalName),
-	}
+	// Set directory ownership per PART 23 after creating the service account.
 	for _, dir := range dirs {
-		os.MkdirAll(dir, 0755)
-		exec.Command("chown", "-R", fmt.Sprintf("%s:%s", sm.user, sm.group), dir).Run()
+		if err := chownServiceTree(dir, uid, uid); err != nil {
+			return err
+		}
+	}
+	if err := markServiceUserCreated(sm.configDir, sm.user); err != nil {
+		return err
 	}
 
 	return nil
@@ -358,7 +706,45 @@ func (sm *ServiceManager) installSystemd() error {
 
 	// Per PART 23: NO User/Group - binary drops privileges after port binding
 	// Per PART 24: paths use {project_org}/{internal_name}
-	unit := fmt.Sprintf(`[Unit]
+	unit := sm.systemdUnit()
+
+	if err := os.WriteFile(unitPath, []byte(unit), 0644); err != nil {
+		return fmt.Errorf("failed to write systemd unit: %w", err)
+	}
+
+	// Reload systemd and enable service
+	if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
+		return fmt.Errorf("reload systemd units: %w", err)
+	}
+	if err := exec.Command("systemctl", "enable", sm.internalName).Run(); err != nil {
+		return fmt.Errorf("enable systemd service: %w", err)
+	}
+	if err := exec.Command("systemctl", "start", sm.internalName).Run(); err != nil {
+		return fmt.Errorf("start systemd service: %w", err)
+	}
+
+	fmt.Printf("Systemd service installed: %s\n", unitPath)
+	fmt.Printf("Start with: systemctl start %s\n", sm.internalName)
+	return nil
+}
+
+func (sm *ServiceManager) systemdUnit() string {
+	paths := appPath.GetAppPaths(sm.configDir, sm.dataDir)
+	readWritePaths := make([]string, 0, 6)
+	for _, dir := range []string{
+		paths.Config,
+		paths.Data,
+		paths.Cache,
+		paths.Log,
+		paths.Backup,
+		appPath.GetMaintenanceLockDir(paths.Data),
+	} {
+		if dir != "" {
+			readWritePaths = append(readWritePaths, "ReadWritePaths="+escapeSystemdPath(dir))
+		}
+	}
+
+	return fmt.Sprintf(`[Unit]
 Description=%s service
 Documentation=https://%s.github.io/%s
 After=network-online.target
@@ -371,35 +757,43 @@ Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
+RuntimeDirectory=%s
+RuntimeDirectoryMode=0755
 
 # Security hardening (binary drops privileges after port binding)
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-ReadWritePaths=/etc/%s/%s
-ReadWritePaths=/var/lib/%s/%s
-ReadWritePaths=/var/cache/%s/%s
-ReadWritePaths=/var/log/%s/%s
+%s
 
 [Install]
 WantedBy=multi-user.target
-`, sm.appName, sm.projectOrg, sm.appName, sm.binaryPath,
-		sm.projectOrg, sm.internalName,
-		sm.projectOrg, sm.internalName,
-		sm.projectOrg, sm.internalName,
-		sm.projectOrg, sm.internalName)
 
-	if err := os.WriteFile(unitPath, []byte(unit), 0644); err != nil {
-		return fmt.Errorf("failed to write systemd unit: %w", err)
+`, sm.appName, sm.projectOrg, sm.appName, sm.binaryPath, sm.projectOrg,
+		strings.Join(readWritePaths, "\n"))
+}
+
+func escapeSystemdPath(path string) string {
+	var escaped strings.Builder
+	for _, char := range path {
+		switch char {
+		case '%':
+			escaped.WriteString("%%")
+		case '\\':
+			escaped.WriteString("\\\\")
+		case ' ':
+			escaped.WriteString("\\x20")
+		case '\t':
+			escaped.WriteString("\\x09")
+		case '\n':
+			escaped.WriteString("\\x0a")
+		case '\r':
+			escaped.WriteString("\\x0d")
+		default:
+			escaped.WriteRune(char)
+		}
 	}
-
-	// Reload systemd and enable service
-	exec.Command("systemctl", "daemon-reload").Run()
-	exec.Command("systemctl", "enable", sm.internalName).Run()
-
-	fmt.Printf("Systemd service installed: %s\n", unitPath)
-	fmt.Printf("Start with: systemctl start %s\n", sm.internalName)
-	return nil
+	return escaped.String()
 }
 
 // installRunit installs runit service per AI.md PART 24
@@ -407,7 +801,9 @@ WantedBy=multi-user.target
 func (sm *ServiceManager) installRunit() error {
 	// Per PART 24: service name uses {internal_name}
 	serviceDir := fmt.Sprintf("/etc/sv/%s", sm.internalName)
-	os.MkdirAll(serviceDir, 0755)
+	if err := os.MkdirAll(serviceDir, 0755); err != nil {
+		return fmt.Errorf("create runit service directory: %w", err)
+	}
 
 	// Per PART 23: binary handles privilege dropping; PART 24: simple run script
 	runScript := fmt.Sprintf(`#!/bin/sh
@@ -422,7 +818,9 @@ exec %s 2>&1
 	// Create log directory and script per PART 24
 	// Per PART 24: log path uses {project_org}/{internal_name}
 	logDir := filepath.Join(serviceDir, "log")
-	os.MkdirAll(logDir, 0755)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("create runit log directory: %w", err)
+	}
 
 	logScript := fmt.Sprintf(`#!/bin/sh
 exec svlogd -tt /var/log/%s/%s
@@ -432,7 +830,12 @@ exec svlogd -tt /var/log/%s/%s
 	}
 
 	// Enable service
-	exec.Command("ln", "-sf", serviceDir, fmt.Sprintf("/var/service/%s", sm.internalName)).Run()
+	if err := exec.Command("ln", "-sf", serviceDir, fmt.Sprintf("/var/service/%s", sm.internalName)).Run(); err != nil {
+		return fmt.Errorf("enable runit service: %w", err)
+	}
+	if err := exec.Command("sv", "start", sm.internalName).Run(); err != nil {
+		return fmt.Errorf("start runit service: %w", err)
+	}
 
 	fmt.Printf("Runit service installed: %s\n", serviceDir)
 	fmt.Printf("Start with: sv start %s\n", sm.internalName)
@@ -491,7 +894,12 @@ start_pre() {
 	}
 
 	// Enable at default runlevel (idempotent — rc-update is fine on re-run).
-	exec.Command("rc-update", "add", sm.internalName, "default").Run()
+	if err := exec.Command("rc-update", "add", sm.internalName, "default").Run(); err != nil {
+		return fmt.Errorf("enable OpenRC service: %w", err)
+	}
+	if err := exec.Command("rc-service", sm.internalName, "start").Run(); err != nil {
+		return fmt.Errorf("start OpenRC service: %w", err)
+	}
 
 	fmt.Printf("OpenRC service installed: %s\n", scriptPath)
 	fmt.Printf("Start with: rc-service %s start\n", sm.internalName)
@@ -577,10 +985,21 @@ exit 0
 	// Register with the host's runlevel manager. Try Debian's update-rc.d
 	// first, fall back to RHEL's chkconfig if present.
 	if _, err := exec.LookPath("update-rc.d"); err == nil {
-		exec.Command("update-rc.d", sm.internalName, "defaults").Run()
+		if err := exec.Command("update-rc.d", sm.internalName, "defaults").Run(); err != nil {
+			return fmt.Errorf("enable SysVinit service: %w", err)
+		}
 	} else if _, err := exec.LookPath("chkconfig"); err == nil {
-		exec.Command("chkconfig", "--add", sm.internalName).Run()
-		exec.Command("chkconfig", sm.internalName, "on").Run()
+		if err := exec.Command("chkconfig", "--add", sm.internalName).Run(); err != nil {
+			return fmt.Errorf("register SysVinit service: %w", err)
+		}
+		if err := exec.Command("chkconfig", sm.internalName, "on").Run(); err != nil {
+			return fmt.Errorf("enable SysVinit service: %w", err)
+		}
+	} else {
+		return fmt.Errorf("no supported SysVinit enable command found")
+	}
+	if err := exec.Command(scriptPath, "start").Run(); err != nil {
+		return fmt.Errorf("start SysVinit service: %w", err)
 	}
 
 	fmt.Printf("SysVinit service installed: %s\n", scriptPath)
@@ -622,6 +1041,9 @@ func (sm *ServiceManager) installDarwin() error {
 	if err := os.WriteFile(plistPath, []byte(plist), 0644); err != nil {
 		return fmt.Errorf("failed to write plist: %w", err)
 	}
+	if err := exec.Command("launchctl", "load", plistPath).Run(); err != nil {
+		return fmt.Errorf("load launchd service: %w", err)
+	}
 
 	fmt.Printf("LaunchDaemon installed: %s\n", plistPath)
 	fmt.Printf("Start with: sudo launchctl load %s\n", plistPath)
@@ -644,7 +1066,10 @@ func (sm *ServiceManager) createDarwinUser() error {
 		return err
 	}
 
-	return createMacOSServiceUser(sm.user, id, sm.dataDir)
+	if err := createMacOSServiceUser(sm.user, id, sm.dataDir); err != nil {
+		return err
+	}
+	return markServiceUserCreated(sm.configDir, sm.user)
 }
 
 // findAvailableMacOSSystemID returns a free UID/GID from the macOS safe range
@@ -725,6 +1150,12 @@ run_rc_command "$1"
 	if err := os.WriteFile(rcPath, []byte(rcScript), 0755); err != nil {
 		return fmt.Errorf("failed to write rc script: %w", err)
 	}
+	if err := exec.Command("sysrc", sm.internalName+"_enable=YES").Run(); err != nil {
+		return fmt.Errorf("enable rc.d service: %w", err)
+	}
+	if err := exec.Command("service", sm.internalName, "start").Run(); err != nil {
+		return fmt.Errorf("start rc.d service: %w", err)
+	}
 
 	fmt.Printf("RC script installed: %s\n", rcPath)
 	fmt.Printf("Enable with: sysrc %s_enable=YES\n", sm.internalName)
@@ -735,25 +1166,49 @@ run_rc_command "$1"
 // createBSDUser creates system user on BSD using pw per AI.md PART 23
 func (sm *ServiceManager) createBSDUser() error {
 	// Check if user exists
-	_, err := exec.Command("pw", "usershow", sm.user).CombinedOutput()
-	if err == nil {
+	if _, err := user.Lookup(sm.user); err == nil {
 		return nil
+	} else if _, unknown := err.(user.UnknownUserError); !unknown {
+		return fmt.Errorf("look up service user %q: %w", sm.user, err)
 	}
 
 	// Find available UID in 200-899 range per AI.md PART 23
-	uid := sm.findAvailableUID(200, 899)
+	uid, err := findAvailableSystemID()
+	if err != nil {
+		return err
+	}
+	paths := appPath.GetAppPaths(sm.configDir, sm.dataDir)
+	dirs := []string{paths.Config, paths.Data, paths.Cache, paths.Log}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("create service directory %q: %w", dir, err)
+		}
+	}
 
 	// Create group per AI.md PART 23
-	exec.Command("pw", "groupadd", sm.group, "-g", strconv.Itoa(uid)).Run()
+	if err := exec.Command("pw", "groupadd", sm.group, "-g", strconv.Itoa(uid)).Run(); err != nil {
+		return fmt.Errorf("failed to create BSD service group: %w", err)
+	}
 
 	// Create user using pw per AI.md PART 23
-	return exec.Command("pw", "useradd", sm.user,
+	if err := exec.Command("pw", "useradd", sm.user,
 		"-u", strconv.Itoa(uid),
 		"-g", sm.group,
 		"-d", sm.dataDir,
 		"-s", "/usr/sbin/nologin",
 		"-c", sm.description,
-	).Run()
+	).Run(); err != nil {
+		return fmt.Errorf("failed to create BSD service user: %w", err)
+	}
+	for _, dir := range dirs {
+		if err := chownServiceTree(dir, uid, uid); err != nil {
+			return err
+		}
+	}
+	if err := markServiceUserCreated(sm.configDir, sm.user); err != nil {
+		return err
+	}
+	return nil
 }
 
 // installWindows installs Windows service per AI.md PART 23
@@ -774,10 +1229,17 @@ func (sm *ServiceManager) installWindows() error {
 	}
 
 	// Set description
-	exec.Command("sc", "description", sm.internalName, sm.description).Run()
+	if err := exec.Command("sc", "description", sm.internalName, sm.description).Run(); err != nil {
+		return fmt.Errorf("set Windows service description: %w", err)
+	}
 
 	// Set failure recovery
-	exec.Command("sc", "failure", sm.internalName, "reset=", "86400", "actions=", "restart/5000/restart/10000/restart/30000").Run()
+	if err := exec.Command("sc", "failure", sm.internalName, "reset=", "86400", "actions=", "restart/5000/restart/10000/restart/30000").Run(); err != nil {
+		return fmt.Errorf("configure Windows service recovery: %w", err)
+	}
+	if err := exec.Command("sc", "start", sm.internalName).Run(); err != nil {
+		return fmt.Errorf("start Windows service: %w", err)
+	}
 
 	fmt.Printf("Windows service installed: %s\n", sm.internalName)
 	fmt.Printf("Start with: sc start %s\n", sm.internalName)
@@ -790,7 +1252,12 @@ func (sm *ServiceManager) installWindows() error {
 func confirmUninstall() error {
 	fmt.Print("This will delete ALL data, configs, and the system user. Continue? [y/N]: ")
 	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Scan()
+	if !scanner.Scan() {
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("read uninstall confirmation: %w", err)
+		}
+		return fmt.Errorf("uninstall aborted: no confirmation provided")
+	}
 	resp := strings.TrimSpace(scanner.Text())
 	if strings.ToLower(resp) != "y" {
 		return fmt.Errorf("uninstall aborted")
@@ -803,33 +1270,55 @@ func (sm *ServiceManager) uninstallLinux() error {
 	if err := confirmUninstall(); err != nil {
 		return err
 	}
-	sm.Stop()
+	if err := sm.Stop(); err != nil {
+		return fmt.Errorf("stop service before uninstall: %w", err)
+	}
 
 	// Per PART 24: service name uses {internal_name}
 	if sm.hasSystemd() {
-		exec.Command("systemctl", "disable", sm.internalName).Run()
-		os.Remove(fmt.Sprintf("/etc/systemd/system/%s.service", sm.internalName))
-		exec.Command("systemctl", "daemon-reload").Run()
+		if err := exec.Command("systemctl", "disable", sm.internalName).Run(); err != nil {
+			return fmt.Errorf("disable systemd service: %w", err)
+		}
+		if err := removeIfExists(fmt.Sprintf("/etc/systemd/system/%s.service", sm.internalName)); err != nil {
+			return err
+		}
+		if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
+			return fmt.Errorf("reload systemd after uninstall: %w", err)
+		}
 	}
 	if sm.hasOpenRC() {
-		exec.Command("rc-update", "del", sm.internalName, "default").Run()
-		os.Remove(fmt.Sprintf("/etc/init.d/%s", sm.internalName))
+		if err := exec.Command("rc-update", "del", sm.internalName, "default").Run(); err != nil {
+			return fmt.Errorf("disable OpenRC service: %w", err)
+		}
+		if err := removeIfExists(fmt.Sprintf("/etc/init.d/%s", sm.internalName)); err != nil {
+			return err
+		}
 	}
 	if sm.hasSysVInit() {
 		if _, err := exec.LookPath("update-rc.d"); err == nil {
-			exec.Command("update-rc.d", "-f", sm.internalName, "remove").Run()
+			if err := exec.Command("update-rc.d", "-f", sm.internalName, "remove").Run(); err != nil {
+				return fmt.Errorf("disable SysVinit service: %w", err)
+			}
 		} else if _, err := exec.LookPath("chkconfig"); err == nil {
-			exec.Command("chkconfig", "--del", sm.internalName).Run()
+			if err := exec.Command("chkconfig", "--del", sm.internalName).Run(); err != nil {
+				return fmt.Errorf("disable SysVinit service: %w", err)
+			}
+		} else {
+			return fmt.Errorf("no supported SysVinit disable command found")
 		}
-		os.Remove(fmt.Sprintf("/etc/init.d/%s", sm.internalName))
+		if err := removeIfExists(fmt.Sprintf("/etc/init.d/%s", sm.internalName)); err != nil {
+			return err
+		}
 	}
 	if sm.hasRunit() {
-		os.Remove(fmt.Sprintf("/var/service/%s", sm.internalName))
-		os.RemoveAll(fmt.Sprintf("/etc/sv/%s", sm.internalName))
+		if err := removeIfExists(fmt.Sprintf("/var/service/%s", sm.internalName)); err != nil {
+			return err
+		}
+		if err := removeIfExists(fmt.Sprintf("/etc/sv/%s", sm.internalName)); err != nil {
+			return err
+		}
 	}
-
-	fmt.Printf("Service %s uninstalled\n", sm.internalName)
-	return nil
+	return sm.removeProjectDataAndAccount(true)
 }
 
 // uninstallDarwin removes macOS service
@@ -839,10 +1328,13 @@ func (sm *ServiceManager) uninstallDarwin() error {
 	}
 	// Per PART 24: Path is /Library/LaunchDaemons/{plist_name}.plist
 	plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.plistName)
-	exec.Command("launchctl", "unload", plistPath).Run()
-	os.Remove(plistPath)
-	fmt.Printf("Service %s uninstalled\n", sm.internalName)
-	return nil
+	if err := exec.Command("launchctl", "unload", plistPath).Run(); err != nil {
+		return fmt.Errorf("unload launchd service: %w", err)
+	}
+	if err := removeIfExists(plistPath); err != nil {
+		return err
+	}
+	return sm.removeProjectDataAndAccount(true)
 }
 
 // uninstallBSD removes BSD service
@@ -850,11 +1342,14 @@ func (sm *ServiceManager) uninstallBSD() error {
 	if err := confirmUninstall(); err != nil {
 		return err
 	}
-	sm.Stop()
+	if err := sm.Stop(); err != nil {
+		return fmt.Errorf("stop service before uninstall: %w", err)
+	}
 	// Per PART 24: service name uses {internal_name}
-	os.Remove(fmt.Sprintf("/usr/local/etc/rc.d/%s", sm.internalName))
-	fmt.Printf("Service %s uninstalled\n", sm.internalName)
-	return nil
+	if err := removeIfExists(fmt.Sprintf("/usr/local/etc/rc.d/%s", sm.internalName)); err != nil {
+		return err
+	}
+	return sm.removeProjectDataAndAccount(true)
 }
 
 // uninstallWindows removes Windows service
@@ -862,10 +1357,13 @@ func (sm *ServiceManager) uninstallWindows() error {
 	if err := confirmUninstall(); err != nil {
 		return err
 	}
-	sm.Stop()
-	exec.Command("sc", "delete", sm.internalName).Run()
-	fmt.Printf("Service %s uninstalled\n", sm.internalName)
-	return nil
+	if err := sm.Stop(); err != nil {
+		return fmt.Errorf("stop service before uninstall: %w", err)
+	}
+	if err := exec.Command("sc", "delete", sm.internalName).Run(); err != nil {
+		return fmt.Errorf("delete Windows service: %w", err)
+	}
+	return sm.removeProjectDataAndAccount(true)
 }
 
 // DetectEscalation detects available privilege escalation methods per AI.md PART 23
@@ -894,7 +1392,9 @@ func IsRunningAsRoot() bool {
 		if err != nil {
 			return false
 		}
-		f.Close()
+		if err := f.Close(); err != nil {
+			return false
+		}
 		return true
 	default:
 		return os.Getuid() == 0
@@ -1059,80 +1559,124 @@ func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {
 		return 0, 0, nil
 	}
 
-	// Check if user already exists
-	output, err := exec.Command("id", "-u", appName).Output()
-	if err == nil {
-		// User exists, get UID
-		uidStr := strings.TrimSpace(string(output))
-		uid, _ = strconv.Atoi(uidStr)
-
-		// Get GID
-		output, err = exec.Command("id", "-g", appName).Output()
-		if err == nil {
-			gidStr := strings.TrimSpace(string(output))
-			gid, _ = strconv.Atoi(gidStr)
+	account, lookupErr := user.Lookup(appName)
+	createdAccount := false
+	if lookupErr == nil {
+		uid, err = strconv.Atoi(account.Uid)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid UID for service user %q: %w", appName, err)
 		}
-
-		// Ensure directories are owned by this user
-		for _, dir := range dirs {
-			if dir != "" {
-				os.MkdirAll(dir, 0755)
-				exec.Command("chown", "-R", fmt.Sprintf("%s:%s", appName, appName), dir).Run()
-			}
+		gid, err = strconv.Atoi(account.Gid)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid GID for service user %q: %w", appName, err)
 		}
-
-		return uid, gid, nil
+		if uid != gid {
+			return 0, 0, fmt.Errorf("service user %q has mismatched UID/GID %d/%d", appName, uid, gid)
+		}
+	} else {
+		if _, ok := lookupErr.(user.UnknownUserError); !ok {
+			return 0, 0, fmt.Errorf("look up service user %q: %w", appName, lookupErr)
+		}
+		uid, err = createStartupSystemUser(appName, dirs)
+		if err != nil {
+			return 0, 0, err
+		}
+		gid = uid
+		createdAccount = true
 	}
 
-	// User doesn't exist, create it
-	// Find available UID/GID in 200-899 range per AI.md PART 23
-	id := findAvailableID(200, 899)
+	for _, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return 0, 0, fmt.Errorf("create service directory %q: %w", dir, err)
+		}
+		if err := chownServiceTree(dir, uid, gid); err != nil {
+			return 0, 0, err
+		}
+	}
+	if createdAccount && len(dirs) > 0 {
+		if err := markServiceUserCreated(dirs[0], appName); err != nil {
+			return 0, 0, err
+		}
+	}
+	return uid, gid, nil
+}
 
-	// Determine home directory (use first data dir if available)
-	homeDir := "/nonexistent"
+func createStartupSystemUser(appName string, dirs []string) (int, error) {
+	if runtime.GOOS == "windows" {
+		return 0, nil
+	}
+	id, err := findAvailableSystemID()
+	if runtime.GOOS == "darwin" {
+		id, err = findAvailableMacOSSystemID()
+	}
+	if err != nil {
+		return 0, err
+	}
+	homeDir := "/var/lib/apimgr/" + appName
 	if len(dirs) > 0 && dirs[0] != "" {
 		homeDir = dirs[0]
 	}
-
-	// groupadd --system --gid {id} {name} per AI.md PART 23
-	// --gid is numeric; Alpine uses addgroup -g -S
-	if _, err := exec.LookPath("groupadd"); err == nil {
-		exec.Command("groupadd", "--system", "--gid", strconv.Itoa(id), appName).Run()
-		// useradd: --system, numeric --gid per AI.md PART 23
-		cmd := exec.Command("useradd",
-			"--system",
-			"--uid", strconv.Itoa(id),
-			"--gid", strconv.Itoa(id),
-			"--home-dir", homeDir,
-			"--shell", "/sbin/nologin",
-			"--comment", appName+" service account",
-			appName,
-		)
-		cmd.Run()
-	} else {
-		// Alpine Linux uses addgroup/adduser (busybox)
-		exec.Command("addgroup", "-g", strconv.Itoa(id), "-S", appName).Run()
-		cmd := exec.Command("adduser",
-			"-D",
-			"-S",
-			"-H",
-			"-u", strconv.Itoa(id),
-			"-G", appName,
-			"-s", "/sbin/nologin",
-			appName,
-		)
-		cmd.Run()
-	}
-
-	// Create directories and set ownership
 	for _, dir := range dirs {
 		if dir != "" {
-			os.MkdirAll(dir, 0755)
-			exec.Command("chown", "-R", fmt.Sprintf("%s:%s", appName, appName), dir).Run()
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return 0, fmt.Errorf("create service directory %q: %w", dir, err)
+			}
 		}
 	}
 
-	return id, id, nil
+	switch runtime.GOOS {
+	case "linux":
+		if _, err := exec.LookPath("groupadd"); err == nil {
+			if err := exec.Command("groupadd", "--system", "--gid", strconv.Itoa(id), appName).Run(); err != nil {
+				return 0, fmt.Errorf("create service group %q: %w", appName, err)
+			}
+			cmd := exec.Command("useradd", "--system", "--uid", strconv.Itoa(id), "--gid", strconv.Itoa(id), "--home-dir", homeDir, "--shell", "/sbin/nologin", "--comment", appName+" service account", appName)
+			if err := cmd.Run(); err != nil {
+				return 0, fmt.Errorf("create service user %q: %w", appName, err)
+			}
+		} else {
+			if err := exec.Command("addgroup", "-g", strconv.Itoa(id), "-S", appName).Run(); err != nil {
+				return 0, fmt.Errorf("create service group %q: %w", appName, err)
+			}
+			cmd := exec.Command("adduser", "-D", "-S", "-H", "-u", strconv.Itoa(id), "-G", appName, "-h", homeDir, "-s", "/sbin/nologin", "-g", appName+" service account", appName)
+			if err := cmd.Run(); err != nil {
+				return 0, fmt.Errorf("create service user %q: %w", appName, err)
+			}
+		}
+	case "darwin":
+		if err := createMacOSServiceUser(appName, id, homeDir); err != nil {
+			return 0, err
+		}
+	case "freebsd":
+		if err := exec.Command("pw", "groupadd", "-n", appName, "-g", strconv.Itoa(id)).Run(); err != nil {
+			return 0, fmt.Errorf("create service group %q: %w", appName, err)
+		}
+		cmd := exec.Command("pw", "useradd", "-n", appName, "-u", strconv.Itoa(id), "-g", strconv.Itoa(id), "-d", homeDir, "-s", "/usr/sbin/nologin", "-c", appName+" service account")
+		if err := cmd.Run(); err != nil {
+			return 0, fmt.Errorf("create service user %q: %w", appName, err)
+		}
+	default:
+		return 0, fmt.Errorf("automatic service user creation is unsupported on %s", runtime.GOOS)
+	}
+	return id, nil
+}
+
+func chownServiceTree(root string, uid, gid int) error {
+	return filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return fmt.Errorf("inspect service path %q: %w", path, walkErr)
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if err := os.Chown(path, uid, gid); err != nil {
+			return fmt.Errorf("set ownership of service path %q: %w", path, err)
+		}
+		return nil
+	})
 }
 
 // reservedSystemIDs is the set of IDs never to assign, per AI.md PART 23.
@@ -1160,9 +1704,13 @@ func findAvailableSystemID() (int, error) {
 		}
 		if _, err := user.LookupId(strconv.Itoa(id)); err == nil {
 			continue
+		} else if _, unknown := err.(user.UnknownUserIdError); !unknown {
+			return 0, fmt.Errorf("check UID %d availability: %w", id, err)
 		}
 		if _, err := user.LookupGroupId(strconv.Itoa(id)); err == nil {
 			continue
+		} else if _, unknown := err.(user.UnknownGroupIdError); !unknown {
+			return 0, fmt.Errorf("check GID %d availability: %w", id, err)
 		}
 		return id, nil
 	}

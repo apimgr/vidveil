@@ -5,17 +5,19 @@
 package system
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"syscall"
 
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"golang.org/x/sys/windows"
 )
 
 // DropPrivileges is a no-op on Windows per AI.md PART 23
 // Windows uses Virtual Service Account (NT SERVICE\vidveil) which is already minimal-privilege
-func DropPrivileges(username string) error {
+func DropPrivileges(username string, configDirs ...string) error {
 	// Windows: No privilege dropping needed
 	// Virtual Service Account (VSA) is already a minimal-privilege isolated account
 	return nil
@@ -93,26 +95,28 @@ func isInAdminGroup() bool {
 }
 
 // HandleEscalation prompts user and re-executes with elevated privileges per AI.md PART 23
-func HandleEscalation(action string) error {
+func HandleEscalation(action string, locales ...string) error {
+	locale := "en"
+	if len(locales) > 0 && strings.TrimSpace(locales[0]) != "" {
+		locale = locales[0]
+	}
 	if IsElevated() {
 		// Already elevated
 		return nil
 	}
 
 	if !canEscalate() {
-		return fmt.Errorf("%s requires administrator privileges\n\n"+
-			"You do not have admin access. Contact your system administrator.", action)
+		return errors.New(strings.ReplaceAll(i18n.Translate(locale, "cli.privilege.unavailable"), "{action}", action))
 	}
 
 	// User CAN escalate - ask and re-exec with elevated privileges
-	fmt.Printf("%s requires elevated privileges.\n", action)
-	fmt.Print("Escalate with UAC? [Y/n]: ")
+	fmt.Print(strings.ReplaceAll(i18n.Translate(locale, "cli.privilege.prompt_windows"), "{action}", action))
 
 	var response string
 	fmt.Scanln(&response)
 	response = strings.TrimSpace(strings.ToLower(response))
 	if response != "" && response != "y" && response != "yes" {
-		return fmt.Errorf("escalation declined")
+		return errors.New(i18n.Translate(locale, "cli.privilege.declined"))
 	}
 
 	// Re-execute with elevated privileges via UAC

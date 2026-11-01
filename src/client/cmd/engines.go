@@ -224,11 +224,19 @@ func OutputEnginesAsTable(engines []EngineInfo, showDetails bool) error {
 
 	// Header
 	if showDetails {
-		fmt.Fprintf(tableWriter, "NAME\tTIER\tSTATUS\tPREVIEW\tDOWNLOAD\n")
-		fmt.Fprintf(tableWriter, "----\t----\t------\t-------\t--------\n")
+		if _, err := fmt.Fprintf(tableWriter, "NAME\tTIER\tSTATUS\tPREVIEW\tDOWNLOAD\n"); err != nil {
+			return fmt.Errorf("write engines table header: %w", err)
+		}
+		if _, err := fmt.Fprintf(tableWriter, "----\t----\t------\t-------\t--------\n"); err != nil {
+			return fmt.Errorf("write engines table separator: %w", err)
+		}
 	} else {
-		fmt.Fprintf(tableWriter, "NAME\tSTATUS\n")
-		fmt.Fprintf(tableWriter, "----\t------\n")
+		if _, err := fmt.Fprintf(tableWriter, "NAME\tSTATUS\n"); err != nil {
+			return fmt.Errorf("write engines table header: %w", err)
+		}
+		if _, err := fmt.Fprintf(tableWriter, "----\t------\n"); err != nil {
+			return fmt.Errorf("write engines table separator: %w", err)
+		}
 	}
 
 	enabledCount := 0
@@ -248,15 +256,21 @@ func OutputEnginesAsTable(engines []EngineInfo, showDetails bool) error {
 			if engine.hasDownload() {
 				download = EngineDataYes
 			}
-			fmt.Fprintf(tableWriter, "%s\t%d\t%s\t%s\t%s\n",
-				engine.DisplayName, engine.Tier, status, preview, download)
+			if _, err := fmt.Fprintf(tableWriter, "%s\t%d\t%s\t%s\t%s\n",
+				engine.DisplayName, engine.Tier, status, preview, download); err != nil {
+				return fmt.Errorf("write engine row: %w", err)
+			}
 		} else {
-			fmt.Fprintf(tableWriter, "%s\t%s\n",
-				engine.DisplayName, status)
+			if _, err := fmt.Fprintf(tableWriter, "%s\t%s\n",
+				engine.DisplayName, status); err != nil {
+				return fmt.Errorf("write engine row: %w", err)
+			}
 		}
 	}
 
-	tableWriter.Flush()
+	if err := tableWriter.Flush(); err != nil {
+		return fmt.Errorf("flush engine table: %w", err)
+	}
 
 	fmt.Printf("\nTotal: %d engines (%d enabled, %d disabled)\n",
 		len(engines), enabledCount, len(engines)-enabledCount)
@@ -435,14 +449,22 @@ func OutputBangsAsPlain(bangs []BangInfo) error {
 func OutputBangsAsTable(bangs []BangInfo) error {
 	tableWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
-	fmt.Fprintf(tableWriter, "BANG\tENGINE\n")
-	fmt.Fprintf(tableWriter, "----\t------\n")
-
-	for _, bang := range bangs {
-		fmt.Fprintf(tableWriter, "%s\t%s\n", bang.Bang, bang.DisplayName)
+	if _, err := fmt.Fprintf(tableWriter, "BANG\tENGINE\n"); err != nil {
+		return fmt.Errorf("write bangs table header: %w", err)
+	}
+	if _, err := fmt.Fprintf(tableWriter, "----\t------\n"); err != nil {
+		return fmt.Errorf("write bangs table separator: %w", err)
 	}
 
-	tableWriter.Flush()
+	for _, bang := range bangs {
+		if _, err := fmt.Fprintf(tableWriter, "%s\t%s\n", bang.Bang, bang.DisplayName); err != nil {
+			return fmt.Errorf("write bangs table row: %w", err)
+		}
+	}
+
+	if err := tableWriter.Flush(); err != nil {
+		return fmt.Errorf("flush bangs table: %w", err)
+	}
 	fmt.Printf("\nTotal: %d bangs available\n", len(bangs))
 	fmt.Printf("\nUsage: %s search \"!<bang> <query>\"\n", BinaryName)
 

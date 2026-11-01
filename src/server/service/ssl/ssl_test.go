@@ -153,7 +153,7 @@ func TestGetHTTPHandlerReturnsNonNil(t *testing.T) {
 
 func TestGetHTTPHandlerImplementsHTTPHandler(t *testing.T) {
 	m := newTestSSLManager(t)
-	var _ http.Handler = m.GetHTTPHandler()
+	_ = m.GetHTTPHandler()
 }
 
 // ---- SetHTTP01Challenge / ClearHTTP01Challenge ----

@@ -28,7 +28,9 @@ func EnsureDir(path string, isRoot bool) error {
 	if err := os.WriteFile(testFile, []byte{}, 0600); err != nil {
 		return fmt.Errorf("directory %s is not writable: %w", path, err)
 	}
-	os.Remove(testFile)
+	if err := os.Remove(testFile); err != nil {
+		return fmt.Errorf("failed to remove directory write-test file: %w", err)
+	}
 
 	return nil
 }

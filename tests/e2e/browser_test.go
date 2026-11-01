@@ -3,10 +3,12 @@
 package e2e
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 )
@@ -44,15 +46,22 @@ func TestBrowserSearchEnhancedFlow(t *testing.T) {
 	var location string
 	err := chromedp.Run(tb.ctx,
 		chromedp.Navigate(s.browserBase+"/"),
-		chromedp.WaitVisible(`form input[name="q"]`, chromedp.ByQuery),
-		chromedp.SendKeys(`form input[name="q"]`, "browser probe", chromedp.ByQuery),
-		chromedp.Submit(`form input[name="q"]`, chromedp.ByQuery),
-		chromedp.WaitReady("body", chromedp.ByQuery),
-		chromedp.Sleep(time.Second),
-		chromedp.Location(&location),
+		chromedp.WaitVisible(`form.search-form--large input[name="q"]`, chromedp.ByQuery),
+		chromedp.SendKeys(`form.search-form--large input[name="q"]`, "browser probe", chromedp.ByQuery),
+		chromedp.Click(`form.search-form--large button[type="submit"]`, chromedp.ByQuery),
 	)
 	if err != nil {
 		t.Fatalf("browser search: %v", err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := chromedp.Run(tb.ctx, chromedp.Location(&location)); err != nil {
+			t.Fatalf("read browser location: %v", err)
+		}
+		if strings.Contains(location, "/search") {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 	if !strings.Contains(location, "/search") {
 		t.Errorf("search did not land on /search, got %s", location)
@@ -63,32 +72,53 @@ func TestBrowserSearchEnhancedFlow(t *testing.T) {
 func TestBrowserBangAutocomplete(t *testing.T) {
 	tb := newTab(t)
 	var status int64
+	var fetchError string
 	err := chromedp.Run(tb.ctx,
-		chromedp.Navigate(s.browserBase+"/bangs"),
-		chromedp.WaitReady("body", chromedp.ByQuery),
-		chromedp.Evaluate(`fetch('/bangs/autocomplete?q=y').then(r => r.status)`, &status,
+		chromedp.Navigate(s.browserBase+"/"),
+		chromedp.WaitVisible(`form.search-form--large input[name="q"]`, chromedp.ByQuery),
+		chromedp.Evaluate(`fetch('/api/v1/bangs/autocomplete?q=y').then(r => r.status).catch(e => { window.__autocompleteFetchError = e.name + ': ' + e.message; return 0; })`, &status,
 			func(p *runtime.EvaluateParams) *runtime.EvaluateParams { return p.WithAwaitPromise(true) }),
 	)
 	if err != nil {
 		t.Fatalf("bang autocomplete: %v", err)
 	}
 	if status != 200 {
-		t.Errorf("/bangs/autocomplete returned %d", status)
+		_ = chromedp.Run(tb.ctx, chromedp.Evaluate(`window.__autocompleteFetchError || ''`, &fetchError))
+		t.Errorf("/api/v1/bangs/autocomplete returned %d (%s)", status, fetchError)
 	}
-	assertNoConsoleErrors(t, tb, "/bangs")
+	assertNoConsoleErrors(t, tb, "/")
 }
 
 func TestBrowserPreferencesEnhancedFlow(t *testing.T) {
 	tb := newTab(t)
+	var cookie, stored, density, debug string
 	err := chromedp.Run(tb.ctx,
-		chromedp.Navigate(s.browserBase+"/preferences"),
+		chromedp.Navigate(s.browserBase+"/server/preferences"),
 		chromedp.WaitVisible("form", chromedp.ByQuery),
 		chromedp.Sleep(500*time.Millisecond),
+		chromedp.Evaluate(`JSON.stringify({form:!!document.getElementById('preferences-form'),managed:document.getElementById('preferences-form')?.dataset.managed,buttonForm:document.getElementById('preferences-save-btn')?.form?.id,grid:document.getElementById('grid-density')?.value,helper:typeof mirrorPreferencesToCookies})`, &debug),
+		chromedp.SetValue("#grid-density", "compact", chromedp.ByQuery),
+		chromedp.Click("#preferences-save-btn", chromedp.ByQuery),
+		chromedp.Sleep(250*time.Millisecond),
+		chromedp.Evaluate(`document.cookie`, &cookie),
+		chromedp.Evaluate(`localStorage.getItem('vidveil_prefs') || ''`, &stored),
+		chromedp.Navigate(s.browserBase+"/server/preferences"),
+		chromedp.WaitReady("body", chromedp.ByQuery),
+		chromedp.Evaluate(`document.getElementById('grid-density').value`, &density),
 	)
 	if err != nil {
 		t.Fatalf("preferences page: %v", err)
 	}
-	assertNoConsoleErrors(t, tb, "/preferences")
+	if !strings.Contains(cookie, "vidveil_pref_grid_density=compact") {
+		t.Errorf("preference save did not set the grid-density cookie: %q (page state %s)", cookie, debug)
+	}
+	if stored != "" {
+		t.Errorf("preferences remained load-bearing in localStorage: %q", stored)
+	}
+	if density != "compact" {
+		t.Errorf("server-rendered preference value = %q, want compact", density)
+	}
+	assertNoConsoleErrors(t, tb, "/server/preferences")
 }
 
 func TestBrowserFavoritesEnhancedFlow(t *testing.T) {
@@ -106,14 +136,22 @@ func TestBrowserFavoritesEnhancedFlow(t *testing.T) {
 
 func TestBrowserThemeTogglesComputedStyle(t *testing.T) {
 	tb := newTab(t)
+	host, err := url.Parse(s.browserBase)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var dark, light string
-	err := chromedp.Run(tb.ctx,
-		chromedp.Navigate(s.browserBase+"/?theme=dark"),
+	err = chromedp.Run(tb.ctx,
+		network.SetCookie("theme", "dark").WithDomain(host.Hostname()).WithPath("/"),
+		chromedp.Navigate(s.browserBase+"/"),
 		chromedp.WaitReady("body", chromedp.ByQuery),
-		chromedp.Evaluate(`getComputedStyle(document.body).backgroundColor`, &dark),
-		chromedp.Navigate(s.browserBase+"/?theme=light"),
+		chromedp.Sleep(250*time.Millisecond),
+		chromedp.Evaluate(`getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim()`, &dark),
+		network.SetCookie("theme", "light").WithDomain(host.Hostname()).WithPath("/"),
+		chromedp.Navigate(s.browserBase+"/"),
 		chromedp.WaitReady("body", chromedp.ByQuery),
-		chromedp.Evaluate(`getComputedStyle(document.body).backgroundColor`, &light),
+		chromedp.Sleep(250*time.Millisecond),
+		chromedp.Evaluate(`getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim()`, &light),
 	)
 	if err != nil {
 		t.Fatalf("theme toggle: %v", err)
@@ -125,21 +163,23 @@ func TestBrowserThemeTogglesComputedStyle(t *testing.T) {
 
 func TestBrowserResponsiveNoHorizontalScroll(t *testing.T) {
 	tb := newTab(t)
-	for _, path := range []string{"/", "/search?q=responsive", "/engines", "/preferences", "/server/about"} {
+	for _, path := range []string{"/", "/search?q=responsive", "/favorites", "/server/preferences", "/server/about"} {
 		var overflow bool
+		var overflowElements string
 		err := chromedp.Run(tb.ctx,
 			chromedp.EmulateViewport(375, 812),
 			chromedp.Navigate(s.browserBase+path),
 			chromedp.WaitReady("body", chromedp.ByQuery),
 			chromedp.Sleep(300*time.Millisecond),
 			chromedp.Evaluate(`document.documentElement.scrollWidth > document.documentElement.clientWidth + 1`, &overflow),
+			chromedp.Evaluate(`JSON.stringify(Array.from(document.querySelectorAll('body *')).map(e => { const r=e.getBoundingClientRect(); return {tag:e.tagName, className:typeof e.className==='string'?e.className:'', id:e.id, left:Math.round(r.left), right:Math.round(r.right), width:Math.round(r.width)}; }).filter(e => e.right > innerWidth + 1 || e.left < -1).slice(0,10))`, &overflowElements),
 		)
 		if err != nil {
 			t.Errorf("responsive check %s: %v", path, err)
 			continue
 		}
 		if overflow {
-			t.Errorf("%s scrolls horizontally at 375x812", path)
+			t.Errorf("%s scrolls horizontally at 375x812: %s", path, overflowElements)
 		}
 	}
 }

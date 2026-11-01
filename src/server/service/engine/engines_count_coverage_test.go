@@ -31,4 +31,11 @@ func TestEnginesToUseCount(t *testing.T) {
 	if got := m.EnginesToUseCount([]string{"alpha", "beta", "missing"}); got != 2 {
 		t.Errorf("mixed named filter: want 2, got %d", got)
 	}
+
+	if got := m.EnginesToUseCount([]string{"__none__"}); got != 0 {
+		t.Errorf("explicit empty filter: want 0 engines, got %d", got)
+	}
+	if unknown := m.UnknownEngineNames([]string{"__none__"}); len(unknown) != 0 {
+		t.Errorf("explicit empty filter should be valid, got unknown names %v", unknown)
+	}
 }

@@ -633,9 +633,10 @@ func TestSpellCorrect_Typo_ReturnsSuggestion(t *testing.T) {
 	m := newTestManager()
 	// "porfhub" is one edit away from "pornhub".
 	result := m.SpellCorrect("porfhub")
-	if result == "" {
+	switch result {
+	case "":
 		t.Log("SpellCorrect(porfhub) returned empty — could be no match found (acceptable)")
-	} else if result == "porfhub" {
+	case "porfhub":
 		t.Errorf("SpellCorrect returned unchanged input %q, want a correction", result)
 	}
 }

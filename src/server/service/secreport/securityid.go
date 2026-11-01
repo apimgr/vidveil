@@ -28,18 +28,13 @@ func GenerateSecurityID(installationSecret []byte, t time.Time) string {
 // AI.md PART 11 "prevents boundary failures for researchers who load the
 // security.txt at second 47:59:59".
 func ValidateSecurityID(installationSecret []byte, id string, t time.Time) bool {
-	if id == "" {
-		return false
-	}
 	current := windowIndex(t)
-	idBytes := []byte(id)
-	if len(idBytes) != 16 {
-		return false
-	}
-	currentID := []byte(computeSecurityID(installationSecret, current))
-	previousID := []byte(computeSecurityID(installationSecret, current-1))
-	return subtle.ConstantTimeCompare(idBytes, currentID) == 1 ||
-		subtle.ConstantTimeCompare(idBytes, previousID) == 1
+	idHash := sha256.Sum256([]byte(id))
+	currentIDHash := sha256.Sum256([]byte(computeSecurityID(installationSecret, current)))
+	previousIDHash := sha256.Sum256([]byte(computeSecurityID(installationSecret, current-1)))
+	valid := subtle.ConstantTimeCompare(idHash[:], currentIDHash[:])
+	valid |= subtle.ConstantTimeCompare(idHash[:], previousIDHash[:])
+	return valid == 1
 }
 
 func windowIndex(t time.Time) int64 {

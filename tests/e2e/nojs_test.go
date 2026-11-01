@@ -46,9 +46,9 @@ func TestNoJSSearchFormSubmits(t *testing.T) {
 	err := chromedp.Run(tb.ctx,
 		chromedp.Navigate(s.browserBase+"/"),
 		chromedp.WaitVisible(`form input[name="q"]`, chromedp.ByQuery),
-		chromedp.SendKeys(`form input[name="q"]`, "nojs probe", chromedp.ByQuery),
-		chromedp.Submit(`form input[name="q"]`, chromedp.ByQuery),
-		chromedp.WaitReady("body", chromedp.ByQuery),
+		chromedp.SetValue(`form.search-form--large input[name="q"]`, "nojs probe", chromedp.ByQuery),
+		chromedp.Click(`form.search-form--large button[type="submit"]`, chromedp.ByQuery),
+		chromedp.Sleep(500*time.Millisecond),
 		chromedp.Location(&url),
 		chromedp.OuterHTML("html", &body, chromedp.ByQuery),
 	)
@@ -66,7 +66,7 @@ func TestNoJSSearchFormSubmits(t *testing.T) {
 
 func TestNoJSNavigationLinksWork(t *testing.T) {
 	tb := noJSTab(t)
-	for _, path := range []string{"/engines", "/bangs", "/favorites", "/preferences", "/server/about", "/server/help"} {
+	for _, path := range []string{"/favorites", "/server/preferences", "/server/about", "/server/help", "/server/privacy"} {
 		var body string
 		err := chromedp.Run(tb.ctx,
 			chromedp.Navigate(s.browserBase+path),
@@ -88,12 +88,12 @@ func TestNoJSPreferencesFormPersists(t *testing.T) {
 	tb := noJSTab(t)
 	var body string
 	err := chromedp.Run(tb.ctx,
-		chromedp.Navigate(s.browserBase+"/preferences"),
+		chromedp.Navigate(s.browserBase+"/server/preferences"),
 		chromedp.WaitVisible(`form`, chromedp.ByQuery),
-		chromedp.SetValue(`select[name="results_per_page"], input[name="results_per_page"]`, "50", chromedp.ByQuery),
-		chromedp.Submit(`form`, chromedp.ByQuery),
+		chromedp.SetValue(`#preferences-form select[name="vidveil_pref_results_per_page"]`, "50", chromedp.ByQuery),
+		chromedp.Click(`#preferences-form button[type="submit"]`, chromedp.ByQuery),
 		chromedp.WaitReady("body", chromedp.ByQuery),
-		chromedp.Navigate(s.browserBase+"/preferences"),
+		chromedp.Navigate(s.browserBase+"/server/preferences"),
 		chromedp.WaitReady("body", chromedp.ByQuery),
 		chromedp.OuterHTML("html", &body, chromedp.ByQuery),
 	)
@@ -110,7 +110,7 @@ func TestNoJSThemeSwitchFallback(t *testing.T) {
 	tb := noJSTab(t)
 	var html string
 	err := chromedp.Run(tb.ctx,
-		chromedp.Navigate(s.browserBase+"/preferences"),
+		chromedp.Navigate(s.browserBase+"/server/preferences"),
 		chromedp.WaitReady("body", chromedp.ByQuery),
 		chromedp.OuterHTML("html", &html, chromedp.ByQuery),
 	)

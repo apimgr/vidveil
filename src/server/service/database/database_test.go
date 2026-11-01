@@ -59,7 +59,7 @@ func TestNewAppDatabase_EmptyDriverOpensSQLite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAppDatabase(empty driver) error: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := db.Ping(); err != nil {
 		t.Errorf("Ping after empty-driver open = %v, want nil", err)
 	}
@@ -135,7 +135,7 @@ func TestAppDatabase_Query_Rows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query SELECT 1 = %v, want nil", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 }
 
 // TestAppDatabase_QueryContext_Rows verifies QueryContext returns rows.
@@ -145,7 +145,7 @@ func TestAppDatabase_QueryContext_Rows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueryContext SELECT 1 = %v, want nil", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 }
 
 // TestAppDatabase_QueryRow verifies QueryRow scans a value.
@@ -328,7 +328,7 @@ func TestNewSchemaManager_InMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSchemaManager(:memory:) = %v, want nil", err)
 	}
-	defer sm.Close()
+	defer func() { _ = sm.Close() }()
 	if sm.GetDB() == nil {
 		t.Error("SchemaManager.GetDB() returned nil")
 	}
@@ -340,7 +340,7 @@ func TestSchemaManager_EnsureSchema_NoPanic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSchemaManager(:memory:) = %v", err)
 	}
-	defer sm.Close()
+	defer func() { _ = sm.Close() }()
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("EnsureSchema() panicked: %v", r)
@@ -421,7 +421,7 @@ func TestNewSchemaManagerWithConfig_InMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSchemaManagerWithConfig = %v", err)
 	}
-	defer sm.Close()
+	defer func() { _ = sm.Close() }()
 }
 
 // TestSchemaManager_GetMigrationStatus verifies GetMigrationStatus returns slice after EnsureSchema.
@@ -430,7 +430,7 @@ func TestSchemaManager_GetMigrationStatus_AfterEnsure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSchemaManager = %v", err)
 	}
-	defer sm.Close()
+	defer func() { _ = sm.Close() }()
 	_ = sm.EnsureSchema()
 	_, err = sm.GetMigrationStatus()
 	if err != nil {
@@ -444,7 +444,7 @@ func TestNewMigrationManager_InMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMigrationManager = %v", err)
 	}
-	defer sm.Close()
+	defer func() { _ = sm.Close() }()
 }
 
 // TestSchemaManager_RegisterDefaultMigrations_NoPanic verifies no panic on register.
@@ -453,7 +453,7 @@ func TestSchemaManager_RegisterDefaultMigrations_NoPanic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMigrationManager = %v", err)
 	}
-	defer sm.Close()
+	defer func() { _ = sm.Close() }()
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("RegisterDefaultMigrations panicked: %v", r)
@@ -468,7 +468,7 @@ func TestSchemaManager_RunMigrations_NoPanic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMigrationManager = %v", err)
 	}
-	defer sm.Close()
+	defer func() { _ = sm.Close() }()
 	_ = sm.EnsureSchema()
 	defer func() {
 		if r := recover(); r != nil {
@@ -484,7 +484,7 @@ func TestSchemaManager_RollbackMigration_NoPanic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMigrationManager = %v", err)
 	}
-	defer sm.Close()
+	defer func() { _ = sm.Close() }()
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("RollbackMigration panicked: %v", r)

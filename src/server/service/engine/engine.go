@@ -87,6 +87,8 @@ const (
 	// TorPrefContextKey carries the user's optional Tor network preference (*bool)
 	// nil = inherit server default, true = always use Tor, false = never use Tor
 	TorPrefContextKey contextKey = "tor_user_pref"
+	// ShowAIContextKey carries whether the visitor explicitly opted into AI-generated content.
+	ShowAIContextKey contextKey = "show_ai_content"
 )
 
 // WithUserIP adds user IP to context for potential forwarding to video sites
@@ -117,6 +119,15 @@ func WithTorPref(ctx context.Context, pref *bool) context.Context {
 func GetTorPrefFromContext(ctx context.Context) *bool {
 	pref, _ := ctx.Value(TorPrefContextKey).(*bool)
 	return pref
+}
+
+func WithShowAIContent(ctx context.Context, show bool) context.Context {
+	return context.WithValue(ctx, ShowAIContextKey, show)
+}
+
+func ShowAIContentFromContext(ctx context.Context) bool {
+	show, _ := ctx.Value(ShowAIContextKey).(bool)
+	return show
 }
 
 // SearchEngine interface defines what a search engine must implement
@@ -423,8 +434,8 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 		// Check for server errors that should trigger retry
 		if resp.StatusCode >= 500 {
 			// Close the body to allow retry
-			io.Copy(io.Discard, resp.Body)
-			resp.Body.Close()
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
 			return retry.ErrServerError
 		}
 
@@ -440,8 +451,8 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 			e.statsMu.Lock()
 			e.rateLimitedUntil = time.Now().Add(cooldown)
 			e.statsMu.Unlock()
-			io.Copy(io.Discard, resp.Body)
-			resp.Body.Close()
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
 			return retry.ErrRateLimit
 		}
 

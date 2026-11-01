@@ -103,11 +103,19 @@ type VersionResponse struct {
 
 // AutodiscoverResponse is the non-versioned client bootstrap response.
 type AutodiscoverResponse struct {
-	Primary    string `json:"primary"`
-	APIVersion string `json:"api_version"`
-	Timeout    int    `json:"timeout"`
-	Retry      int    `json:"retry"`
-	RetryDelay int    `json:"retry_delay"`
+	Primary       string                    `json:"primary"`
+	APIVersion    string                    `json:"api_version"`
+	Timeout       int                       `json:"timeout"`
+	Retry         int                       `json:"retry"`
+	RetryDelay    int                       `json:"retry_delay"`
+	CLIVersions   map[string]CLIVersionInfo `json:"cli_versions"`
+	CLIMinVersion string                    `json:"cli_min_version"`
+}
+
+// CLIVersionInfo contains a release version and its published SHA-256 digest.
+type CLIVersionInfo struct {
+	Version string `json:"version"`
+	SHA256  string `json:"sha256"`
 }
 
 // NewAPIClient creates a new API client
@@ -218,10 +226,19 @@ func (c *APIClient) GetVersion() (*VersionResponse, error) {
 
 // Autodiscover gets server connection defaults from the non-versioned autodiscover endpoint.
 func (c *APIClient) Autodiscover() (*AutodiscoverResponse, error) {
-	url := fmt.Sprintf("%s/api/autodiscover", c.baseURL)
+	return c.AutodiscoverChannel("")
+}
+
+// AutodiscoverChannel gets server bootstrap and CLI release metadata for a
+// validated update channel.
+func (c *APIClient) AutodiscoverChannel(channel string) (*AutodiscoverResponse, error) {
+	endpoint := fmt.Sprintf("%s/api/autodiscover", c.baseURL)
+	if channel != "" {
+		endpoint += "?channel=" + url.QueryEscape(channel)
+	}
 
 	var resp AutodiscoverResponse
-	if err := c.get(url, &resp); err != nil {
+	if err := c.get(endpoint, &resp); err != nil {
 		return nil, err
 	}
 
@@ -242,7 +259,7 @@ func (c *APIClient) Health() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return resp.StatusCode == 200, nil
 }
@@ -274,7 +291,7 @@ func (c *APIClient) FetchURLResponseBytes(url string) ([]byte, error) {
 	if err != nil {
 		return nil, &ConnectionError{BaseURL: c.baseURL, Err: err}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -305,7 +322,7 @@ func (c *APIClient) get(url string, result interface{}) error {
 	if err != nil {
 		return &ConnectionError{BaseURL: c.baseURL, Err: err}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)

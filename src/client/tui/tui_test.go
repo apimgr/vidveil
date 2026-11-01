@@ -89,6 +89,15 @@ func TestLayoutMode_String(t *testing.T) {
 	}
 }
 
+func TestLayoutMode_String_InvalidMode(t *testing.T) {
+	if got := LayoutMode(-1).String(); got != "unknown" {
+		t.Errorf("LayoutMode(-1).String() = %q, want %q", got, "unknown")
+	}
+	if got := LayoutMode(99).String(); got != "unknown" {
+		t.Errorf("LayoutMode(99).String() = %q, want %q", got, "unknown")
+	}
+}
+
 // --- LayoutMode.Config ---
 
 // TestLayoutMode_Config_MicroHasNoSidebar verifies Micro config has no sidebar.

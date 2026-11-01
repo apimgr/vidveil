@@ -36,7 +36,7 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read body for debug logging (size-capped)
 	body, err := readEngineBody(resp)
@@ -144,7 +144,7 @@ func enrichOneDetailResult(ctx context.Context, e *BaseEngine, r *model.VideoRes
 	if err != nil {
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := readEngineBody(resp)
 	if err != nil {

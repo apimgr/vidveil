@@ -378,6 +378,7 @@ dialog::backdrop {
 .long-string,
 .ip-address,
 .onion-address,
+.i2p-address,
 .api-token,
 .hash,
 .uuid,

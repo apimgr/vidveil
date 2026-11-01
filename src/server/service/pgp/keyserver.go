@@ -115,8 +115,11 @@ func submitToKeyserver(ctx context.Context, keyserver string, pubArmored []byte)
 	if err != nil {
 		return fmt.Errorf("submit: %w", err)
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil {
+		return fmt.Errorf("read keyserver response: %w", err)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("keyserver returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}

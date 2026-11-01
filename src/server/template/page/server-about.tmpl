@@ -5,9 +5,9 @@
 {{define "content"}}
 <div class="content">
     <div class="prose">
-        <h1>{{ tf "about.page_title" .AppName }}</h1>
+        <h1>{{ tf "about.page_title" "app_name" .AppName }}</h1>
         {{if .AppTagline}}<p class="tagline">{{.AppTagline}}</p>{{end}}
-        <p>{{ tf "about.intro" .AppName }}</p>
+        <p>{{ tf "about.intro" "app_name" .AppName }}</p>
 
         <h2>{{ t "about.features" }}</h2>
         <ul>

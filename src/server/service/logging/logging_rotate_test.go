@@ -26,7 +26,7 @@ func TestNewRotatingFile_HonorsFileMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	info, err := os.Stat(path)
 	if err != nil {
@@ -46,7 +46,7 @@ func TestNewRotatingFile_DefaultFileMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	info, err := os.Stat(path)
 	if err != nil {
@@ -67,10 +67,12 @@ func TestRotate_TriggeredBySecondWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	// First write: currentSize goes from 0 to 3 (no rotation yet)
-	rf.Write([]byte("abc"))
+	if _, err := rf.Write([]byte("abc")); err != nil {
+		t.Fatal(err)
+	}
 
 	// Second write: currentSize(3) >= maxSize(1) → rotate() fires
 	_, err = rf.Write([]byte("xyz"))
@@ -87,13 +89,19 @@ func TestRotate_NewFileCreatedAfterRotation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
-	rf.Write([]byte("hello"))
-	rf.Write([]byte("world"))
+	if _, err := rf.Write([]byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rf.Write([]byte("world")); err != nil {
+		t.Fatal(err)
+	}
 
 	// After rotation, the log file path should still be writable
-	rf.Write([]byte("post-rotate"))
+	if _, err := rf.Write([]byte("post-rotate")); err != nil {
+		t.Fatal(err)
+	}
 
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("log file missing after rotation: %v", err)
@@ -108,12 +116,16 @@ func TestRotate_WithKeepCount_OldFilesRemoved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	// Trigger multiple rotations (keep=1 means only 1 old file retained)
 	for i := 0; i < 4; i++ {
-		rf.Write([]byte("data"))
-		rf.Write([]byte("more"))
+		if _, err := rf.Write([]byte("data")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := rf.Write([]byte("more")); err != nil {
+			t.Fatal(err)
+		}
 		// Small sleep to ensure unique timestamps in rotated filenames
 		time.Sleep(2 * time.Millisecond)
 	}
@@ -178,7 +190,9 @@ func TestCleanupOldFiles_RemovesExcessFiles(t *testing.T) {
 	// Create 3 rotated files
 	for i := 0; i < 3; i++ {
 		name := base + ".202601010000" + string(rune('1'+i))
-		os.WriteFile(name, []byte("old"), 0644)
+		if err := os.WriteFile(name, []byte("old"), 0644); err != nil {
+			t.Fatal(err)
+		}
 		time.Sleep(2 * time.Millisecond)
 	}
 

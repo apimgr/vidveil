@@ -228,9 +228,12 @@ func TestCircuitBreakerExecute(t *testing.T) {
 	}
 
 	// Another failure to open
-	cb.Execute(func() error {
+	err = cb.Execute(func() error {
 		return testErr
 	})
+	if err != testErr {
+		t.Errorf("Expected test error while opening circuit, got %v", err)
+	}
 
 	// Circuit open
 	err = cb.Execute(func() error {

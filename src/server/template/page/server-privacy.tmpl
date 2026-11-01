@@ -6,10 +6,10 @@
 <div class="content">
     <div class="prose">
         <h1>{{ t "privacy.title" }}</h1>
-        <p class="last-updated">{{ tf "privacy.last_updated" .BuildDateTime }}</p>
+        <p class="last-updated">{{ tf "privacy.last_updated" "date" .BuildDateTime }}</p>
 
         <h2>{{ t "privacy.summary" }}</h2>
-        <p>{{ tf "privacy.summary_body" .AppName }}</p>
+        <p>{{ tf "privacy.summary_body" "app_name" .AppName }}</p>
         <ul class="privacy-key-points">
             {{ if .Privacy.Data.StoredOnServer }}
             <li><strong>{{ t "privacy.summary_stored_title" }}</strong> — {{ t "privacy.summary_stored_desc" }}</li>
@@ -34,13 +34,11 @@
         </ul>
 
         <h2>{{ t "privacy.how_handled" }}</h2>
-        <p>{{ tf "privacy.how_handled_body" .AppName }}</p>
+        <p>{{ tf "privacy.how_handled_body" "app_name" .AppName }}</p>
 
         <h2>{{ t "privacy.browser_only" }}</h2>
         <p>{{ t "privacy.browser_only_intro" }}</p>
         <ul>
-            <li><code>vidveil-theme</code> — {{ t "privacy.storage_theme" }}</li>
-            <li><code>vidveil_prefs</code> — {{ t "privacy.storage_prefs" }}</li>
             <li><code>vidveil_history</code> — {{ t "privacy.storage_history" }}</li>
         </ul>
         <p>{{ t "privacy.browser_only_manage" }} <a href="/server/preferences">{{ t "privacy.preferences_link" }}</a> {{ t "privacy.browser_only_erase" }}</p>
@@ -49,10 +47,12 @@
         <p>{{ t "privacy.favorites_body_1" }} <a href="/favorites">{{ t "privacy.favorites_link" }}</a> {{ t "privacy.favorites_body_2" }}</p>
 
         <h2>{{ t "privacy.cookies" }}</h2>
-        <p>{{ tf "privacy.cookies_intro" .AppName }}</p>
+        <p>{{ tf "privacy.cookies_intro" "app_name" .AppName }}</p>
         <ul>
             <li><strong>{{ t "privacy.cookie_age" }}</strong> — {{ t "privacy.cookie_age_desc" }}</li>
             <li><strong>{{ t "privacy.cookie_content_ack" }}</strong> — {{ t "privacy.cookie_content_ack_desc" }}</li>
+            <li>{{ t "privacy.cookie_ui_preferences" }}</li>
+            <li>{{ t "privacy.cookie_app_preferences" }}</li>
             <li><strong>{{ t "privacy.cookie_geo" }}</strong> (<code>forward_ip</code>) — {{ t "privacy.cookie_geo_desc" }}</li>
             <li><strong>{{ t "privacy.cookie_visitor" }}</strong> (<code>visitor_id</code>) — {{ t "privacy.cookie_visitor_desc" }}</li>
         </ul>
@@ -98,7 +98,7 @@
         {{ end }}
 
         <h2>{{ t "privacy.retention" }}</h2>
-        <p>{{ tf "privacy.retention_period" .Privacy.Retention.Period }}</p>
+        <p>{{ tf "privacy.retention_period" "period" .Privacy.Retention.Period }}</p>
 
         <h2>{{ t "privacy.your_rights" }}</h2>
         <ul>
@@ -115,16 +115,16 @@
         <p>{{ t "privacy.thumbnail_proxy_body" }}</p>
 
         <h2>{{ t "privacy.tor_access" }}</h2>
-        <p>{{if .TorOnionAddr}}{{ tf "privacy.tor_access_reachable" .TorOnionAddr }}{{else}}{{ tf "privacy.tor_access_auto" .AppName }}{{end}} {{ t "privacy.tor_access_geo" }}</p>
+        <p>{{if .TorOnionAddr}}{{ tf "privacy.tor_access_reachable" "onion_address" .TorOnionAddr }}{{else}}{{ tf "privacy.tor_access_auto" "app_name" .AppName }}{{end}} {{ t "privacy.tor_access_geo" }}</p>
 
         <h2>{{ t "privacy.geo_restriction" }}</h2>
         <p>{{ t "privacy.geo_restriction_body" }}</p>
 
         <h2>{{ t "privacy.server_logs" }}</h2>
-        <p>{{ tf "privacy.server_logs_body" .AppName }}</p>
+        <p>{{ tf "privacy.server_logs_body" "app_name" .AppName }}</p>
 
         <h2>{{ t "privacy.third_parties" }}</h2>
-        <p>{{ tf "privacy.third_parties_body" .AppName }}</p>
+        <p>{{ tf "privacy.third_parties_body" "app_name" .AppName }}</p>
         {{ if .Privacy.ThirdParty.Services }}
         <table class="privacy-third-parties">
             <thead>

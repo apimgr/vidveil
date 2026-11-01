@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/apimgr/vidveil/src/config"
+	mcpserver "github.com/apimgr/vidveil/src/server/mcp"
 )
 
 func TestCsrfPathMatches(t *testing.T) {
@@ -30,6 +33,44 @@ func TestCsrfPathMatches(t *testing.T) {
 	}
 }
 
+func TestCsrfBypassMCPAliases(t *testing.T) {
+	for _, path := range []string{"/mcp", "/api/mcp", "/api/v2/server/mcp"} {
+		req := httptest.NewRequest("POST", path, nil)
+		if !csrfBypass(config.CSRFConfig{}, req) {
+			t.Errorf("CSRF should be bypassed for anonymous MCP POST %s", path)
+		}
+	}
+	for _, path := range []string{"/not-api/server/mcp", "/api/custom/server/mcp"} {
+		req := httptest.NewRequest("POST", path, nil)
+		if csrfBypass(config.CSRFConfig{}, req) {
+			t.Errorf("CSRF unexpectedly bypassed for non-MCP route %s", path)
+		}
+	}
+}
+
+func TestCsrfBypassGuestPreferencesAPIOnly(t *testing.T) {
+	for _, path := range []string{"/api/v1/server/preferences", "/api/v2/server/preferences"} {
+		req := httptest.NewRequest("POST", path, nil)
+		if !csrfBypass(config.CSRFConfig{}, req) {
+			t.Errorf("CSRF should be bypassed for guest preference API %s", path)
+		}
+	}
+	for _, path := range []string{"/server/preferences", "/api/v1/server/preferences/import", "/api/custom/server/preferences", "/api/v1/server/preferences/extra"} {
+		req := httptest.NewRequest("POST", path, nil)
+		if csrfBypass(config.CSRFConfig{}, req) {
+			t.Errorf("CSRF unexpectedly bypassed for %s", path)
+		}
+	}
+}
+
+func TestCsrfBypassInternalMCPAPIDispatch(t *testing.T) {
+	req := httptest.NewRequest("POST", "/api/v1/search/batch", nil)
+	req = req.WithContext(mcpserver.WithInternalDispatch(req.Context()))
+	if !csrfBypass(config.CSRFConfig{}, req) {
+		t.Fatal("CSRF should be bypassed for an internal MCP API dispatch")
+	}
+}
+
 func TestCsrfDeny(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/resource", nil)
 	req.RemoteAddr = "203.0.113.5:1234"
@@ -40,8 +81,8 @@ func TestCsrfDeny(t *testing.T) {
 	if rec.Code != 403 {
 		t.Errorf("csrfDeny: status = %d, want 403", rec.Code)
 	}
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json; charset=utf-8" {
-		t.Errorf("csrfDeny: Content-Type = %q, want application/json; charset=utf-8", ct)
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("csrfDeny: Content-Type = %q, want application/json", ct)
 	}
 
 	var body map[string]interface{}

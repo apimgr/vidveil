@@ -135,7 +135,7 @@ func WithLock(ctx context.Context, store LockStore, key string, ttl time.Duratio
 		// Another node is handling this
 		return nil
 	}
-	defer store.ReleaseLock(ctx, key)
+	defer func() { _ = store.ReleaseLock(ctx, key) }()
 	return fn()
 }
 

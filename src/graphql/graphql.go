@@ -72,20 +72,24 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	var req Request
 
-	if r.Method == http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
 		req.Query = r.URL.Query().Get("query")
 		req.OperationName = r.URL.Query().Get("operationName")
 		if v := r.URL.Query().Get("variables"); v != "" {
-			json.Unmarshal([]byte(v), &req.Variables)
+			if err := json.Unmarshal([]byte(v), &req.Variables); err != nil {
+				writeJSON(w, http.StatusBadRequest, Response{Errors: []Error{{Message: "Invalid variables"}}})
+				return
+			}
 		}
-	} else if r.Method == http.MethodPost {
+	case http.MethodPost:
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeJSON(w, http.StatusBadRequest, Response{
 				Errors: []Error{{Message: "Invalid request body"}},
 			})
 			return
 		}
-	} else {
+	default:
 		writeJSON(w, http.StatusMethodNotAllowed, Response{
 			Errors: []Error{{Message: "Method not allowed"}},
 		})
@@ -104,7 +108,10 @@ func (h *Handler) GraphiQL(w http.ResponseWriter, r *http.Request) {
 	resultHTML := ""
 
 	if r.Method == http.MethodPost {
-		r.ParseForm()
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid form", http.StatusBadRequest)
+			return
+		}
 		queryStr = r.FormValue("query")
 		if queryStr != "" {
 			req := Request{Query: queryStr}
@@ -121,7 +128,7 @@ func (h *Handler) GraphiQL(w http.ResponseWriter, r *http.Request) {
 	// Theme is applied via the shared theme-{dark,light,auto} class on <html>
 	// (AI.md PART 16) — colors come from common.css custom properties, never
 	// inline styles or a separate hardcoded palette.
-	fmt.Fprintf(w, `<!DOCTYPE html>
+	if _, err := fmt.Fprintf(w, `<!DOCTYPE html>
 <html lang="%s" dir="%s" class="theme-%s">
 <head>
     <meta charset="UTF-8">
@@ -152,7 +159,9 @@ func (h *Handler) GraphiQL(w http.ResponseWriter, r *http.Request) {
         </div>
     </div>
 </body>
-</html>`, lang, dir, theme, html.EscapeString(queryStr), resultHTML)
+</html>`, lang, dir, theme, html.EscapeString(queryStr), resultHTML); err != nil {
+		http.Error(w, "Unable to render GraphQL explorer", http.StatusInternalServerError)
+	}
 }
 
 // executeQuery executes a GraphQL query
@@ -474,7 +483,7 @@ func (h *Handler) getSchema() map[string]interface{} {
 // Schema returns the GraphQL schema definition
 func (h *Handler) Schema(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Write([]byte(`type Query {
+	_, _ = w.Write([]byte(`type Query {
   search(query: String!, page: Int, engines: String): SearchResult
   bangs: [Bang]
   autocomplete(prefix: String!): [Bang]
@@ -538,5 +547,7 @@ type Health {
 // writeJSON writes a JSON response
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		return
+	}
 }

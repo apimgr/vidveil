@@ -16,6 +16,7 @@ import (
 func createTestConfig() *config.AppConfig {
 	return &config.AppConfig{
 		Server: config.ServerConfig{
+			MCP: config.MCPConfig{Enabled: true},
 			Branding: config.ServerBrandingConfig{
 				Title:       "Test Vidveil",
 				Description: "Test Description",
@@ -28,6 +29,7 @@ func createTestConfig() *config.AppConfig {
 			},
 		},
 		Web: config.WebConfig{
+			LLMS: config.LLMSConfig{Enabled: true, IncludeEndpoints: true},
 			UI: config.UIConfig{
 				Theme: "dark",
 			},
@@ -37,6 +39,11 @@ func createTestConfig() *config.AppConfig {
 			},
 		},
 	}
+}
+
+func isolateMaintenanceDataDir(t *testing.T) {
+	t.Helper()
+	t.Setenv("DATA_DIR", t.TempDir())
 }
 
 func TestHealthCheck(t *testing.T) {
@@ -80,8 +87,8 @@ func TestRobotsTxt(t *testing.T) {
 		t.Error("RobotsTxt should disallow /api/")
 	}
 
-	if !strings.Contains(body, "Disallow: /server/admin/") {
-		t.Error("RobotsTxt should disallow /server/admin/")
+	if strings.Contains(body, "Disallow: /server/admin/") {
+		t.Error("RobotsTxt should not advertise a nonexistent admin route")
 	}
 
 	if !strings.Contains(body, "Sitemap:") {
@@ -136,6 +143,8 @@ func TestSecurityTxt(t *testing.T) {
 
 func TestSitemapXML(t *testing.T) {
 	cfg := createTestConfig()
+	cfg.Server.SEO.Sitemap.Enabled = true
+	cfg.Server.SEO.Sitemap.MaxURLs = 50000
 	h := &SearchHandler{appConfig: cfg}
 
 	req := httptest.NewRequest("GET", "/sitemap.xml", nil)
@@ -163,10 +172,46 @@ func TestSitemapXML(t *testing.T) {
 	if !strings.Contains(body, "<loc>") {
 		t.Error("SitemapXML should contain <loc> elements")
 	}
+	for _, expected := range []string{"/server/docs/swagger", "/server/docs/graphql", "/server/security/policy", "<lastmod>"} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("SitemapXML should contain %q", expected)
+		}
+	}
+	for _, privatePath := range []string{"/server/preferences", "/favorites", "/server/security/report/"} {
+		if strings.Contains(body, privatePath) {
+			t.Errorf("SitemapXML must not expose personalized path %q", privatePath)
+		}
+	}
 
 	contentType := rr.Header().Get("Content-Type")
 	if !strings.Contains(contentType, "application/xml") {
 		t.Errorf("SitemapXML Content-Type = %s, want application/xml", contentType)
+	}
+}
+
+func TestSitemapXMLHonorsConfig(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Server.SEO.Sitemap.Enabled = false
+	h := &SearchHandler{appConfig: cfg}
+	rr := httptest.NewRecorder()
+	h.SitemapXML(rr, httptest.NewRequest("GET", "/sitemap.xml", nil))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("disabled sitemap status = %d, want %d", rr.Code, http.StatusNotFound)
+	}
+
+	cfg.Server.SEO.Sitemap.Enabled = true
+	cfg.Server.SEO.Sitemap.MaxURLs = 1
+	rr = httptest.NewRecorder()
+	h.SitemapXML(rr, httptest.NewRequest("GET", "/sitemap.xml", nil))
+	if got := strings.Count(rr.Body.String(), "<url>"); got != 1 {
+		t.Fatalf("sitemap URL count = %d, want 1", got)
+	}
+}
+
+func TestRobotsDirectiveIndexesPublicSecurityPolicy(t *testing.T) {
+	req := httptest.NewRequest("GET", "/server/security/policy", nil)
+	if got := robotsDirective(req); got != "index,follow" {
+		t.Fatalf("robots directive for public security policy = %q, want index,follow", got)
 	}
 }
 
@@ -325,7 +370,7 @@ func TestAgeVerifyMiddleware_StaticBypass(t *testing.T) {
 	// Test that static files bypass age verification
 	handler := h.AgeVerifyMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	}))
 
 	testPaths := []string{

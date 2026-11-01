@@ -207,7 +207,9 @@ func WriteKeypair(configDir string, kp *Keypair, secret []byte) error {
 		return fmt.Errorf("write private key: %w", err)
 	}
 	if err := os.Rename(tmpPriv, privPath); err != nil {
-		os.Remove(tmpPriv)
+		if removeErr := os.Remove(tmpPriv); removeErr != nil && !os.IsNotExist(removeErr) {
+			return fmt.Errorf("write private key: %w; remove temporary private key: %v", err, removeErr)
+		}
 		return fmt.Errorf("write private key: %w", err)
 	}
 	return nil

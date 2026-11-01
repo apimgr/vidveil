@@ -65,7 +65,7 @@ func ResolveResearcherKey(raw string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetch researcher key: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("fetch researcher key: unexpected status %d", resp.StatusCode)
 	}

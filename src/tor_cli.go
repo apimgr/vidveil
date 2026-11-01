@@ -143,6 +143,14 @@ type healthzTor struct {
 	Hostname string `json:"hostname"`
 }
 
+type healthzI2P struct {
+	Enabled  bool   `json:"enabled"`
+	Running  bool   `json:"running"`
+	Status   string `json:"status"`
+	Hostname string `json:"hostname"`
+	Provider string `json:"provider"`
+}
+
 // healthzResponse holds the /server/healthz fields the CLI needs for
 // `tor status` and `--status`.
 type healthzResponse struct {
@@ -150,6 +158,7 @@ type healthzResponse struct {
 	Mode     string `json:"mode"`
 	Features struct {
 		Tor healthzTor `json:"tor"`
+		I2P healthzI2P `json:"i2p"`
 	} `json:"features"`
 }
 
@@ -175,7 +184,7 @@ func queryHealthz(configDir, dataDir string) *healthzResponse {
 	if err != nil {
 		return nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil
@@ -226,7 +235,7 @@ func torControlRequest(method, addr, path string, body interface{}) (map[string]
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var envelope controlEnvelope
 	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
@@ -249,7 +258,7 @@ func serverReachable(addr string) bool {
 	if err != nil {
 		return false
 	}
-	conn.Close()
+	_ = conn.Close()
 	return true
 }
 

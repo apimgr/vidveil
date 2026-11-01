@@ -5,6 +5,7 @@
 package system
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -17,17 +18,13 @@ const windowsServiceName = "vidveil"
 
 // windowsService implements the Windows Service interface
 type windowsService struct {
-	stopChan chan struct{}
-	runFunc  func() error
+	runFunc func(context.Context) error
 }
 
 // RunAsWindowsService runs the application as a Windows service
 // Per AI.md PART 24: Use golang.org/x/sys/windows/svc for Windows service integration
-func RunAsWindowsService(runFunc func() error) error {
-	ws := &windowsService{
-		stopChan: make(chan struct{}),
-		runFunc:  runFunc,
-	}
+func RunAsWindowsService(runFunc func(context.Context) error) error {
+	ws := &windowsService{runFunc: runFunc}
 	return svc.Run(windowsServiceName, ws)
 }
 
@@ -40,9 +37,11 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, s c
 	s <- svc.Status{State: svc.StartPending}
 
 	// Start the application in a goroutine
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	errChan := make(chan error, 1)
 	go func() {
-		errChan <- ws.runFunc()
+		errChan <- ws.runFunc(ctx)
 	}()
 
 	// Small delay to allow startup
@@ -57,25 +56,43 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, s c
 		case c := <-r:
 			switch c.Cmd {
 			case svc.Stop, svc.Shutdown:
-				s <- svc.Status{State: svc.StopPending}
-				close(ws.stopChan)
-				// Give the application time to shutdown gracefully
-				time.Sleep(5 * time.Second)
-				return false, 0
+				cancel()
+				return ws.waitForShutdown(errChan, s)
 			case svc.Interrogate:
 				s <- c.CurrentStatus
 			default:
 				// Ignore unknown commands
 			}
 		case err := <-errChan:
-			if err != nil {
-				// Log error and exit with failure
-				fmt.Fprintf(os.Stderr, "Service error: %v\n", err)
-				return true, 1
-			}
-			return false, 0
+			return windowsServiceExit(err)
 		}
 	}
+}
+
+func (ws *windowsService) waitForShutdown(errChan <-chan error, statuses chan<- svc.Status) (bool, uint32) {
+	checkpoint := uint32(1)
+	status := svc.Status{State: svc.StopPending, WaitHint: 30000, CheckPoint: checkpoint}
+	statuses <- status
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case err := <-errChan:
+			return windowsServiceExit(err)
+		case <-ticker.C:
+			checkpoint++
+			status.CheckPoint = checkpoint
+			statuses <- status
+		}
+	}
+}
+
+func windowsServiceExit(err error) (bool, uint32) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Service error: %v\n", err)
+		return true, 1
+	}
+	return false, 0
 }
 
 // IsWindowsService returns true if the current process is running as a Windows service
@@ -86,9 +103,4 @@ func IsWindowsService() bool {
 		return false
 	}
 	return inService
-}
-
-// StopChannel returns the channel that signals service stop
-func (ws *windowsService) StopChannel() <-chan struct{} {
-	return ws.stopChan
 }

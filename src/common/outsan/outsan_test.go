@@ -20,6 +20,26 @@ func TestSanitize_RedactsSensitiveQueryParams(t *testing.T) {
 	}
 }
 
+func TestRedactURL_RedactsCredentialsInRelativeRequestURI(t *testing.T) {
+	got := RedactURL("/api/v1/debug?token=operator-secret&format=json")
+	if strings.Contains(got, "operator-secret") {
+		t.Fatalf("operator token leaked in redacted URI: %q", got)
+	}
+	if !strings.Contains(got, "format=json") {
+		t.Fatalf("non-sensitive query parameter was lost: %q", got)
+	}
+}
+
+func TestRedactURL_RemovesURLUserInfo(t *testing.T) {
+	got := RedactURL("https://user:password@example.com/path?token=secret")
+	if strings.Contains(got, "user") || strings.Contains(got, "password") || strings.Contains(got, "secret") {
+		t.Fatalf("URL credentials leaked in redacted output: %q", got)
+	}
+	if !strings.Contains(got, "example.com/path") {
+		t.Fatalf("safe URL components were lost: %q", got)
+	}
+}
+
 func TestSanitize_StripsInternalIP(t *testing.T) {
 	in := map[string]interface{}{
 		"message": "connection failed to 10.0.0.5 during handshake",

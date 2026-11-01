@@ -20,8 +20,11 @@ func OutputDataAsJSON(outputData interface{}) error {
 // OutputDataAsYAML writes YAML output to stdout.
 func OutputDataAsYAML(outputData interface{}) error {
 	yamlEncoder := yaml.NewEncoder(os.Stdout)
-	defer yamlEncoder.Close()
-	return yamlEncoder.Encode(outputData)
+	if err := yamlEncoder.Encode(outputData); err != nil {
+		_ = yamlEncoder.Close()
+		return err
+	}
+	return yamlEncoder.Close()
 }
 
 // outputDataAsCSV writes a CSV header row followed by data rows to stdout.

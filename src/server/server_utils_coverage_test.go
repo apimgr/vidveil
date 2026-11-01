@@ -11,6 +11,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 // ── parseBodySize extras ──────────────────────────────────────────────────────
@@ -332,8 +335,12 @@ func TestOnionLocationMiddleware_NilTorSvc_PassesThrough(t *testing.T) {
 }
 
 func TestOnionLocationMiddleware_OnionHostPassesThrough(t *testing.T) {
-	// If Host ends with .onion, skip (already an onion request).
-	s := &Server{}
+	// Only the configured onion host is treated as a Tor request.
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Tor.OnionAddress = "configured.onion"
+	urlvar.GlobalResolver().SetAppConfig(cfg)
+	t.Cleanup(func() { urlvar.GlobalResolver().SetAppConfig(nil) })
+	s := &Server{appConfig: cfg, torSvc: &mockTorWithOnion{addr: "configured.onion"}}
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -341,7 +348,7 @@ func TestOnionLocationMiddleware_OnionHostPassesThrough(t *testing.T) {
 	})
 	h := s.onionLocationMiddleware(inner)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Host = "xyz.onion"
+	req.Host = "configured.onion"
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 

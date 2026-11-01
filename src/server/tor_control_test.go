@@ -247,8 +247,40 @@ func TestHandleTorControlRestart_Error(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("restart error = %d, want 500", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "tor is not enabled") {
-		t.Errorf("restart error body missing message: %q", rec.Body.String())
+	if strings.Contains(rec.Body.String(), "tor is not enabled") || !strings.Contains(rec.Body.String(), "Tor control operation failed") {
+		t.Errorf("restart error response must hide internal details: %q", rec.Body.String())
+	}
+}
+
+func TestTorControlOperationErrorsHideInternalDetails(t *testing.T) {
+	const privateDetail = "failed opening /private/tor/secret-key"
+	tc := &fakeTorControl{
+		restartErr:    errors.New(privateDetail),
+		regenerateErr: errors.New(privateDetail),
+		vanityErr:     errors.New(privateDetail),
+		applyErr:      errors.New(privateDetail),
+		importErr:     errors.New(privateDetail),
+	}
+	_, r := newTestServerWithTorControl(tc)
+	requests := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{http.MethodPost, "/server/tor/restart", ""},
+		{http.MethodPost, "/server/tor/regenerate", ""},
+		{http.MethodPost, "/server/tor/vanity/start", `{"prefix":"abc"}`},
+		{http.MethodPost, "/server/tor/vanity/apply", ""},
+		{http.MethodPost, "/server/tor/import-keys", `{"secret_key":"aGVsbG8="}`},
+	}
+	for _, request := range requests {
+		rec := doLoopback(r, request.method, request.path, request.body)
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("%s %s status = %d, want 500", request.method, request.path, rec.Code)
+		}
+		if strings.Contains(rec.Body.String(), privateDetail) || !strings.Contains(rec.Body.String(), "Tor control operation failed") {
+			t.Errorf("%s %s exposed internal error details: %q", request.method, request.path, rec.Body.String())
+		}
 	}
 }
 

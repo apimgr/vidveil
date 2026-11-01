@@ -184,6 +184,9 @@ func TestGetCertificate_ReturnsLoadedCert(t *testing.T) {
 func TestInitialize_LoadsAppManagedLetsEncryptCert(t *testing.T) {
 	// Priority 3: {config_dir}/ssl/letsencrypt/{fqdn}/ fullchain.pem + privkey.pem.
 	// Loaded cert must NOT be flagged system or user managed (it auto-renews).
+	if certExists("/etc/letsencrypt/live/domain", "fullchain.pem", "privkey.pem") {
+		t.Skip("higher-priority host certificate takes precedence")
+	}
 	fqdn := "app.example.test"
 	m := newFQDNManager(t, fqdn)
 	dir := filepath.Join(m.configDir, "ssl", "letsencrypt", fqdn)
@@ -208,6 +211,9 @@ func TestInitialize_LoadsAppManagedLetsEncryptCert(t *testing.T) {
 
 func TestInitialize_LoadsUserManagedLocalCert(t *testing.T) {
 	// Priority 4: {config_dir}/ssl/local/{fqdn}/ cert.pem + key.pem sets userCert=true.
+	if certExists("/etc/letsencrypt/live/domain", "fullchain.pem", "privkey.pem") {
+		t.Skip("higher-priority host certificate takes precedence")
+	}
 	fqdn := "user.example.test"
 	m := newFQDNManager(t, fqdn)
 	dir := filepath.Join(m.configDir, "ssl", "local", fqdn)

@@ -69,8 +69,7 @@ disclosure: fix, advisory, release notes, version bump.
 | Rate limiting    | Per-IP and per-endpoint, configurable in `server.yml`.             |
 | Country blocking | `deny_countries` / `allow_countries` via GeoIP (PART 19).          |
 | Blocklists       | Domain and IP blocklists, refreshed by the internal scheduler.     |
-| Argon2id         | Server admin password hashing.                                     |
-| TOTP             | Optional MFA for admins (suggested at first login, never forced).  |
+| Argon2id         | Hashing for protected configuration and backup passwords.          |
 | Tor              | Auto-enabled hidden service when `tor` is present.                 |
 | Logging          | Structured logs; secrets and tokens are never logged plaintext.    |
 

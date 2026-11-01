@@ -3,8 +3,41 @@ package system
 
 import (
 	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 )
+
+func TestSystemdCommandArgsSelectScope(t *testing.T) {
+	if got, want := systemdCommandArgs(false, "restart", "vidveil"), []string{"restart", "vidveil"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("system service args = %v, want %v", got, want)
+	}
+	if got, want := systemdCommandArgs(true, "restart", "vidveil"), []string{"--user", "restart", "vidveil"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("user service args = %v, want %v", got, want)
+	}
+}
+
+func TestLaunchdPlistPathSelectsScope(t *testing.T) {
+	userPath, err := launchdPlistPath("/Users/alice", false, "io.github.apimgr.vidveil")
+	if err != nil {
+		t.Fatalf("launchdPlistPath(user): %v", err)
+	}
+	wantUserPath := filepath.Join("/Users/alice", "Library", "LaunchAgents", "io.github.apimgr.vidveil.plist")
+	if userPath != wantUserPath {
+		t.Fatalf("user plist path = %q, want %q", userPath, wantUserPath)
+	}
+	systemPath, err := launchdPlistPath("", true, "io.github.apimgr.vidveil")
+	if err != nil {
+		t.Fatalf("launchdPlistPath(system): %v", err)
+	}
+	wantSystemPath := filepath.Join("/Library", "LaunchDaemons", "io.github.apimgr.vidveil.plist")
+	if systemPath != wantSystemPath {
+		t.Fatalf("system plist path = %q, want %q", systemPath, wantSystemPath)
+	}
+	if _, err := launchdPlistPath("", false, "io.github.apimgr.vidveil"); err == nil {
+		t.Fatal("user plist path succeeded without a home directory")
+	}
+}
 
 // --- NewServiceManager ---
 
@@ -257,7 +290,7 @@ func TestHasRunit_NoPanic(t *testing.T) {
 func TestHasRunit_ReturnsBool(t *testing.T) {
 	sm := NewServiceManager("test", "/tmp/test", t.TempDir(), t.TempDir())
 	// Only assert the type; whether sv is installed is environment-dependent.
-	var _ bool = sm.hasRunit()
+	_ = sm.hasRunit()
 }
 
 // --- hasOpenRC ---
@@ -277,7 +310,7 @@ func TestHasOpenRC_NoPanic(t *testing.T) {
 // detection logic (PATH lookup or /sbin/openrc-run).
 func TestHasOpenRC_ReturnsBool(t *testing.T) {
 	sm := NewServiceManager("test", "/tmp/test", t.TempDir(), t.TempDir())
-	var _ bool = sm.hasOpenRC()
+	_ = sm.hasOpenRC()
 }
 
 // --- hasSysVInit ---
@@ -322,14 +355,19 @@ func TestGetServiceStatus_NoPanic(t *testing.T) {
 			t.Errorf("GetServiceStatus() panicked: %v", r)
 		}
 	}()
-	sm.GetServiceStatus()
+	if _, err := sm.GetServiceStatus(); err != nil {
+		t.Errorf("GetServiceStatus() returned error: %v", err)
+	}
 }
 
 // TestGetServiceStatus_ReturnsString verifies that the string return value is
 // one of the documented values even when the service does not exist.
 func TestGetServiceStatus_ReturnsString(t *testing.T) {
 	sm := NewServiceManager("nonexistent-vidveil-test-service", "/tmp/nope", t.TempDir(), t.TempDir())
-	status, _ := sm.GetServiceStatus()
+	status, err := sm.GetServiceStatus()
+	if err != nil {
+		t.Fatalf("GetServiceStatus() returned error: %v", err)
+	}
 
 	validStatuses := map[string]bool{
 		"running": true,
@@ -619,6 +657,9 @@ func TestIsWindowsService_FalseOnNonWindows(t *testing.T) {
 // "unknown" with a nil error when neither systemd nor launchctl is active.
 func TestGetServiceStatus_FallbackUnknown(t *testing.T) {
 	sm := NewServiceManager("testapp", "/usr/bin/testapp", "/etc/testapp", "/var/lib/testapp")
+	if sm.hasSystemd() {
+		t.Skip("fallback path requires a host without systemd")
+	}
 	status, err := sm.GetServiceStatus()
 	if err != nil {
 		t.Errorf("GetServiceStatus() unexpected error: %v", err)

@@ -28,6 +28,7 @@ https://x.scour.li
 | **SSE Streaming** | Real-time result streaming as engines respond |
 | **Video Previews** | Hover (desktop) and swipe (mobile) preview for 8+ engines |
 | **Thumbnail Proxy** | All thumbnails proxied to prevent engine tracking |
+| **Private Favorites** | Favorites belong to an anonymous owner and can be restored on another browser with the primary token |
 | **Autocomplete** | Bang shortcuts, performer names, and search terms autocomplete |
 | **Related Searches** | Server-generated related search suggestions |
 | **Semantic Search** | AND-based filtering with synonym expansion across 27 categories |
@@ -138,6 +139,13 @@ Configuration file location (created on first run):
 ---
 
 ## API
+
+### Authentication and Favorites
+
+Search and browsing are public. Favorites are private to an anonymous owner; the
+first saved favorite creates an owner token. Save the primary token securely to
+restore access on another browser at `/server/preferences`. API clients send
+owner tokens as Bearer credentials. See the [authentication guide](docs/api/authentication.md).
 
 ### Search
 

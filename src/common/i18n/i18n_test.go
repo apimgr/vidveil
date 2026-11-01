@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"sort"
 	"testing"
 )
@@ -41,15 +42,21 @@ func TestTranslate(t *testing.T) {
 func TestTranslateFormat(t *testing.T) {
 	translator := newTranslator()
 
-	// Test formatted translation with time.minutes (has %d)
-	result := translator.TranslateFormat("en", "time.minutes", 42)
+	// Test named translation interpolation with time.minutes.
+	result := translator.TranslateFormat("en", "time.minutes", "count", 42)
 	if result == "" {
 		t.Error("Expected formatted translation, got empty string")
 	}
 
 	// Should contain the number
-	if result == "time.minutes" {
-		t.Error("Translation not found or formatting failed")
+	if result != "42 minutes ago" {
+		t.Errorf("expected named placeholder replacement, got %q", result)
+	}
+	if got := translator.TranslateFormat("en", "time.minutes", 42); got != "{count} minutes ago" {
+		t.Errorf("odd interpolation arguments should leave translation unchanged, got %q", got)
+	}
+	if got := translator.TranslateFormat("en", "time.minutes", map[string]string{"count": "7"}); got != "7 minutes ago" {
+		t.Errorf("named interpolation map failed, got %q", got)
 	}
 }
 
@@ -220,7 +227,7 @@ func TestGlobalTranslator(t *testing.T) {
 		t.Errorf("Translate() should return translation, got '%s'", result)
 	}
 
-	result2 := TranslateFormat("en", "time.minutes", 5)
+	result2 := TranslateFormat("en", "time.minutes", "count", 5)
 	if result2 == "" || result2 == "time.minutes" {
 		t.Errorf("TranslateFormat() should return formatted translation, got '%s'", result2)
 	}
@@ -740,10 +747,17 @@ func TestTemplateFuncWithArgs(t *testing.T) {
 	})
 }
 
-// TestLocaleKeyCompleteness is the build-time key validation required by AI.md PART 30.
-// Every key present in en.json MUST exist in all other locale files.
-// Missing keys cause the CI build to fail (test failure).
-func TestLocaleKeyCompleteness(t *testing.T) {
+// TestLocalesFS verifies all required locale files are embedded in the binary.
+func TestLocalesFS(t *testing.T) {
+	for _, name := range []string{"en", "es", "fr", "de", "zh", "ar", "ja"} {
+		if _, err := localesFS.ReadFile("locales/" + name + ".json"); err != nil {
+			t.Errorf("required embedded locale %s.json is unavailable: %v", name, err)
+		}
+	}
+}
+
+// TestKeyConsistency enforces the locale integrity requirements from AI.md PART 30.
+func TestKeyConsistency(t *testing.T) {
 	// Load all locale files from the embedded FS
 	entries, err := localesFS.ReadDir("locales")
 	if err != nil {
@@ -778,6 +792,11 @@ func TestLocaleKeyCompleteness(t *testing.T) {
 	if !ok {
 		t.Fatal("en.json not found in embedded locales")
 	}
+	for _, required := range []string{"ar", "de", "es", "fr", "ja", "zh"} {
+		if _, exists := locales[required]; !exists {
+			t.Errorf("required locale %s.json is missing", required)
+		}
+	}
 
 	// Build sorted key list for deterministic output
 	keys := make([]string, 0, len(enKeys))
@@ -786,15 +805,62 @@ func TestLocaleKeyCompleteness(t *testing.T) {
 	}
 	sort.Strings(keys)
 
-	// Verify all non-English locales contain every key from en.json
+	placeholderPattern := regexp.MustCompile(`\{[A-Za-z][A-Za-z0-9_]*\}`)
+	readValue := func(lang, key string, raw json.RawMessage) string {
+		t.Helper()
+		var value string
+		if err := json.Unmarshal(raw, &value); err != nil {
+			t.Errorf("locale %s key %q must contain a string: %v", lang, key, err)
+			return ""
+		}
+		if value == "" {
+			t.Errorf("locale %s key %q has an empty value", lang, key)
+		}
+		return value
+	}
+	enValues := make(map[string]string, len(enKeys))
+	for key, raw := range enKeys {
+		enValues[key] = readValue("en", key, raw)
+	}
+
+	// Every locale must have exactly the canonical key set, non-empty strings,
+	// and the same named interpolation variables as the English source.
 	for lang, trans := range locales {
 		if lang == "en" {
 			continue
 		}
 		for _, key := range keys {
-			if _, exists := trans[key]; !exists {
+			raw, exists := trans[key]
+			if !exists {
 				t.Errorf("locale %s missing key %q (present in en.json)", lang, key)
+				continue
+			}
+			value := readValue(lang, key, raw)
+			if got, want := placeholderPattern.FindAllString(value, -1), placeholderPattern.FindAllString(enValues[key], -1); !sameStringSet(got, want) {
+				t.Errorf("locale %s key %q interpolation variables = %v, want %v", lang, key, got, want)
+			}
+		}
+		for key := range trans {
+			if _, exists := enKeys[key]; !exists {
+				t.Errorf("locale %s has orphaned key %q not present in en.json", lang, key)
 			}
 		}
 	}
+}
+
+func sameStringSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	counts := make(map[string]int, len(a))
+	for _, value := range a {
+		counts[value]++
+	}
+	for _, value := range b {
+		counts[value]--
+		if counts[value] < 0 {
+			return false
+		}
+	}
+	return true
 }

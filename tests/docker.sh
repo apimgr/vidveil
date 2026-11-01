@@ -16,7 +16,6 @@ DOCKER_INTERNAL_NAME="vidveil"
 # Colors
 DOCKER_RED='\033[0;31m'
 DOCKER_GREEN='\033[0;32m'
-DOCKER_YELLOW='\033[1;33m'
 DOCKER_BLUE='\033[0;34m'
 DOCKER_NC='\033[0m'
 
@@ -63,7 +62,7 @@ __test_endpoint() {
     local response
     local status
 
-    response=$(docker exec vidveil-test curl -s -w "\n%{http_code}" -X "${method}" "http://localhost:8080${endpoint}" 2>/dev/null || echo "000")
+    response=$(docker exec vidveil-test curl -q -LSs -w "\n%{http_code}" -X "${method}" "http://localhost:8080${endpoint}" 2>/dev/null || echo "000")
     status=$(printf '%s\n' "$response" | tail -n1)
 
     if [ "$status" = "$expected_status" ]; then
@@ -170,21 +169,31 @@ docker run -d \
 
 sleep 3
 
-# Wait for server to be ready (retry health check up to 15 times)
+# Wait for server to be ready. The Alpine container installs test tools before
+# starting the server, so allow up to 60 seconds for package mirrors.
 # Per AI.md PART 13: /server/healthz is canonical; /healthz is opt-in
 __info "Waiting for server to be ready..."
-for i in $(seq 1 15); do
-    if docker exec vidveil-test curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/server/healthz" 2>/dev/null | grep -q -- "200"; then
+DOCKER_RETRIES=60
+DOCKER_SERVER_READY=false
+while [ "$DOCKER_RETRIES" -gt 0 ]; do
+    if docker exec vidveil-test curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:8080/server/healthz" 2>/dev/null | grep -q -- "200"; then
+        DOCKER_SERVER_READY=true
         break
     fi
+    DOCKER_RETRIES=$((DOCKER_RETRIES - 1))
     sleep 1
 done
+if [ "$DOCKER_SERVER_READY" != "true" ]; then
+    echo -e "${DOCKER_RED}x Server did not become ready within 60 seconds${DOCKER_NC}"
+    docker logs vidveil-test 2>&1 || true
+    exit 1
+fi
 
 # Step 7: Test Health Endpoint
 __info "Testing health endpoint..."
 __test_endpoint GET "/server/healthz" "200" "Health check"
 
-# Step 8: Test Vidveil-Specific Endpoints (PART 36)
+# Step 8: Test VidVeil-specific endpoints
 __info "Testing vidveil-specific endpoints..."
 
 __test_endpoint GET "/api/v1/search?q=test" "200" "Search endpoint"
@@ -201,7 +210,7 @@ __test_endpoint GET "/api/healthz" "200" "API unversioned health alias"
 __test_endpoint GET "/api/autodiscover" "200" "API autodiscover"
 
 # Engine detail — use a known engine or expect 404 gracefully
-ENGINE_STATUS=$(docker exec vidveil-test curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/api/v1/engines/google" 2>/dev/null || echo "000")
+ENGINE_STATUS=$(docker exec vidveil-test curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:8080/api/v1/engines/google" 2>/dev/null || echo "000")
 if [ "$ENGINE_STATUS" = "200" ] || [ "$ENGINE_STATUS" = "404" ]; then
     __pass "Engine detail endpoint reachable (HTTP $ENGINE_STATUS)"
 else
@@ -224,7 +233,7 @@ __test_endpoint GET "/humans.txt" "200" "humans.txt"
 __test_endpoint GET "/sitemap.xml" "200" "sitemap.xml"
 __test_endpoint GET "/.well-known/security.txt" "200" "security.txt"
 # pgp-key.asc returns 404 until a PGP keypair is generated (per AI.md PART 11)
-PGP_STATUS=$(docker exec vidveil-test curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/.well-known/pgp-key.asc" 2>/dev/null || echo "000")
+PGP_STATUS=$(docker exec vidveil-test curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:8080/.well-known/pgp-key.asc" 2>/dev/null || echo "000")
 if [ "$PGP_STATUS" = "200" ] || [ "$PGP_STATUS" = "404" ]; then
     __pass "pgp-key.asc (HTTP $PGP_STATUS)"
 else
@@ -246,9 +255,9 @@ __test_endpoint GET "/server/contact" "200" "Contact page"
 __test_endpoint GET "/server/help" "200" "Help page"
 __test_endpoint GET "/offline.html" "200" "Offline page"
 
-# Step 12: Test SSE Streaming (PART 36 requirement)
+# Step 12: Test SSE streaming
 __info "Testing SSE streaming endpoint..."
-SSE_OUTPUT=$(docker exec vidveil-test timeout 10 curl -s -N -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search?q=test" 2>/dev/null || true)
+SSE_OUTPUT=$(docker exec vidveil-test timeout 10 curl -q -LSsfN -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search?q=test" 2>/dev/null || true)
 
 if grep -qE -- "(data:|event:)" <<< "$SSE_OUTPUT"; then
     __pass "SSE streaming - SSE format correct"
@@ -266,14 +275,14 @@ else
     __info "SSE streaming - done message not received (engines may have timed out)"
 fi
 
-SSE_BANG=$(docker exec vidveil-test timeout 5 curl -s -N -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search?q=!ph+test" 2>/dev/null || true)
+SSE_BANG=$(docker exec vidveil-test timeout 5 curl -q -LSsfN -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search?q=!ph+test" 2>/dev/null || true)
 if grep -q -- "data:" <<< "$SSE_BANG"; then
     __pass "SSE streaming - with bang shortcuts"
 else
     __fail "SSE streaming - bang shortcuts not working"
 fi
 
-SSE_ERROR=$(docker exec vidveil-test curl -s -w "\n%{http_code}" -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search" 2>/dev/null)
+SSE_ERROR=$(docker exec vidveil-test curl -q -LSs -w "\n%{http_code}" -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search" 2>/dev/null)
 SSE_STATUS=$(printf '%s\n' "$SSE_ERROR" | tail -n1)
 if [ "$SSE_STATUS" = "400" ]; then
     __pass "SSE streaming - missing query error (HTTP 400)"
@@ -288,8 +297,13 @@ __test_endpoint GET "/api/v1/search" "400" "Search without query 400"
 
 # Step 14: Test batch search (POST)
 __info "Testing POST endpoints..."
-BATCH_STATUS=$(docker exec vidveil-test curl -s -o /dev/null -w "%{http_code}" -X POST \
+CSRF_TOKEN=$(docker exec vidveil-test curl -q -LSsf -D - -o /dev/null \
+    "http://localhost:8080/server/healthz" 2>/dev/null \
+    | sed -n 's/^Set-Cookie: csrf_token=\([^;]*\).*/\1/ip' | tr -d '\r')
+BATCH_STATUS=$(docker exec vidveil-test curl -q -LSs -o /dev/null -w "%{http_code}" -X POST \
     -H "Content-Type: application/json" \
+    -H "Cookie: csrf_token=${CSRF_TOKEN}" \
+    -H "X-CSRF-Token: ${CSRF_TOKEN}" \
     -d '{"queries":[{"q":"test"}]}' \
     "http://localhost:8080/api/v1/search/batch" 2>/dev/null || echo "000")
 if [ "$BATCH_STATUS" = "200" ] || [ "$BATCH_STATUS" = "202" ]; then

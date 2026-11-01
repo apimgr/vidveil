@@ -50,6 +50,16 @@ type EndpointLimiters struct {
 	mu       sync.RWMutex
 }
 
+// Stop shuts down cleanup goroutines owned by the endpoint limiters.
+func (el *EndpointLimiters) Stop() {
+	if el == nil {
+		return
+	}
+	for _, limiter := range el.limiters {
+		limiter.Stop()
+	}
+}
+
 // newEndpointLimiters creates endpoint-specific rate limiters per AI.md PART 12
 func newEndpointLimiters(enabled bool) *EndpointLimiters {
 	el := &EndpointLimiters{
@@ -117,6 +127,9 @@ type RateLimiter struct {
 	// Time window
 	window  time.Duration
 	clients map[string]*clientInfo
+	stopCh  chan struct{}
+	doneCh  chan struct{}
+	stop    sync.Once
 	// Logger for security events per AI.md PART 11
 	logger *logging.AppLogger
 }
@@ -143,12 +156,23 @@ func NewRateLimiter(enabled bool, requests int, windowSeconds int) *RateLimiter 
 		requests: requests,
 		window:   time.Duration(windowSeconds) * time.Second,
 		clients:  make(map[string]*clientInfo),
+		stopCh:   make(chan struct{}),
+		doneCh:   make(chan struct{}),
 	}
 
 	// Start cleanup goroutine
 	go l.cleanup()
 
 	return l
+}
+
+// Stop terminates the stale-client cleanup goroutine and waits for it to exit.
+func (l *RateLimiter) Stop() {
+	if l == nil {
+		return
+	}
+	l.stop.Do(func() { close(l.stopCh) })
+	<-l.doneCh
 }
 
 // SetLogger sets the logger for security event logging per AI.md PART 11
@@ -256,29 +280,35 @@ func (l *RateLimiter) Reset(ip string) time.Time {
 func (l *RateLimiter) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
+	defer close(l.doneCh)
 
-	for range ticker.C {
-		l.mu.Lock()
-		now := time.Now()
-		// Keep entries for 2x window
-		cutoff := now.Add(-l.window * 2)
+	for {
+		select {
+		case <-l.stopCh:
+			return
+		case <-ticker.C:
+			l.mu.Lock()
+			now := time.Now()
+			// Keep entries for 2x window
+			cutoff := now.Add(-l.window * 2)
 
-		for ip, client := range l.clients {
-			client.mu.Lock()
-			// Remove if no recent timestamps
-			hasRecent := false
-			for _, t := range client.timestamps {
-				if t.After(cutoff) {
-					hasRecent = true
-					break
+			for ip, client := range l.clients {
+				client.mu.Lock()
+				// Remove if no recent timestamps
+				hasRecent := false
+				for _, t := range client.timestamps {
+					if t.After(cutoff) {
+						hasRecent = true
+						break
+					}
 				}
+				if !hasRecent {
+					delete(l.clients, ip)
+				}
+				client.mu.Unlock()
 			}
-			if !hasRecent {
-				delete(l.clients, ip)
-			}
-			client.mu.Unlock()
+			l.mu.Unlock()
 		}
-		l.mu.Unlock()
 	}
 }
 
@@ -327,7 +357,7 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 				"error":   "RATE_LIMITED",
 				"message": "Too many requests, retry after " + itoa(retryAfter) + " seconds",
 			})
-			w.Write(append(body, '\n'))
+			_, _ = w.Write(append(body, '\n'))
 			return
 		}
 

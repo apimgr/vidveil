@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/common/i18n"
+	"github.com/apimgr/vidveil/src/common/outsan"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
@@ -111,37 +112,45 @@ type APIResponse struct {
 	Details any    `json:"details,omitempty"`
 }
 
+// marshalPublicJSON is the shared sanitization chokepoint for every public
+// JSON response, including canonical success and error envelopes.
+func marshalPublicJSON(data any) ([]byte, error) {
+	return json.MarshalIndent(outsan.Sanitize(data, config.IsProductionMode()), "", "  ")
+}
+
 // SendOK sends a success response per AI.md PART 9
 func SendOK(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	// Use MarshalIndent with 2-space indentation per PART 14
 	response := APIResponse{OK: true, Data: data}
-	output, err := json.MarshalIndent(response, "", "  ")
+	output, err := marshalPublicJSON(response)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"ok":false,"error":"SERVER_ERROR","message":"Failed to encode response"}`))
-		w.Write([]byte("\n"))
+		_, _ = w.Write([]byte(`{"ok":false,"error":"SERVER_ERROR","message":"Failed to encode response"}`))
+		_, _ = w.Write([]byte("\n"))
 		return
 	}
-	w.Write(output)
-	w.Write([]byte("\n"))
+	_, _ = w.Write(output)
+	_, _ = w.Write([]byte("\n"))
 }
 
 // SendError sends an error response per AI.md PART 9
 func SendError(w http.ResponseWriter, code string, message string) {
 	status := ErrorCodeToHTTP(code)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
 	// Use MarshalIndent with 2-space indentation per PART 14
 	response := APIResponse{OK: false, Error: code, Message: message}
-	output, err := json.MarshalIndent(response, "", "  ")
+	output, err := marshalPublicJSON(response)
 	if err != nil {
-		w.Write([]byte(`{"ok":false,"error":"SERVER_ERROR","message":"Failed to encode error"}`))
-		w.Write([]byte("\n"))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"ok":false,"error":"SERVER_ERROR","message":"Failed to encode error"}`))
+		_, _ = w.Write([]byte("\n"))
 		return
 	}
-	w.Write(output)
-	w.Write([]byte("\n"))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write(output)
+	_, _ = w.Write([]byte("\n"))
 }
 
 // SendNegotiatedError writes an error using the canonical JSON envelope for API
@@ -160,17 +169,19 @@ func SendNegotiatedError(w http.ResponseWriter, r *http.Request, code string, me
 // object per AI.md PART 14 (e.g. {"field":"email","rule":"format"}).
 func sendErrorWithDetails(w http.ResponseWriter, code string, message string, details any) {
 	status := ErrorCodeToHTTP(code)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
 	response := APIResponse{OK: false, Error: code, Message: message, Details: details}
-	output, err := json.MarshalIndent(response, "", "  ")
+	output, err := marshalPublicJSON(response)
 	if err != nil {
-		w.Write([]byte(`{"ok":false,"error":"SERVER_ERROR","message":"Failed to encode error"}`))
-		w.Write([]byte("\n"))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"ok":false,"error":"SERVER_ERROR","message":"Failed to encode error"}`))
+		_, _ = w.Write([]byte("\n"))
 		return
 	}
-	w.Write(output)
-	w.Write([]byte("\n"))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write(output)
+	_, _ = w.Write([]byte("\n"))
 }
 
 // ErrorCodeToHTTP maps error codes to HTTP status codes per AI.md PART 9
@@ -295,7 +306,7 @@ func (h *SearchHandler) renderResponseStatus(w http.ResponseWriter, r *http.Requ
 	}
 
 	// The header's <noscript> theme-switch form (AI.md PART 16) posts to
-	// /server/preferences/save with return_to=CurrentPath so a no-JS visitor
+	// /server/preferences with redirect=CurrentPath so a no-JS visitor
 	// lands back on the page they switched theme from, not always /server/preferences.
 	if data["CurrentPath"] == nil {
 		data["CurrentPath"] = r.URL.RequestURI()
@@ -354,7 +365,7 @@ func (h *SearchHandler) renderResponseStatus(w http.ResponseWriter, r *http.Requ
 		text := convertHTMLToText(html, 80)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(status)
-		w.Write([]byte(text + "\n"))
+		_, _ = w.Write([]byte(text + "\n"))
 		return
 	}
 
@@ -375,7 +386,7 @@ func (h *SearchHandler) renderResponseStatus(w http.ResponseWriter, r *http.Requ
 		text := convertHTMLToText(html, 80)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(status)
-		w.Write([]byte(text + "\n"))
+		_, _ = w.Write([]byte(text + "\n"))
 		return
 	}
 
@@ -389,6 +400,24 @@ func (h *SearchHandler) renderResponseStatus(w http.ResponseWriter, r *http.Requ
 func hasConsentCookie(r *http.Request) bool {
 	c, err := r.Cookie("cookie_consent")
 	return err == nil && c.Value != ""
+}
+
+func consentPreferencesEnabled(r *http.Request, defaultValue bool) bool {
+	cookie, err := r.Cookie("cookie_consent")
+	if err != nil || cookie.Value == "" {
+		return defaultValue
+	}
+	value, err := url.QueryUnescape(cookie.Value)
+	if err != nil {
+		return defaultValue
+	}
+	var consent struct {
+		Preferences bool `json:"preferences"`
+	}
+	if json.Unmarshal([]byte(value), &consent) != nil {
+		return defaultValue
+	}
+	return consent.Preferences
 }
 
 // BannerAnnouncement is the per-request template view of an active,
@@ -549,7 +578,7 @@ func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{
 		html += "</ul>"
 	case "favorites":
 		html += "<h1>Favorites</h1>"
-		html += "<p>Favorites are stored locally in your browser (localStorage).</p>"
+		html += "<p>Favorites are stored on this server and associated with your visitor cookie. A browser copy may be used to restore them on this device.</p>"
 		html += "<p>Visit /favorites in a browser to view and manage your saved items.</p>"
 	case "preferences":
 		html += "<h1>Preferences</h1>"

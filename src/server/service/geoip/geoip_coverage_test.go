@@ -17,12 +17,18 @@ import (
 func newGeoIPForTest(t *testing.T) (*GeoIPService, string) {
 	t.Helper()
 	base := filepath.Join(os.TempDir(), "apimgr")
-	os.MkdirAll(base, 0755)
+	if err := os.MkdirAll(base, 0755); err != nil {
+		t.Fatalf("create GeoIP temp base: %v", err)
+	}
 	tmp, err := os.MkdirTemp(base, "vidveil-geoip-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(tmp) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmp); err != nil {
+			t.Errorf("remove GeoIP temp directory: %v", err)
+		}
+	})
 
 	cfg := config.DefaultAppConfig()
 	cfg.Server.GeoIP.Enabled = true
@@ -173,11 +179,10 @@ func TestClose_AllNilDBs_NoPanic(t *testing.T) {
 func TestIsBlocked_Enabled_AllowCountries_NotInList(t *testing.T) {
 	s, _ := newGeoIPForTest(t)
 	s.appConfig.Server.GeoIP.AllowCountries = []string{"US", "CA"}
-	// DB is not open → Lookup returns empty GeoIPResult → country = ""
-	// "" is not in AllowCountries → should be blocked
+	// DB is not open → lookup cannot resolve a country, so GeoIP fails open.
 	blocked := s.IsBlocked("8.8.8.8")
-	if !blocked {
-		t.Log("IsBlocked(allowlist, no DB): expected true (empty country not in allowlist)")
+	if blocked {
+		t.Error("IsBlocked(allowlist, no DB) = true, want false")
 	}
 }
 
@@ -234,12 +239,18 @@ func TestUpdate_DisabledReturnsNil_Coverage(t *testing.T) {
 
 func TestInitialize_EnabledNoDBs_DownloadAttemptsFail(t *testing.T) {
 	base := filepath.Join(os.TempDir(), "apimgr")
-	os.MkdirAll(base, 0755)
+	if err := os.MkdirAll(base, 0755); err != nil {
+		t.Fatalf("create GeoIP temp base: %v", err)
+	}
 	tmp, err := os.MkdirTemp(base, "vidveil-geoip-nonet-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(tmp) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmp); err != nil {
+			t.Errorf("remove GeoIP temp directory: %v", err)
+		}
+	})
 
 	cfg := config.DefaultAppConfig()
 	cfg.Server.GeoIP.Enabled = true
@@ -275,12 +286,18 @@ func TestUpdate_Enabled_CloseAndReopen(t *testing.T) {
 
 func TestInitialize_CityFallbackURL_BothFail(t *testing.T) {
 	base := filepath.Join(os.TempDir(), "apimgr")
-	os.MkdirAll(base, 0755)
+	if err := os.MkdirAll(base, 0755); err != nil {
+		t.Fatalf("create GeoIP temp base: %v", err)
+	}
 	tmp, err := os.MkdirTemp(base, "vidveil-geoip-city-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(tmp) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmp); err != nil {
+			t.Errorf("remove GeoIP temp directory: %v", err)
+		}
+	})
 
 	cfg := config.DefaultAppConfig()
 	cfg.Server.GeoIP.Enabled = true

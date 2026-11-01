@@ -15,7 +15,8 @@ command -v go-licenses >/dev/null 2>&1 || {
 
 # Check for copyleft licenses
 echo "Scanning dependencies..."
-if go-licenses csv ./... | grep -iE 'GPL|AGPL|LGPL'; then
+licenses=$(go-licenses csv ./...)
+if printf '%s\n' "$licenses" | grep -iE 'GPL|AGPL|LGPL'; then
     echo "ERROR: Copyleft license detected!"
     echo "Remove the dependency or find an alternative."
     exit 1

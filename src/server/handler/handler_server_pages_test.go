@@ -352,7 +352,8 @@ func TestSearchPage_NoJS_RendersResultsInVisibleGrid(t *testing.T) {
 				"Views":     "1000",
 			},
 		},
-		"SearchTime":      int64(42),
+		"SearchTime":      "42 seconds",
+		"SearchSessionID": "test-session",
 		"RelatedSearches": []string{},
 		"SpellSuggestion": "",
 		"EnginesParam":    "",
@@ -363,6 +364,8 @@ func TestSearchPage_NoJS_RendersResultsInVisibleGrid(t *testing.T) {
 		"Page":            1,
 		"PrevPage":        0,
 		"NextPage":        2,
+		"PrevURL":         "/search?page=1&q=test",
+		"NextURL":         "/search?page=2&q=test",
 		"HasMore":         true,
 		"InfiniteScroll":  false,
 		"FavoriteURLs":    map[string]bool{},
@@ -394,6 +397,15 @@ func TestSearchPage_NoJS_RendersResultsInVisibleGrid(t *testing.T) {
 	if !strings.Contains(body, `<span id="result-count">1</span>`) {
 		t.Errorf("search render: server-rendered result count missing")
 	}
+	if !strings.Contains(body, `href="/search?page=2&amp;q=test"`) {
+		t.Errorf("search render: server-rendered next-page link missing")
+	}
+	if !strings.Contains(body, `data-search-session="test-session"`) {
+		t.Errorf("search render: session token for infinite-scroll dedup missing")
+	}
+	if !strings.Contains(body, `id="search-time-container">in 42 seconds</span>`) {
+		t.Errorf("search render: duration should be rendered in human-readable units; body=%s", body)
+	}
 	// 5. The results themselves must not be gated inside a <noscript> block
 	//    (a page-wide <noscript> fallback for an unrelated control, such as
 	//    the header's no-JS theme toggle, is legitimate progressive
@@ -412,6 +424,16 @@ func TestSearchPage_NoJS_RendersResultsInVisibleGrid(t *testing.T) {
 		if strings.Contains(body[start:end], "<noscript>") {
 			t.Errorf("search render: results must not be confined to <noscript>")
 		}
+	}
+
+	// Infinite scroll is an enhancement. A visitor with JavaScript disabled
+	// still needs a server-rendered way to reach the next result page.
+	data["InfiniteScroll"] = true
+	noJSRecorder := httptest.NewRecorder()
+	h.renderResponse(noJSRecorder, req, "search", data)
+	noJSBody := noJSRecorder.Body.String()
+	if !strings.Contains(noJSBody, `<noscript>`) || !strings.Contains(noJSBody, `rel="next"`) || !strings.Contains(noJSBody, `href="/search?page=2&amp;q=test"`) {
+		t.Errorf("infinite-scroll preference must retain no-JS next-page navigation; body=%s", noJSBody)
 	}
 }
 

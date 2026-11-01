@@ -22,14 +22,22 @@ func setupTestDB(t *testing.T) *sql.DB {
 	if err := os.MkdirAll(tmpDir, 0755); err != nil {
 		t.Fatalf("mkdir tempdir: %v", err)
 	}
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Errorf("remove temporary database directory: %v", err)
+		}
+	})
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close test database: %v", err)
+		}
+	})
 
 	// Schema matches security_reports DDL in
 	// src/server/service/database/migrations.go.
@@ -108,6 +116,9 @@ func TestCreateReport_And_GetReportStatus(t *testing.T) {
 	}
 	if status.TrackingID != sub.TrackingID {
 		t.Fatalf("GetReportStatus: want tracking id %q, got %q", sub.TrackingID, status.TrackingID)
+	}
+	if _, err := GetReportStatus(ctx, db, sub.TrackingID, sub.ReportToken); err == nil {
+		t.Fatal("GetReportStatus: expected same-day token reuse to be rejected")
 	}
 }
 

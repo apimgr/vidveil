@@ -72,7 +72,7 @@ func TestPgpDeleteCore_MarksRevoked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	defer dbMgr.Close()
+	defer func() { _ = dbMgr.Close() }()
 	meta, err := pgp.GetKeypairMeta(dbMgr.GetDB())
 	if err != nil {
 		t.Fatalf("GetKeypairMeta: %v", err)

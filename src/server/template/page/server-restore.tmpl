@@ -1,0 +1,32 @@
+{{define "server-restore"}}
+{{template "public" .}}
+{{end}}
+
+{{define "content"}}
+<div class="content">
+  <div class="prose">
+    <h1>{{ t "restore.title" }}</h1>
+    <p>{{ t "restore.description" }}</p>
+    {{if .RestoreError}}<p class="error-message" role="alert">{{.RestoreError}}</p>{{end}}
+    {{if .RestoreSuccess}}<p class="alert-success" role="status">{{.RestoreSuccess}}</p>{{end}}
+    <form method="post" action="/server/restore" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <div class="form-group">
+        <label for="restore-backup">{{ t "restore.backup_file" }}</label>
+        <input id="restore-backup" type="file" name="backup" accept=".tar.gz,.enc" required>
+      </div>
+      <div class="form-group">
+        <label for="restore-operator-token">{{ t "restore.operator_token" }}</label>
+        <input id="restore-operator-token" type="password" name="operator_token" autocomplete="current-password" required>
+      </div>
+      <div class="form-group">
+        <label for="restore-password">{{ t "restore.backup_password" }}</label>
+        <input id="restore-password" type="password" name="password" autocomplete="off">
+      </div>
+      <div class="form-actions">
+        <button class="primary" type="submit">{{ t "restore.submit" }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{{end}}

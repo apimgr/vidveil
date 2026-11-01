@@ -96,6 +96,16 @@ func (s *Server) registerTorControlRoutes(r chi.Router) {
 	})
 }
 
+func (s *Server) sendTorControlError(w http.ResponseWriter, operation string, err error) {
+	if s.logger != nil {
+		s.logger.Error("Tor control operation failed", map[string]interface{}{
+			"operation": operation,
+			"error":     err.Error(),
+		})
+	}
+	handler.SendError(w, "SERVER_ERROR", "Tor control operation failed")
+}
+
 func (s *Server) handleTorControlStatus(w http.ResponseWriter, r *http.Request) {
 	if s.torControl == nil {
 		handler.SendError(w, "NOT_FOUND", "tor control not available")
@@ -128,7 +138,7 @@ func (s *Server) handleTorControlRestart(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := s.torControl.Restart(r.Context()); err != nil {
-		handler.SendError(w, "SERVER_ERROR", err.Error())
+		s.sendTorControlError(w, "restart", err)
 		return
 	}
 	handler.SendOK(w, map[string]interface{}{"message": "tor restarted"})
@@ -140,7 +150,7 @@ func (s *Server) handleTorControlRegenerate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := s.torControl.RegenerateAddress(); err != nil {
-		handler.SendError(w, "SERVER_ERROR", err.Error())
+		s.sendTorControlError(w, "regenerate", err)
 		return
 	}
 	handler.SendOK(w, map[string]interface{}{
@@ -163,7 +173,7 @@ func (s *Server) handleTorControlVanityStart(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err := s.torControl.GenerateVanityAddress(req.Prefix); err != nil {
-		handler.SendError(w, "SERVER_ERROR", err.Error())
+		s.sendTorControlError(w, "vanity_start", err)
 		return
 	}
 	handler.SendOK(w, map[string]interface{}{"message": "vanity generation started"})
@@ -175,7 +185,7 @@ func (s *Server) handleTorControlVanityApply(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err := s.torControl.ApplyVanityAddress(); err != nil {
-		handler.SendError(w, "SERVER_ERROR", err.Error())
+		s.sendTorControlError(w, "vanity_apply", err)
 		return
 	}
 	handler.SendOK(w, map[string]interface{}{
@@ -198,7 +208,7 @@ func (s *Server) handleTorControlImportKeys(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := s.torControl.ImportKeys(req.SecretKey); err != nil {
-		handler.SendError(w, "SERVER_ERROR", err.Error())
+		s.sendTorControlError(w, "import_keys", err)
 		return
 	}
 	handler.SendOK(w, map[string]interface{}{

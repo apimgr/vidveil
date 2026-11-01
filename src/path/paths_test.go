@@ -574,7 +574,11 @@ func TestEnsureDirFailsWhenDirectoryNotWritable(t *testing.T) {
 	if err := os.Chmod(target, 0555); err != nil {
 		t.Fatalf("setup: Chmod: %v", err)
 	}
-	t.Cleanup(func() { os.Chmod(target, 0755) })
+	t.Cleanup(func() {
+		if err := os.Chmod(target, 0755); err != nil {
+			t.Errorf("restore directory permissions: %v", err)
+		}
+	})
 
 	err := EnsureDir(target, false)
 	if err == nil {
@@ -707,6 +711,17 @@ func TestSafeFilePathBlocksTraversal(t *testing.T) {
 	_, err := SafeFilePath(tmp, "../outside")
 	if err == nil {
 		t.Error("SafeFilePath('..') = nil error, want ErrPathTraversal")
+	}
+}
+
+func TestSafeFilePathRejectsSymlinkEscape(t *testing.T) {
+	base := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(base, "linked")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, err := SafeFilePath(base, "linked/secret"); err == nil {
+		t.Fatal("SafeFilePath accepted a path through a symlink outside the base")
 	}
 }
 

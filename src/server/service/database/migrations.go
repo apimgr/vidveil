@@ -73,7 +73,78 @@ func (sm *SchemaManager) EnsureSchema() error {
 			return fmt.Errorf("failed to create table: %w", err)
 		}
 	}
+	if err := sm.ensureOwnerTokenColumns(ctx); err != nil {
+		return err
+	}
+	if err := sm.ensureFavoriteOwnerColumn(ctx); err != nil {
+		return err
+	}
 
+	return nil
+}
+
+func (sm *SchemaManager) ensureFavoriteOwnerColumn(ctx context.Context) error {
+	var count int
+	if err := sm.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('favorites') WHERE name = 'owner_id'`).Scan(&count); err != nil {
+		return fmt.Errorf("inspect favorites ownership schema: %w", err)
+	}
+	if count == 0 {
+		if _, err := sm.db.ExecContext(ctx, `ALTER TABLE favorites ADD COLUMN owner_id TEXT REFERENCES owners(id)`); err != nil {
+			return fmt.Errorf("add favorites owner_id column: %w", err)
+		}
+	}
+	if _, err := sm.db.ExecContext(ctx, `INSERT OR IGNORE INTO owners(id) SELECT DISTINCT 'legacy-favorite-' || visitor_id FROM favorites WHERE owner_id IS NULL`); err != nil {
+		return fmt.Errorf("preserve legacy favorite owners: %w", err)
+	}
+	if _, err := sm.db.ExecContext(ctx, `UPDATE favorites SET owner_id = 'legacy-favorite-' || visitor_id WHERE owner_id IS NULL`); err != nil {
+		return fmt.Errorf("assign legacy favorite owners: %w", err)
+	}
+	if _, err := sm.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_favorites_owner_id ON favorites(owner_id)`); err != nil {
+		return fmt.Errorf("index favorite owners: %w", err)
+	}
+	return nil
+}
+
+// ensureOwnerTokenColumns upgrades databases created before anonymous owners
+// were added. Legacy tokens remain linked to isolated owners and cannot be
+// revealed because their original raw values were never stored.
+func (sm *SchemaManager) ensureOwnerTokenColumns(ctx context.Context) error {
+	columns := []struct{ name, ddl string }{
+		{"owner_id", `ALTER TABLE api_tokens ADD COLUMN owner_id TEXT`},
+		{"kind", `ALTER TABLE api_tokens ADD COLUMN kind TEXT NOT NULL DEFAULT 'linked'`},
+		{"name", `ALTER TABLE api_tokens ADD COLUMN name TEXT`},
+		{"token_suffix", `ALTER TABLE api_tokens ADD COLUMN token_suffix TEXT NOT NULL DEFAULT ''`},
+		{"token_enc", `ALTER TABLE api_tokens ADD COLUMN token_enc TEXT NOT NULL DEFAULT ''`},
+		{"rotated_at", `ALTER TABLE api_tokens ADD COLUMN rotated_at INTEGER`},
+	}
+	for _, column := range columns {
+		var count int
+		if err := sm.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('api_tokens') WHERE name = ?`, column.name).Scan(&count); err != nil {
+			return fmt.Errorf("inspect API-token schema: %w", err)
+		}
+		if count == 0 {
+			if _, err := sm.db.ExecContext(ctx, column.ddl); err != nil {
+				return fmt.Errorf("add API-token %s column: %w", column.name, err)
+			}
+		}
+	}
+	if _, err := sm.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO owners(id)
+		SELECT 'legacy-' || id FROM api_tokens WHERE owner_id IS NULL`); err != nil {
+		return fmt.Errorf("preserve legacy API-token identities: %w", err)
+	}
+	if _, err := sm.db.ExecContext(ctx, `
+		UPDATE api_tokens SET owner_id = 'legacy-' || id WHERE owner_id IS NULL`); err != nil {
+		return fmt.Errorf("assign legacy API-token owners: %w", err)
+	}
+	for _, ddl := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_api_tokens_owner ON api_tokens(owner_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_primary ON api_tokens(owner_id) WHERE kind = 'primary' AND revoked_at IS NULL`,
+	} {
+		if _, err := sm.db.ExecContext(ctx, ddl); err != nil {
+			return fmt.Errorf("create owner-token index: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -208,12 +279,11 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 		// Favorites table per AI.md PART 16 progressive-enhancement rule
 		// ("core functionality MUST work without JS") and PART 32's
 		// cookie-vs-localStorage split (cookies are server-read/authoritative;
-		// localStorage is JS-only, never load-bearing). visitor_id is an
-		// opaque value from the visitor_id cookie (no account required) —
-		// the actual favorite data lives here, not in the cookie or in JS
-		// storage.
+		// localStorage is JS-only, never load-bearing). owner_id binds each
+		// favorite to its anonymous primary-token owner.
 		`CREATE TABLE IF NOT EXISTS favorites (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			owner_id TEXT NOT NULL REFERENCES owners(id),
 			visitor_id TEXT NOT NULL,
 			url TEXT NOT NULL,
 			title TEXT NOT NULL,
@@ -224,6 +294,39 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 		)`,
 
 		`CREATE INDEX IF NOT EXISTS idx_favorites_visitor_id ON favorites(visitor_id)`,
+
+		// API tokens per AI.md PART 11: token_hash stores the SHA-256 digest;
+		// token_enc stores the AES-256-GCM encrypted raw owner token for reveal.
+		// The operator server.token is never stored in this table.
+		`CREATE TABLE IF NOT EXISTS api_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			owner_id TEXT REFERENCES owners(id) ON DELETE CASCADE,
+			kind TEXT NOT NULL DEFAULT 'linked' CHECK (kind IN ('primary', 'linked')),
+			name TEXT,
+			token_hash TEXT NOT NULL UNIQUE,
+			token_prefix TEXT NOT NULL,
+			token_suffix TEXT NOT NULL DEFAULT '',
+			token_enc TEXT NOT NULL DEFAULT '',
+			resource_type TEXT NOT NULL,
+			resource_id TEXT NOT NULL,
+			created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+			rotated_at INTEGER,
+			expires_at INTEGER,
+			last_used_at INTEGER,
+			revoked_at INTEGER,
+			revoked_reason TEXT
+		)`,
+
+		`CREATE INDEX IF NOT EXISTS idx_api_tokens_hash     ON api_tokens(token_hash)`,
+		`CREATE INDEX IF NOT EXISTS idx_api_tokens_prefix   ON api_tokens(token_prefix)`,
+		`CREATE INDEX IF NOT EXISTS idx_api_tokens_resource ON api_tokens(resource_type, resource_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_api_tokens_active   ON api_tokens(revoked_at) WHERE revoked_at IS NULL`,
+
+		`CREATE TABLE IF NOT EXISTS owners (
+			id TEXT PRIMARY KEY,
+			created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+			last_seen_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+		)`,
 	}
 }
 

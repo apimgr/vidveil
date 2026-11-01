@@ -4,10 +4,13 @@
 
 package system
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestRunAsWindowsService_ReturnsUnsupportedError(t *testing.T) {
-	err := RunAsWindowsService(func() error { return nil })
+	err := RunAsWindowsService(func(context.Context) error { return nil })
 	if err == nil {
 		t.Error("RunAsWindowsService() = nil, want error on non-Windows platform")
 	}

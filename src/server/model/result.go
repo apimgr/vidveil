@@ -66,6 +66,16 @@ type SearchData struct {
 	RelatedSearches []string                  `json:"related_searches,omitempty"`
 	SpellSuggestion string                    `json:"spell_suggestion,omitempty"`
 	InvalidBang     string                    `json:"invalid_bang,omitempty"`
+	Display         *SearchDisplay            `json:"display,omitempty"`
+}
+
+// SearchDisplay carries opt-in localized strings for browser presentation.
+// The machine-readable search_time_ms and result/pagination fields stay unchanged.
+type SearchDisplay struct {
+	SearchTime         string   `json:"search_time"`
+	ResultCount        int      `json:"result_count"`
+	ResultCountText    string   `json:"result_count_text"`
+	ResultCountFormats []string `json:"result_count_formats"`
 }
 
 // PaginationData holds pagination information

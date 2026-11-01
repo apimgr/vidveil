@@ -24,10 +24,14 @@ const (
 
 // String returns the string representation of the layout mode
 func (m LayoutMode) String() string {
-	return [...]string{
+	names := [...]string{
 		"micro", "minimal", "compact", "standard",
 		"wide", "ultrawide", "massive",
-	}[m]
+	}
+	if int(m) < 0 || int(m) >= len(names) {
+		return "unknown"
+	}
+	return names[m]
 }
 
 // GetLayoutMode determines layout mode from terminal dimensions

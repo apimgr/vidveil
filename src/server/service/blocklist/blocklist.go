@@ -100,7 +100,7 @@ func (s *BlocklistService) downloadAndParse(ctx context.Context, source config.B
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed with status: %d", resp.StatusCode)
@@ -112,11 +112,14 @@ func (s *BlocklistService) downloadAndParse(ctx context.Context, source config.B
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Copy response to file
 	if _, err := io.Copy(file, resp.Body); err != nil {
 		return fmt.Errorf("failed to save file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("failed to close blocklist file: %w", err)
 	}
 
 	// Parse and load into memory
@@ -129,7 +132,7 @@ func (s *BlocklistService) loadBlocklist(filename, blockType string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open blocklist: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -143,9 +146,10 @@ func (s *BlocklistService) loadBlocklist(filename, blockType string) error {
 			continue
 		}
 
-		if blockType == "ip" {
+		switch blockType {
+		case "ip":
 			s.parseIPLine(line)
-		} else if blockType == "domain" {
+		case "domain":
 			s.parseDomainLine(line)
 		}
 	}

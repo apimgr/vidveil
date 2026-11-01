@@ -51,7 +51,7 @@ func (e *PornHubEngine) Search(ctx context.Context, query string, page int) ([]m
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {

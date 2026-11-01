@@ -6,6 +6,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -313,7 +314,13 @@ func TestRenderHealthzHTML_EmptyFS_Returns500(t *testing.T) {
 // ── Autodiscover ──────────────────────────────────────────────────────────────
 
 func TestAutodiscover_ReturnsJSON(t *testing.T) {
+	originalFetcher := cliReleaseMetadataFetcher
+	cliReleaseMetadataFetcher = func(context.Context, string) (cliReleaseMetadata, error) {
+		return cliReleaseMetadata{Versions: map[string]cliVersionMetadata{}, Assets: map[string]string{}}, nil
+	}
+	t.Cleanup(func() { cliReleaseMetadataFetcher = originalFetcher })
 	h := newRenderTestHandler()
+	h.appConfig.Server.Update.CLIMinVersion = "1.2.3"
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/autodiscover", nil)
 
@@ -325,6 +332,9 @@ func TestAutodiscover_ReturnsJSON(t *testing.T) {
 	ct := rr.Header().Get("Content-Type")
 	if !strings.Contains(ct, "application/json") {
 		t.Errorf("Autodiscover: Content-Type = %q, want application/json", ct)
+	}
+	if !strings.Contains(rr.Body.String(), `"cli_min_version": "1.2.3"`) && !strings.Contains(rr.Body.String(), `"cli_min_version":"1.2.3"`) {
+		t.Errorf("Autodiscover body = %s, want configured minimum CLI version", rr.Body.String())
 	}
 }
 

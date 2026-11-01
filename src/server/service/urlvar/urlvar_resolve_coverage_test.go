@@ -76,6 +76,18 @@ func TestResolveFQDN(t *testing.T) {
 		t.Errorf("tor: got %q want abcdef.onion", got)
 	}
 
+	rI2P := newResolver(t)
+	rI2P.appCfg.Server.I2P.Enabled = true
+	rI2P.appCfg.Server.I2P.Address = "abc123.b32.i2p"
+	reqI2P := trustedReq(http.MethodGet, "/")
+	reqI2P.Host = "abc123.b32.i2p"
+	reqI2P.Header.Set("X-Forwarded-Host", "spoofed.example.com")
+	reqI2P.Header.Set("X-Forwarded-Proto", "https")
+	proto, host, port := rI2P.GetURLVars(reqI2P)
+	if proto != "http" || host != "abc123.b32.i2p" || port != "" {
+		t.Errorf("I2P URL vars = (%q, %q, %q), want (http, configured I2P host, empty port)", proto, host, port)
+	}
+
 	// X-Forwarded-Host with a port is stripped to the host.
 	r := newResolver(t)
 	req := trustedReq(http.MethodGet, "/")

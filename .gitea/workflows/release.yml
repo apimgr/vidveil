@@ -5,6 +5,7 @@ on:
     tags:
       - 'v*'
       - '[0-9]*.[0-9]*.[0-9]*'
+  workflow_dispatch: {}
 
 concurrency:
   group: release-${{ gitea.ref }}
@@ -133,6 +134,11 @@ jobs:
           ARCHIVE_NAME="${{ env.PROJECT_NAME }}-${{ env.VERSION }}-source.tar.gz"
           tar -czf "$ARCHIVE_NAME" --exclude=.git --exclude=.github --exclude=.gitea --exclude=.forgejo --exclude=binaries --exclude=releases --exclude='*.tar.gz' .
           mv "$ARCHIVE_NAME" binaries/
+
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          docker run --rm -v "$PWD":/app -w /app -e GOFLAGS=-buildvcs=false casjaysdev/go:latest \
+            cyclonedx-gomod mod -json -output "binaries/${{ env.PROJECT_NAME }}-${{ env.VERSION }}-sbom.cdx.json"
 
       - name: Generate checksums
         run: |

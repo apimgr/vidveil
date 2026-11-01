@@ -14,15 +14,15 @@ func TestMatchesBranch(t *testing.T) {
 	}{
 		{"stable release matches stable branch", "1.2.3", false, "stable", true},
 		{"stable release matches beta branch", "1.2.3", false, "beta", true},
-		{"stable release matches daily branch", "1.2.3", false, "daily", true},
+		{"stable release matches devel branch", "1.2.3", false, "devel", true},
 		{"beta prerelease matches beta branch", "1.2.3-beta", true, "beta", true},
-		{"beta prerelease matches daily branch", "1.2.3-beta", true, "daily", true},
+		{"beta prerelease matches devel branch", "1.2.3-beta", true, "devel", true},
 		{"beta prerelease excluded from stable branch", "1.2.3-beta", true, "stable", false},
-		{"daily prerelease matches daily branch", "20260725123045", true, "daily", true},
-		{"daily prerelease excluded from beta branch", "20260725123045", true, "beta", false},
-		{"daily prerelease excluded from stable branch", "20260725123045", true, "stable", false},
-		{"non-daily-length prerelease excluded from daily", "202607251230", true, "daily", false},
-		{"dotted 14-char prerelease not treated as daily", "2026.07.251230", true, "daily", false},
+		{"devel release matches devel branch", "devel", true, "devel", true},
+		{"devel release excluded from beta branch", "devel", true, "beta", false},
+		{"devel release excluded from stable branch", "devel", true, "stable", false},
+		{"timestamp prerelease excluded from devel", "20260725123045", true, "devel", false},
+		{"dotted timestamp prerelease excluded from devel", "2026.07.251230", true, "devel", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

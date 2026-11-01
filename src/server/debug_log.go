@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/outsan"
 	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
@@ -22,17 +23,21 @@ func (s *Server) debugLog(r *http.Request, status int, duration time.Duration, s
 	if urlvar.IsTorRequest(r) {
 		remoteAddr = urlvar.TorClientLabel(r)
 	}
+	query := ""
+	if r.URL.RawQuery != "" {
+		query = outsan.RedactURL("?" + r.URL.RawQuery)
+	}
 
 	slog.Debug("request",
 		"method", r.Method,
 		"path", r.URL.Path,
-		"query", r.URL.RawQuery,
+		"query", query,
 		"status", status,
 		"duration_ms", duration.Milliseconds(),
 		"size", size,
 		"remote_addr", remoteAddr,
 		"user_agent", r.UserAgent(),
-		"referer", r.Referer(),
+		"referer", outsan.RedactURL(r.Referer()),
 		"request_id", r.Header.Get("X-Request-ID"),
 	)
 }

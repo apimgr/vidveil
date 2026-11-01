@@ -4,7 +4,10 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestDefaultAppConfig(t *testing.T) {
@@ -18,13 +21,31 @@ func TestDefaultAppConfig(t *testing.T) {
 	if cfg.Server.Mode != "production" {
 		t.Errorf("Expected mode 'production', got '%s'", cfg.Server.Mode)
 	}
+	if !cfg.Server.MCP.Enabled {
+		t.Error("MCP should be enabled by default per AI.md PART 11")
+	}
+	if cfg.Server.Tokens.MaxLinked != 25 || cfg.Server.Tokens.CookieMaxAge != "1y" || cfg.Server.Tokens.IdlePurgeDays != 0 {
+		t.Errorf("owner-token defaults = %+v, want max-linked 25, cookie age 1y, and no idle purge", cfg.Server.Tokens)
+	}
+	if !cfg.Web.LLMS.Enabled || !cfg.Web.LLMS.IncludeEndpoints || cfg.Web.LLMS.IncludeSchemas {
+		t.Errorf("llms.txt defaults = %+v, want enabled/endpoints/no schemas", cfg.Web.LLMS)
+	}
 
 	if cfg.Server.Branding.Title != "Vidveil" {
 		t.Errorf("Expected title 'Vidveil', got '%s'", cfg.Server.Branding.Title)
 	}
+	if cfg.Server.Branding.RefreshInterval != "24h" {
+		t.Errorf("Expected daily branding refresh interval, got %q", cfg.Server.Branding.RefreshInterval)
+	}
+	if !cfg.Server.SEO.Sitemap.Enabled || cfg.Server.SEO.Sitemap.MaxURLs != 50000 || cfg.Server.SEO.Sitemap.IncludeImages {
+		t.Errorf("Expected sitemap defaults enabled/50000/no images, got %+v", cfg.Server.SEO.Sitemap)
+	}
 
 	if cfg.Server.Address != "[::]" {
 		t.Errorf("Expected address '[::]', got '%s'", cfg.Server.Address)
+	}
+	if cfg.Server.Restore != DefaultRestoreConfig() {
+		t.Errorf("restore limits = %+v, want defaults %+v", cfg.Server.Restore, DefaultRestoreConfig())
 	}
 
 	// Check web defaults
@@ -35,6 +56,125 @@ func TestDefaultAppConfig(t *testing.T) {
 	// Check search defaults
 	if cfg.Search.ResultsPerPage != 50 {
 		t.Errorf("Expected 50 results per page, got %d", cfg.Search.ResultsPerPage)
+	}
+}
+
+func TestNormalizeUpdateChannel(t *testing.T) {
+	cases := map[string]string{
+		"":              "stable",
+		"stable":        "stable",
+		"beta":          "beta",
+		"devel":         "devel",
+		"daily":         "devel",
+		"rolling":       "devel",
+		"dev":           "devel",
+		"development":   "devel",
+		" Development ": "devel",
+	}
+	for input, want := range cases {
+		got, valid := NormalizeUpdateChannel(input)
+		if !valid || got != want {
+			t.Errorf("NormalizeUpdateChannel(%q) = (%q, %v), want (%q, true)", input, got, valid, want)
+		}
+	}
+	if _, valid := NormalizeUpdateChannel("nightly"); valid {
+		t.Error("NormalizeUpdateChannel(nightly) unexpectedly succeeded")
+	}
+}
+
+func TestMCPAndLLMSConfigKeys(t *testing.T) {
+	cfg := DefaultAppConfig()
+	contents := []byte("server:\n  mcp:\n    enabled: false\nweb:\n  api_contact: api@example.test\n  llms:\n    enabled: false\n    include_endpoints: false\n    include_schemas: true\n    custom_sections:\n      - '## More\\nDetails'\n")
+	if err := yaml.Unmarshal(contents, cfg); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	if cfg.Server.MCP.Enabled {
+		t.Fatal("server.mcp.enabled was not read")
+	}
+	if cfg.Web.LLMS.Enabled || cfg.Web.LLMS.IncludeEndpoints || !cfg.Web.LLMS.IncludeSchemas {
+		t.Fatalf("web.llms config = %+v", cfg.Web.LLMS)
+	}
+	if cfg.Web.APIContact != "api@example.test" || len(cfg.Web.LLMS.CustomSections) != 1 {
+		t.Fatalf("web contact/sections = %q / %#v", cfg.Web.APIContact, cfg.Web.LLMS.CustomSections)
+	}
+}
+
+func TestDefaultConfigOmitsAdminPanelSettings(t *testing.T) {
+	data, err := yaml.Marshal(DefaultAppConfig())
+	if err != nil {
+		t.Fatalf("marshal default config: %v", err)
+	}
+	text := string(data)
+	if strings.Contains(text, "\n  admin:\n") {
+		t.Fatal("default config contains unsupported server.admin panel settings")
+	}
+	if !strings.Contains(text, "\n        admin:\n") {
+		t.Fatal("default config omits the legitimate server.contact.admin notification role")
+	}
+}
+
+func TestParseSizeBytes(t *testing.T) {
+	tests := []struct {
+		value string
+		want  uint64
+		bad   bool
+	}{{"1", 1, false}, {"1G", 1 << 30, false}, {"512M", 512 << 20, false}, {"2 KB", 2 << 10, false}, {"0", 0, true}, {"invalid", 0, true}, {"9223372036854775808", 0, true}}
+	for _, test := range tests {
+		got, err := ParseSizeBytes(test.value)
+		if (err != nil) != test.bad || (!test.bad && got != test.want) {
+			t.Errorf("ParseSizeBytes(%q) = %d, %v; want %d, error=%t", test.value, got, err, test.want, test.bad)
+		}
+	}
+}
+
+func TestValidateRestoreConfigUsesSpecDefaults(t *testing.T) {
+	cfg := RestoreConfig{MaxArchiveSize: "bad", MaxExpandedSize: "0", MaxFiles: 0, MaxFileSize: "-1G", MaxRatio: 0}
+	defaults := DefaultRestoreConfig()
+	validateRestoreConfig(&cfg, defaults)
+	if cfg != defaults {
+		t.Fatalf("validated restore config = %+v, want %+v", cfg, defaults)
+	}
+}
+
+func TestRestoreLimitEnvironmentOverridesAreValidated(t *testing.T) {
+	t.Setenv("VIDVEIL_SERVER_RESTORE_MAX_FILES", "0")
+	config := DefaultAppConfig()
+	applyEnvOverrides(config)
+	validateRestoreConfig(&config.Server.Restore, DefaultRestoreConfig())
+	if config.Server.Restore.MaxFiles != DefaultRestoreConfig().MaxFiles {
+		t.Fatalf("restore.max_files = %d, want default %d", config.Server.Restore.MaxFiles, DefaultRestoreConfig().MaxFiles)
+	}
+}
+
+func TestRestoreAndCLIMinimumConfigurationKeys(t *testing.T) {
+	cfg := DefaultAppConfig()
+	contents := []byte("server:\n  restore:\n    max_archive_size: 2G\n    max_expanded_size: 6G\n    max_files: 20000\n    max_file_size: 1G\n    max_ratio: 80\n  update:\n    cli_min_version: 1.2.3\n")
+	if err := yaml.Unmarshal(contents, cfg); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	if cfg.Server.Restore != (RestoreConfig{MaxArchiveSize: "2G", MaxExpandedSize: "6G", MaxFiles: 20000, MaxFileSize: "1G", MaxRatio: 80}) {
+		t.Fatalf("restore config = %+v", cfg.Server.Restore)
+	}
+	if cfg.Server.Update.CLIMinVersion != "1.2.3" {
+		t.Fatalf("minimum CLI version = %q, want 1.2.3", cfg.Server.Update.CLIMinVersion)
+	}
+}
+
+func TestSaveAppConfigPermissions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "server.yml")
+	if err := SaveAppConfig(DefaultAppConfig(), path); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat config: %v", err)
+	}
+	want := os.FileMode(0600)
+	if os.Geteuid() == 0 {
+		want = 0644
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Fatalf("config permissions = %04o, want %04o", got, want)
 	}
 }
 
@@ -200,7 +340,11 @@ func TestIsValidHost(t *testing.T) {
 func TestLoadAndSave(t *testing.T) {
 	// Create temp directory
 	tmpDir := filepath.Join(os.TempDir(), "apimgr-test", "vidveil-config-test")
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Errorf("remove temporary config directory: %v", err)
+		}
+	})
 
 	configDir := filepath.Join(tmpDir, "config")
 	dataDir := filepath.Join(tmpDir, "data")
@@ -243,8 +387,7 @@ func TestLoadAndSave(t *testing.T) {
 
 func TestGetFQDN(t *testing.T) {
 	// Test with DOMAIN env var
-	os.Setenv("DOMAIN", "test.example.com")
-	defer os.Unsetenv("DOMAIN")
+	t.Setenv("DOMAIN", "test.example.com")
 
 	fqdn := GetFQDN()
 	if fqdn != "test.example.com" {
@@ -256,8 +399,7 @@ func TestGetDisplayHost(t *testing.T) {
 	cfg := DefaultAppConfig()
 
 	// Set DOMAIN to test
-	os.Setenv("DOMAIN", "vidveil.example.com")
-	defer os.Unsetenv("DOMAIN")
+	t.Setenv("DOMAIN", "vidveil.example.com")
 
 	host := GetDisplayHost(cfg)
 
@@ -449,47 +591,6 @@ func TestIsValidSSLHost(t *testing.T) {
 	}
 }
 
-// TestAdminURLPrefix verifies the /server/{admin_path} prefix is returned.
-func TestAdminURLPrefix(t *testing.T) {
-	cfg := DefaultAppConfig()
-
-	cfg.Server.Admin.Path = "admin"
-	if got := cfg.AdminURLPrefix(); got != "/server/admin" {
-		t.Errorf("AdminURLPrefix with 'admin': got %q, want %q", got, "/server/admin")
-	}
-
-	// Empty path falls back to "admin"
-	cfg.Server.Admin.Path = ""
-	if got := cfg.AdminURLPrefix(); got != "/server/admin" {
-		t.Errorf("AdminURLPrefix with empty path: got %q, want %q", got, "/server/admin")
-	}
-
-	cfg.Server.Admin.Path = "myadmin"
-	if got := cfg.AdminURLPrefix(); got != "/server/myadmin" {
-		t.Errorf("AdminURLPrefix with 'myadmin': got %q, want %q", got, "/server/myadmin")
-	}
-}
-
-// TestAdminAPIPrefix verifies the canonical admin API prefix matches AdminURLPrefix.
-func TestAdminAPIPrefix(t *testing.T) {
-	cfg := DefaultAppConfig()
-
-	cfg.Server.Admin.Path = "admin"
-	if got := cfg.AdminAPIPrefix(); got != "/server/admin" {
-		t.Errorf("AdminAPIPrefix with 'admin': got %q, want %q", got, "/server/admin")
-	}
-
-	cfg.Server.Admin.Path = ""
-	if got := cfg.AdminAPIPrefix(); got != "/server/admin" {
-		t.Errorf("AdminAPIPrefix with empty path: got %q, want %q", got, "/server/admin")
-	}
-
-	cfg.Server.Admin.Path = "myadmin"
-	if got := cfg.AdminAPIPrefix(); got != "/server/myadmin" {
-		t.Errorf("AdminAPIPrefix with 'myadmin': got %q, want %q", got, "/server/myadmin")
-	}
-}
-
 // TestGetPublicURL covers FQDN set, address empty, and address 0.0.0.0.
 func TestGetPublicURL(t *testing.T) {
 	cfg := DefaultAppConfig()
@@ -527,7 +628,7 @@ func TestGetFQDNWithEnv(t *testing.T) {
 
 // TestGetFQDNWithoutEnv verifies that GetFQDN returns a non-empty string when DOMAIN is unset.
 func TestGetFQDNWithoutEnv(t *testing.T) {
-	os.Unsetenv("DOMAIN")
+	t.Setenv("DOMAIN", "")
 	got := GetFQDN()
 	if got == "" {
 		t.Error("GetFQDN without DOMAIN env returned empty string")
@@ -552,7 +653,9 @@ func TestNewWatcherExistingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	tmp.Close()
+	if err := tmp.Close(); err != nil {
+		t.Fatalf("close temporary config file: %v", err)
+	}
 
 	info, err := os.Stat(tmp.Name())
 	if err != nil {
@@ -604,13 +707,34 @@ func TestWatcherReload(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "server.yml")
 
 	cfg := DefaultAppConfig()
+	cfg.Server.SEO.Sitemap.MaxURLs = 19
+	cfg.Server.SEO.OGImage = "https://assets.example.test/social.png"
+	cfg.Server.Token = "reloaded-operator-token"
+	cfg.Server.CORS.MaxAge = 321
+	cfg.Server.Contact.General.Email = "contact@example.test"
+	cfg.Server.Privacy.Data.Sold = true
+	cfg.Server.BaseURL = "/service"
 	if err := SaveAppConfig(cfg, configPath); err != nil {
 		t.Fatalf("SaveAppConfig failed: %v", err)
 	}
 
+	cfg.Server.SEO.Sitemap.MaxURLs = 7
+	cfg.Server.SEO.OGImage = ""
+	cfg.Server.Token = "old-operator-token"
+	cfg.Server.CORS.MaxAge = 0
+	cfg.Server.Contact.General.Email = ""
+	cfg.Server.Privacy.Data.Sold = false
+	cfg.Server.BaseURL = "/"
 	w := NewWatcher(configPath, cfg)
 	if err := w.Reload(); err != nil {
 		t.Errorf("Reload() returned error: %v", err)
+	}
+	if cfg.Server.SEO.Sitemap.MaxURLs != 19 || cfg.Server.SEO.OGImage != "https://assets.example.test/social.png" {
+		t.Errorf("Reload() did not apply SEO settings: %+v", cfg.Server.SEO)
+	}
+	if cfg.Server.Token != "reloaded-operator-token" || cfg.Server.CORS.MaxAge != 321 ||
+		cfg.Server.Contact.General.Email != "contact@example.test" || !cfg.Server.Privacy.Data.Sold || cfg.Server.BaseURL != "/service" {
+		t.Errorf("Reload() did not apply hot-reloadable server settings: %+v", cfg.Server)
 	}
 }
 
@@ -731,6 +855,27 @@ func TestValidateSEOVerification_CustomTag(t *testing.T) {
 	bad2 := validateSEOVerification(v2)
 	if len(bad2) == 0 {
 		t.Error("validateSEOVerification() with empty name/property should return errors")
+	}
+}
+
+func TestSanitizeSEOVerificationRemovesInvalidValues(t *testing.T) {
+	verification := SEOVerificationConfig{
+		Google: "<script>",
+		Bing:   "ABCDEF",
+		Custom: []SEOCustomTag{
+			{Name: "valid-tag", Content: "valid"},
+			{Name: "invalid tag", Content: "bad"},
+		},
+	}
+	bad := sanitizeSEOVerification(&verification)
+	if len(bad) != 2 {
+		t.Fatalf("invalid fields = %v, want 2", bad)
+	}
+	if verification.Google != "" || verification.Bing != "ABCDEF" {
+		t.Fatalf("provider values were not filtered correctly: %+v", verification)
+	}
+	if len(verification.Custom) != 1 || verification.Custom[0].Name != "valid-tag" {
+		t.Fatalf("invalid custom tags were not removed: %+v", verification.Custom)
 	}
 }
 

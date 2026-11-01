@@ -14,8 +14,9 @@ These integrations exist in the `AI.md` template but are **not adopted**
 by VidVeil:
 
 - **OIDC / LDAP / external identity providers.** VidVeil has no end-user
-  accounts. Server admins authenticate locally with Argon2id + optional
-  TOTP, as defined in `IDEA.md`.
+  accounts, and operators do not log in to a web interface. Operators
+  administer the server through local configuration, CLI commands, and
+  explicitly protected API operations.
 - **OAuth providers (GitHub, Google, …).** Same reason as above.
 - **Email user-onboarding flows.** No registration, no verification email
   loop. The email subsystem exists only for admin notifications.
@@ -30,16 +31,16 @@ not features left pending implementation from the current `AI.md`.
 
 | Direction | Target                                        | Purpose                                                                 | Failure mode                              |
 |-----------|-----------------------------------------------|-------------------------------------------------------------------------|-------------------------------------------|
-| Outbound  | The 43 upstream video search sites            | Fan-out search at request time. Results stream back via SSE.            | Per-engine timeout; partial results returned. |
+| Outbound  | The 33 upstream video search sites            | Fan-out search at request time. Results stream back via SSE.            | Per-engine timeout; partial results returned. |
 | Outbound  | Let's Encrypt ACME (`acme-v02.api.letsencrypt.org`) | TLS certificate issuance and renewal when ACME is enabled.              | Falls back to existing cert; alerts admin. |
 | Outbound  | GeoIP / blocklist / CVE feeds (configurable)  | Periodic refresh by the internal scheduler.                             | Last good DB stays in place; next refresh retries. |
 | Outbound  | SMTP server (configurable)                    | Admin notifications only.                                               | Notifications drop; server keeps running.  |
 | Inbound   | Tor hidden service (when `tor` is present)    | Same routes as the public surface.                                      | Hidden service disabled; clearnet unaffected. |
 
 VidVeil does **not** phone home, send telemetry, or contact a vendor
-license server. The only outbound network the binary makes on its own
-authority are ACME renewals and the scheduled refresh feeds you have
-configured.
+license server. Outbound requests are limited to searches initiated by
+visitors, configured ACME issuance/renewal, configured scheduled data feeds,
+and configured SMTP notifications.
 
 ## Integration Surfaces VidVeil Exposes
 
@@ -63,6 +64,14 @@ These are the well-defined entry points clients can integrate against.
 - Spec served at `/api/v1/server/swagger`.
 - Swagger UI at `/server/docs/swagger`.
 
+### MCP and AI-agent discovery
+
+- MCP Streamable HTTP is exposed at `/api/{api_version}/server/mcp`, `/api/mcp`,
+  and `/mcp`; it uses the API Bearer token and can be disabled with
+  `server.mcp.enabled: false`.
+- The generated endpoint guide is available at `/.well-known/llms.txt` and
+  `/llms.txt`. See [configuration](configuration.md) for settings.
+
 ### CLI Client (`vidveil-cli`)
 
 - Talks to the configured server over the REST API.
@@ -84,6 +93,6 @@ Other `/.well-known/*` paths return 404 unless explicitly defined.
 ## Tor Hidden Service
 
 When the `tor` binary is present at startup, VidVeil enables a hidden
-service automatically. The `.onion` address is shown on `/server/healthz`
-and in admin tooling. Clearnet routing is unaffected. See
+service automatically. Operators can inspect its status and address through
+the server's documented status interfaces. Clearnet routing is unaffected. See
 [`admin-guide/security.md`](admin-guide/security.md) for operator detail.

@@ -6,10 +6,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -31,6 +34,7 @@ var apiVersionPattern = regexp.MustCompile(`^v[0-9]+$`)
 // Config holds all application configuration per AI.md spec
 type AppConfig struct {
 	Server  ServerConfig  `yaml:"server"`
+	CLI     CLIConfig     `yaml:"cli"`
 	Web     WebConfig     `yaml:"web"`
 	Search  SearchConfig  `yaml:"search"`
 	Engines EnginesConfig `yaml:"engines"`
@@ -39,6 +43,17 @@ type AppConfig struct {
 	// Set by ConfigWatcher when port/address changes require a restart.
 	PendingRestart bool     `yaml:"-" json:"-"`
 	RestartReasons []string `yaml:"-" json:"-"`
+}
+
+// CLIConfig holds server-side companion CLI download settings per AI.md PART 32.
+type CLIConfig struct {
+	BinaryDownload CLIBinaryDownloadConfig `yaml:"binary_download"`
+}
+
+// CLIBinaryDownloadConfig controls whether the server token is required when
+// streaming companion CLI release binaries.
+type CLIBinaryDownloadConfig struct {
+	RequireAuth bool `yaml:"require_auth"`
 }
 
 // EnginesConfig holds engine-specific settings
@@ -55,6 +70,9 @@ type ServerBrandingConfig struct {
 	Logo string `yaml:"logo"`
 	// Favicon is a local file path or remote URL for the favicon; empty = embedded default.
 	Favicon string `yaml:"favicon"`
+	// RefreshInterval controls the internal scheduler refresh interval for remote images.
+	// Defaults to daily; local image sources are also reprocessed at this interval.
+	RefreshInterval string `yaml:"refresh_interval"`
 }
 
 // ServerConfig holds server-related settings per AI.md
@@ -77,6 +95,12 @@ type ServerConfig struct {
 	// Can be overridden by MODE env var or --mode CLI flag
 	Mode string `yaml:"mode"`
 
+	// MCP controls the Streamable HTTP MCP endpoint per AI.md PART 11.
+	MCP MCPConfig `yaml:"mcp"`
+
+	// Tokens controls anonymous owner-token lifecycle per AI.md PART 11.
+	Tokens TokensConfig `yaml:"tokens"`
+
 	// Token is the global operator token per AI.md PART 11 ("server.token").
 	// Auto-generated and written to server.yml on first run if absent or empty.
 	// Grants full access to every resource and every sensitive server management
@@ -94,9 +118,6 @@ type ServerConfig struct {
 
 	// PID file
 	PIDFile bool `yaml:"pidfile"`
-
-	// Admin panel configuration
-	Admin AdminConfig `yaml:"admin"`
 
 	// Contact routing: admin/security/abuse/general roles with email + webhooks
 	Contact ContactConfig `yaml:"contact"`
@@ -131,6 +152,9 @@ type ServerConfig struct {
 	// Security headers
 	SecurityHeaders SecurityHeadersConfig `yaml:"security_headers"`
 
+	// CORS controls browser cross-origin access per AI.md PART 16.
+	CORS CORSConfig `yaml:"cors"`
+
 	// Session
 	Session SessionConfig `yaml:"session"`
 
@@ -148,6 +172,8 @@ type ServerConfig struct {
 
 	// Backup (PART 21) - Backup & Restore settings
 	Backup BackupConfig `yaml:"backup"`
+	// Restore archive resource limits per AI.md PART 21.
+	Restore RestoreConfig `yaml:"restore"`
 
 	// Compliance holds regulatory-standard toggles per AI.md "Compliance Standards".
 	// All disabled by default; enable individually as needed.
@@ -155,6 +181,9 @@ type ServerConfig struct {
 
 	// Tor (PART 31) - Hidden service and outbound network settings
 	Tor TorConfig `yaml:"tor"`
+
+	// I2P (PART 31.2) - opt-in eepsite provider settings; disabled by default.
+	I2P I2PConfig `yaml:"i2p"`
 
 	// Healthz (PART 13) - Optional root-level alias for /server/healthz
 	// Canonical route is /server/healthz; root /healthz is opt-in
@@ -170,6 +199,18 @@ type ServerConfig struct {
 	// per AI.md PART 12 "Cookie Consent Banner" (server.privacy.consent.*,
 	// server.privacy.data.sold)
 	Privacy PrivacyConfig `yaml:"privacy"`
+}
+
+// MCPConfig controls exposure of the API through Model Context Protocol.
+type MCPConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// TokensConfig contains limits and retention for anonymous owner tokens.
+type TokensConfig struct {
+	MaxLinked     int    `yaml:"max_linked"`
+	CookieMaxAge  string `yaml:"cookie_max_age"`
+	IdlePurgeDays int    `yaml:"idle_purge_days"`
 }
 
 // PrivacyConfig holds cookie-consent and data-sale disclosure settings per
@@ -396,6 +437,35 @@ type TorConfig struct {
 	ContactEmail string `yaml:"contact_email"`
 }
 
+// I2PConfig configures the opt-in I2P eepsite provider per AI.md PART 31.2.
+type I2PConfig struct {
+	Enabled          bool   `yaml:"enabled"`
+	Binary           string `yaml:"binary"`
+	SAMAddress       string `yaml:"sam_address"`
+	VirtualPort      int    `yaml:"virtual_port"`
+	InboundLength    int    `yaml:"inbound_length"`
+	OutboundLength   int    `yaml:"outbound_length"`
+	InboundQuantity  int    `yaml:"inbound_quantity"`
+	OutboundQuantity int    `yaml:"outbound_quantity"`
+	SignatureType    int    `yaml:"signature_type"`
+	BootstrapTimeout string `yaml:"bootstrap_timeout"`
+	Address          string `yaml:"-" json:"-"`
+}
+
+// DefaultI2PConfig returns the PART 31.2 defaults, with the service disabled.
+func DefaultI2PConfig() I2PConfig {
+	return I2PConfig{
+		SAMAddress:       "127.0.0.1:7656",
+		VirtualPort:      80,
+		InboundLength:    3,
+		OutboundLength:   3,
+		InboundQuantity:  5,
+		OutboundQuantity: 5,
+		SignatureType:    7,
+		BootstrapTimeout: "5m",
+	}
+}
+
 // DefaultTorConfig returns the default Tor configuration per PART 31
 func DefaultTorConfig() TorConfig {
 	return TorConfig{
@@ -419,29 +489,6 @@ func DefaultTorConfig() TorConfig {
 		NumIntroPoints:            3,
 		VirtualPort:               80,
 	}
-}
-
-// AdminConfig holds admin panel settings
-type AdminConfig struct {
-	// Path is the admin panel URL path (default: "admin") per PART 12
-	Path      string          `yaml:"path"`
-	Email     string          `yaml:"email"`
-	Username  string          `yaml:"username"`
-	Password  string          `yaml:"password"`
-	Token     string          `yaml:"token"`
-	TwoFactor TwoFactorConfig `yaml:"two_factor"`
-}
-
-// TwoFactorConfig holds 2FA settings per AI.md PART 11
-type TwoFactorConfig struct {
-	// 2FA is enabled for this admin
-	Enabled bool `yaml:"enabled"`
-	// TOTP secret (stored securely)
-	Secret string `yaml:"secret,omitempty"`
-	// One-time backup codes
-	BackupCodes []string `yaml:"backup_codes,omitempty"`
-	// Trust device for N days
-	RememberDeviceDays int `yaml:"remember_device_days"`
 }
 
 // SMTPConfig holds SMTP connection settings per AI.md PART 17
@@ -766,6 +813,15 @@ type TrustedProxiesConfig struct {
 	Additional []string `yaml:"additional"`
 }
 
+// CORSConfig controls which browser origins may access the server.
+// An exact empty-string origin disables CORS; an empty list uses discovered
+// domains and trusted reverse-proxy hosts before falling back to '*'.
+type CORSConfig struct {
+	AllowedOrigins   []string `yaml:"allowed_origins"`
+	AllowCredentials bool     `yaml:"allow_credentials"`
+	MaxAge           int      `yaml:"max_age"`
+}
+
 // SecurityHeadersConfig holds security header settings
 type SecurityHeadersConfig struct {
 	Enabled             bool   `yaml:"enabled"`
@@ -856,6 +912,26 @@ type CVEConfig struct {
 type BackupConfig struct {
 	Retention  BackupRetentionConfig  `yaml:"retention"`
 	Encryption BackupEncryptionConfig `yaml:"encryption"`
+}
+
+// RestoreConfig bounds compressed and expanded backup archive processing per AI.md PART 21.
+type RestoreConfig struct {
+	MaxArchiveSize  string `yaml:"max_archive_size"`
+	MaxExpandedSize string `yaml:"max_expanded_size"`
+	MaxFiles        int    `yaml:"max_files"`
+	MaxFileSize     string `yaml:"max_file_size"`
+	MaxRatio        int    `yaml:"max_ratio"`
+}
+
+// DefaultRestoreConfig returns the archive limits required by AI.md PART 21.
+func DefaultRestoreConfig() RestoreConfig {
+	return RestoreConfig{
+		MaxArchiveSize:  "1G",
+		MaxExpandedSize: "4G",
+		MaxFiles:        10000,
+		MaxFileSize:     "512M",
+		MaxRatio:        100,
+	}
 }
 
 // BackupRetentionConfig holds backup retention settings per AI.md PART 21
@@ -949,7 +1025,7 @@ func (c ComplianceConfig) EnabledStandards() []string {
 
 // UpdateConfig holds update settings per AI.md PART 22
 type UpdateConfig struct {
-	// Branch: release channel — stable | beta | daily (default: stable)
+	// Branch: release channel — stable | beta | devel (default: stable)
 	Branch string `yaml:"branch"`
 	// AutoInstall: when true the update_check scheduler task installs eligible updates automatically
 	// Default: false — the task notifies only; installing is always an explicit operator decision
@@ -957,6 +1033,23 @@ type UpdateConfig struct {
 	// DeferDays: a release must be at least this many days old before the task considers it eligible
 	// 0 = immediately eligible; 30 = adopt only after 30 days of public availability
 	DeferDays int `yaml:"defer_days"`
+	// CLIMinVersion blocks CLI versions below the operator-configured floor.
+	CLIMinVersion string `yaml:"cli_min_version"`
+}
+
+// NormalizeUpdateChannel maps supported aliases to the canonical stored
+// channel names defined in AI.md PART 22.
+func NormalizeUpdateChannel(channel string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(channel)) {
+	case "", "stable":
+		return "stable", true
+	case "beta":
+		return "beta", true
+	case "devel", "daily", "rolling", "dev", "development":
+		return "devel", true
+	default:
+		return "", false
+	}
 }
 
 // SessionConfig holds session settings
@@ -1022,7 +1115,6 @@ type WebConfig struct {
 	Announcements AnnouncementsConfig `yaml:"announcements"`
 	Robots        RobotsConfig        `yaml:"robots"`
 	Security      WebSecurityConfig   `yaml:"security"`
-	CORS          string              `yaml:"cors"`
 	CSP           CSPConfig           `yaml:"csp"`
 	CSRF          CSRFConfig          `yaml:"csrf"`
 	Footer        FooterConfig        `yaml:"footer"`
@@ -1030,6 +1122,18 @@ type WebConfig struct {
 	// opt-out (default false) per AI.md PART 11 "Privacy Signal Headers". Sec-GPC
 	// is always honored regardless of this setting.
 	HonorDNT bool `yaml:"honor_dnt"`
+	// LLMS configures the AI-agent discovery document per AI.md PART 14.
+	LLMS LLMSConfig `yaml:"llms"`
+	// APIContact is the contact address advertised to API consumers.
+	APIContact string `yaml:"api_contact"`
+}
+
+// LLMSConfig controls generated llms.txt output per AI.md PART 14.
+type LLMSConfig struct {
+	Enabled          bool     `yaml:"enabled"`
+	IncludeEndpoints bool     `yaml:"include_endpoints"`
+	IncludeSchemas   bool     `yaml:"include_schemas"`
+	CustomSections   []string `yaml:"custom_sections"`
 }
 
 // UIConfig holds UI settings
@@ -1176,6 +1280,13 @@ type SEOVerificationConfig struct {
 	Custom []SEOCustomTag `yaml:"custom"`
 }
 
+// SEOSitemapConfig controls generated public sitemap output per AI.md PART 16.
+type SEOSitemapConfig struct {
+	Enabled       bool `yaml:"enabled"`
+	MaxURLs       int  `yaml:"max_urls"`
+	IncludeImages bool `yaml:"include_images"`
+}
+
 // SEOConfig holds SEO/social metadata per AI.md PART 16
 type SEOConfig struct {
 	// Keywords for <meta name="keywords"> (if non-empty)
@@ -1188,6 +1299,8 @@ type SEOConfig struct {
 	TwitterHandle string `yaml:"twitter_handle"`
 	// Verification holds search engine verification codes
 	Verification SEOVerificationConfig `yaml:"verification"`
+	// Sitemap controls generated sitemap output.
+	Sitemap SEOSitemapConfig `yaml:"sitemap"`
 }
 
 // CSRFConfig holds CSRF settings per AI.md PART 16 → CSRF Protection
@@ -1412,6 +1525,8 @@ func DefaultAppConfig() *AppConfig {
 			BaseURL:    "/",
 			APIVersion: defaultAPIVersion,
 			Mode:       "production",
+			MCP:        MCPConfig{Enabled: true},
+			Tokens:     TokensConfig{MaxLinked: 25, CookieMaxAge: "1y", IdlePurgeDays: 0},
 			Token:      generateToken(32),
 			Security: SecurityConfig{
 				// Per AI.md PART 11 "Cryptographic Keys": canonical 32-byte
@@ -1423,24 +1538,15 @@ func DefaultAppConfig() *AppConfig {
 				// Per AI.md PART 5 Init-Only Variables: APPLICATION_NAME /
 				// APPLICATION_TAGLINE seed branding on first run; the written
 				// config file wins on subsequent loads (env then ignored)
-				Title:       envDefault("APPLICATION_NAME", "Vidveil"),
-				Tagline:     envDefault("APPLICATION_TAGLINE", "Privacy-first video search"),
-				Description: "Privacy-respecting adult video search",
+				Title:           envDefault("APPLICATION_NAME", "Vidveil"),
+				Tagline:         envDefault("APPLICATION_TAGLINE", "Privacy-first video search"),
+				Description:     "Privacy-respecting adult video search",
+				RefreshInterval: "24h",
 			},
+			SEO:     SEOConfig{Sitemap: SEOSitemapConfig{Enabled: true, MaxURLs: 50000}},
 			User:    "",
 			Group:   "",
 			PIDFile: true,
-			Admin: AdminConfig{
-				Path:     "admin",
-				Email:    "admin@" + fqdn,
-				Username: "administrator",
-				Password: generateToken(16),
-				Token:    generateToken(32),
-				TwoFactor: TwoFactorConfig{
-					Enabled:            false,
-					RememberDeviceDays: 30,
-				},
-			},
 			Contact: ContactConfig{
 				Admin: ContactRoleConfig{
 					Email:    "admin@" + fqdn,
@@ -1611,6 +1717,11 @@ func DefaultAppConfig() *AppConfig {
 			TrustedProxies: TrustedProxiesConfig{
 				Additional: []string{},
 			},
+			CORS: CORSConfig{
+				AllowedOrigins:   []string{"*"},
+				AllowCredentials: true,
+				MaxAge:           86400,
+			},
 			SecurityHeaders: SecurityHeadersConfig{
 				Enabled:             true,
 				HSTS:                true,
@@ -1693,16 +1804,19 @@ func DefaultAppConfig() *AppConfig {
 					Enabled: false,
 				},
 			},
+			Restore: DefaultRestoreConfig(),
 			// Tor settings per AI.md PART 31
 			// Hidden service auto-enabled if tor binary found
 			// Outbound network disabled by default - can be enabled for privacy
 			Tor: DefaultTorConfig(),
+			I2P: DefaultI2PConfig(),
 			// Update settings per AI.md PART 22
 			// Branch: stable by default; auto_install: false (notify-only); defer_days: 0
 			Update: UpdateConfig{
-				Branch:      "stable",
-				AutoInstall: false,
-				DeferDays:   0,
+				Branch:        "stable",
+				AutoInstall:   false,
+				DeferDays:     0,
+				CLIMinVersion: "",
 			},
 			// Privacy/cookie-consent banner text per AI.md PART 12.
 			// Data.Sold defaults false (VidVeil per IDEA.md does not sell data);
@@ -1754,6 +1868,8 @@ func DefaultAppConfig() *AppConfig {
 			},
 		},
 		Web: WebConfig{
+			LLMS:       LLMSConfig{Enabled: true, IncludeEndpoints: true, IncludeSchemas: false, CustomSections: []string{}},
+			APIContact: "api@" + fqdn,
 			UI: UIConfig{
 				Theme: "dark",
 			},
@@ -1763,7 +1879,7 @@ func DefaultAppConfig() *AppConfig {
 			},
 			Robots: RobotsConfig{
 				Allow: []string{"/"},
-				Deny:  []string{"/search", "/api/", "/server/admin", defaultAPIBase + "/server/admin"},
+				Deny:  []string{"/search", "/api/"},
 				// Default posture per AI.md PART 11: no AI crawler is blocked
 				// unless the operator explicitly denies it.
 				AIBots: AIBotsConfig{
@@ -1775,7 +1891,6 @@ func DefaultAppConfig() *AppConfig {
 				Contact:              "security@" + fqdn,
 				DisclosureWindowDays: 90,
 			},
-			CORS: "*",
 			CSP: CSPConfig{
 				Enabled:           true,
 				Mode:              "enforce",
@@ -1906,6 +2021,8 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 
 		// Apply VIDVEIL_* env var overrides per AI.md (env overrides config file)
 		applyEnvOverrides(cfg)
+		validateUpdateChannel(&cfg.Server.Update, DefaultAppConfig().Server.Update)
+		validateRestoreConfig(&cfg.Server.Restore, DefaultRestoreConfig())
 
 		return cfg, configPath, nil
 	}
@@ -1944,6 +2061,8 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 
 	// Apply VIDVEIL_* env var overrides per AI.md (env overrides config file)
 	applyEnvOverrides(cfg)
+	validateUpdateChannel(&cfg.Server.Update, DefaultAppConfig().Server.Update)
+	validateRestoreConfig(&cfg.Server.Restore, DefaultRestoreConfig())
 
 	return cfg, configPath, nil
 }
@@ -1952,6 +2071,8 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 // Rule: If config setting is invalid, warn and replace with default. Never fail startup.
 func validateConfig(cfg *AppConfig) {
 	defaults := DefaultAppConfig()
+	validateI2PConfig(&cfg.Server.I2P, defaults.Server.I2P)
+	validateUpdateChannel(&cfg.Server.Update, defaults.Server.Update)
 
 	// Validate port (must be valid or use random per PART 8/12)
 	if cfg.Server.Port != "" {
@@ -1962,9 +2083,8 @@ func validateConfig(cfg *AppConfig) {
 			if port == "" {
 				continue
 			}
-			portNum := 0
-			fmt.Sscanf(port, "%d", &portNum)
-			if portNum < 1 || portNum > 65535 {
+			portNum, err := strconv.Atoi(port)
+			if err != nil || portNum < 1 || portNum > 65535 {
 				randomPort := findUnusedPort()
 				fmt.Fprintf(os.Stderr, "Warning: invalid port %s, using random port %d\n", port, randomPort)
 				cfg.Server.Port = fmt.Sprintf("%d", randomPort)
@@ -2029,6 +2149,15 @@ func validateConfig(cfg *AppConfig) {
 		cfg.Server.Compression.Level = 5
 	}
 
+	validateCORS(&cfg.Server.CORS, defaults.Server.CORS)
+	for _, field := range sanitizeSEOVerification(&cfg.Server.SEO.Verification) {
+		fmt.Fprintf(os.Stderr, "Warning: invalid %s value; omitting it from rendered SEO metadata\n", field)
+	}
+	if cfg.Server.SEO.Sitemap.MaxURLs < 1 || cfg.Server.SEO.Sitemap.MaxURLs > 50000 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid seo.sitemap.max_urls %d, using default %d\n", cfg.Server.SEO.Sitemap.MaxURLs, defaults.Server.SEO.Sitemap.MaxURLs)
+		cfg.Server.SEO.Sitemap.MaxURLs = defaults.Server.SEO.Sitemap.MaxURLs
+	}
+
 	// Enforce audit log format as JSON only per AI.md PART 11
 	// "audit: format: json only (text not supported for audit - must be machine-parseable)"
 	if cfg.Server.Logs.Audit.Format != "" && cfg.Server.Logs.Audit.Format != "json" {
@@ -2038,6 +2167,125 @@ func validateConfig(cfg *AppConfig) {
 
 	// Validate backup retention settings (warn, don't error - server must start) per AI.md PART 21
 	validateBackupRetention(cfg)
+	validateRestoreConfig(&cfg.Server.Restore, defaults.Server.Restore)
+}
+
+func validateUpdateChannel(cfg *UpdateConfig, defaults UpdateConfig) {
+	if channel, valid := NormalizeUpdateChannel(cfg.Branch); valid {
+		cfg.Branch = channel
+		return
+	}
+	fmt.Fprintf(os.Stderr, "Warning: invalid update.branch %q, using default %q\n", cfg.Branch, defaults.Branch)
+	cfg.Branch = defaults.Branch
+}
+
+func validateRestoreConfig(cfg *RestoreConfig, defaults RestoreConfig) {
+	maxInt64 := uint64(^uint64(0) >> 1)
+	for _, field := range []struct {
+		name  string
+		value *string
+		def   string
+	}{{"max_archive_size", &cfg.MaxArchiveSize, defaults.MaxArchiveSize}, {"max_expanded_size", &cfg.MaxExpandedSize, defaults.MaxExpandedSize}, {"max_file_size", &cfg.MaxFileSize, defaults.MaxFileSize}} {
+		bytes, err := ParseSizeBytes(*field.value)
+		invalid := err != nil || bytes == 0
+		if !invalid && field.name == "max_archive_size" && bytes > maxInt64-(1<<20) {
+			invalid = true
+		}
+		if !invalid && field.name == "max_expanded_size" && bytes >= maxInt64 {
+			invalid = true
+		}
+		if invalid {
+			fmt.Fprintf(os.Stderr, "Warning: invalid restore.%s %q, using default %q\n", field.name, *field.value, field.def)
+			*field.value = field.def
+		}
+	}
+	if cfg.MaxFiles < 1 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid restore.max_files %d, using default %d\n", cfg.MaxFiles, defaults.MaxFiles)
+		cfg.MaxFiles = defaults.MaxFiles
+	}
+	if cfg.MaxRatio < 1 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid restore.max_ratio %d, using default %d\n", cfg.MaxRatio, defaults.MaxRatio)
+		cfg.MaxRatio = defaults.MaxRatio
+	}
+}
+
+// ParseSizeBytes parses a positive byte count with optional K/KB, M/MB, G/GB,
+// or T/TB suffixes using binary units.
+func ParseSizeBytes(value string) (uint64, error) {
+	value = strings.TrimSpace(value)
+	upper := strings.ToUpper(value)
+	multiplier := uint64(1)
+	for _, unit := range []struct {
+		suffix string
+		factor uint64
+	}{{"TB", 1 << 40}, {"T", 1 << 40}, {"GB", 1 << 30}, {"G", 1 << 30}, {"MB", 1 << 20}, {"M", 1 << 20}, {"KB", 1 << 10}, {"K", 1 << 10}} {
+		if strings.HasSuffix(upper, unit.suffix) {
+			upper = strings.TrimSpace(upper[:len(upper)-len(unit.suffix)])
+			multiplier = unit.factor
+			break
+		}
+	}
+	number, err := strconv.ParseFloat(upper, 64)
+	if err != nil || number <= 0 || math.IsInf(number, 0) || math.IsNaN(number) || number > float64(^uint64(0))/float64(multiplier) {
+		return 0, fmt.Errorf("invalid positive byte size %q", value)
+	}
+	bytes := number * float64(multiplier)
+	if bytes < 1 || bytes >= math.Exp2(63) {
+		return 0, fmt.Errorf("byte size %q is outside the supported range", value)
+	}
+	return uint64(bytes), nil
+}
+
+// validateCORS normalizes malformed CORS settings to the documented defaults.
+func validateI2PConfig(cfg *I2PConfig, defaults I2PConfig) {
+	if cfg.SAMAddress == "" {
+		cfg.SAMAddress = defaults.SAMAddress
+	}
+	if cfg.VirtualPort < 1 || cfg.VirtualPort > 65535 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid i2p.virtual_port %d, using default %d\n", cfg.VirtualPort, defaults.VirtualPort)
+		cfg.VirtualPort = defaults.VirtualPort
+	}
+	if cfg.InboundLength < 0 || cfg.InboundLength > 7 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid i2p.inbound_length %d, using default %d\n", cfg.InboundLength, defaults.InboundLength)
+		cfg.InboundLength = defaults.InboundLength
+	}
+	if cfg.OutboundLength < 0 || cfg.OutboundLength > 7 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid i2p.outbound_length %d, using default %d\n", cfg.OutboundLength, defaults.OutboundLength)
+		cfg.OutboundLength = defaults.OutboundLength
+	}
+	if cfg.InboundQuantity < 1 || cfg.InboundQuantity > 16 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid i2p.inbound_quantity %d, using default %d\n", cfg.InboundQuantity, defaults.InboundQuantity)
+		cfg.InboundQuantity = defaults.InboundQuantity
+	}
+	if cfg.OutboundQuantity < 1 || cfg.OutboundQuantity > 16 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid i2p.outbound_quantity %d, using default %d\n", cfg.OutboundQuantity, defaults.OutboundQuantity)
+		cfg.OutboundQuantity = defaults.OutboundQuantity
+	}
+	if cfg.SignatureType != 7 {
+		fmt.Fprintf(os.Stderr, "Warning: unsupported i2p.signature_type %d, using default %d\n", cfg.SignatureType, defaults.SignatureType)
+		cfg.SignatureType = defaults.SignatureType
+	}
+	if duration, err := time.ParseDuration(cfg.BootstrapTimeout); err != nil || duration < 30*time.Second || duration > 10*time.Minute {
+		fmt.Fprintf(os.Stderr, "Warning: invalid i2p.bootstrap_timeout %q, using default %q\n", cfg.BootstrapTimeout, defaults.BootstrapTimeout)
+		cfg.BootstrapTimeout = defaults.BootstrapTimeout
+	}
+}
+
+func validateCORS(corsCfg *CORSConfig, defaults CORSConfig) {
+	if corsCfg.MaxAge <= 0 {
+		corsCfg.MaxAge = defaults.MaxAge
+	}
+	for _, origin := range corsCfg.AllowedOrigins {
+		if origin == "" || origin == "*" {
+			continue
+		}
+		parsed, err := url.Parse(origin)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {
+			fmt.Fprintf(os.Stderr, "Warning: invalid cors.allowed_origins entry %q, using default origins\n", origin)
+			corsCfg.AllowedOrigins = append([]string(nil), defaults.AllowedOrigins...)
+			return
+		}
+	}
 }
 
 // validateBackupRetention validates cfg.Server.Backup.Retention per AI.md PART 21.
@@ -2079,7 +2327,7 @@ func validateBackupRetention(cfg *AppConfig) {
 }
 
 // SaveAppConfig saves configuration to file
-func SaveAppConfig(cfg *AppConfig, path string) error {
+func SaveAppConfig(cfg *AppConfig, path string) (saveErr error) {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
@@ -2096,15 +2344,43 @@ func SaveAppConfig(cfg *AppConfig, path string) error {
 `
 	fullData := []byte(header + string(data))
 
-	// Write atomically: write to a temp file in the same directory, then rename
-	// over the target so a crash mid-write never leaves a truncated config.
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, fullData, 0644); err != nil {
+	// Write atomically with the mode required by the current execution mode.
+	// server.yml contains operator tokens, encryption keys, and SMTP credentials.
+	mode := os.FileMode(0600)
+	if os.Geteuid() == 0 {
+		mode = 0644
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary config file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+			if saveErr == nil {
+				saveErr = fmt.Errorf("remove temporary config file: %w", err)
+			} else {
+				saveErr = fmt.Errorf("%w; remove temporary config file: %v", saveErr, err)
+			}
+		}
+	}()
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to set config permissions: %w", err)
+	}
+	if _, err := tmp.Write(fullData); err != nil {
+		_ = tmp.Close()
 		return fmt.Errorf("failed to write config: %w", err)
 	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to sync config: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("failed to close config: %w", err)
+	}
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("failed to write config: %w", err)
+		return fmt.Errorf("failed to replace config: %w", err)
 	}
 
 	return nil
@@ -2147,8 +2423,9 @@ func findUnusedPort() int {
 		port := portMin + (startOffset+i)%portRange
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err == nil {
-			ln.Close()
-			return port
+			if closeErr := ln.Close(); closeErr == nil {
+				return port
+			}
 		}
 	}
 	return 64080
@@ -2410,6 +2687,10 @@ func (w *ConfigWatcher) reload() {
 	pendingRestart := len(restartReasons) > 0
 
 	w.appConfig.Server.Branding = newCfg.Server.Branding
+	w.appConfig.Server.Token = newCfg.Server.Token
+	w.appConfig.Server.Contact = newCfg.Server.Contact
+	w.appConfig.Server.CORS = newCfg.Server.CORS
+	w.appConfig.Server.BaseURL = newCfg.Server.BaseURL
 	w.appConfig.Server.RateLimit = newCfg.Server.RateLimit
 	w.appConfig.Server.Notifications = newCfg.Server.Notifications
 	w.appConfig.Server.Schedule = newCfg.Server.Schedule
@@ -2418,18 +2699,21 @@ func (w *ConfigWatcher) reload() {
 	w.appConfig.Server.Logs = newCfg.Server.Logs
 	w.appConfig.Server.GeoIP = newCfg.Server.GeoIP
 	w.appConfig.Server.Cache = newCfg.Server.Cache
-	w.appConfig.Server.Admin = newCfg.Server.Admin
 	w.appConfig.Server.Session = newCfg.Server.Session
 	w.appConfig.Server.SecurityHeaders = newCfg.Server.SecurityHeaders
 	w.appConfig.Server.Compression = newCfg.Server.Compression
 	w.appConfig.Server.Limits = newCfg.Server.Limits
 	w.appConfig.Server.TrustedProxies = newCfg.Server.TrustedProxies
 	w.appConfig.Server.Security = newCfg.Server.Security
+	w.appConfig.Server.SEO = newCfg.Server.SEO
+	w.appConfig.Server.Compliance = newCfg.Server.Compliance
 	w.appConfig.Server.Backup = newCfg.Server.Backup
 	w.appConfig.Server.Tor = newCfg.Server.Tor
 	w.appConfig.Server.Healthz = newCfg.Server.Healthz
 	w.appConfig.Server.FQDN = newCfg.Server.FQDN
 	w.appConfig.Server.Mode = newCfg.Server.Mode
+	w.appConfig.Server.Update = newCfg.Server.Update
+	w.appConfig.Server.Privacy = newCfg.Server.Privacy
 	w.appConfig.Web = newCfg.Web
 	w.appConfig.Search = newCfg.Search
 
@@ -2610,16 +2894,6 @@ func getGlobalIPv4() string {
 	return ""
 }
 
-// AdminURLPrefix returns the spec-canonical admin route prefix per AI.md PART 14/17.
-// Form: "/server/{admin_path}". The legacy form (without "/server/") is no longer accepted.
-func (c *AppConfig) AdminURLPrefix() string {
-	adminPath := c.Server.Admin.Path
-	if adminPath == "" {
-		adminPath = "admin"
-	}
-	return "/server/" + adminPath
-}
-
 // APIBasePath returns the versioned API base path per AI.md PART 14
 // ("Always version ALL API routes: /api/{api_version}/..."), e.g. "/api/v1".
 // Never hardcode "/api/v1" in route registration or path construction - use this.
@@ -2629,16 +2903,6 @@ func (c *AppConfig) APIBasePath() string {
 		ver = "v1"
 	}
 	return "/api/" + ver
-}
-
-// AdminAPIPrefix returns the canonical admin API prefix without the "/api/{ver}" leader.
-// Used as a relative subpath under APIBasePath(): result is "/server/{admin_path}".
-func (c *AppConfig) AdminAPIPrefix() string {
-	adminPath := c.Server.Admin.Path
-	if adminPath == "" {
-		adminPath = "admin"
-	}
-	return "/server/" + adminPath
 }
 
 // GetPublicURL returns the public-facing URL for this server
@@ -2702,6 +2966,46 @@ func validateSEOVerification(v SEOVerificationConfig) []string {
 			bad = append(bad, key+".content")
 		}
 	}
+	return bad
+}
+
+// sanitizeSEOVerification removes invalid provider codes and custom tags so
+// templates can only receive values that passed the PART 16 format checks.
+func sanitizeSEOVerification(v *SEOVerificationConfig) []string {
+	if v == nil {
+		return nil
+	}
+	bad := validateSEOVerification(*v)
+	invalid := make(map[string]struct{}, len(bad))
+	for _, field := range bad {
+		invalid[field] = struct{}{}
+	}
+	for _, provider := range []struct {
+		key   string
+		value *string
+	}{
+		{"google", &v.Google}, {"bing", &v.Bing}, {"yandex", &v.Yandex},
+		{"baidu", &v.Baidu}, {"pinterest", &v.Pinterest}, {"facebook", &v.Facebook},
+	} {
+		if _, exists := invalid["seo.verification."+provider.key]; exists {
+			*provider.value = ""
+		}
+	}
+	custom := make([]SEOCustomTag, 0, len(v.Custom))
+	for index, tag := range v.Custom {
+		prefix := fmt.Sprintf("seo.verification.custom[%d]", index)
+		invalidTag := false
+		for field := range invalid {
+			if strings.HasPrefix(field, prefix+".") {
+				invalidTag = true
+				break
+			}
+		}
+		if !invalidTag {
+			custom = append(custom, tag)
+		}
+	}
+	v.Custom = custom
 	return bad
 }
 

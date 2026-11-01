@@ -234,7 +234,7 @@ func (m SetupWizardModel) View() string {
 
 	case SetupStateSaveConfig:
 		viewBuilder.WriteString(labelStyle.Render("  Configuration:\n\n"))
-		viewBuilder.WriteString(fmt.Sprintf("    Server: %s\n", m.serverURL))
+		fmt.Fprintf(&viewBuilder, "    Server: %s\n", m.serverURL)
 		if m.apiToken != "" {
 			viewBuilder.WriteString("    Token:  ********\n")
 		} else {
@@ -245,16 +245,16 @@ func (m SetupWizardModel) View() string {
 		if m.saveToConfig {
 			checkbox = "[x]"
 		}
-		viewBuilder.WriteString(fmt.Sprintf("  %s Save to configuration file\n", checkbox))
+		fmt.Fprintf(&viewBuilder, "  %s Save to configuration file\n", checkbox)
 		viewBuilder.WriteString("\n")
 		viewBuilder.WriteString(labelStyle.Render("  Press Enter to save, Esc to cancel\n"))
 
 	case SetupStateComplete:
 		viewBuilder.WriteString(successStyle.Render("  Setup complete!\n\n"))
-		viewBuilder.WriteString(fmt.Sprintf("    Server: %s\n", m.serverURL))
-		viewBuilder.WriteString(fmt.Sprintf("    Config: %s\n", getCLIConfigFilePath()))
+		fmt.Fprintf(&viewBuilder, "    Server: %s\n", m.serverURL)
+		fmt.Fprintf(&viewBuilder, "    Config: %s\n", getCLIConfigFilePath())
 		if m.apiToken != "" {
-			viewBuilder.WriteString(fmt.Sprintf("    Token:  %s\n", path.TokenFile()))
+			fmt.Fprintf(&viewBuilder, "    Token:  %s\n", path.TokenFile())
 		}
 
 	case SetupStateFailed:

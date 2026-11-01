@@ -10,6 +10,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -23,20 +24,25 @@ import (
 	"time"
 
 	"golang.org/x/term"
+	"gopkg.in/yaml.v3"
 
 	"github.com/apimgr/vidveil/src/common/banner"
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/mode"
+	pathpkg "github.com/apimgr/vidveil/src/path"
 	"github.com/apimgr/vidveil/src/server"
 	daemonpkg "github.com/apimgr/vidveil/src/server/daemon"
+	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/blocklist"
 	"github.com/apimgr/vidveil/src/server/service/cve"
 	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/email"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
+	"github.com/apimgr/vidveil/src/server/service/i2p"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	svcmetrics "github.com/apimgr/vidveil/src/server/service/metric"
@@ -60,6 +66,8 @@ var (
 	BuildDate    = "unknown"
 	OfficialSite = ""
 )
+
+var errRestoreRestartRequested = errors.New("restore completed; restart server")
 
 // buildEpoch parses BuildEpoch into a Unix timestamp, returning 0 on any
 // parse failure (e.g. the default "0" or a dev build with no ldflags set).
@@ -86,7 +94,7 @@ func init() {
 }
 
 // parseUpdateArgs parses the arguments that follow "--update" (or its alias
-// "--maintenance update") per AI.md PART 22: [check|yes|branch {stable|beta|daily}].
+// "--maintenance update") per AI.md PART 22: [check|yes|branch {stable|beta|devel}].
 // rest is the slice of args after the update token. It returns the update
 // subcommand (default "yes"), its argument (branch name, if any), and the
 // number of args from rest that were consumed.
@@ -170,6 +178,61 @@ func applyPortOverride(cfg *config.AppConfig, port, configPath string) (bool, er
 }
 
 func main() {
+	if system.IsWindowsService() {
+		if err := system.RunAsWindowsService(runUntilRestart); err != nil {
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Windows service failed: "+err.Error())
+			os.Exit(1)
+		}
+		return
+	}
+	if err := runUntilRestart(context.Background()); err != nil {
+		fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Server failed: "+err.Error())
+		os.Exit(1)
+	}
+}
+
+func runUntilRestart(ctx context.Context) error {
+	for {
+		err := run(ctx)
+		if errors.Is(err, errRestoreRestartRequested) {
+			continue
+		}
+		return err
+	}
+}
+
+func waitForShutdownRequest(ctx context.Context, restart <-chan struct{}, waitForSignal func(context.Context) os.Signal) (os.Signal, bool) {
+	waitCtx, cancelWait := context.WithCancel(ctx)
+	watchStop := make(chan struct{})
+	watchDone := make(chan struct{})
+	restartRequested := false
+	go func() {
+		defer close(watchDone)
+		select {
+		case _, open := <-restart:
+			restartRequested = open
+			if open {
+				cancelWait()
+			}
+		case <-ctx.Done():
+		case <-watchStop:
+		}
+	}()
+
+	sig := waitForSignal(waitCtx)
+	close(watchStop)
+	cancelWait()
+	<-watchDone
+	select {
+	case _, open := <-restart:
+		restartRequested = restartRequested || open
+	default:
+	}
+	return sig, restartRequested
+}
+
+func run(ctx context.Context) error {
+	signalpkg.ResetShutdown()
 	startTime := time.Now()
 	rawArgs := os.Args[1:]
 
@@ -198,6 +261,7 @@ func main() {
 	// Per AI.md PART 8: --lang CODE (output language, default auto).
 	langF := fs.String("lang", "", "Output language (default auto)")
 	debugF := fs.Bool("debug", false, "Enable debug logging")
+	i2pF := fs.Bool("i2p", false, "Enable the optional I2P eepsite")
 	daemonF := fs.Bool("daemon", false, "Run as background daemon")
 	versionF := fs.Bool("version", false, "Show version and exit")
 	helpF := fs.Bool("help", false, "Show help and exit")
@@ -228,6 +292,7 @@ func main() {
 	modeStr := *modeF
 	colorFlag := *colorF
 	langFlag := *langF
+	serviceLanguage := *langF
 	debug := *debugF
 	daemon := *daemonF
 
@@ -278,7 +343,9 @@ func main() {
 
 	// Per AI.md PART 8: --lang CODE (output language, default "auto").
 	// Env var fallback: LANG (POSIX standard, e.g. "en_US.UTF-8").
-	if langFlag == "" && os.Getenv("LANG") != "" {
+	if langFlag == "" && os.Getenv("LC_ALL") != "" {
+		langFlag = os.Getenv("LC_ALL")
+	} else if langFlag == "" && os.Getenv("LANG") != "" {
 		langFlag = os.Getenv("LANG")
 	}
 
@@ -337,17 +404,17 @@ func main() {
 
 		case "--service":
 			if len(rest) == 0 {
-				fmt.Fprintln(os.Stderr, "Usage: --service {start|stop|restart|reload|status|--install|--uninstall|--disable|--help}")
+				fmt.Fprintln(os.Stderr, serviceText(cliOutputLocale(serviceLanguage, configDir, dataDir), "cli.service.dispatch_usage"))
 				os.Exit(1)
 			}
-			handleServiceCommand(rest[0], configDir, dataDir)
-			return
+			handleServiceCommand(rest[0], configDir, dataDir, serviceLanguage)
+			return nil
 
 		case "--update":
-			// AI.md PART 22: --update [check|yes|branch {stable|beta|daily}].
+			// AI.md PART 22: --update [check|yes|branch {stable|beta|devel}].
 			uCmd, uArg, _ := parseUpdateArgs(rest)
 			handleUpdateCommand(uCmd, uArg)
-			return
+			return nil
 
 		case "--maintenance":
 			// A bare --maintenance with no sub-command falls through to a normal
@@ -358,7 +425,7 @@ func main() {
 				if rest[0] == "update" {
 					uCmd, uArg, _ := parseUpdateArgs(rest[1:])
 					handleUpdateCommand(uCmd, uArg)
-					return
+					return nil
 				}
 				// Per AI.md PART 21: no --password flag; the password is prompted
 				// interactively, so only a non-flag operand is taken here.
@@ -367,14 +434,20 @@ func main() {
 					maintArg = rest[1]
 				}
 				handleMaintenanceCommand(rest[0], maintArg, configDir, dataDir)
-				return
+				return nil
 			}
 		}
 	}
 
 	// Initialize mode and debug per AI.md PART 6
 	// This must happen before starting the server
-	mode.InitializeAppMode(modeStr, debug)
+	debugFlagSet := false
+	fs.Visit(func(parsed *flag.Flag) {
+		if parsed.Name == "debug" {
+			debugFlagSet = true
+		}
+	})
+	mode.InitializeAppModeWithDebugOverride(modeStr, debug, debugFlagSet)
 
 	// Handle daemon mode per AI.md PART 8
 	if daemon {
@@ -391,24 +464,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load configuration: %v\n", err)
 		os.Exit(1)
 	}
+	if *i2pF {
+		appConfig.Server.I2P.Enabled = true
+	}
 
 	// Get paths early so we can override log directory
 	paths := config.GetAppPaths(configDir, dataDir)
 
 	// Ensure system user/group and set directory ownership per AI.md PART 23
 	// "Binary handles EVERYTHING else: directories, permissions, user/group, Tor, etc."
-	appName := filepath.Base(os.Args[0])
-	if appName == "" {
-		appName = "vidveil"
-	}
-	// Remove any extension from binary name
-	if ext := filepath.Ext(appName); ext != "" {
-		appName = strings.TrimSuffix(appName, ext)
-	}
-	// Normalize to base name (vidveil, vidveil-agent, vidveil-cli)
-	if strings.Contains(appName, "-") && !strings.HasPrefix(appName, "vidveil-") {
-		appName = "vidveil"
-	}
+	appName := system.ServiceUserName()
 
 	// Create user and chown directories (only if running as root)
 	// Include db subdirectory for SQLite database and the Tor data/site
@@ -419,10 +484,31 @@ func main() {
 	dbDir := config.GetDatabaseDir(paths.Data)
 	torDataDir := filepath.Join(paths.Data, "tor")
 	torSiteDir := filepath.Join(torDataDir, "site")
-	dirsToOwn := []string{paths.Config, paths.Data, dbDir, paths.Cache, paths.Log, torDataDir, torSiteDir}
+	dirsToOwn := []string{
+		paths.Config,
+		paths.Data,
+		dbDir,
+		paths.Cache,
+		paths.Log,
+		paths.Backup,
+		pathpkg.GetMaintenanceLockDir(paths.Data),
+		torDataDir,
+		torSiteDir,
+	}
+	if runtime.GOOS == "linux" && paths.PIDFile == pathpkg.GetDefaultPIDFile(true) {
+		dirsToOwn = append(dirsToOwn, filepath.Dir(paths.PIDFile))
+	}
+	if appConfig.Server.I2P.Enabled {
+		dirsToOwn = append(dirsToOwn,
+			filepath.Join(paths.Config, "i2p"),
+			filepath.Join(paths.Data, "i2p"),
+			filepath.Join(paths.Data, "i2p", "site"),
+		)
+	}
 	uid, gid, err := system.EnsureSystemUser(appName, dirsToOwn)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Failed to ensure system user: %v\n", err)
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to ensure system user: %v\n", err)
+		os.Exit(1)
 	} else if system.IsRunningAsRoot() && uid > 0 {
 		fmt.Printf(terminal.UserIcon()+" Running as user %s (uid=%d, gid=%d)\n", appName, uid, gid)
 	}
@@ -452,7 +538,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 			os.Exit(1)
 		}
-		defer signalpkg.RemovePIDFile(pidFile)
+		defer func() { _ = signalpkg.RemovePIDFile(pidFile) }()
 	}
 
 	// Override with command line flags
@@ -480,19 +566,25 @@ func main() {
 
 	// Initialize database per AI.md PART 10
 	// VidVeil is stateless/privacy-first: only server.db (admin/config/audit).
-	// No regular users, organizations, or custom domains (PARTS 34-36 NOT implemented).
+	// The project definition excludes regular user accounts, organizations, and custom domains.
 	serverDBPath := filepath.Join(paths.Data, "db", "server.db")
 	migrationMgr, err := database.NewMigrationManager(serverDBPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to initialize database: %v\n", err)
 		os.Exit(1)
 	}
-	defer migrationMgr.Close()
+	defer func() { _ = migrationMgr.Close() }()
 
 	// Register and run migrations
 	migrationMgr.RegisterDefaultMigrations()
 	if err := migrationMgr.RunMigrations(); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to run migrations: %v\n", err)
+		os.Exit(1)
+	}
+	tokenHashCtx, cancelTokenHashMigration := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelTokenHashMigration()
+	if err := apitoken.NormalizeLegacyHashes(tokenHashCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to migrate stored API-token digests: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -550,6 +642,14 @@ func main() {
 	torSvc.SetConfigDir(filepath.Join(paths.Config, "tor"))
 	// Pass log dir so Tor writes its notice log to {log_dir}/tor.log
 	torSvc.SetLogDir(paths.Log)
+	i2pSvc := i2p.NewService(appConfig.Server.I2P, paths.Config, paths.Data, paths.Log, logger)
+	i2pCtx, cancelI2P := context.WithCancel(context.Background())
+	defer cancelI2P()
+	defer func() {
+		if err := i2pSvc.Close(); err != nil {
+			logger.Warn("I2P shutdown failed", map[string]interface{}{"error": err.Error()})
+		}
+	}()
 
 	// Blocklist service (PART 11)
 	blocklistSvc := blocklist.NewBlocklistService(appConfig)
@@ -566,6 +666,20 @@ func main() {
 	// Initialize scheduler with database persistence per AI.md PART 18
 	// Task state (run_count, fail_count, last_run) survives restarts
 	sched := scheduler.NewSchedulerWithDB(migrationMgr.GetDB())
+	sched.SetLogger(logger)
+	var i2pHealthTask scheduler.TaskFunc
+	if appConfig.Server.I2P.Enabled {
+		i2pHealthTask = func(ctx context.Context) error {
+			if err := i2pSvc.CheckHealth(ctx); err == nil {
+				return nil
+			}
+			if err := i2pSvc.Restart(ctx); err != nil {
+				return fmt.Errorf("I2P provider health check and restart: %w", err)
+			}
+			appConfig.Server.I2P.Address = i2pSvc.Address()
+			return nil
+		}
+	}
 
 	// Set catch-up window per AI.md PART 18
 	// Missed tasks within this window will run on startup
@@ -576,7 +690,7 @@ func main() {
 	}
 
 	// Register all built-in tasks per AI.md PART 18
-	sched.RegisterBuiltinTasks(scheduler.BuiltinTaskFuncs{
+	if err := sched.RegisterBuiltinTasks(scheduler.BuiltinTaskFuncs{
 		SSLRenewal: func(ctx context.Context) error {
 			// SSL certificate renewal check per PART 15
 			if !appConfig.Server.SSL.Enabled {
@@ -603,6 +717,20 @@ func main() {
 			return cveSvc.Update(ctx)
 		},
 		TokenCleanup: func(ctx context.Context) error {
+			cleanupCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			result, err := migrationMgr.GetDB().ExecContext(cleanupCtx,
+				`DELETE FROM api_tokens WHERE expires_at IS NOT NULL AND expires_at <= ?`, time.Now().Unix())
+			if err != nil {
+				return fmt.Errorf("remove expired API tokens: %w", err)
+			}
+			removed, err := result.RowsAffected()
+			if err != nil {
+				return fmt.Errorf("count removed API tokens: %w", err)
+			}
+			if removed > 0 {
+				logger.Info("expired API tokens removed", map[string]interface{}{"count": removed})
+			}
 			return nil
 		},
 		LogRotation: func(ctx context.Context) error {
@@ -637,6 +765,12 @@ func main() {
 		},
 		HealthcheckSelf: func(ctx context.Context) error {
 			// Self health check per PART 13
+			if err := migrationMgr.GetDB().PingContext(ctx); err != nil {
+				return fmt.Errorf("database health check failed: %w", err)
+			}
+			if !sched.IsRunning() {
+				return fmt.Errorf("scheduler health check failed: scheduler is stopped")
+			}
 			return nil
 		},
 		TorHealth: func(ctx context.Context) error {
@@ -659,11 +793,13 @@ func main() {
 			}
 			return nil
 		},
+		I2PHealth: i2pHealthTask,
 		UpdateCheck: func(ctx context.Context) error {
 			// Update check per AI.md PART 18/22 — daily at 06:00
 			// Notify-only unless update.auto_install is true; honors update.defer_days
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
-			info, err := maint.CheckUpdate()
+			maint.SetBuildEpoch(buildEpoch())
+			info, err := maint.CheckUpdateContext(ctx)
 			if err != nil {
 				return fmt.Errorf("update check: %w", err)
 			}
@@ -686,31 +822,38 @@ func main() {
 			})
 			// Auto-install only when explicitly configured
 			if appConfig.Server.Update.AutoInstall {
-				return maint.ApplyUpdate(info.DownloadURL)
+				return maint.ApplyUpdateContext(ctx, info.DownloadURL)
 			}
 			return nil
 		},
-	})
+	}); err != nil {
+		logger.Error("failed to register built-in scheduler tasks", map[string]interface{}{"error": err.Error()})
+		return fmt.Errorf("register built-in scheduler tasks: %w", err)
+	}
 
 	// Set Tor provider for engine manager per PART 31
 	// This enables Tor outbound network for anonymized engine queries when UseNetwork is true
 	engineMgr.SetTorProvider(torSvc)
-	defer torSvc.Stop()
+	defer func() { _ = torSvc.Stop() }()
 
 	// Load scheduler history from database per AI.md PART 18
 	if err := sched.LoadHistoryFromDB(100); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Failed to load scheduler history: %v\n", err)
 	}
 
-	// Start scheduler
-	sched.Start(context.Background())
-	defer sched.Stop()
-
 	// Create server with migration manager, scheduler, and logger per AI.md PART 11
+	restoreRestart := make(chan struct{}, 1)
 	srv := server.NewServer(appConfig, configDir, dataDir, engineMgr, migrationMgr, sched, logger)
+	srv.SetRestoreRestartHandler(func() {
+		select {
+		case restoreRestart <- struct{}{}:
+		default:
+		}
+	})
 
 	// Set Tor service for handlers per AI.md PART 31
 	srv.SetTorService(torSvc)
+	srv.SetI2PService(i2pSvc)
 
 	// Wire the internal loopback-only Tor control channel used by the
 	// `{project_name} tor ...` CLI subcommand per AI.md PART 31
@@ -725,6 +868,11 @@ func main() {
 	// Wire SSL manager for HTTPS serving and ACME challenges per AI.md PART 15
 	srv.SetSSLManager(sslSvc)
 
+	// Start the scheduler only after server handlers and failure notifications
+	// are wired, so startup catch-up runs cannot miss their configured channels.
+	sched.Start(context.Background())
+	defer sched.Stop()
+
 	// Register the process-wide active config for the Output Sanitization
 	// Pipeline (AI.md PART 11 stage 5) — packages outside the request path
 	// use config.IsProductionMode() instead of threading a config pointer
@@ -736,7 +884,13 @@ func main() {
 	configWatcher := config.NewWatcher(configPath, appConfig)
 	configWatcher.OnReload(func(newCfg *config.AppConfig) {
 		// Config has been reloaded - the shared appConfig pointer is already updated
-		// Additional reload actions can be added here if needed
+		// Refresh token-auth state so server.token changes take effect immediately.
+		srv.RefreshOperatorTokenHash()
+		go func() {
+			if err := srv.RefreshBrandingImages(context.Background()); err != nil {
+				logger.Warn("branding image refresh after config reload failed", nil)
+			}
+		}()
 	})
 	configWatcher.Start()
 	defer configWatcher.Stop()
@@ -781,18 +935,37 @@ func main() {
 	// earlier one-time chown could not have covered since they did not exist yet.
 	if system.IsRunningAsRoot() {
 		if _, _, err := system.EnsureSystemUser(appName, dirsToOwn); err != nil {
-			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Failed to re-apply ownership before privilege drop: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to re-apply ownership before privilege drop: %v\n", err)
+			os.Exit(1)
 		}
 	}
 
 	// Drop privileges to the vidveil system user after port is bound per AI.md PART 23.
 	// ShouldDropPrivileges() returns true only on Unix when current uid == 0.
 	if system.ShouldDropPrivileges() {
-		if err := system.DropPrivileges(appName); err != nil {
+		if err := system.DropPrivileges(appName, paths.Config); err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to drop privileges: %v\n", err)
 			os.Exit(1)
 		}
 		fmt.Printf(terminal.UserIcon()+" Dropped privileges to %s\n", appName)
+	}
+
+	if appConfig.Server.I2P.Enabled {
+		go func() {
+			if err := i2pSvc.Start(i2pCtx); err != nil {
+				if i2pCtx.Err() == nil {
+					logger.Warn("I2P eepsite unavailable", map[string]interface{}{"error": err.Error()})
+				}
+				return
+			}
+			appConfig.Server.I2P.Address = i2pSvc.Address()
+			logger.Info("I2P eepsite started", map[string]interface{}{"address": i2pSvc.Address(), "provider": i2pSvc.Provider()})
+			if listener := i2pSvc.Listener(); listener != nil {
+				if err := srv.ServeOn(listener); err != nil && err != http.ErrServerClosed {
+					logger.Warn("I2P backend listener stopped", map[string]interface{}{"error": err.Error()})
+				}
+			}
+		}()
 	}
 
 	// Start Tor hidden service per PART 31 (in background to not block HTTP server).
@@ -974,10 +1147,10 @@ func main() {
 			// Test DB connectivity
 			dbErr := migrationMgr.GetDB().Ping()
 			// Test file-write ability (write to a probe file in the data dir)
-			probeFile := filepath.Join(dataDir, ".write_probe")
+			probeFile := filepath.Join(paths.Data, ".write_probe")
 			writeErr := os.WriteFile(probeFile, []byte("probe"), 0o600)
 			if writeErr == nil {
-				os.Remove(probeFile)
+				_ = os.Remove(probeFile)
 			}
 			unhealthy := dbErr != nil || writeErr != nil
 
@@ -1019,19 +1192,24 @@ func main() {
 	// Wait for shutdown signal per AI.md PART 8
 	// Handles: SIGTERM(15), SIGINT(2), SIGQUIT(3), SIGRTMIN+3(37)
 	// Ignores: SIGHUP(1) - config auto-reloads via file watcher
-	sig := signalpkg.WaitForShutdown(context.Background())
+	sig, restartRequested := waitForShutdownRequest(ctx, restoreRestart, signalpkg.WaitForShutdown)
 	fmt.Printf("\n%s Received %v, shutting down gracefully...\n", terminal.StopIcon(), sig)
+	signalpkg.BeginShutdown()
+	cancelI2P()
 
 	// Graceful shutdown with timeout (30 seconds per AI.md PART 8)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Shutdown error: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("server shutdown: %w", err)
 	}
 
 	fmt.Printf("%s Server stopped\n", terminal.StatusIcon(true))
+	if restartRequested {
+		return errRestoreRestartRequested
+	}
+	return nil
 }
 
 func printHelp() {
@@ -1065,6 +1243,7 @@ Server Configuration:
 --baseurl PATH                         - URL path prefix (default: /)
 --daemon                               - Run as daemon (detach from terminal)
 --debug                                - Enable debug mode
+--i2p                                  - Enable the optional I2P eepsite
 --color {auto|yes|no}                  - Color output (default: auto)
 --lang CODE                            - Language for output (default: auto)
 
@@ -1130,7 +1309,7 @@ func checkStatus() int {
 		fmt.Printf("  Port: %s\n", statusPort)
 		return 1
 	}
-	conn.Close()
+	_ = conn.Close()
 
 	// Server is listening - query /server/healthz for mode, uptime, and Tor status
 	health := queryHealthz("", "")
@@ -1156,6 +1335,18 @@ func checkStatus() int {
 		fmt.Println("Tor Hidden Service: Starting")
 	default:
 		fmt.Println("Tor Hidden Service: Disabled")
+	}
+	i2p := health.Features.I2P
+	switch {
+	case i2p.Running:
+		fmt.Printf("\nI2P Eepsite: Running (%s)\n", i2p.Provider)
+		fmt.Printf("  Address: %s\n", i2p.Hostname)
+	case !i2p.Enabled:
+		fmt.Println("\nI2P Eepsite: Disabled")
+	case i2p.Status == "error:no_provider" || i2p.Provider == "none":
+		fmt.Println("\nI2P Eepsite: No Provider")
+	default:
+		fmt.Println("\nI2P Eepsite: Error")
 	}
 	return 0
 }
@@ -1243,7 +1434,7 @@ func printInit(shell, binaryName string) {
 func printBashCompletions(binaryName string) {
 	fmt.Printf(`_%s_completions() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
-    local opts="--help --version --shell --config --data --cache --log --backup --pid --address --port --baseurl --mode --status --daemon --debug --color --lang --service --maintenance --update tor"
+    local opts="--help --version --shell --config --data --cache --log --backup --pid --address --port --baseurl --mode --status --daemon --debug --i2p --color --lang --service --maintenance --update tor"
     COMPREPLY=($(compgen -W "$opts" -- "$cur"))
 }
 complete -F _%s_completions %s
@@ -1270,6 +1461,7 @@ _arguments \
     '--status[Show status]' \
     '--daemon[Run as daemon]' \
     '--debug[Enable debug mode]' \
+    '--i2p[Enable the optional I2P eepsite]' \
     '--color[Color output]:color:(auto yes no)' \
     '--lang[Output language]:code:' \
     '--service[Service command]:command:(start stop restart reload status --install --uninstall --disable)' \
@@ -1313,7 +1505,7 @@ func printPowerShellCompletions(binaryName string) {
     $completions = @(
         '--help', '--version', '--shell', '--config', '--data', '--cache',
         '--log', '--backup', '--pid', '--address', '--port', '--baseurl', '--mode',
-        '--status', '--daemon', '--debug', '--color', '--lang', '--service', '--maintenance', '--update', 'tor'
+			'--status', '--daemon', '--debug', '--i2p', '--color', '--lang', '--service', '--maintenance', '--update', 'tor'
     )
     $completions | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
@@ -1322,12 +1514,13 @@ func printPowerShellCompletions(binaryName string) {
 `, binaryName)
 }
 
-func handleServiceCommand(cmd, configDir, dataDir string) {
+func handleServiceCommand(cmd, configDir, dataDir, language string) {
+	locale := cliOutputLocale(language, configDir, dataDir)
 	// Per AI.md PART 23 and PART 24: Use system.NewServiceManager which creates system user
 	// Get binary path
 	binaryPath, err := os.Executable()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to get executable path: %v\n", err)
+		fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.executable_error", "{error}", err.Error()))
 		os.Exit(1)
 	}
 
@@ -1354,139 +1547,198 @@ func handleServiceCommand(cmd, configDir, dataDir string) {
 
 	switch cmd {
 	case "start":
-		fmt.Println("Starting Vidveil service...")
+		fmt.Println(serviceText(locale, "cli.service.starting"))
 		if err := svc.Start(); err != nil {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to start: %v\n", err)
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.start_error", "{error}", err.Error()))
 			os.Exit(1)
 		}
-		fmt.Println(terminal.StatusIcon(true) + " Service started")
+		fmt.Println(terminal.StatusIcon(true) + serviceText(locale, "cli.service.started"))
 
 	case "stop":
-		fmt.Println("Stopping Vidveil service...")
+		fmt.Println(serviceText(locale, "cli.service.stopping"))
 		if err := svc.Stop(); err != nil {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to stop: %v\n", err)
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.stop_error", "{error}", err.Error()))
 			os.Exit(1)
 		}
-		fmt.Println(terminal.StatusIcon(true) + " Service stopped")
+		fmt.Println(terminal.StatusIcon(true) + serviceText(locale, "cli.service.stopped"))
 
 	case "restart":
-		fmt.Println("Restarting Vidveil service...")
+		fmt.Println(serviceText(locale, "cli.service.restarting"))
 		if err := svc.Restart(); err != nil {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to restart: %v\n", err)
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.restart_error", "{error}", err.Error()))
 			os.Exit(1)
 		}
-		fmt.Println(terminal.StatusIcon(true) + " Service restarted")
+		fmt.Println(terminal.StatusIcon(true) + serviceText(locale, "cli.service.restarted"))
 
 	case "reload":
-		fmt.Println("Reloading Vidveil configuration...")
+		fmt.Println(serviceText(locale, "cli.service.reloading"))
 		if err := svc.Reload(); err != nil {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to reload: %v\n", err)
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.reload_error", "{error}", err.Error()))
 			os.Exit(1)
 		}
-		fmt.Println(terminal.StatusIcon(true) + " Configuration reloaded")
+		fmt.Println(terminal.StatusIcon(true) + serviceText(locale, "cli.service.reloaded"))
 
 	case "status":
 		// Per AI.md PART 24: Show service status
 		status, err := svc.GetServiceStatus()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to get status: %v\n", err)
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.status_error", "{error}", err.Error()))
 			os.Exit(1)
 		}
 		switch status {
 		case "running":
-			fmt.Println(terminal.StatusIcon(true) + " Vidveil service is running")
+			fmt.Println(terminal.StatusIcon(true) + serviceText(locale, "cli.service.status_running"))
 		case "stopped":
-			fmt.Println(terminal.StopButtonIcon() + " Vidveil service is stopped")
+			fmt.Println(terminal.StopButtonIcon() + serviceText(locale, "cli.service.status_stopped"))
 		default:
-			fmt.Printf(terminal.QuestionIcon()+" Vidveil service status: %s\n", status)
+			fmt.Println(terminal.QuestionIcon() + serviceText(locale, "cli.service.status_other", "{status}", status))
 		}
 
 	case "--install":
 		// Per AI.md PART 23: Check escalation before service install
-		if err := system.HandleEscalation("Service installation"); err != nil {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+		if err := system.HandleEscalation(serviceText(locale, "cli.service.installing"), locale); err != nil {
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.operation_error", "{error}", err.Error()))
 			os.Exit(1)
 		}
-		fmt.Println("Installing Vidveil as system service...")
+		fmt.Println(serviceText(locale, "cli.service.installing"))
 		if err := svc.Install(); err != nil {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to install: %v\n", err)
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.install_error", "{error}", err.Error()))
 			os.Exit(1)
 		}
 
 	case "--uninstall":
 		// Per AI.md PART 23: Confirmation required before destructive action
-		fmt.Println(terminal.WarningIcon() + " WARNING: This will:")
-		fmt.Println("   • Stop the service (if running)")
-		fmt.Println("   • Remove service configuration")
-		fmt.Println("   • Delete data, configs, and logs")
-		fmt.Println("   • Remove system user (if created)")
+		fmt.Println(terminal.WarningIcon() + serviceText(locale, "cli.service.uninstall_warning"))
+		fmt.Println("   • " + serviceText(locale, "cli.service.uninstall_stop"))
+		fmt.Println("   • " + serviceText(locale, "cli.service.uninstall_remove_config"))
+		fmt.Println("   • " + serviceText(locale, "cli.service.uninstall_delete_data"))
+		fmt.Println("   • " + serviceText(locale, "cli.service.uninstall_remove_user"))
 		fmt.Println()
-		fmt.Print("This will delete ALL data, configs, and the system user. Continue? [y/N] ")
+		fmt.Print(serviceText(locale, "cli.service.uninstall_prompt"))
 
 		var response string
-		fmt.Scanln(&response)
+		if _, err := fmt.Scanln(&response); err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to read confirmation: %v\n", err)
+			os.Exit(1)
+		}
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response != "y" && response != "yes" {
-			fmt.Println("Cancelled.")
+			fmt.Println(serviceText(locale, "cli.service.cancelled"))
 			os.Exit(0)
 		}
 
 		// Per AI.md PART 23: Check escalation before service uninstall
-		if err := system.HandleEscalation("Service uninstallation"); err != nil {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+		if err := system.HandleEscalation(serviceText(locale, "cli.service.uninstalling"), locale); err != nil {
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.operation_error", "{error}", err.Error()))
 			os.Exit(1)
 		}
 
-		fmt.Println("Uninstalling Vidveil system service...")
+		fmt.Println(serviceText(locale, "cli.service.uninstalling"))
 		if err := svc.Uninstall(); err != nil {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to uninstall: %v\n", err)
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.uninstall_error", "{error}", err.Error()))
 			os.Exit(1)
 		}
-		fmt.Println(terminal.StatusIcon(true) + " Service uninstalled")
+		fmt.Println(terminal.StatusIcon(true) + serviceText(locale, "cli.service.uninstalled"))
 
 	case "--disable":
 		// Per AI.md PART 8: Disable service from starting at boot
-		fmt.Println("Disabling Vidveil service from starting at boot...")
+		fmt.Println(serviceText(locale, "cli.service.disabling"))
 		if err := svc.Disable(); err != nil {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to disable: %v\n", err)
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.disable_error", "{error}", err.Error()))
 			os.Exit(1)
 		}
-		fmt.Println(terminal.StatusIcon(true) + " Service disabled (will not start at boot)")
+		fmt.Println(terminal.StatusIcon(true) + serviceText(locale, "cli.service.disabled"))
 
 	case "--help":
 		// Per AI.md PART 8: Service command help
-		fmt.Printf(`Service Management Commands:
-
-  %s --service start         Start the service
-  %s --service stop          Stop the service
-  %s --service restart       Restart the service
-  %s --service reload        Reload configuration
-  %s --service status        Show service status
-  %s --service --install     Install as system service
-  %s --service --uninstall   Uninstall system service
-  %s --service --disable     Disable service from starting at boot
-
-Supported service managers:
-  - systemd (Linux)
-  - OpenRC (Linux)
-  - SysVinit (Linux)
-  - runit (Linux)
-  - launchd (macOS)
-  - Windows Service Manager
-  - BSD rc.d
-`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
+		fmt.Println(serviceText(locale, "cli.service.help_title"))
+		for _, item := range []struct{ key, command string }{
+			{"cli.service.help_start", "start"}, {"cli.service.help_stop", "stop"},
+			{"cli.service.help_restart", "restart"}, {"cli.service.help_reload", "reload"},
+			{"cli.service.help_status", "status"}, {"cli.service.help_install", "--install"},
+			{"cli.service.help_uninstall", "--uninstall"}, {"cli.service.help_disable", "--disable"},
+		} {
+			fmt.Println(serviceText(locale, item.key, "{binary}", binaryName, "{command}", item.command))
+		}
+		fmt.Println()
+		fmt.Println(serviceText(locale, "cli.service.help_managers"))
+		for _, key := range []string{
+			"cli.service.manager_systemd", "cli.service.manager_openrc", "cli.service.manager_sysvinit",
+			"cli.service.manager_runit", "cli.service.manager_launchd", "cli.service.manager_windows",
+			"cli.service.manager_bsd",
+		} {
+			fmt.Println("  - " + serviceText(locale, key))
+		}
 
 	default:
-		fmt.Printf(terminal.StatusIcon(false)+" Unknown service command: %s\n", cmd)
-		fmt.Printf("   Run '%s --service --help' for available commands\n", binaryName)
+		fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.unknown_command", "{command}", cmd))
+		fmt.Fprintln(os.Stderr, serviceText(locale, "cli.service.help_hint", "{binary}", binaryName))
 		os.Exit(1)
 	}
+}
+
+func cliOutputLocale(language, configDir, dataDir string) string {
+	if language == "" {
+		language = serviceConfigLanguage(configDir, dataDir)
+	}
+	if language == "" {
+		language = os.Getenv("LC_ALL")
+		if language == "" {
+			language = os.Getenv("LANG")
+		}
+	}
+	language = strings.ToLower(strings.TrimSpace(language))
+	if index := strings.IndexAny(language, "._@"); index >= 0 {
+		language = language[:index]
+	}
+	if index := strings.Index(language, "-"); index >= 0 {
+		language = language[:index]
+	}
+	if i18n.GlobalTranslator().HasLocale(language) {
+		return language
+	}
+	return i18n.DefaultLocale
+}
+
+func serviceConfigLanguage(configDir, dataDir string) string {
+	configPath := filepath.Join(config.GetAppPaths(configDir, dataDir).Config, "server.yml")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return ""
+	}
+	var cfg struct {
+		Lang   string `yaml:"lang"`
+		Server struct {
+			I18N struct {
+				DefaultLanguage string `yaml:"default_language"`
+			} `yaml:"i18n"`
+		} `yaml:"server"`
+	}
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return ""
+	}
+	if cfg.Lang != "" && cfg.Lang != "auto" {
+		return cfg.Lang
+	}
+	if strings.EqualFold(cfg.Server.I18N.DefaultLanguage, "auto") {
+		return ""
+	}
+	return cfg.Server.I18N.DefaultLanguage
+}
+
+func serviceText(locale, key string, replacements ...string) string {
+	text := i18n.Translate(locale, key)
+	if len(replacements) >= 2 {
+		text = strings.NewReplacer(replacements...).Replace(text)
+	}
+	return text
 }
 
 // handleUpdateCommand implements AI.md PART 22 --update command
 func handleUpdateCommand(cmd, arg string) {
 	binaryName := filepath.Base(os.Args[0])
 	maint := maintenance.NewMaintenanceManager("", "", version.GetVersion())
+	maint.SetBuildEpoch(buildEpoch())
 
 	switch cmd {
 	case "check":
@@ -1551,19 +1803,19 @@ func handleUpdateCommand(cmd, arg string) {
 		os.Exit(0)
 
 	case "branch":
-		// Set update branch (stable, beta, daily)
-		validBranches := map[string]bool{"stable": true, "beta": true, "daily": true}
-		if !validBranches[arg] {
+		// Set update branch, normalizing accepted aliases to the canonical name.
+		branch, valid := config.NormalizeUpdateChannel(arg)
+		if arg == "" || !valid {
 			fmt.Printf(terminal.StatusIcon(false)+" Invalid branch: %s\n", arg)
-			fmt.Println("   Valid branches: stable, beta, daily")
+			fmt.Println("   Valid branches: stable, beta, devel (aliases: daily, rolling, dev, development)")
 			os.Exit(1)
 		}
 
-		if err := maint.SetUpdateBranch(arg); err != nil {
+		if err := maint.SetUpdateBranch(branch); err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to set branch: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf(terminal.StatusIcon(true)+" Update branch set to: %s\n", arg)
+		fmt.Printf(terminal.StatusIcon(true)+" Update branch set to: %s\n", branch)
 		os.Exit(0)
 
 	case "--help", "help", "-h":
@@ -1572,12 +1824,13 @@ func handleUpdateCommand(cmd, arg string) {
   %s --update              Check and perform in-place update with restart
   %s --update yes          Same as --update (default)
   %s --update check        Check for updates without installing
-  %s --update branch <name>  Set update branch (stable, beta, daily)
+  %s --update branch <name>  Set update branch (stable, beta, devel)
 
 Update Branches:
   stable (default)  Release builds (v*, *.*.*)
   beta              Pre-release builds (*-beta)
-  daily             Daily builds (YYYYMMDDHHMMSS)
+  devel             Rolling development builds
+  daily, rolling, dev, development  Aliases for devel
 `, binaryName, binaryName, binaryName, binaryName)
 		os.Exit(0)
 
@@ -1695,6 +1948,15 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 			os.Exit(1)
 		}
+		appConfig, _, err := config.LoadAppConfig(configDir, dataDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load configuration: %v\n", err)
+			os.Exit(1)
+		}
+		if err := maint.ConfigureRestore(appConfig.Server.Restore); err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Invalid restore limits: %v\n", err)
+			os.Exit(1)
+		}
 
 		if arg == "" {
 			fmt.Println("Restoring from most recent backup...")
@@ -1703,13 +1965,24 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 		}
 		// Per AI.md PART 21: no --password flag - only prompt interactively if the
 		// backup turns out to be encrypted (avoids prompting for plaintext backups).
-		err := maint.RestoreWithPassword(arg, "")
-		if err != nil && strings.Contains(err.Error(), "password required") {
-			password := promptPassword("Enter backup password: ")
-			err = maint.RestoreWithPassword(arg, password)
-		}
+		paths := config.GetAppPaths(configDir, dataDir)
+		binaryPath, err := os.Executable()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Restore failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Resolve server binary: %v\n", err)
+			os.Exit(1)
+		}
+		binaryName := filepath.Base(os.Args[0])
+		controller := system.NewServiceManager(binaryName, binaryPath, paths.Config, paths.Data)
+		err = restoreWithServiceLifecycle(controller, paths.PIDFile, binaryName, func() error {
+			err := maint.RestoreWithPassword(arg, "")
+			if err != nil && strings.Contains(err.Error(), "password required") {
+				password := promptPassword("Enter backup password: ")
+				err = maint.RestoreWithPassword(arg, password)
+			}
+			return err
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Restore operation failed: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -1774,6 +2047,29 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 		// the --maintenance dispatcher, authorized like other sensitive operations.
 		handlePGPMaintenance(arg, configDir, dataDir)
 
+	case "secret":
+		// Per AI.md PART 11 "Secret Rotation": installation_secret and
+		// encryption_key rotate through the same sensitive-operation flow
+		// (operator token OR root + typed confirmation).
+		if err := handleMaintenanceSecret(arg, configDir, dataDir); err != nil {
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" "+err.Error())
+			os.Exit(1)
+		}
+
+	case "token":
+		// Per AI.md "Operator revocation": token revoke/list are operator-only.
+		if err := handleMaintenanceToken(arg, configDir, dataDir); err != nil {
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" "+err.Error())
+			os.Exit(1)
+		}
+
+	case "data":
+		// Per AI.md "Compliance-Specific Behaviors": GDPR data export/delete.
+		if err := handleMaintenanceData(arg, configDir, dataDir); err != nil {
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" "+err.Error())
+			os.Exit(1)
+		}
+
 	case "--help", "help", "-h":
 		// Per AI.md PART 8: --maintenance --help prints help and exits 0
 		fmt.Printf(`Maintenance Commands:
@@ -1783,6 +2079,11 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
   %s --maintenance mode <on|off>      Enable/disable maintenance mode
   %s --maintenance compliance report  Show regulatory compliance summary
   %s --maintenance pgp <action>       Manage the security PGP keypair
+  %s --maintenance secret rotate <n>  Rotate installation_secret or encryption_key
+  %s --maintenance token list         List active API tokens (prefix + resource)
+  %s --maintenance token revoke <pfx> Revoke a specific API token by prefix
+  %s --maintenance data export        Export all stored personal data (GDPR)
+  %s --maintenance data delete        Delete stored personal data (GDPR erasure)
   %s --maintenance setup              Show configuration instructions
 
 PGP actions (AI.md PART 12 "GPG Keypair Management"):
@@ -1794,13 +2095,25 @@ PGP actions (AI.md PART 12 "GPG Keypair Management"):
   import <file>                       Import an existing private key (identity checked)
   delete                              Delete the keypair (irreversible, typed confirmation)
 
+Secret actions (AI.md PART 11 "Secret Rotation"):
+  rotate installation_secret          New 32-byte secret; re-encrypts PGP key (7-day grace)
+  rotate encryption_key               New AES-256-GCM key; re-encrypts at-rest data (30-day grace)
+
+Token actions (operator-only):
+  list                                Show prefix, resource, and expiry for active tokens
+  revoke <prefix>                     Revoke the token matching <prefix>
+
+Data actions (AI.md GDPR/CCPA):
+  export [--out <file>]               Write a JSON export of all stored data
+  delete                              Erase personal data; audit log retained
+
 Per AI.md PART 21 the backup password is never passed on the command
 line; backup always prompts and restore prompts only when the archive
 is encrypted.
 
 Examples:
   %s --maintenance backup             # Backup to default location
-  %s --maintenance backup /tmp/backup.tar  # Backup to specific file
+  %s --maintenance backup backup.tar      # Backup to specific file
   %s --maintenance restore            # Restore from most recent
   %s --maintenance restore backup.tar.gz.enc  # Restore an encrypted archive
   %s --maintenance mode on            # Enable maintenance mode
@@ -1809,7 +2122,8 @@ Examples:
   %s --maintenance pgp publish        # Publish the public key to keyservers
 `, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
 			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
-			binaryName, binaryName, binaryName)
+			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
+			binaryName, binaryName)
 		os.Exit(0)
 
 	default:
@@ -1965,7 +2279,7 @@ func pgpGenerateCore(configDir, dataDir string) (kp *pgp.Keypair, identityName, 
 	if err != nil {
 		return nil, "", "", "", fmt.Errorf("failed to open database: %w", err)
 	}
-	defer dbMgr.Close()
+	defer func() { _ = dbMgr.Close() }()
 	if err := dbMgr.RunMigrations(); err != nil {
 		return nil, "", "", "", fmt.Errorf("failed to run migrations: %w", err)
 	}
@@ -2056,7 +2370,7 @@ func pgpRotateCore(configDir, dataDir string) (*pgpRotateResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
-	defer dbMgr.Close()
+	defer func() { _ = dbMgr.Close() }()
 	if err := dbMgr.RunMigrations(); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
@@ -2180,7 +2494,7 @@ func pgpPublishCore(configDir, dataDir string) (*pgpPublishResult, error) {
 		if dbErr != nil {
 			return res, fmt.Errorf("published but failed to open database: %w", dbErr)
 		}
-		defer dbMgr.Close()
+		defer func() { _ = dbMgr.Close() }()
 		if err := dbMgr.RunMigrations(); err != nil {
 			return res, fmt.Errorf("published but failed to run migrations: %w", err)
 		}
@@ -2204,7 +2518,7 @@ func pgpExportPublic(configDir, dataDir, outPath string) {
 		os.Exit(1)
 	}
 	if outPath == "" {
-		os.Stdout.Write(pub)
+		_, _ = os.Stdout.Write(pub)
 		return
 	}
 	fmt.Printf(terminal.StatusIcon(true)+" Public key written to %s\n", outPath)
@@ -2389,7 +2703,7 @@ func localOperatorIP() string {
 	if err != nil {
 		return ""
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if addr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
 		return addr.IP.String()
 	}
@@ -2473,7 +2787,7 @@ func pgpImportCore(configDir, dataDir, inPath string, confirmMismatch func(expec
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
-	defer dbMgr.Close()
+	defer func() { _ = dbMgr.Close() }()
 	if err := dbMgr.RunMigrations(); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
@@ -2563,7 +2877,7 @@ func pgpDeleteCore(configDir, dataDir string, confirm func() bool) (bool, error)
 	if err != nil {
 		return false, fmt.Errorf("failed to open database: %w", err)
 	}
-	defer dbMgr.Close()
+	defer func() { _ = dbMgr.Close() }()
 	if err := dbMgr.RunMigrations(); err != nil {
 		return false, fmt.Errorf("failed to run migrations: %w", err)
 	}
@@ -2638,7 +2952,7 @@ func loadInstallationSecret(dataDir string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-	defer dbMgr.Close()
+	defer func() { _ = dbMgr.Close() }()
 	if err := dbMgr.RunMigrations(); err != nil {
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
@@ -2696,9 +3010,16 @@ func printComplianceReport(appConfig *config.AppConfig) {
 
 // isDBFirstRun returns true if the settings table has no rows, indicating first run.
 // A missing or inaccessible table also counts as first run.
+// Per AI.md PART 10
+// all queries MUST have timeouts (5s for reads), so the query runs under an
+// explicit context rather than the bare *sql.DB, which would block startup
+// indefinitely if the database is unreachable or blocked.
 func isDBFirstRun(db *sql.DB) bool {
 	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM settings").Scan(&count)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM settings").Scan(&count)
 	if err != nil {
 		return true
 	}
@@ -2741,6 +3062,13 @@ func authorizeSensitiveOperation(configDir, dataDir string) error {
 // PART 5 authorization flows: only the service user may be prompted for the
 // operator token; any other non-root user is rejected outright.
 func authorizeViaOperatorToken(configDir, dataDir, prompt string) error {
+	// Fail closed: without a config directory the operator token cannot be
+	// read, so the check below would have nothing to compare against. Treat it
+	// as unauthorized rather than silently falling through to a default path.
+	if configDir == "" {
+		return fmt.Errorf("requires administrator authorization: no config directory to verify the operator token")
+	}
+
 	currentUser, err := user.Current()
 	if err != nil || currentUser.Username != "vidveil" {
 		return fmt.Errorf("requires administrator authorization\n   Run as root or provide the operator token")
@@ -2773,7 +3101,7 @@ func isDatabaseEmpty(configDir, dataDir string) bool {
 	if err != nil {
 		return true
 	}
-	defer migrationMgr.Close()
+	defer func() { _ = migrationMgr.Close() }()
 	return isDBFirstRun(migrationMgr.GetDB())
 }
 

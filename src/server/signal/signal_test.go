@@ -117,9 +117,9 @@ func TestIsShuttingDownDefaultsFalse(t *testing.T) {
 
 func TestIsShuttingDownReflectsGlobalTrue(t *testing.T) {
 	resetGlobals(t)
-	shuttingDown.Store(true)
+	BeginShutdown()
 	if !IsShuttingDown() {
-		t.Error("IsShuttingDown() = false after shuttingDown = true, want true")
+		t.Error("IsShuttingDown() = false after BeginShutdown(), want true")
 	}
 }
 
@@ -540,7 +540,9 @@ func TestSetupSignalHandlerUSR1InvokesLogReopen(t *testing.T) {
 	called := make(chan struct{}, 1)
 	SetLogReopenFunc(func() { called <- struct{}{} })
 	setupSignalHandler(nil, "")
-	syscall.Kill(os.Getpid(), syscall.SIGUSR1)
+	if err := syscall.Kill(os.Getpid(), syscall.SIGUSR1); err != nil {
+		t.Fatalf("send SIGUSR1 to self: %v", err)
+	}
 	select {
 	case <-called:
 	case <-waitTimeout(t, 2):
@@ -556,7 +558,9 @@ func TestSetupSignalHandlerUSR2InvokesStatusDump(t *testing.T) {
 	called := make(chan struct{}, 1)
 	SetStatusDumpFunc(func() { called <- struct{}{} })
 	setupSignalHandler(nil, "")
-	syscall.Kill(os.Getpid(), syscall.SIGUSR2)
+	if err := syscall.Kill(os.Getpid(), syscall.SIGUSR2); err != nil {
+		t.Fatalf("send SIGUSR2 to self: %v", err)
+	}
 	select {
 	case <-called:
 	case <-waitTimeout(t, 2):

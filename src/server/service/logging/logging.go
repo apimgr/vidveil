@@ -11,12 +11,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/outsan"
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
@@ -207,7 +209,9 @@ func (rf *RotatingFile) needsRotation() bool {
 func (rf *RotatingFile) rotate() error {
 	// Close current file
 	if rf.file != nil {
-		rf.file.Close()
+		if err := rf.file.Close(); err != nil {
+			return fmt.Errorf("close log before rotation: %w", err)
+		}
 	}
 
 	// Generate rotated filename with timestamp
@@ -229,7 +233,7 @@ func (rf *RotatingFile) rotate() error {
 		go rf.compressFile(rotatedPath)
 	} else if rf.keepCount == 0 {
 		// Delete immediately if not keeping rotated files (PART 11 default)
-		go os.Remove(rotatedPath)
+		go func() { _ = os.Remove(rotatedPath) }()
 	}
 
 	// Clean up old rotated files if keepCount > 0
@@ -256,30 +260,39 @@ func (rf *RotatingFile) compressFile(path string) {
 	if err != nil {
 		return
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	// Create gzip file
 	dst, err := os.Create(path + ".gz")
 	if err != nil {
 		return
 	}
-	defer dst.Close()
+	defer func() { _ = dst.Close() }()
 
 	// Write compressed data
 	gz := gzip.NewWriter(dst)
 	if _, err := io.Copy(gz, src); err != nil {
-		gz.Close()
-		os.Remove(path + ".gz")
+		_ = gz.Close()
+		_ = os.Remove(path + ".gz")
 		return
 	}
-	gz.Close()
+	if err := gz.Close(); err != nil {
+		_ = os.Remove(path + ".gz")
+		return
+	}
+	if err := dst.Close(); err != nil {
+		_ = os.Remove(path + ".gz")
+		return
+	}
 
 	// Remove original after successful compression
-	os.Remove(path)
+	if err := os.Remove(path); err != nil {
+		return
+	}
 
 	// If not keeping files, remove compressed too (PART 11 default)
 	if rf.keepCount == 0 {
-		os.Remove(path + ".gz")
+		_ = os.Remove(path + ".gz")
 	}
 }
 
@@ -318,7 +331,7 @@ func (rf *RotatingFile) cleanupOldFiles() {
 	// Remove files beyond keepCount
 	if len(files) > rf.keepCount {
 		for i := 0; i < len(files)-rf.keepCount; i++ {
-			os.Remove(files[i].path)
+			_ = os.Remove(files[i].path)
 		}
 	}
 }
@@ -399,32 +412,70 @@ func SanitizeLogFields(fields map[string]interface{}) map[string]interface{} {
 
 	sanitized := make(map[string]interface{})
 	for k, v := range fields {
-		switch strings.ToLower(k) {
-		case "email", "user_email", "admin_email":
+		lowerKey := strings.ToLower(strings.NewReplacer("-", "_", ".", "_").Replace(k))
+		switch {
+		case strings.Contains(lowerKey, "email"):
 			if s, ok := v.(string); ok {
 				sanitized[k] = MaskEmail(s)
 			} else {
 				sanitized[k] = "***"
 			}
-		case "username", "user", "admin", "admin_username":
+		case lowerKey == "username" || lowerKey == "user" || lowerKey == "admin" || strings.HasSuffix(lowerKey, "_username"):
 			if s, ok := v.(string); ok {
 				sanitized[k] = MaskUsername(s)
 			} else {
 				sanitized[k] = "***"
 			}
-		case "password", "secret", "token", "api_key", "apikey":
+		case isSensitiveLogField(lowerKey):
 			sanitized[k] = "[REDACTED]"
-		case "ip", "remote_addr", "client_ip":
+		case lowerKey == "ip" || strings.HasSuffix(lowerKey, "_ip") || lowerKey == "remote_addr":
 			if s, ok := v.(string); ok {
 				sanitized[k] = MaskIP(s)
 			} else {
 				sanitized[k] = "***"
 			}
 		default:
-			sanitized[k] = v
+			sanitized[k] = sanitizeLogValue(lowerKey, v)
 		}
 	}
 	return sanitized
+}
+
+var (
+	logCredentialPattern      = regexp.MustCompile(`(?i)\b(password|secret|(?:access_|refresh_|session_)?token|authorization|credential|api[_-]?key|session)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;]+)`)
+	logQueryCredentialPattern = regexp.MustCompile(`(?i)([?&](?:token|session|code|key|password|secret|auth|pwd|api_key|apikey|access_token|refresh_token)=)[^&#\s]*`)
+)
+
+func isSensitiveLogField(key string) bool {
+	for _, marker := range []string{"password", "secret", "token", "authorization", "credential", "api_key", "apikey", "session", "auth", "key"} {
+		if strings.Contains(key, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func sanitizeLogValue(key string, value interface{}) interface{} {
+	switch typed := value.(type) {
+	case string:
+		return sanitizeLogText(typed)
+	case map[string]interface{}:
+		return SanitizeLogFields(typed)
+	case []interface{}:
+		cleaned := make([]interface{}, len(typed))
+		for index, item := range typed {
+			cleaned[index] = sanitizeLogValue(key, item)
+		}
+		return cleaned
+	default:
+		return value
+	}
+}
+
+func sanitizeLogText(value string) string {
+	value = logQueryCredentialPattern.ReplaceAllString(value, "$1[REDACTED]")
+	value = logCredentialPattern.ReplaceAllString(value, "$1=[REDACTED]")
+	return outsan.RedactURL(value)
 }
 
 // cefVersion returns the version string used in the CEF deviceVersion field.
@@ -932,9 +983,9 @@ func (l *AppLogger) Close() {
 
 	for _, w := range l.outputs {
 		if rf, ok := w.(*RotatingFile); ok {
-			rf.Close()
+			_ = rf.Close()
 		} else if f, ok := w.(*os.File); ok {
-			f.Close()
+			_ = f.Close()
 		}
 	}
 }
@@ -946,7 +997,7 @@ func (l *AppLogger) Reopen() {
 
 	for name, w := range l.outputs {
 		if rf, ok := w.(*RotatingFile); ok {
-			rf.Reopen()
+			_ = rf.Reopen()
 		}
 		// Suppress unused variable (used for future logging)
 		_ = name
@@ -960,7 +1011,9 @@ func (rf *RotatingFile) Reopen() error {
 
 	// Close current file
 	if rf.file != nil {
-		rf.file.Close()
+		if err := rf.file.Close(); err != nil {
+			return fmt.Errorf("close log before reopen: %w", err)
+		}
 	}
 
 	// Reopen file
@@ -983,6 +1036,8 @@ func (l *AppLogger) log(level Level, output string, message string, fields map[s
 	if level < l.level {
 		return
 	}
+	message = sanitizeLogText(message)
+	fields = SanitizeLogFields(fields)
 
 	now := time.Now()
 	ts := now.Format("2006-01-02T15:04:05-07:00")
@@ -1017,12 +1072,12 @@ func (l *AppLogger) log(level Level, output string, message string, fields map[s
 		sb.WriteString(" level=")
 		sb.WriteString(strings.ToUpper(level.String()))
 		sb.WriteString(" msg=")
-		sb.WriteString(fmt.Sprintf("%q", message))
+		_, _ = fmt.Fprintf(&sb, "%q", message)
 		for k, v := range fields {
 			sb.WriteString(" ")
 			sb.WriteString(k)
 			sb.WriteString("=")
-			sb.WriteString(fmt.Sprintf("%v", v))
+			_, _ = fmt.Fprintf(&sb, "%v", v)
 		}
 		line = sb.String()
 	case "json":
@@ -1050,12 +1105,12 @@ func (l *AppLogger) log(level Level, output string, message string, fields map[s
 			sb.WriteString(" ")
 			sb.WriteString(k)
 			sb.WriteString("=")
-			sb.WriteString(fmt.Sprintf("%v", v))
+			_, _ = fmt.Fprintf(&sb, "%v", v)
 		}
 		line = sb.String()
 	}
 
-	w.Write([]byte(stripLogControl(line) + "\n"))
+	_, _ = w.Write([]byte(stripLogControl(line) + "\n"))
 }
 
 // Debug logs a debug message
@@ -1116,6 +1171,7 @@ func (l *AppLogger) Access(method, path, proto, remoteAddr, referer, userAgent s
 	if _, ok := l.outputs["access"]; !ok {
 		return
 	}
+	referer = outsan.RedactURL(referer)
 
 	// Determine format from config
 	format := "apache"
@@ -1154,8 +1210,8 @@ func (l *AppLogger) Access(method, path, proto, remoteAddr, referer, userAgent s
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	w := l.outputs["access"]
-	w.Write([]byte(stripLogControl(line)))
-	w.Write([]byte("\n"))
+	_, _ = w.Write([]byte(stripLogControl(line)))
+	_, _ = w.Write([]byte("\n"))
 }
 
 // Audit logs an audit event in PART 11-compliant JSON Lines format.
@@ -1194,8 +1250,8 @@ func (l *AppLogger) Audit(event, actorID, actorType, actorIP, result string, det
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	w.Write(data)
-	w.Write([]byte("\n"))
+	_, _ = w.Write(data)
+	_, _ = w.Write([]byte("\n"))
 }
 
 // Auth logs an authentication event to auth.log in syslog RFC 3164 format per AI.md PART 11.
@@ -1242,8 +1298,8 @@ func (l *AppLogger) Auth(user, remoteAddr, result, reason string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	w := l.outputs["auth"]
-	w.Write([]byte(stripLogControl(line)))
-	w.Write([]byte("\n"))
+	_, _ = w.Write([]byte(stripLogControl(line)))
+	_, _ = w.Write([]byte("\n"))
 }
 
 // Security logs a security event with automatic PII masking per AI.md PART 11
@@ -1313,7 +1369,7 @@ func (l *AppLogger) Security(event, remoteAddr string, details map[string]interf
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	w.Write([]byte(stripLogControl(line) + "\n"))
+	_, _ = w.Write([]byte(stripLogControl(line) + "\n"))
 }
 
 // AccessLogMiddleware creates middleware for access logging

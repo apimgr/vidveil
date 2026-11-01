@@ -42,9 +42,10 @@ func extractJSON(data []byte) []byte {
 			continue
 		}
 
-		if b == '{' {
+		switch b {
+		case '{':
 			depth++
-		} else if b == '}' {
+		case '}':
 			depth--
 			if depth == 0 {
 				return data[:i+1]
@@ -108,7 +109,7 @@ func (e *XHamsterEngine) Search(ctx context.Context, query string, page int) ([]
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := readEngineBody(resp)
 	if err != nil {

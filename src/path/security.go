@@ -5,6 +5,7 @@ package path
 import (
 	"errors"
 	"net/http"
+	"os"
 	stdpath "path"
 	"path/filepath"
 	"regexp"
@@ -103,24 +104,48 @@ func SafeFilePath(baseDir, userPath string) (string, error) {
 		return "", err
 	}
 
-	fullPath := filepath.Join(baseDir, safe)
-
-	absPath, err := filepath.Abs(fullPath)
-	if err != nil {
-		return "", err
-	}
-
 	absBase, err := filepath.Abs(baseDir)
 	if err != nil {
 		return "", err
 	}
-
-	// Verify path is still within base
-	if !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) && absPath != absBase {
+	// Resolve the existing base so a symlinked base cannot make the returned
+	// path appear contained lexically while writing elsewhere.
+	absBase, err = filepath.EvalSymlinks(absBase)
+	if err != nil {
+		return "", err
+	}
+	target := filepath.Join(absBase, safe)
+	// Resolve every existing component. For a not-yet-created target, resolve
+	// its nearest existing parent and append the missing suffix unchanged.
+	candidate := target
+	var resolved string
+	var suffix []string
+	for {
+		resolved, err = filepath.EvalSymlinks(candidate)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		parent := filepath.Dir(candidate)
+		if parent == candidate {
+			return "", err
+		}
+		suffix = append(suffix, filepath.Base(candidate))
+		candidate = parent
+	}
+	for i := len(suffix) - 1; i >= 0; i-- {
+		resolved = filepath.Join(resolved, suffix[i])
+	}
+	relative, err := filepath.Rel(absBase, resolved)
+	if err != nil {
+		return "", err
+	}
+	if relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return "", ErrPathTraversal
 	}
-
-	return absPath, nil
+	return resolved, nil
 }
 
 // PathSecurityMiddleware normalizes paths and blocks traversal attempts per AI.md PART 5

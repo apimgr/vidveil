@@ -6,7 +6,7 @@
 <div class="content">
     <div class="prose">
         <h1>{{ t "help.title" }}</h1>
-        <p>{{ tf "help.intro" .AppName }}</p>
+        <p>{{ tf "help.intro" "app_name" .AppName }}</p>
 
         <h2>{{ t "help.basic_search" }}</h2>
         <p>{{ t "help.basic_search_body" }}</p>
@@ -58,7 +58,7 @@
         <pre><code>curl "{{.BaseURL}}{{.APIBase}}/proxy/thumbnails?url=https://example.com/thumb.jpg"</code></pre>
 
         <h2>{{ t "help.tor_hidden_service" }}</h2>
-        <p>{{if .TorOnionAddr}}{{ tf "help.tor_reachable" .TorOnionAddr }}{{else}}{{ t "help.tor_auto" }}{{end}}</p>
+        <p>{{if .TorOnionAddr}}{{ tf "help.tor_reachable" "onion_address" .TorOnionAddr }}{{else}}{{ t "help.tor_auto" }}{{end}}</p>
 
         <h2>{{ t "help.age_verification" }}</h2>
         <p>{{ t "help.age_verification_body" }}</p>
@@ -71,7 +71,7 @@
         </ul>
 
         <h2>{{ t "help.api_access" }}</h2>
-        <p>{{ tf "help.api_access_body" .AppName }}</p>
+        <p>{{ tf "help.api_access_body" "app_name" .AppName }}</p>
 
         <table>
             <thead><tr><th>{{ t "help.table_endpoint" }}</th><th>{{ t "help.table_purpose" }}</th></tr></thead>
@@ -105,7 +105,7 @@ curl "{{.BaseURL}}{{.APIBase}}/server/healthz"
 curl "{{.BaseURL}}{{.APIBase}}/search.txt?q=sunset"</code></pre>
 
         <h3>{{ t "help.api_documentation" }}</h3>
-        <p>{{ tf "help.api_documentation_intro" .AppName }}</p>
+        <p>{{ tf "help.api_documentation_intro" "app_name" .AppName }}</p>
         <ul>
             <li><a href="/server/docs/swagger">{{ t "help.swagger_link" }}</a> — {{ t "help.swagger_desc" }} <code>/api/swagger</code></li>
             <li><a href="/server/docs/graphql">{{ t "help.graphiql_link" }}</a> — {{ t "help.graphiql_desc" }} <code>/api/graphql</code></li>
@@ -113,11 +113,11 @@ curl "{{.BaseURL}}{{.APIBase}}/search.txt?q=sunset"</code></pre>
 
         <h2>{{ t "help.faq" }}</h2>
 
-        <h3>{{ tf "help.faq_hosts_q" .AppName }}</h3>
-        <p>{{ tf "help.faq_hosts_a" .AppName }}</p>
+        <h3>{{ tf "help.faq_hosts_q" "app_name" .AppName }}</h3>
+        <p>{{ tf "help.faq_hosts_a" "app_name" .AppName }}</p>
 
         <h3>{{ t "help.faq_account_q" }}</h3>
-        <p>{{ tf "help.faq_account_a" .AppName }}</p>
+        <p>{{ tf "help.faq_account_a" "app_name" .AppName }}</p>
 
         <h3>{{ t "help.faq_no_results_q" }}</h3>
         <p>{{ t "help.faq_no_results_a" }}</p>

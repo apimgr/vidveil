@@ -66,7 +66,9 @@ func TestSearch_WithEngines(t *testing.T) {
 		}
 		resp := SearchResponse{Ok: true, Query: r.URL.Query().Get("q")}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Errorf("encode search response: %v", err)
+		}
 	})
 	client, _ := newTestServer(t, mux)
 
@@ -99,7 +101,9 @@ func TestGetVersion_ReturnsVersion(t *testing.T) {
 	mux.HandleFunc("/api/v1/version", func(w http.ResponseWriter, r *http.Request) {
 		resp := VersionResponse{Ok: true, Version: "1.2.3", Commit: "abc", Built: "2026-01-01"}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Errorf("encode version response: %v", err)
+		}
 	})
 	client, _ := newTestServer(t, mux)
 
@@ -132,7 +136,9 @@ func TestAutodiscover_ReturnsConfig(t *testing.T) {
 	mux.HandleFunc("/api/autodiscover", func(w http.ResponseWriter, r *http.Request) {
 		resp := AutodiscoverResponse{Primary: "http://node1:8080", APIVersion: "v1", Timeout: 30}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Errorf("encode autodiscover response: %v", err)
+		}
 	})
 	client, _ := newTestServer(t, mux)
 
@@ -198,7 +204,9 @@ func TestFetchURLResponseBytes_ReturnsBody(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/some/path", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"key":"value"}`))
+		if _, err := w.Write([]byte(`{"key":"value"}`)); err != nil {
+			t.Errorf("write response body: %v", err)
+		}
 	})
 	client, ts := newTestServer(t, mux)
 
@@ -219,7 +227,9 @@ func TestFetchURLResponseBytes_WithToken(t *testing.T) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		w.Write([]byte(`"ok"`))
+		if _, err := w.Write([]byte(`"ok"`)); err != nil {
+			t.Errorf("write response body: %v", err)
+		}
 	})
 	client, ts := newTestServer(t, mux)
 
@@ -248,7 +258,9 @@ func TestGet_InvalidJSONReturnsError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/version", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{invalid json`))
+		if _, err := w.Write([]byte(`{invalid json`)); err != nil {
+			t.Errorf("write response body: %v", err)
+		}
 	})
 	client, _ := newTestServer(t, mux)
 
@@ -268,7 +280,9 @@ func TestGet_SendsAuthorizationHeader(t *testing.T) {
 		}
 		resp := VersionResponse{Ok: true, Version: "1.0.0"}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Errorf("encode version response: %v", err)
+		}
 	})
 	client, _ := newTestServer(t, mux)
 

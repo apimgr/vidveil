@@ -50,6 +50,16 @@ func IsShuttingDown() bool {
 	return shuttingDown.Load()
 }
 
+// BeginShutdown marks the process as draining so health endpoints return 503.
+func BeginShutdown() {
+	shuttingDown.Store(true)
+}
+
+// ResetShutdown clears the draining state before a restored server restarts in-process.
+func ResetShutdown() {
+	shuttingDown.Store(false)
+}
+
 // setupSignalHandler configures graceful shutdown per AI.md PART 8
 func setupSignalHandler(server *http.Server, pidFile string) {
 	sigChan := make(chan os.Signal, 1)
@@ -103,10 +113,13 @@ func setupSignalHandler(server *http.Server, pidFile string) {
 // WaitForShutdown blocks until a shutdown signal is received
 func WaitForShutdown(ctx context.Context) os.Signal {
 	quit := make(chan os.Signal, 1)
+	defer signal.Stop(quit)
 	signal.Notify(quit,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT,
+		syscall.SIGUSR1,
+		syscall.SIGUSR2,
 	)
 	// SIGRTMIN+3 for systemd socket activation
 	signal.Notify(quit, syscall.Signal(37))
@@ -114,11 +127,24 @@ func WaitForShutdown(ctx context.Context) os.Signal {
 	// Ignore SIGHUP per PART 8
 	signal.Ignore(syscall.SIGHUP)
 
-	select {
-	case sig := <-quit:
-		return sig
-	case <-ctx.Done():
-		return syscall.SIGTERM
+	for {
+		select {
+		case sig := <-quit:
+			switch sig {
+			case syscall.SIGUSR1:
+				if logReopenFn != nil {
+					logReopenFn()
+				}
+			case syscall.SIGUSR2:
+				if statusDumpFn != nil {
+					statusDumpFn()
+				}
+			default:
+				return sig
+			}
+		case <-ctx.Done():
+			return syscall.SIGTERM
+		}
 	}
 }
 
@@ -153,7 +179,7 @@ func gracefulShutdown(server *http.Server, pidFile string) {
 
 	// Remove PID file per PART 8
 	if pidFile != "" {
-		os.Remove(pidFile)
+		_ = os.Remove(pidFile)
 	}
 
 	// Exit
@@ -226,21 +252,21 @@ func CheckPIDFile(pidPath string, binaryName string) (bool, int, error) {
 	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
 		// Corrupt PID file - remove it
-		os.Remove(pidPath)
+		_ = os.Remove(pidPath)
 		return false, 0, nil
 	}
 
 	// Check if process is running
 	if !isProcessRunning(pid) {
 		// Stale PID file - remove it
-		os.Remove(pidPath)
+		_ = os.Remove(pidPath)
 		return false, 0, nil
 	}
 
 	// Process exists - verify it's actually our process (not PID reuse)
 	if !isOurProcess(pid, binaryName) {
 		// PID was reused by another process - remove stale file
-		os.Remove(pidPath)
+		_ = os.Remove(pidPath)
 		return false, 0, nil
 	}
 

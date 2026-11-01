@@ -30,7 +30,7 @@ func captureStderr(f func()) string {
 	orig := os.Stderr
 	os.Stderr = w
 	f()
-	w.Close()
+	_ = w.Close()
 	os.Stderr = orig
 	buf := make([]byte, 0, 4096)
 	tmp := make([]byte, 4096)
@@ -43,7 +43,7 @@ func captureStderr(f func()) string {
 			break
 		}
 	}
-	r.Close()
+	_ = r.Close()
 	return string(buf)
 }
 
@@ -541,7 +541,7 @@ func TestServerReachable_ClosedPort(t *testing.T) {
 		t.Fatal(err)
 	}
 	addr := ln.Addr().String()
-	ln.Close()
+	_ = ln.Close()
 	if serverReachable(addr) {
 		t.Error("serverReachable on a closed port = true, want false")
 	}

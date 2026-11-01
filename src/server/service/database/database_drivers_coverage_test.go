@@ -27,7 +27,7 @@ func TestNewAppDatabase_LibSQL_Opens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAppDatabase libsql: unexpected error: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if db.Driver() != DriverLibSQL {
 		t.Errorf("Driver() = %v, want %v", db.Driver(), DriverLibSQL)
 	}
@@ -42,7 +42,7 @@ func TestNewAppDatabase_LibSQL_TursoAlias(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAppDatabase turso alias: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if db.Driver() != DriverLibSQL {
 		t.Errorf("Driver() = %v, want %v", db.Driver(), DriverLibSQL)
 	}
@@ -59,7 +59,7 @@ func TestNewAppDatabase_LibSQL_WithToken_Opens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAppDatabase libsql with token: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 }
 
 func TestNewAppDatabase_LibSQL_TokenWithExistingQuery_Opens(t *testing.T) {
@@ -73,7 +73,7 @@ func TestNewAppDatabase_LibSQL_TokenWithExistingQuery_Opens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAppDatabase libsql token with query: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 }
 
 func TestNewAppDatabase_LibSQL_TokenAlreadyInURL_Opens(t *testing.T) {
@@ -87,7 +87,7 @@ func TestNewAppDatabase_LibSQL_TokenAlreadyInURL_Opens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAppDatabase libsql token in URL: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 }
 
 func TestNewAppDatabase_UnknownDriver_ReturnsError(t *testing.T) {

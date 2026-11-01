@@ -230,72 +230,38 @@ func TestParseCLIGlobalFlagsResolvesNamedConfigFiles(t *testing.T) {
 }
 
 func TestGetCLIAuthTokenFromEnv(t *testing.T) {
-	originalCanonicalToken := os.Getenv("VIDVEIL_TOKEN")
-	originalLegacyToken := os.Getenv("VIDVEIL_CLI_TOKEN")
-
-	t.Cleanup(func() {
-		if originalCanonicalToken == "" {
-			os.Unsetenv("VIDVEIL_TOKEN")
-		} else {
-			os.Setenv("VIDVEIL_TOKEN", originalCanonicalToken)
-		}
-
-		if originalLegacyToken == "" {
-			os.Unsetenv("VIDVEIL_CLI_TOKEN")
-		} else {
-			os.Setenv("VIDVEIL_CLI_TOKEN", originalLegacyToken)
-		}
-	})
-
-	os.Unsetenv("VIDVEIL_TOKEN")
-	os.Unsetenv("VIDVEIL_CLI_TOKEN")
+	t.Setenv("VIDVEIL_TOKEN", "")
+	t.Setenv("VIDVEIL_CLI_TOKEN", "")
 
 	if gotToken := getCLIAuthTokenFromEnv(); gotToken != "" {
 		t.Fatalf("token with no env = %q, want empty", gotToken)
 	}
 
-	os.Setenv("VIDVEIL_CLI_TOKEN", "legacy-token")
+	t.Setenv("VIDVEIL_CLI_TOKEN", "legacy-token")
 	if gotToken := getCLIAuthTokenFromEnv(); gotToken != "legacy-token" {
 		t.Fatalf("legacy token = %q, want %q", gotToken, "legacy-token")
 	}
 
-	os.Setenv("VIDVEIL_TOKEN", "canonical-token")
+	t.Setenv("VIDVEIL_TOKEN", "canonical-token")
 	if gotToken := getCLIAuthTokenFromEnv(); gotToken != "canonical-token" {
 		t.Fatalf("canonical token = %q, want %q", gotToken, "canonical-token")
 	}
 }
 
 func TestGetCLIServerAddressFromEnv(t *testing.T) {
-	originalCanonicalServerAddress := os.Getenv("VIDVEIL_SERVER_PRIMARY")
-	originalLegacyServerAddress := os.Getenv("VIDVEIL_SERVER")
-
-	t.Cleanup(func() {
-		if originalCanonicalServerAddress == "" {
-			os.Unsetenv("VIDVEIL_SERVER_PRIMARY")
-		} else {
-			os.Setenv("VIDVEIL_SERVER_PRIMARY", originalCanonicalServerAddress)
-		}
-
-		if originalLegacyServerAddress == "" {
-			os.Unsetenv("VIDVEIL_SERVER")
-		} else {
-			os.Setenv("VIDVEIL_SERVER", originalLegacyServerAddress)
-		}
-	})
-
-	os.Unsetenv("VIDVEIL_SERVER_PRIMARY")
-	os.Unsetenv("VIDVEIL_SERVER")
+	t.Setenv("VIDVEIL_SERVER_PRIMARY", "")
+	t.Setenv("VIDVEIL_SERVER", "")
 
 	if gotServerAddress := getCLIServerAddressFromEnv(); gotServerAddress != "" {
 		t.Fatalf("server address with no env = %q, want empty", gotServerAddress)
 	}
 
-	os.Setenv("VIDVEIL_SERVER", "https://legacy.example.com")
+	t.Setenv("VIDVEIL_SERVER", "https://legacy.example.com")
 	if gotServerAddress := getCLIServerAddressFromEnv(); gotServerAddress != "https://legacy.example.com" {
 		t.Fatalf("legacy server address = %q, want %q", gotServerAddress, "https://legacy.example.com")
 	}
 
-	os.Setenv("VIDVEIL_SERVER_PRIMARY", "https://canonical.example.com")
+	t.Setenv("VIDVEIL_SERVER_PRIMARY", "https://canonical.example.com")
 	if gotServerAddress := getCLIServerAddressFromEnv(); gotServerAddress != "https://canonical.example.com" {
 		t.Fatalf("canonical server address = %q, want %q", gotServerAddress, "https://canonical.example.com")
 	}
@@ -516,9 +482,6 @@ func TestLoadCLIConfigFromFileAutoCreatesMissingConfig(t *testing.T) {
 	}
 	if !strings.Contains(configText, "api_version: v1") {
 		t.Fatalf("config file missing default server.api_version:\n%s", configText)
-	}
-	if !strings.Contains(configText, "admin_path: admin") {
-		t.Fatalf("config file missing default server.admin_path:\n%s", configText)
 	}
 	if !strings.Contains(configText, "retry: 3") {
 		t.Fatalf("config file missing default server.retry:\n%s", configText)
@@ -1241,7 +1204,9 @@ func TestPrintCLIHelpMessageShowsOfficialSiteDefault(t *testing.T) {
 
 	os.Stdout = writePipe
 	printCLIHelpMessage()
-	writePipe.Close()
+	if err := writePipe.Close(); err != nil {
+		t.Fatalf("closing stdout pipe: %v", err)
+	}
 	os.Stdout = originalStdout
 
 	var outputBuffer bytes.Buffer
@@ -1422,57 +1387,6 @@ func TestLoadCLIConfigFromFileReadsDebugFromConfig(t *testing.T) {
 
 	if !debugModeEnabled {
 		t.Fatal("expected debug config to enable debug mode")
-	}
-}
-
-func TestLoadCLIConfigFromFileReadsServerAdminPathFromConfig(t *testing.T) {
-	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
-	t.Setenv("APPDATA", filepath.Join(homeDir, "AppData", "Roaming"))
-	t.Setenv("LOCALAPPDATA", filepath.Join(homeDir, "AppData", "Local"))
-
-	originalCLIConfigFilePath := cliConfigFilePath
-	originalServerAddressFlag := serverAddressFlag
-	originalAPITokenFlag := apiTokenFlag
-	originalTokenFilePath := tokenFilePath
-	originalOutputFormatFlag := outputFormatFlag
-	originalColorFlag := colorFlag
-	originalRequestTimeoutSeconds := requestTimeoutSeconds
-	originalDebugModeEnabled := debugModeEnabled
-	originalDebugFlagProvided := debugFlagProvided
-	originalOfficialSite := OfficialSite
-	t.Cleanup(func() {
-		cliConfigFilePath = originalCLIConfigFilePath
-		serverAddressFlag = originalServerAddressFlag
-		apiTokenFlag = originalAPITokenFlag
-		tokenFilePath = originalTokenFilePath
-		outputFormatFlag = originalOutputFormatFlag
-		colorFlag = originalColorFlag
-		requestTimeoutSeconds = originalRequestTimeoutSeconds
-		debugModeEnabled = originalDebugModeEnabled
-		debugFlagProvided = originalDebugFlagProvided
-		OfficialSite = originalOfficialSite
-	})
-
-	OfficialSite = ""
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
-	configText := `server:
-  primary: "https://configured.example.com"
-  admin_path: manage
-`
-	if err := os.MkdirAll(filepath.Dir(cliConfigFilePath), 0700); err != nil {
-		t.Fatalf("creating config directory: %v", err)
-	}
-	if err := os.WriteFile(cliConfigFilePath, []byte(configText), 0600); err != nil {
-		t.Fatalf("writing config file: %v", err)
-	}
-
-	if err := LoadCLIConfigFromFile(); err != nil {
-		t.Fatalf("loading config: %v", err)
-	}
-
-	if cliConfig.Server.AdminPath != "manage" {
-		t.Fatalf("server admin path = %q, want %q", cliConfig.Server.AdminPath, "manage")
 	}
 }
 

@@ -102,7 +102,9 @@ func TestProxyThumbnail_CacheHit_StaleFile_NotServedFromCache(t *testing.T) {
 
 	// Stamp the cache file as 2 minutes old (past the 1-minute TTL)
 	staleTime := time.Now().Add(-2 * time.Minute)
-	os.Chtimes(cachePath, staleTime, staleTime)
+	if err := os.Chtimes(cachePath, staleTime, staleTime); err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest("GET", "/proxy/thumbnail?url="+url.QueryEscape(thumbURL), nil)
 	rr := httptest.NewRecorder()

@@ -449,7 +449,7 @@ func (m TUIModel) View() string {
 
 	// Results
 	if len(m.searchResults) > 0 {
-		viewBuilder.WriteString(fmt.Sprintf("Results (%d):\n", len(m.searchResults)))
+		fmt.Fprintf(&viewBuilder, "Results (%d):\n", len(m.searchResults))
 		if layout.ShowBorders {
 			viewBuilder.WriteString(strings.Repeat("-", 50) + "\n")
 		}

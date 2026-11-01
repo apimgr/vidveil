@@ -2,7 +2,8 @@
 // AI.md PART 8/12: URL Variables & Reverse Proxy Headers
 // X-Forwarded-* headers are only trusted when the immediate peer IP is in the
 // trusted set (loopback, RFC1918, fc00::/7, link-local, and additional CIDRs).
-// Tor requests (Host matches tor.onion_address) bypass the gate at priority 0.
+// Tor requests (Host, or trusted forwarded Host, matches tor.onion_address)
+// bypass the gate at priority 0.
 package urlvar
 
 import (
@@ -72,20 +73,43 @@ func (r *URLResolver) SetAppConfig(cfg *config.AppConfig) {
 	r.mu.Unlock()
 }
 
-// isTorRequest returns true when the request Host matches tor.onion_address per AI.md PART 12.
-// Tor requests bypass the trusted_proxies gate entirely — priority 0 in FQDN resolution.
+// isTorRequest returns true when the request Host, after trusted proxy host
+// resolution, matches tor.onion_address per AI.md PART 12.
 func (r *URLResolver) isTorRequest(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
 	r.mu.RLock()
 	cfg := r.appCfg
 	r.mu.RUnlock()
 	if cfg == nil || cfg.Server.Tor.OnionAddress == "" {
 		return false
 	}
-	host := req.Host
+	return matchesOnionAddress(r.RequestHost(req), cfg.Server.Tor.OnionAddress)
+}
+
+// isI2PRequest recognizes only the app-managed destination when opt-in I2P is active.
+func (r *URLResolver) isI2PRequest(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	r.mu.RLock()
+	cfg := r.appCfg
+	r.mu.RUnlock()
+	if cfg == nil || !cfg.Server.I2P.Enabled || cfg.Server.I2P.Address == "" {
+		return false
+	}
+	return matchesOnionAddress(req.Host, cfg.Server.I2P.Address)
+}
+
+func matchesOnionAddress(host, onionAddress string) bool {
+	if strings.TrimSpace(onionAddress) == "" {
+		return false
+	}
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
-	return host == cfg.Server.Tor.OnionAddress
+	return strings.EqualFold(strings.Trim(host, "[]"), strings.TrimSpace(onionAddress))
 }
 
 // isTrustedProxy returns true when the request's immediate peer IP is in the trusted set
@@ -128,6 +152,33 @@ func (r *URLResolver) isTrustedProxy(remoteAddr string) bool {
 		}
 	}
 	return false
+}
+
+// IsTrustedProxy reports whether the request's immediate peer is trusted to
+// supply forwarding headers under the configured proxy policy.
+func (r *URLResolver) IsTrustedProxy(req *http.Request) bool {
+	return req != nil && r.isTrustedProxy(req.RemoteAddr)
+}
+
+// RequestHost returns the request host after applying only trusted forwarded
+// host headers. It preserves any port so same-origin comparisons remain exact.
+func (r *URLResolver) RequestHost(req *http.Request) string {
+	if req == nil {
+		return ""
+	}
+	if r.isTrustedProxy(req.RemoteAddr) {
+		for _, header := range []string{"X-Forwarded-Host", "X-Real-Host", "X-Original-Host"} {
+			if host := strings.TrimSpace(req.Header.Get(header)); host != "" {
+				return host
+			}
+		}
+	}
+	return req.Host
+}
+
+// RequestHost returns the request host after trusted proxy resolution.
+func RequestHost(req *http.Request) string {
+	return GlobalResolver().RequestHost(req)
 }
 
 // sameSubnetAsListen reports whether ip shares the /24 network of the configured
@@ -218,7 +269,7 @@ func (r *URLResolver) GetURLVars(req *http.Request) (proto, fqdn, port string) {
 // Priority 5: "/"
 func (r *URLResolver) resolvePathPrefix(req *http.Request) string {
 	// Reverse proxy headers only trusted from known-good peers
-	if r.isTrustedProxy(req.RemoteAddr) {
+	if !r.isTorRequest(req) && !r.isI2PRequest(req) && r.isTrustedProxy(req.RemoteAddr) {
 		if prefix := req.Header.Get("X-Forwarded-Prefix"); prefix != "" {
 			return normalizePathPrefix(prefix)
 		}
@@ -264,12 +315,17 @@ func (r *URLResolver) GetPathPrefix(req *http.Request) string {
 	return r.resolvePathPrefix(req)
 }
 
+// IsOverlayRequest reports whether a request targets this app's Tor or I2P identity.
+func (r *URLResolver) IsOverlayRequest(req *http.Request) bool {
+	return r.isTorRequest(req) || r.isI2PRequest(req)
+}
+
 // resolveProto resolves protocol per AI.md PART 12 priority order.
 // X-Forwarded-* headers are only honored from trusted proxy peers.
 // Tor requests always return "http" — TLS terminates in the Tor layer.
 func (r *URLResolver) resolveProto(req *http.Request) string {
-	// Priority 0: Tor exception — always http, no proxy header inspection
-	if r.isTorRequest(req) {
+	// Overlay exceptions — always http, no proxy header inspection.
+	if r.isTorRequest(req) || r.isI2PRequest(req) {
 		return "http"
 	}
 
@@ -305,11 +361,16 @@ func (r *URLResolver) resolveProto(req *http.Request) string {
 // Reverse proxy headers (priority 1) are only honored from trusted peers.
 func (r *URLResolver) resolveFQDN(req *http.Request) string {
 	// Priority 0: Tor request detection — always trusted, bypasses proxy gate
-	if r.isTorRequest(req) {
+	isTor := r.isTorRequest(req)
+	isI2P := !isTor && r.isI2PRequest(req)
+	if isTor || isI2P {
 		r.mu.RLock()
-		onion := r.appCfg.Server.Tor.OnionAddress
+		fqdn := r.appCfg.Server.Tor.OnionAddress
+		if isI2P {
+			fqdn = r.appCfg.Server.I2P.Address
+		}
 		r.mu.RUnlock()
-		return onion
+		return fqdn
 	}
 
 	// Priority 1: Reverse Proxy Headers — only from trusted peers
@@ -366,7 +427,7 @@ func (r *URLResolver) resolveFQDN(req *http.Request) string {
 // Tor requests always return empty — port is never appended to onion URLs.
 func (r *URLResolver) resolvePort(req *http.Request, proto string) string {
 	// Tor exception: no port in onion URLs
-	if r.isTorRequest(req) {
+	if r.isTorRequest(req) || r.isI2PRequest(req) {
 		return ""
 	}
 
@@ -699,6 +760,15 @@ func ResolveClientIP(req *http.Request) string {
 // the "tor" sentinel for the client IP when this returns true.
 func IsTorRequest(req *http.Request) bool {
 	return GlobalResolver().isTorRequest(req)
+}
+
+// IsTorRequestForAddress classifies a request against an explicit configured
+// onion address while resolving forwarded hosts through the global trust policy.
+func IsTorRequestForAddress(req *http.Request, onionAddress string) bool {
+	if req == nil {
+		return false
+	}
+	return matchesOnionAddress(GlobalResolver().RequestHost(req), onionAddress)
 }
 
 // torCircuitIDNet is the fc00::/8 range Tor's HiddenServiceExportCircuitID

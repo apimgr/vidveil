@@ -3,8 +3,8 @@
 // AI.md PART 16 ("If it works without JavaScript, ship it. Add JavaScript
 // only to enhance") and PART 32's cookie-vs-localStorage split (cookies are
 // server-read/authoritative — "anything the server reads to render pages";
-// localStorage is JS-only, "never load-bearing"). The visitor_id cookie
-// carries only an opaque identifier; the favorite rows themselves live in
+// localStorage is JS-only, "never load-bearing"). The owner-token cookie
+// carries the owner credential; the favorite rows themselves live in
 // server.db, read and written by the server on every request, so the whole
 // feature (view/add/remove/clear/export/import) works with JavaScript
 // disabled. JS is layered on top only for instant feedback, no reload.
@@ -12,21 +12,24 @@ package handler
 
 import (
 	"context"
-	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"html"
+	"io"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/i18n"
+	"github.com/apimgr/vidveil/src/server/service/apitoken"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 	"github.com/go-chi/chi/v5"
 )
-
-// favoritesVisitorCookieName holds an opaque, server-issued visitor
-// identifier — never the favorite data itself. Long-lived (1 year) so
-// returning anonymous visitors keep their list without an account.
-const favoritesVisitorCookieName = "visitor_id"
 
 // Favorite is one server-stored favorite row.
 type Favorite struct {
@@ -38,49 +41,107 @@ type Favorite struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// getOrCreateVisitorID returns the caller's visitor_id, issuing and setting a
-// new cookie when absent. Called at the top of every favorites handler so
-// GET (list) and POST (mutate) requests share identity consistently.
-// It returns "" when no usable identifier exists (CSPRNG failure and no
-// usable cookie). Callers fail closed on "" rather than substituting a shared
-// value — a constant fallback would make every such visitor read and write
-// the same favorite rows.
-func (h *SearchHandler) getOrCreateVisitorID(w http.ResponseWriter, r *http.Request) string {
-	if c, err := r.Cookie(favoritesVisitorCookieName); err == nil && c.Value != "" {
-		return c.Value
+// ownerID resolves the owner for a bearer token or owner cookie and issues
+// a primary token when the caller first creates a resource.
+func (h *SearchHandler) ownerID(w http.ResponseWriter, r *http.Request, create bool, apiOnly bool) (string, string) {
+	if h.tokenManager == nil {
+		log.Printf("owner token manager is unavailable while resolving favorite ownership")
+		return "", ""
 	}
-	id := newVisitorID()
-	if id == "" {
-		return ""
+	if header := r.Header.Get("Authorization"); strings.HasPrefix(header, "Bearer ") {
+		raw := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
+		if h.isOperatorToken(raw) {
+			if create {
+				return h.issuePrimaryOwner(w, r, apiOnly)
+			}
+			return "*", ""
+		}
+		principal, err := h.tokenManager.Authenticate(r.Context(), raw)
+		if err == nil {
+			return principal.OwnerID, ""
+		}
+		return "", ""
 	}
-	sslEnabled := h.appConfig != nil && h.appConfig.Server.SSL.Enabled
-	http.SetCookie(w, newSecureCookie(favoritesVisitorCookieName, id, "/", 365*24*60*60, sslEnabled))
-	return id
+	if apiOnly {
+		if create {
+			return h.issuePrimaryOwner(w, r, true)
+		}
+		return "", ""
+	}
+	if c, err := r.Cookie(apitoken.OwnerCookieName); err == nil && c.Value != "" {
+		principal, authErr := h.tokenManager.Authenticate(r.Context(), c.Value)
+		if authErr == nil && principal.Kind == "primary" {
+			h.setOwnerCookie(w, c.Value)
+			return principal.OwnerID, ""
+		}
+		http.SetCookie(w, &http.Cookie{Name: apitoken.OwnerCookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+	}
+	legacy, _ := r.Cookie("visitor_id")
+	if !create && legacy == nil {
+		return "", ""
+	}
+	ownerID, raw := h.issuePrimaryOwner(w, r, false)
+	if ownerID == "" {
+		return "", ""
+	}
+	if legacy != nil && legacy.Value != "" && h.healthDB != nil {
+		_, _ = h.healthDB.ExecContext(r.Context(), `UPDATE favorites SET owner_id = ? WHERE visitor_id = ? AND owner_id LIKE 'legacy-favorite-%'`, ownerID, legacy.Value)
+		http.SetCookie(w, &http.Cookie{Name: "visitor_id", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+	}
+	return ownerID, raw
 }
 
-// newVisitorID returns a random 32-hex-char opaque identifier — carries no
-// personal data, cannot be reversed to derive anything about the visitor.
-// Returns "" when the system CSPRNG fails, matching csrfGenToken's fail-closed
-// behavior: never issue a guessable or all-zero identifier.
-func newVisitorID() string {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return ""
+func (h *SearchHandler) isOperatorToken(raw string) bool {
+	if h.appConfig == nil || h.appConfig.Server.Token == "" || raw == "" {
+		return false
 	}
-	return hex.EncodeToString(b)
+	want := sha256.Sum256([]byte(h.appConfig.Server.Token))
+	got := sha256.Sum256([]byte(raw))
+	return subtle.ConstantTimeCompare(want[:], got[:]) == 1
+}
+
+func ownerIdentityFailureCode(r *http.Request) string {
+	if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+		return "FORBIDDEN"
+	}
+	return "SERVER_ERROR"
+}
+
+func (h *SearchHandler) issuePrimaryOwner(w http.ResponseWriter, r *http.Request, apiOnly bool) (string, string) {
+	issued, err := h.tokenManager.IssuePrimary(r.Context())
+	if err != nil {
+		log.Printf("owner token issuance failed: %v", err)
+		return "", ""
+	}
+	if h.ownerAudit != nil {
+		h.ownerAudit.Audit("token.created", issued.OwnerID, "owner", urlvar.ResolveClientIP(r), "success", map[string]interface{}{"owner_id": issued.OwnerID, "token_prefix": issued.Prefix})
+	}
+	if !apiOnly {
+		h.setOwnerCookie(w, issued.Token)
+	}
+	return issued.OwnerID, issued.Token
+}
+
+func (h *SearchHandler) setOwnerCookie(w http.ResponseWriter, token string) {
+	maxAge := apitoken.CookieMaxAge(h.appConfig.Server.Tokens.CookieMaxAge)
+	http.SetCookie(w, &http.Cookie{Name: apitoken.OwnerCookieName, Value: token, Path: "/", MaxAge: maxAge, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
 }
 
 // listFavorites reads all favorites for a visitor, newest first.
-func (h *SearchHandler) listFavorites(visitorID string) ([]Favorite, error) {
-	if h.healthDB == nil || visitorID == "" {
+func (h *SearchHandler) listFavorites(ownerID string) ([]Favorite, error) {
+	if h.healthDB == nil || ownerID == "" {
 		return nil, sql.ErrConnDone
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	rows, err := h.healthDB.QueryContext(ctx,
-		`SELECT id, url, title, thumbnail, source, created_at FROM favorites WHERE visitor_id = ? ORDER BY created_at DESC`,
-		visitorID)
+	query := `SELECT id, url, title, thumbnail, source, created_at FROM favorites WHERE owner_id = ? ORDER BY created_at DESC`
+	args := []any{ownerID}
+	if ownerID == "*" {
+		query = `SELECT id, url, title, thumbnail, source, created_at FROM favorites ORDER BY created_at DESC`
+		args = nil
+	}
+	rows, err := h.healthDB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -100,11 +161,11 @@ func (h *SearchHandler) listFavorites(visitorID string) ([]Favorite, error) {
 	return out, rows.Err()
 }
 
-// addFavorite inserts a favorite for a visitor. Duplicate url (per the
-// UNIQUE(visitor_id, url) constraint) is treated as success — favoriting an
+// addFavorite inserts a favorite for an owner. Duplicate url (per the
+// UNIQUE(visitor_id, url) compatibility constraint) is treated as success — favoriting an
 // already-favorited video is idempotent, not an error.
-func (h *SearchHandler) addFavorite(visitorID, url, title, thumbnail, source string) error {
-	if h.healthDB == nil || visitorID == "" {
+func (h *SearchHandler) addFavorite(ownerID, url, title, thumbnail, source string) error {
+	if h.healthDB == nil || ownerID == "" {
 		return sql.ErrConnDone
 	}
 	if url == "" || title == "" {
@@ -114,49 +175,64 @@ func (h *SearchHandler) addFavorite(visitorID, url, title, thumbnail, source str
 	defer cancel()
 
 	_, err := h.healthDB.ExecContext(ctx,
-		`INSERT OR IGNORE INTO favorites (visitor_id, url, title, thumbnail, source) VALUES (?, ?, ?, ?, ?)`,
-		visitorID, url, title, thumbnail, source)
+		`INSERT OR IGNORE INTO favorites (owner_id, visitor_id, url, title, thumbnail, source) VALUES (?, ?, ?, ?, ?, ?)`,
+		ownerID, ownerID, url, title, thumbnail, source)
 	return err
 }
 
-// removeFavorite deletes one favorite by id, scoped to the visitor so one
-// visitor can never delete another visitor's row via a guessed id.
-func (h *SearchHandler) removeFavorite(visitorID string, id int64) error {
-	if h.healthDB == nil || visitorID == "" {
+// removeFavorite deletes one favorite by id, scoped to its owner.
+func (h *SearchHandler) removeFavorite(ownerID string, id int64) error {
+	if h.healthDB == nil || ownerID == "" {
 		return sql.ErrConnDone
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := h.healthDB.ExecContext(ctx,
-		`DELETE FROM favorites WHERE id = ? AND visitor_id = ?`, id, visitorID)
+	query := `DELETE FROM favorites WHERE id = ? AND owner_id = ?`
+	args := []any{id, ownerID}
+	if ownerID == "*" {
+		query = `DELETE FROM favorites WHERE id = ?`
+		args = []any{id}
+	}
+	_, err := h.healthDB.ExecContext(ctx, query, args...)
 	return err
 }
 
 // removeFavoriteByURL deletes one favorite by URL, scoped to the visitor —
 // used by the no-JS favorite-toggle form on the search results page, which
 // only knows the video URL, not the row id.
-func (h *SearchHandler) removeFavoriteByURL(visitorID, url string) error {
-	if h.healthDB == nil || visitorID == "" {
+func (h *SearchHandler) removeFavoriteByURL(ownerID, url string) error {
+	if h.healthDB == nil || ownerID == "" {
 		return sql.ErrConnDone
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := h.healthDB.ExecContext(ctx,
-		`DELETE FROM favorites WHERE url = ? AND visitor_id = ?`, url, visitorID)
+	query := `DELETE FROM favorites WHERE url = ? AND owner_id = ?`
+	args := []any{url, ownerID}
+	if ownerID == "*" {
+		query = `DELETE FROM favorites WHERE url = ?`
+		args = []any{url}
+	}
+	_, err := h.healthDB.ExecContext(ctx, query, args...)
 	return err
 }
 
-// clearFavorites deletes every favorite belonging to a visitor.
-func (h *SearchHandler) clearFavorites(visitorID string) error {
-	if h.healthDB == nil || visitorID == "" {
+// clearFavorites deletes every favorite belonging to an owner.
+func (h *SearchHandler) clearFavorites(ownerID string) error {
+	if h.healthDB == nil || ownerID == "" {
 		return sql.ErrConnDone
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := h.healthDB.ExecContext(ctx, `DELETE FROM favorites WHERE visitor_id = ?`, visitorID)
+	query := `DELETE FROM favorites WHERE owner_id = ?`
+	args := []any{ownerID}
+	if ownerID == "*" {
+		query = `DELETE FROM favorites`
+		args = nil
+	}
+	_, err := h.healthDB.ExecContext(ctx, query, args...)
 	return err
 }
 
@@ -165,12 +241,8 @@ func (h *SearchHandler) clearFavorites(visitorID string) error {
 // does the work, the client displays the result"); JS enhances the same
 // markup afterward via the JSON data island for instant add/remove feedback.
 func (h *SearchHandler) FavoritesPage(w http.ResponseWriter, r *http.Request) {
-	visitorID := h.getOrCreateVisitorID(w, r)
-	if visitorID == "" {
-		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
-		return
-	}
-	favs, err := h.listFavorites(visitorID)
+	ownerID, _ := h.ownerID(w, r, false, false)
+	favs, err := h.listFavorites(ownerID)
 	if err != nil {
 		favs = nil
 	}
@@ -206,9 +278,17 @@ func (h *SearchHandler) FavoritesSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	visitorID := h.getOrCreateVisitorID(w, r)
-	if visitorID == "" {
-		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+	ownerID, newToken := h.ownerID(w, r, r.FormValue("_method") != "DELETE", false)
+	if ownerID == "" {
+		if detectResponseFormat(r) != "application/json" && !isOurCliClient(r) {
+			redirectTo := safeLocalRedirect(r.FormValue("redirect"))
+			if redirectTo == "/" {
+				redirectTo = "/favorites"
+			}
+			http.Redirect(w, r, redirectTo, http.StatusFound)
+			return
+		}
+		SendError(w, "SERVER_ERROR", "failed to establish owner identity")
 		return
 	}
 
@@ -217,15 +297,15 @@ func (h *SearchHandler) FavoritesSave(w http.ResponseWriter, r *http.Request) {
 	case "DELETE":
 		if idStr := r.FormValue("id"); idStr != "" {
 			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
-				opErr = h.removeFavorite(visitorID, id)
+				opErr = h.removeFavorite(ownerID, id)
 			}
 		} else if url := r.FormValue("url"); url != "" {
-			opErr = h.removeFavoriteByURL(visitorID, url)
+			opErr = h.removeFavoriteByURL(ownerID, url)
 		} else {
-			opErr = h.clearFavorites(visitorID)
+			opErr = h.clearFavorites(ownerID)
 		}
 	default:
-		opErr = h.addFavorite(visitorID, r.FormValue("url"), r.FormValue("title"), r.FormValue("thumbnail"), r.FormValue("source"))
+		opErr = h.addFavorite(ownerID, r.FormValue("url"), r.FormValue("title"), r.FormValue("thumbnail"), r.FormValue("source"))
 	}
 
 	if detectResponseFormat(r) == "application/json" || isOurCliClient(r) {
@@ -233,7 +313,18 @@ func (h *SearchHandler) FavoritesSave(w http.ResponseWriter, r *http.Request) {
 			SendError(w, "SERVER_ERROR", "failed to update favorites")
 			return
 		}
-		SendOK(w, map[string]interface{}{"message": "ok"})
+		result := map[string]interface{}{"message": "ok"}
+		if newToken != "" {
+			result["owner_token"] = newToken
+		}
+		SendOK(w, result)
+		return
+	}
+	if newToken != "" {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		locale := i18n.DetectLocale(r)
+		_, _ = fmt.Fprintf(w, `<!doctype html><html lang="%s" dir="%s"><meta charset="utf-8"><title>%s</title><main><h1>%s</h1><p>%s</p><code class="owner-token-value" data-owner-token-value>%s</code><p><button type="button" data-copy-owner-token data-copy-success="%s" data-copy-failed="%s">%s</button> <span role="status" aria-live="polite"></span></p><p>%s</p><p><a href="/favorites">%s</a></p></main><script src="/static/js/app.js"></script></html>`, html.EscapeString(locale), i18n.Direction(locale), html.EscapeString(i18n.Translate(locale, "owner_tokens.created_title")), html.EscapeString(i18n.Translate(locale, "owner_tokens.created_title")), html.EscapeString(i18n.Translate(locale, "owner_tokens.created_description")), html.EscapeString(newToken), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_success")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_failed")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy")), html.EscapeString(i18n.Translate(locale, "owner_tokens.token_viewable")), html.EscapeString(i18n.Translate(locale, "owner_tokens.continue_favorites")))
 		return
 	}
 
@@ -252,14 +343,15 @@ func (h *SearchHandler) FavoritesSave(w http.ResponseWriter, r *http.Request) {
 // FavoritesExport handles GET /favorites/export — downloads the visitor's
 // favorites as a JSON file, matching the shape FavoritesImport accepts.
 func (h *SearchHandler) FavoritesExport(w http.ResponseWriter, r *http.Request) {
-	visitorID := h.getOrCreateVisitorID(w, r)
-	if visitorID == "" {
-		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+	ownerID, _ := h.ownerID(w, r, false, false)
+	if ownerID == "" {
+		SendError(w, "FORBIDDEN", "A valid owner token is required")
 		return
 	}
-	favs, err := h.listFavorites(visitorID)
+	favs, err := h.listFavorites(ownerID)
 	if err != nil {
-		favs = nil
+		SendNegotiatedError(w, r, "SERVER_ERROR", "failed to export favorites")
+		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="favorites.json"`)
@@ -285,26 +377,85 @@ func (h *SearchHandler) FavoritesImport(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, "/favorites", http.StatusFound)
 		return
 	}
-	visitorID := h.getOrCreateVisitorID(w, r)
-	if visitorID == "" {
-		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
-		return
+	var reader io.Reader = r.Body
+	var uploadedFile io.ReadCloser
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		file, _, err := r.FormFile("file")
+		if err != nil {
+			SendNegotiatedError(w, r, "BAD_REQUEST", "favorites file is required")
+			return
+		}
+		uploadedFile = file
+		reader = file
 	}
 
 	var entries []importFavoriteEntry
-	if file, _, err := r.FormFile("file"); err == nil {
-		defer func() { _ = file.Close() }()
-		_ = json.NewDecoder(file).Decode(&entries)
-	} else {
-		_ = json.NewDecoder(r.Body).Decode(&entries)
+	decoder := json.NewDecoder(reader)
+	decodeErr := decoder.Decode(&entries)
+	if uploadedFile != nil {
+		if err := uploadedFile.Close(); decodeErr == nil && err != nil {
+			decodeErr = err
+		}
 	}
-
-	for _, e := range entries {
-		_ = h.addFavorite(visitorID, e.URL, e.Title, e.Thumbnail, e.Source)
+	if decodeErr != nil {
+		SendNegotiatedError(w, r, "BAD_REQUEST", "invalid favorites JSON")
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		SendNegotiatedError(w, r, "BAD_REQUEST", "favorites JSON must contain one array")
+		return
+	}
+	for _, entry := range entries {
+		if entry.URL == "" || entry.Title == "" {
+			SendNegotiatedError(w, r, "VALIDATION_FAILED", "each favorite requires a URL and title")
+			return
+		}
+	}
+	apiOnly := strings.HasPrefix(r.URL.Path, "/api/")
+	ownerID, ownerToken := h.ownerID(w, r, true, apiOnly)
+	if ownerID == "" {
+		SendNegotiatedError(w, r, ownerIdentityFailureCode(r), "A valid owner token is required")
+		return
+	}
+	if h.healthDB == nil {
+		SendNegotiatedError(w, r, "SERVER_ERROR", "failed to import favorites")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	tx, err := h.healthDB.BeginTx(ctx, nil)
+	if err != nil {
+		SendNegotiatedError(w, r, "SERVER_ERROR", "failed to import favorites")
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, entry := range entries {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO favorites (owner_id, visitor_id, url, title, thumbnail, source) VALUES (?, ?, ?, ?, ?, ?)`,
+			ownerID, ownerID, entry.URL, entry.Title, entry.Thumbnail, entry.Source); err != nil {
+			SendNegotiatedError(w, r, "SERVER_ERROR", "failed to import favorites")
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		SendNegotiatedError(w, r, "SERVER_ERROR", "failed to import favorites")
+		return
 	}
 
 	if detectResponseFormat(r) == "application/json" || isOurCliClient(r) {
-		SendOK(w, map[string]interface{}{"imported": len(entries)})
+		result := map[string]interface{}{"imported": len(entries)}
+		if ownerToken != "" {
+			result["owner_token"] = ownerToken
+		}
+		SendOK(w, result)
+		return
+	}
+	if ownerToken != "" {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		locale := i18n.DetectLocale(r)
+		_, _ = fmt.Fprintf(w, `<!doctype html><html lang="%s" dir="%s"><meta charset="utf-8"><title>%s</title><main><h1>%s</h1><p>%s</p><code class="owner-token-value" data-owner-token-value>%s</code><p><button type="button" data-copy-owner-token data-copy-success="%s" data-copy-failed="%s">%s</button> <span role="status" aria-live="polite"></span></p><p><a href="/favorites">%s</a></p></main><script src="/static/js/app.js"></script></html>`, html.EscapeString(locale), i18n.Direction(locale), html.EscapeString(i18n.Translate(locale, "owner_tokens.created_title")), html.EscapeString(i18n.Translate(locale, "owner_tokens.created_title")), html.EscapeString(i18n.Translate(locale, "owner_tokens.imported_description")), html.EscapeString(ownerToken), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_success")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_failed")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy")), html.EscapeString(i18n.Translate(locale, "owner_tokens.continue_favorites")))
 		return
 	}
 	http.Redirect(w, r, "/favorites", http.StatusFound)
@@ -312,12 +463,12 @@ func (h *SearchHandler) FavoritesImport(w http.ResponseWriter, r *http.Request) 
 
 // FavoritesAPIList handles GET /api/{api_version}/favorites.
 func (h *SearchHandler) FavoritesAPIList(w http.ResponseWriter, r *http.Request) {
-	visitorID := h.getOrCreateVisitorID(w, r)
-	if visitorID == "" {
-		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+	ownerID, _ := h.ownerID(w, r, false, true)
+	if ownerID == "" {
+		SendError(w, "FORBIDDEN", "A valid owner token is required")
 		return
 	}
-	favs, err := h.listFavorites(visitorID)
+	favs, err := h.listFavorites(ownerID)
 	if err != nil {
 		SendError(w, "SERVER_ERROR", "failed to load favorites")
 		return
@@ -332,16 +483,24 @@ func (h *SearchHandler) FavoritesAPIAdd(w http.ResponseWriter, r *http.Request) 
 		SendError(w, "BAD_REQUEST", "invalid JSON body")
 		return
 	}
-	visitorID := h.getOrCreateVisitorID(w, r)
-	if visitorID == "" {
-		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
-		return
-	}
-	if err := h.addFavorite(visitorID, in.URL, in.Title, in.Thumbnail, in.Source); err != nil {
+	if strings.TrimSpace(in.URL) == "" || strings.TrimSpace(in.Title) == "" {
 		SendError(w, "VALIDATION_FAILED", "url and title are required")
 		return
 	}
-	SendOK(w, map[string]interface{}{"message": "added"})
+	ownerID, raw := h.ownerID(w, r, true, true)
+	if ownerID == "" {
+		SendError(w, ownerIdentityFailureCode(r), "failed to establish owner identity")
+		return
+	}
+	if err := h.addFavorite(ownerID, in.URL, in.Title, in.Thumbnail, in.Source); err != nil {
+		SendError(w, "VALIDATION_FAILED", "url and title are required")
+		return
+	}
+	result := map[string]interface{}{"message": "added"}
+	if raw != "" {
+		result["owner_token"] = raw
+	}
+	SendOK(w, result)
 }
 
 // FavoritesAPIRemove handles DELETE /api/{api_version}/favorites/{id}.
@@ -351,12 +510,12 @@ func (h *SearchHandler) FavoritesAPIRemove(w http.ResponseWriter, r *http.Reques
 		SendError(w, "BAD_REQUEST", "invalid id")
 		return
 	}
-	visitorID := h.getOrCreateVisitorID(w, r)
-	if visitorID == "" {
-		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+	ownerID, _ := h.ownerID(w, r, false, true)
+	if ownerID == "" {
+		SendError(w, "FORBIDDEN", "A valid owner token is required")
 		return
 	}
-	if err := h.removeFavorite(visitorID, id); err != nil {
+	if err := h.removeFavorite(ownerID, id); err != nil {
 		SendError(w, "SERVER_ERROR", "failed to remove favorite")
 		return
 	}
@@ -365,12 +524,12 @@ func (h *SearchHandler) FavoritesAPIRemove(w http.ResponseWriter, r *http.Reques
 
 // FavoritesAPIClear handles DELETE /api/{api_version}/favorites.
 func (h *SearchHandler) FavoritesAPIClear(w http.ResponseWriter, r *http.Request) {
-	visitorID := h.getOrCreateVisitorID(w, r)
-	if visitorID == "" {
-		SendError(w, "SERVER_ERROR", "failed to establish visitor identity")
+	ownerID, _ := h.ownerID(w, r, false, true)
+	if ownerID == "" {
+		SendError(w, "FORBIDDEN", "A valid owner token is required")
 		return
 	}
-	if err := h.clearFavorites(visitorID); err != nil {
+	if err := h.clearFavorites(ownerID); err != nil {
 		SendError(w, "SERVER_ERROR", "failed to clear favorites")
 		return
 	}

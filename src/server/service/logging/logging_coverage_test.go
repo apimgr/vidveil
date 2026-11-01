@@ -292,7 +292,7 @@ func TestRotatingFileReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile() error: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	if err := rf.Reopen(); err != nil {
 		t.Fatalf("Reopen() error: %v", err)
@@ -397,7 +397,7 @@ func TestNeedsRotationNoneInterval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile() error: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	rf.maxSize = 0
 	rf.interval = RotationNone
@@ -416,7 +416,7 @@ func TestNeedsRotationHourly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile() error: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	rf.interval = RotationHourly
 	rf.lastRotation = time.Now().Add(-2 * time.Hour)
@@ -436,7 +436,7 @@ func TestNeedsRotationDaily(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile() error: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	rf.interval = RotationDaily
 	rf.lastRotation = time.Now().Add(-48 * time.Hour)
@@ -456,7 +456,7 @@ func TestNeedsRotationWeekly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile() error: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	rf.interval = RotationWeekly
 	rf.lastRotation = time.Now().Add(-8 * 24 * time.Hour)
@@ -476,7 +476,7 @@ func TestNeedsRotationMonthly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile() error: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	rf.interval = RotationMonthly
 	rf.lastRotation = time.Now().Add(-32 * 24 * time.Hour)

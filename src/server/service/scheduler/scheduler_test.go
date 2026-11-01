@@ -84,7 +84,7 @@ func TestSetDB_NilThenNonNil(t *testing.T) {
 		// Driver not available in this test environment — skip the non-nil case.
 		t.Skip("sqlite3 driver unavailable:", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	s.SetDB(db)
 	if s.db == nil {
@@ -380,7 +380,9 @@ func TestRegisterTask_NilFn(t *testing.T) {
 			t.Errorf("RegisterTask with nil fn panicked: %v", r)
 		}
 	}()
-	s.RegisterTask("nilf", "Nil", "d", "hourly", nil)
+	if err := s.RegisterTask("nilf", "Nil", "d", "hourly", nil); err != nil {
+		t.Errorf("RegisterTask with nil fn: %v", err)
+	}
 }
 
 // --- GetTask ---
@@ -724,6 +726,34 @@ func TestRunTaskNow_FailingTask(t *testing.T) {
 	}
 	if hist[0].Result != "failure" {
 		t.Errorf("history Result = %q, want 'failure'", hist[0].Result)
+	}
+}
+
+func TestRunTask_PanicIsRecordedAsFailure(t *testing.T) {
+	s := NewScheduler()
+	if err := s.RegisterTask("panic1", "Panic", "d", "hourly", func(context.Context) error {
+		panic("task failure")
+	}); err != nil {
+		t.Fatalf("RegisterTask error: %v", err)
+	}
+	s.ctx = context.Background()
+
+	s.mu.RLock()
+	task := s.tasks["panic1"]
+	s.mu.RUnlock()
+	s.runTask(task)
+
+	if task.LastResult != "failure" {
+		t.Errorf("LastResult = %q, want failure", task.LastResult)
+	}
+	if task.FailCount != 1 {
+		t.Errorf("FailCount = %d, want 1", task.FailCount)
+	}
+	if task.LastError == "" {
+		t.Error("LastError is empty after panic")
+	}
+	if task.running {
+		t.Error("task remains marked running after panic")
 	}
 }
 

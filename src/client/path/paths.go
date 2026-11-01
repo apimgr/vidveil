@@ -24,6 +24,11 @@ func GitHubRepo() string {
 	return projectName
 }
 
+// InternalName returns the frozen on-disk identity from IDEA.md.
+func InternalName() string {
+	return projectName
+}
+
 // ConfigDir returns the CLI config directory
 // Linux/macOS: ~/.config/apimgr/vidveil/
 // Windows: %APPDATA%\apimgr\vidveil\

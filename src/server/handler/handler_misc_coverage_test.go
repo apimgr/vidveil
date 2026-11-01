@@ -1151,6 +1151,9 @@ func TestFavoritesPage_PlainText(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), "Favorites") {
 		t.Errorf("FavoritesPage text: body missing 'Favorites': %s", rr.Body.String())
 	}
+	if !strings.Contains(rr.Body.String(), "stored on this server") {
+		t.Errorf("FavoritesPage text must describe server-side storage: %s", rr.Body.String())
+	}
 }
 
 // FavoritesPage with no special Accept falls through to the default (renderResponse).

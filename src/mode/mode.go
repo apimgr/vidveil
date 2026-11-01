@@ -126,16 +126,33 @@ func SetAppModeFromEnv() {
 // InitializeAppMode initializes mode from CLI flags and environment
 // CLI flags take priority over environment variables
 func InitializeAppMode(modeFlag string, debugFlag bool) {
-	// Start with environment
-	SetAppModeFromEnv()
+	InitializeAppModeWithDebugOverride(modeFlag, debugFlag, debugFlag)
+}
 
-	// CLI flags override environment
+// InitializeAppModeWithDebugOverride resolves the application mode and debug
+// state independently, preserving the PART 6 priority even for --debug=false.
+func InitializeAppModeWithDebugOverride(modeFlag string, debugFlag, debugFlagSet bool) {
+	selectedMode := os.Getenv("MODE")
 	if modeFlag != "" {
-		SetAppMode(modeFlag)
+		selectedMode = modeFlag
 	}
-	if debugFlag {
-		SetDebug(true)
+
+	modeIsDebug := strings.EqualFold(strings.TrimSpace(selectedMode), "debug")
+	switch strings.ToLower(strings.TrimSpace(selectedMode)) {
+	case "dev", "devel", "development", "debug":
+		currentMode = Development
+	default:
+		currentMode = Production
 	}
+
+	if debugFlagSet {
+		debugEnabled = debugFlag
+	} else if debugValue, set := os.LookupEnv("DEBUG"); set {
+		debugEnabled = config.IsTruthy(debugValue)
+	} else {
+		debugEnabled = modeIsDebug
+	}
+	updateProfilingSettings()
 }
 
 // ConsoleIcon returns an emoji icon for the current mode

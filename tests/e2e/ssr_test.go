@@ -3,7 +3,11 @@
 package e2e
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -54,22 +58,145 @@ func TestSSRSearchPage(t *testing.T) {
 	)
 }
 
-func TestSSREnginesPage(t *testing.T) {
+func TestAPIEnginesList(t *testing.T) {
 	client := httpClient(t)
-	resp, body := get(t, client, "/engines", nil)
+	resp, body := get(t, client, "/api/v1/engines", nil)
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /engines: want 200, got %d", resp.StatusCode)
+		t.Fatalf("GET /api/v1/engines: want 200, got %d", resp.StatusCode)
 	}
-	mustContain(t, "ssr-engines", body, "<table", "</html>")
+	if !strings.Contains(resp.Header.Get("Content-Type"), "application/json") || !json.Valid([]byte(body)) {
+		t.Fatalf("GET /api/v1/engines: expected valid JSON, content type %q", resp.Header.Get("Content-Type"))
+	}
 }
 
-func TestSSRBangsPage(t *testing.T) {
+func TestAPIBangsList(t *testing.T) {
 	client := httpClient(t)
-	resp, body := get(t, client, "/bangs", nil)
+	resp, body := get(t, client, "/api/v1/bangs", nil)
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /bangs: want 200, got %d", resp.StatusCode)
+		t.Fatalf("GET /api/v1/bangs: want 200, got %d", resp.StatusCode)
 	}
-	mustContain(t, "ssr-bangs", body, "!", "</html>")
+	if !strings.Contains(resp.Header.Get("Content-Type"), "application/json") || !json.Valid([]byte(body)) {
+		t.Fatalf("GET /api/v1/bangs: expected valid JSON, content type %q", resp.Header.Get("Content-Type"))
+	}
+}
+
+func TestOwnerTokenFavoritesAPI(t *testing.T) {
+	client := httpClient(t)
+	_, _ = get(t, client, "/", nil)
+	baseURL, err := url.Parse(s.localBase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var csrf string
+	for _, cookie := range client.Jar.Cookies(baseURL) {
+		if cookie.Name == "csrf_token" {
+			csrf = cookie.Value
+		}
+	}
+	if csrf == "" {
+		t.Fatal("initial page did not set a CSRF token")
+	}
+	request, err := http.NewRequest(http.MethodPost, s.localBase+"/api/v1/favorites", bytes.NewBufferString(`{"url":"https://example.test/e2e","title":"Owner-scoped favorite"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-CSRF-Token", csrf)
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	responseBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		_ = response.Body.Close()
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	var created struct {
+		Data struct {
+			OwnerToken string `json:"owner_token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(responseBody, &created); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || created.Data.OwnerToken == "" {
+		t.Fatalf("anonymous favorite creation = %d, owner token present=%t, body=%s", response.StatusCode, created.Data.OwnerToken != "", responseBody)
+	}
+	client.Jar.SetCookies(baseURL, append(client.Jar.Cookies(baseURL), &http.Cookie{Name: "vidveil_owner_token_ab5213f6", Value: created.Data.OwnerToken, Path: "/"}))
+
+	ownedList, body := get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + created.Data.OwnerToken, "Accept": "application/json"})
+	if ownedList.StatusCode != http.StatusOK || !strings.Contains(body, "Owner-scoped favorite") {
+		t.Fatalf("owner bearer list = %d %s", ownedList.StatusCode, body)
+	}
+	unauthorized, body := get(t, client, "/api/v1/favorites", map[string]string{"Accept": "application/json"})
+	if unauthorized.StatusCode != http.StatusForbidden || strings.Contains(body, "Owner-scoped favorite") {
+		t.Fatalf("cookie-only API list = %d %s", unauthorized.StatusCode, body)
+	}
+	callJSON := func(method, path, rawToken, payload string) (int, []byte) {
+		t.Helper()
+		request, err := http.NewRequest(method, s.localBase+path, strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Authorization", "Bearer "+rawToken)
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		body, err := io.ReadAll(response.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response.StatusCode, body
+	}
+	status, apiBody := callJSON(http.MethodPost, "/api/v1/server/preferences/tokens", created.Data.OwnerToken, `{"name":"e2e automation","expires":"30d"}`)
+	var linked struct {
+		Data struct {
+			Token string `json:"token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(apiBody, &linked); err != nil || status != http.StatusOK || linked.Data.Token == "" {
+		t.Fatalf("linked-token creation = %d %s", status, apiBody)
+	}
+	linkedList, body := get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + linked.Data.Token, "Accept": "application/json"})
+	if linkedList.StatusCode != http.StatusOK || !strings.Contains(body, "Owner-scoped favorite") {
+		t.Fatalf("linked-token resource access = %d %s", linkedList.StatusCode, body)
+	}
+	status, apiBody = callJSON(http.MethodGet, "/api/v1/server/preferences/tokens", linked.Data.Token, "")
+	if status != http.StatusForbidden {
+		t.Fatalf("linked-token management status = %d, want 403: %s", status, apiBody)
+	}
+	status, apiBody = callJSON(http.MethodPost, "/api/v1/server/preferences/tokens/primary/rotate", created.Data.OwnerToken, "")
+	var rotated struct {
+		Data struct {
+			Token string `json:"token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(apiBody, &rotated); err != nil || status != http.StatusOK || rotated.Data.Token == "" {
+		t.Fatalf("primary-token rotation = %d %s", status, apiBody)
+	}
+	status, apiBody = callJSON(http.MethodGet, "/api/v1/server/preferences/tokens", created.Data.OwnerToken, "")
+	if status != http.StatusForbidden {
+		t.Fatalf("old primary token status = %d, want 403: %s", status, apiBody)
+	}
+	ownedList, body = get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + rotated.Data.Token, "Accept": "application/json"})
+	if ownedList.StatusCode != http.StatusOK || !strings.Contains(body, "Owner-scoped favorite") {
+		t.Fatalf("rotated primary resource access = %d %s", ownedList.StatusCode, body)
+	}
+}
+
+func TestAPIBangAutocomplete(t *testing.T) {
+	client := httpClient(t)
+	resp, body := get(t, client, "/api/v1/bangs/autocomplete?q=y", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /api/v1/bangs/autocomplete: want 200, got %d", resp.StatusCode)
+	}
+	if !strings.Contains(resp.Header.Get("Content-Type"), "application/json") || !json.Valid([]byte(body)) {
+		t.Fatalf("GET /api/v1/bangs/autocomplete: expected valid JSON, content type %q", resp.Header.Get("Content-Type"))
+	}
 }
 
 func TestSSRFavoritesPage(t *testing.T) {
@@ -83,13 +210,13 @@ func TestSSRFavoritesPage(t *testing.T) {
 
 func TestSSRPreferencesPage(t *testing.T) {
 	client := httpClient(t)
-	resp, body := get(t, client, "/preferences", nil)
+	resp, body := get(t, client, "/server/preferences", nil)
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /preferences: want 200, got %d", resp.StatusCode)
+		t.Fatalf("GET /server/preferences: want 200, got %d", resp.StatusCode)
 	}
 	mustContain(t, "ssr-preferences", body,
 		"<form",
-		"results_per_page",
+		"vidveil_pref_results_per_page",
 	)
 }
 
@@ -239,7 +366,7 @@ func TestSSRSecurityHeaders(t *testing.T) {
 
 func TestSSRCSRFTokenIssuedOnForms(t *testing.T) {
 	client := httpClient(t)
-	resp, body := get(t, client, "/preferences", nil)
+	resp, body := get(t, client, "/server/preferences", nil)
 	if !strings.Contains(body, "csrf_token") {
 		saveArtifact(t, "csrf-preferences.html", body)
 		t.Error("preferences form has no csrf_token field")
@@ -263,7 +390,7 @@ func TestSSRCSRFTokenIssuedOnForms(t *testing.T) {
 
 func TestSSRCSRFRejectsMissingToken(t *testing.T) {
 	client := httpClient(t)
-	resp, err := client.PostForm(s.localBase+"/server/preferences/save", nil)
+	resp, err := client.PostForm(s.localBase+"/server/preferences", nil)
 	if err != nil {
 		t.Fatalf("POST without CSRF token: %v", err)
 	}

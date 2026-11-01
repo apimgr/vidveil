@@ -40,7 +40,7 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := readEngineBody(resp)
 	if err != nil {

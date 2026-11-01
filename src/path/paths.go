@@ -61,16 +61,60 @@ func IsPrivilegedMode() bool {
 // GetAppPaths returns OS-appropriate paths per AI.md PART 4.
 func GetAppPaths(configDir, dataDir string) *AppPaths {
 	isRoot := startupIsRoot
+	resolvedDataDir := pathOverride(dataDir, "DATA_DIR", GetDefaultDataDir(isRoot))
+	backupDir := pathOverride("", "BACKUP_DIR", "")
+	if backupDir == "" {
+		backupDir = resolveBackupDir(isRoot, resolvedDataDir, canWritePath)
+	}
 
 	return &AppPaths{
 		Config:   pathOverride(configDir, "CONFIG_DIR", GetDefaultConfigDir(isRoot)),
-		Data:     pathOverride(dataDir, "DATA_DIR", GetDefaultDataDir(isRoot)),
+		Data:     resolvedDataDir,
 		Cache:    pathOverride("", "CACHE_DIR", GetDefaultCacheDir(isRoot)),
 		Log:      pathOverride("", "LOG_DIR", GetDefaultLogDir(isRoot)),
-		Backup:   pathOverride("", "BACKUP_DIR", GetDefaultBackupDir(isRoot)),
+		Backup:   backupDir,
 		PIDFile:  pathOverride("", "PID_FILE", GetDefaultPIDFile(isRoot)),
 		SSL:      pathOverride("", "SSL_DIR", GetDefaultSSLDir(isRoot)),
 		Security: pathOverride("", "SECURITY_DIR", GetDefaultSecurityDir(isRoot)),
+	}
+}
+
+func resolveBackupDir(isRoot bool, dataDir string, writable func(string) bool) string {
+	systemBackupDir := GetDefaultBackupDir(true)
+	if writable(systemBackupDir) {
+		return systemBackupDir
+	}
+	if isRoot {
+		return filepath.Join(dataDir, "backup")
+	}
+	return GetDefaultBackupDir(false)
+}
+
+func canWritePath(dir string) bool {
+	probeDir := dir
+	for {
+		info, err := os.Stat(probeDir)
+		if err == nil {
+			if !info.IsDir() {
+				return false
+			}
+			probe, err := os.CreateTemp(probeDir, ".vidveil-write-test-*")
+			if err != nil {
+				return false
+			}
+			name := probe.Name()
+			closeErr := probe.Close()
+			removeErr := os.Remove(name)
+			return closeErr == nil && removeErr == nil
+		}
+		if !os.IsNotExist(err) {
+			return false
+		}
+		parent := filepath.Dir(probeDir)
+		if parent == probeDir {
+			return false
+		}
+		probeDir = parent
 	}
 }
 
@@ -81,6 +125,12 @@ func GetDatabaseDir(dataDir string) string {
 	}
 
 	return filepath.Join(dataDir, "db")
+}
+
+// GetMaintenanceLockDir returns a stable project-scoped directory adjacent to
+// the data root, so restore root replacement cannot remove an active lock.
+func GetMaintenanceLockDir(dataDir string) string {
+	return filepath.Join(filepath.Dir(dataDir), ".vidveil-maintenance")
 }
 
 // GetDefaultConfigDir returns OS-appropriate config directory

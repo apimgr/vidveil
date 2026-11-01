@@ -190,7 +190,7 @@ func NewAppDatabase(cfg DatabaseConfig) (*AppDatabase, error) {
 	pingCtx, pingCancel := context.WithTimeout(context.Background(), TimeoutSimpleSelect)
 	defer pingCancel()
 	if err := db.PingContext(pingCtx); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to verify database connection: %w", err)
 	}
 
@@ -357,10 +357,13 @@ func (d *AppDatabase) QueryRow(query string, args ...interface{}) (*sql.Row, err
 // empty result is a successful query that row.Scan reports as sql.ErrNoRows.
 func (d *AppDatabase) QueryRowContext(ctx context.Context, query string, args ...interface{}) (*sql.Row, error) {
 	var row *sql.Row
-	_ = instrumentQuery(query, func() error {
+	err := instrumentQuery(query, func() error {
 		row = d.db.QueryRowContext(ctx, query, args...)
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 	if row == nil {
 		return nil, sql.ErrNoRows
 	}
@@ -476,7 +479,7 @@ func (d *AppDatabase) WithTransaction(ctx context.Context, fn func(*sql.Tx) erro
 	}
 
 	if err := fn(tx); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return err
 	}
 
@@ -511,7 +514,7 @@ func (d *AppDatabase) WithSerializableRetry(ctx context.Context, fn func(*sql.Tx
 			}
 
 			if err := fn(tx); err != nil {
-				tx.Rollback()
+				_ = tx.Rollback()
 				return err
 			}
 

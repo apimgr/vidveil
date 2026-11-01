@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 )
@@ -330,6 +331,11 @@ func httpClient(t *testing.T) *http.Client {
 	if err != nil {
 		t.Fatalf("cookiejar: %v", err)
 	}
+	baseURL, err := url.Parse(s.localBase)
+	if err != nil {
+		t.Fatalf("parse local server URL: %v", err)
+	}
+	jar.SetCookies(baseURL, []*http.Cookie{{Name: "age_verified", Value: "1", Path: "/"}})
 	return &http.Client{
 		Jar:     jar,
 		Timeout: 30 * time.Second,
@@ -375,6 +381,13 @@ func newTab(t *testing.T) *tab {
 	t.Helper()
 	ctx, cancel := chromedp.NewContext(s.allocCtx)
 	timed, timeout := context.WithTimeout(ctx, 90*time.Second)
+	browserURL, err := url.Parse(s.browserBase)
+	if err != nil {
+		t.Fatalf("parse browser server URL: %v", err)
+	}
+	if err := chromedp.Run(timed, network.SetCookie("age_verified", "1").WithDomain(browserURL.Hostname()).WithPath("/")); err != nil {
+		t.Fatalf("set E2E age verification cookie: %v", err)
+	}
 
 	collected := &[]string{}
 	lock := make(chan struct{}, 1)

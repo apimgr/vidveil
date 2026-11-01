@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"io"
 	"net/http"
@@ -14,11 +15,74 @@ import (
 	"os/user"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/system"
 	_ "modernc.org/sqlite"
 )
+
+func TestWaitForShutdownRequestRestartsAfterRestore(t *testing.T) {
+	ctx := context.Background()
+	restart := make(chan struct{}, 1)
+	waitStarted := make(chan struct{})
+	type result struct {
+		signal  os.Signal
+		restart bool
+	}
+	done := make(chan result, 1)
+	go func() {
+		sig, restartRequested := waitForShutdownRequest(ctx, restart, func(waitCtx context.Context) os.Signal {
+			close(waitStarted)
+			<-waitCtx.Done()
+			return os.Interrupt
+		})
+		done <- result{signal: sig, restart: restartRequested}
+	}()
+	select {
+	case <-waitStarted:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown signal wait did not start")
+	}
+	restart <- struct{}{}
+	select {
+	case got := <-done:
+		if got.signal != os.Interrupt || !got.restart {
+			t.Fatalf("waitForShutdownRequest() = (%v, %t), want (interrupt, true)", got.signal, got.restart)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("restore restart did not interrupt shutdown wait")
+	}
+}
+
+func TestWaitForShutdownRequestDoesNotRestartOnStop(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	waitStarted := make(chan struct{})
+	done := make(chan bool, 1)
+	go func() {
+		_, restartRequested := waitForShutdownRequest(ctx, nil, func(waitCtx context.Context) os.Signal {
+			close(waitStarted)
+			<-waitCtx.Done()
+			return os.Interrupt
+		})
+		done <- restartRequested
+	}()
+	select {
+	case <-waitStarted:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown signal wait did not start")
+	}
+	cancel()
+	select {
+	case got := <-done:
+		if got {
+			t.Fatal("normal service stop requested a restart")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("normal service stop did not interrupt shutdown wait")
+	}
+}
 
 // ── loadInstallationSecret / pgpGenerateCore / pgpExportPublicCore ────────────
 // AI.md PART 12 GPG Keypair Management. These exercise the error-returning cores
@@ -29,7 +93,9 @@ import (
 func TestLoadInstallationSecret(t *testing.T) {
 	base := t.TempDir()
 	dataDir := base + "/data"
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	secret, err := loadInstallationSecret(dataDir)
 	if err != nil {
@@ -53,8 +119,12 @@ func TestPgpGenerateCore_NoSecurityContact(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
 	if err != nil {
@@ -79,8 +149,12 @@ func TestPgpExportPublicCore_NoKey(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	if _, err := pgpExportPublicCore(cfgDir, dataDir, ""); err == nil {
 		t.Fatal("expected error exporting public key when none exists")
@@ -94,8 +168,12 @@ func TestPgpGenerateCore_And_ExportPublic(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
 	if err != nil {
@@ -151,8 +229,12 @@ func TestPgpRotateCore_NoExistingKey(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
 	if err != nil {
@@ -175,8 +257,12 @@ func TestPgpRotateCore(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
 	if err != nil {
@@ -216,8 +302,12 @@ func TestPgpPublishCore_NoKey(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
 	if err != nil {
@@ -238,8 +328,12 @@ func TestPgpPublishCore_NoKeyservers(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
 	if err != nil {
@@ -269,8 +363,12 @@ func TestPgpPublishCore_Success(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	var hit bool
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -312,8 +410,12 @@ func TestPgpPublishCore_AllFail(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -349,8 +451,12 @@ func TestPgpGenerateAndExportPublic_Wrappers(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
 	if err != nil {
@@ -430,11 +536,11 @@ func captureStdout(f func()) string {
 	orig := os.Stdout
 	os.Stdout = w
 	f()
-	w.Close()
+	_ = w.Close()
 	os.Stdout = orig
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	r.Close()
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
 	return buf.String()
 }
 
@@ -792,10 +898,16 @@ func TestHandleMaintenanceCommand_Backup_NoPanic(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("BACKUP_DIR", base+"/backup")
-	os.MkdirAll(base+"/backup", 0755)
+	if err := os.MkdirAll(base+"/backup", 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	captureStdout(func() {
 		handleMaintenanceCommand("backup", "", cfgDir, dataDir)
@@ -809,10 +921,16 @@ func TestHandleMaintenanceCommand_Backup_WithPassword_NoPanic(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("BACKUP_DIR", base+"/backup")
-	os.MkdirAll(base+"/backup", 0755)
+	if err := os.MkdirAll(base+"/backup", 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	captureStdout(func() {
 		handleMaintenanceCommand("backup", "", cfgDir, dataDir)
@@ -824,8 +942,12 @@ func TestHandleMaintenanceCommand_ModeOn_NoPanic(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	captureStdout(func() {
 		handleMaintenanceCommand("mode", "on", cfgDir, dataDir)
@@ -837,8 +959,12 @@ func TestHandleMaintenanceCommand_ModeOff_NoPanic(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	captureStdout(func() {
 		handleMaintenanceCommand("mode", "off", cfgDir, dataDir)
@@ -850,8 +976,12 @@ func TestHandleMaintenanceCommand_ModeTrue_NoPanic(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	captureStdout(func() {
 		handleMaintenanceCommand("mode", "true", cfgDir, dataDir)
@@ -863,8 +993,12 @@ func TestHandleMaintenanceCommand_ModeFalse_NoPanic(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	captureStdout(func() {
 		handleMaintenanceCommand("mode", "false", cfgDir, dataDir)
@@ -877,10 +1011,16 @@ func TestHandleMaintenanceCommand_Restore_NoPanic(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("BACKUP_DIR", base+"/backup")
-	os.MkdirAll(base+"/backup", 0755)
+	if err := os.MkdirAll(base+"/backup", 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	// Create a backup first, then restore it
 	captureStdout(func() {
@@ -899,7 +1039,7 @@ func TestIsDBFirstRun_EmptyDB_ReturnsTrue(t *testing.T) {
 	if err != nil {
 		t.Fatal("sql.Open:", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if !isDBFirstRun(db) {
 		t.Error("isDBFirstRun on empty DB: expected true")
 	}
@@ -910,7 +1050,7 @@ func TestIsDBFirstRun_TableWithRows_ReturnsFalse(t *testing.T) {
 	if err != nil {
 		t.Fatal("sql.Open:", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec("CREATE TABLE settings (key TEXT, value TEXT)"); err != nil {
 		t.Fatal("CREATE TABLE:", err)
 	}
@@ -927,7 +1067,7 @@ func TestIsDBFirstRun_EmptySettingsTable_ReturnsTrue(t *testing.T) {
 	if err != nil {
 		t.Fatal("sql.Open:", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec("CREATE TABLE settings (key TEXT, value TEXT)"); err != nil {
 		t.Fatal("CREATE TABLE:", err)
 	}
@@ -1046,8 +1186,12 @@ func TestIsDatabaseEmpty_NoDBFile_ReturnsTrue(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	if !isDatabaseEmpty(cfgDir, dataDir) {
 		t.Error("isDatabaseEmpty with no db file: expected true")
@@ -1058,9 +1202,13 @@ func TestIsDatabaseEmpty_WithSettingsRow_ReturnsFalse(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 	dbDir := dataDir + "/db"
-	os.MkdirAll(dbDir, 0755)
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	db, err := sql.Open("sqlite", dbDir+"/server.db")
 	if err != nil {
@@ -1072,7 +1220,7 @@ func TestIsDatabaseEmpty_WithSettingsRow_ReturnsFalse(t *testing.T) {
 	if _, err := db.Exec("INSERT INTO settings VALUES ('key', 'val')"); err != nil {
 		t.Fatal("INSERT:", err)
 	}
-	db.Close()
+	_ = db.Close()
 
 	if isDatabaseEmpty(cfgDir, dataDir) {
 		t.Error("isDatabaseEmpty with settings rows: expected false")
@@ -1083,8 +1231,12 @@ func TestAuthorizeRestore_EmptyDatabase_Allowed(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := authorizeRestore(cfgDir, dataDir); err != nil {
 		t.Errorf("authorizeRestore on empty database: expected nil, got %v", err)
@@ -1098,9 +1250,13 @@ func TestAuthorizeRestore_NonEmptyDatabase_AsRoot_Allowed(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 	dbDir := dataDir + "/db"
-	os.MkdirAll(dbDir, 0755)
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	db, err := sql.Open("sqlite", dbDir+"/server.db")
 	if err != nil {
@@ -1112,7 +1268,7 @@ func TestAuthorizeRestore_NonEmptyDatabase_AsRoot_Allowed(t *testing.T) {
 	if _, err := db.Exec("INSERT INTO settings VALUES ('key', 'val')"); err != nil {
 		t.Fatal("INSERT:", err)
 	}
-	db.Close()
+	_ = db.Close()
 
 	captureStdout(func() {
 		if err := authorizeRestore(cfgDir, dataDir); err != nil {
@@ -1128,8 +1284,12 @@ func TestAuthorizeSensitiveOperation_AsRoot_Allowed(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	captureStdout(func() {
 		if err := authorizeSensitiveOperation(cfgDir, dataDir); err != nil {
@@ -1142,8 +1302,12 @@ func TestAuthorizeViaOperatorToken_NonServiceUser_Rejected(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
-	os.MkdirAll(cfgDir, 0755)
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	// The test process never runs as the "vidveil" service user (it runs as
 	// whatever CI/dev account invoked `go test`, typically root), so this

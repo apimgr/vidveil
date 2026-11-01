@@ -15,7 +15,7 @@ import (
 func TestGuaranteedRecoverer_PassesThroughNormalResponse(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 
 	rr := httptest.NewRecorder()
@@ -106,7 +106,7 @@ func TestGuaranteedRecoverer_HTMLOnPanicDefault(t *testing.T) {
 func TestGuaranteedRecoverer_NoDoubleWriteWhenHeaderAlreadySent(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte("partial"))
+		_, _ = w.Write([]byte("partial"))
 		panic("boom after write")
 	})
 

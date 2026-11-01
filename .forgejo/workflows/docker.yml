@@ -84,10 +84,14 @@ jobs:
           provenance: false
           tags: ${{ steps.tags.outputs.tags }}
           labels: |
+            maintainer=apimgr
+            org.opencontainers.image.schema-version=${{ steps.tags.outputs.version }}
+            org.opencontainers.image.vcs-type=Git
+            com.github.containers.toolbox=false
             org.opencontainers.image.vendor=apimgr
             org.opencontainers.image.authors=apimgr
             org.opencontainers.image.title=${{ env.PROJECT_NAME }}
-            org.opencontainers.image.base.name=alpine:latest
+            org.opencontainers.image.base.name=${{ env.PROJECT_NAME }}
             org.opencontainers.image.description=vidveil - video-focused self-hosted service
             org.opencontainers.image.licenses=MIT
             org.opencontainers.image.version=${{ steps.tags.outputs.version }}
@@ -97,10 +101,14 @@ jobs:
             org.opencontainers.image.source=${{ forgejo.server_url }}/${{ forgejo.repository }}
             org.opencontainers.image.documentation=${{ forgejo.server_url }}/${{ forgejo.repository }}
           annotations: |
+            manifest:maintainer=apimgr
+            manifest:org.opencontainers.image.schema-version=${{ steps.tags.outputs.version }}
+            manifest:org.opencontainers.image.vcs-type=Git
+            manifest:com.github.containers.toolbox=false
             manifest:org.opencontainers.image.vendor=apimgr
             manifest:org.opencontainers.image.authors=apimgr
             manifest:org.opencontainers.image.title=${{ env.PROJECT_NAME }}
-            manifest:org.opencontainers.image.base.name=alpine:latest
+            manifest:org.opencontainers.image.base.name=${{ env.PROJECT_NAME }}
             manifest:org.opencontainers.image.description=vidveil - video-focused self-hosted service
             manifest:org.opencontainers.image.licenses=MIT
             manifest:org.opencontainers.image.version=${{ steps.tags.outputs.version }}
@@ -155,25 +163,39 @@ jobs:
           push: true
           provenance: false
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:devel
+          build-args: |
+            VERSION=devel
+            BUILD_DATE=${{ steps.meta.outputs.build_date }}
+            COMMIT_ID=${{ steps.meta.outputs.revision }}
           labels: |
+            maintainer=apimgr
+            org.opencontainers.image.schema-version=devel
+            org.opencontainers.image.vcs-type=Git
+            com.github.containers.toolbox=false
             org.opencontainers.image.vendor=apimgr
             org.opencontainers.image.authors=apimgr
             org.opencontainers.image.title=${{ env.PROJECT_NAME }}
-            org.opencontainers.image.base.name=alpine:latest
+            org.opencontainers.image.base.name=${{ env.PROJECT_NAME }}
             org.opencontainers.image.description=vidveil - development image (alpine, debug mode)
             org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.version=devel
             org.opencontainers.image.created=${{ steps.meta.outputs.build_date }}
             org.opencontainers.image.revision=${{ steps.meta.outputs.revision }}
             org.opencontainers.image.url=${{ forgejo.server_url }}/${{ forgejo.repository }}
             org.opencontainers.image.source=${{ forgejo.server_url }}/${{ forgejo.repository }}
             org.opencontainers.image.documentation=${{ forgejo.server_url }}/${{ forgejo.repository }}
           annotations: |
+            manifest:maintainer=apimgr
+            manifest:org.opencontainers.image.schema-version=devel
+            manifest:org.opencontainers.image.vcs-type=Git
+            manifest:com.github.containers.toolbox=false
             manifest:org.opencontainers.image.vendor=apimgr
             manifest:org.opencontainers.image.authors=apimgr
             manifest:org.opencontainers.image.title=${{ env.PROJECT_NAME }}
-            manifest:org.opencontainers.image.base.name=alpine:latest
+            manifest:org.opencontainers.image.base.name=${{ env.PROJECT_NAME }}
             manifest:org.opencontainers.image.description=vidveil - development image (alpine, debug mode)
             manifest:org.opencontainers.image.licenses=MIT
+            manifest:org.opencontainers.image.version=devel
             manifest:org.opencontainers.image.created=${{ steps.meta.outputs.build_date }}
             manifest:org.opencontainers.image.revision=${{ steps.meta.outputs.revision }}
             manifest:org.opencontainers.image.url=${{ forgejo.server_url }}/${{ forgejo.repository }}

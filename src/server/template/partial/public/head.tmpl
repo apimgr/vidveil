@@ -68,8 +68,16 @@
 <link rel="stylesheet" href="{{ asset "/static/css/components.css" }}">
 <link rel="stylesheet" href="{{ asset "/static/css/public.css" }}">
 <link rel="manifest" href="/manifest.json">
-<link rel="icon" href="{{if .BrandingFavicon}}{{.BrandingFavicon}}{{else}}/static/images/favicon.ico{{end}}">
-<link rel="apple-touch-icon" href="/static/icons/icon-180.png">
+{{- if .BrandingFavicon}}
+<link rel="icon" type="image/png" sizes="16x16" href="/branding/favicon-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/branding/favicon-32.png">
+<link rel="icon" type="image/png" sizes="48x48" href="/branding/favicon-48.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/branding/favicon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/branding/favicon-512.png">
+{{- else}}
+<link rel="icon" href="/static/images/favicon.ico">
+{{- end}}
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="VidVeil">
@@ -98,7 +106,21 @@
     "searchCardVideoOptions": "{{ t "search.card_video_options" }}",
     "searchCardVideoResultLabel": "{{ t "search.card_video_result_label" }}",
     "searchConnectionError": "{{ t "search.connection_error" }}",
-    "searchFailed": "{{ t "search.failed" }}"
+    "searchFailed": "{{ t "search.failed" }}",
+    "searchSearching": "{{ t "search.loading" }}",
+    "searchAllSources": "{{ t "search.all_sources" }}",
+    "searchNoMoreResults": "{{ t "search.no_more_results" }}",
+    "searchRelatedShowMore": "{{ t "search.related_show_more" }}",
+    "searchRelatedShowLess": "{{ t "search.related_show_less" }}",
+    "searchEnginesResponding": "{{ t "search.engines_responding" }}",
+    "searchEnginesWithResults": "{{ t "search.engines_with_results" }}",
+    "searchEnginesCount": "{{ t "search.engines_count" }}",
+    "searchMinimumDuration": "{{ t "search.minimum_duration" }}",
+    "searchStreaming": "{{ t "search.streaming" }}",
+    "offlineMessage": "{{ t "offline.message" }}",
+    "updateAvailable": "{{ t "pwa.update_available" }}",
+    "updateNow": "{{ t "pwa.update_now" }}",
+    "later": "{{ t "action.later" }}"
 }</script>
 {{/* Service worker registration lives in static/js/app.js (CSP: script-src 'self') */}}
 {{end}}

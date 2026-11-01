@@ -138,6 +138,11 @@ jobs:
           tar -czf "$ARCHIVE_NAME" --exclude=.git --exclude=.github --exclude=.gitea --exclude=.forgejo --exclude=binaries --exclude=releases --exclude='*.tar.gz' .
           mv "$ARCHIVE_NAME" binaries/
 
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          docker run --rm -v "$PWD":/app -w /app -e GOFLAGS=-buildvcs=false casjaysdev/go:latest \
+            cyclonedx-gomod mod -json -output "binaries/${{ env.PROJECT_NAME }}-${{ needs.version.outputs.version }}-sbom.cdx.json"
+
       - name: Generate checksums
         run: |
           cd binaries

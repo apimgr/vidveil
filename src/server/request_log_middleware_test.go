@@ -15,7 +15,7 @@ func TestRequestLogMiddleware_CallsNextAndPreservesResponse(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusTeapot)
-		w.Write([]byte("hello"))
+		_, _ = w.Write([]byte("hello"))
 	})
 
 	rr := httptest.NewRecorder()

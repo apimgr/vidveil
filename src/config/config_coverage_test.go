@@ -367,12 +367,18 @@ func TestSecChUaPlatform_AllPlatforms_NoPanic(t *testing.T) {
 
 func TestLoadAppConfig_NonExistentDir_ReturnsDefault(t *testing.T) {
 	base := os.TempDir() + "/apimgr"
-	os.MkdirAll(base, 0755)
+	if err := os.MkdirAll(base, 0755); err != nil {
+		t.Fatalf("create temporary base directory: %v", err)
+	}
 	tmp, err := os.MkdirTemp(base, "vidveil-cfg-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmp)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmp); err != nil {
+			t.Errorf("remove temporary config directory: %v", err)
+		}
+	})
 
 	cfg, _, loadErr := LoadAppConfig(tmp+"/nonexistent", tmp)
 	if cfg == nil {
@@ -385,12 +391,18 @@ func TestLoadAppConfig_NonExistentDir_ReturnsDefault(t *testing.T) {
 
 func TestSaveAppConfig_TempFile_NoPanic(t *testing.T) {
 	base := os.TempDir() + "/apimgr"
-	os.MkdirAll(base, 0755)
+	if err := os.MkdirAll(base, 0755); err != nil {
+		t.Fatalf("create temporary base directory: %v", err)
+	}
 	tmp, err := os.MkdirTemp(base, "vidveil-save-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmp)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmp); err != nil {
+			t.Errorf("remove temporary config directory: %v", err)
+		}
+	})
 
 	cfg := DefaultAppConfig()
 	err = SaveAppConfig(cfg, tmp+"/server.yml")

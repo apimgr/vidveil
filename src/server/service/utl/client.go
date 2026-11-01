@@ -87,7 +87,7 @@ func dialTLS(ctx context.Context, network, addr string) (net.Conn, error) {
 
 	// Perform handshake
 	if err := utlsConn.Handshake(); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, err
 	}
 
@@ -184,7 +184,7 @@ func dialTLSWithFingerprint(ctx context.Context, network, addr string, helloID u
 	utlsConn := utls.UClient(conn, tlsConfig, helloID)
 
 	if err := utlsConn.Handshake(); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, err
 	}
 

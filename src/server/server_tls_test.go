@@ -82,7 +82,7 @@ func TestServeTLSOn_NilProviderReturnsServerClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	if err := s.ServeTLSOn(ln); !errors.Is(err, http.ErrServerClosed) {
 		t.Fatalf("expected ErrServerClosed with nil provider, got %v", err)
 	}
@@ -119,6 +119,7 @@ func TestServeTLSOn_ServesHTTPS(t *testing.T) {
 }
 
 func TestHTTPRedirectHandler_RedirectsToHTTPS(t *testing.T) {
+	t.Setenv("DOMAIN", "example.com")
 	s := newTestServer(t)
 	s.SetSSLManager(&fakeTLSProvider{})
 	h := s.httpRedirectHandler("443")
@@ -138,6 +139,7 @@ func TestHTTPRedirectHandler_RedirectsToHTTPS(t *testing.T) {
 }
 
 func TestHTTPRedirectHandler_CustomHTTPSPort(t *testing.T) {
+	t.Setenv("DOMAIN", "example.com")
 	s := newTestServer(t)
 	h := s.httpRedirectHandler("8443")
 
@@ -149,6 +151,35 @@ func TestHTTPRedirectHandler_CustomHTTPSPort(t *testing.T) {
 	loc := rr.Header().Get("Location")
 	if loc != "https://example.com:8443/" {
 		t.Fatalf("expected custom https port in target, got %q", loc)
+	}
+}
+
+func TestHTTPRedirectHandler_DoesNotRedirectTor(t *testing.T) {
+	s := newTestServer(t)
+	s.appConfig.Server.Tor.OnionAddress = "vidveil-example.onion"
+	h := s.httpRedirectHandler("443")
+
+	req := httptest.NewRequest("GET", "http://vidveil-example.onion/", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code == http.StatusMovedPermanently {
+		t.Fatalf("Tor request redirected to HTTPS: %q", rr.Header().Get("Location"))
+	}
+}
+
+func TestHTTPRedirectHandler_IgnoresUntrustedHost(t *testing.T) {
+	t.Setenv("DOMAIN", "configured.example.com")
+	s := newTestServer(t)
+	h := s.httpRedirectHandler("443")
+
+	req := httptest.NewRequest("GET", "http://attacker.example/", nil)
+	req.Host = "attacker.example"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if got := rr.Header().Get("Location"); got != "https://configured.example.com/" {
+		t.Fatalf("redirect location = %q, want configured host", got)
 	}
 }
 
@@ -208,5 +239,7 @@ func TestServeHTTPRedirectOn_ServesRedirect(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 	_ = ln.Close()
-	<-srvErr
+	if err := <-srvErr; err != nil && !errors.Is(err, net.ErrClosed) {
+		t.Errorf("TLS server: %v", err)
+	}
 }

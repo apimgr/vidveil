@@ -19,6 +19,8 @@ func (s *Server) registerDebugRoutes(r chi.Router) {
 	}
 
 	r.Route("/debug", func(r chi.Router) {
+		r.Use(s.requireOperatorToken)
+
 		// pprof endpoints
 		r.HandleFunc("/pprof/", pprof.Index)
 		r.HandleFunc("/pprof/cmdline", pprof.Cmdline)
@@ -75,13 +77,16 @@ func (s *Server) handleDebugConfig(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDebugRoutes(w http.ResponseWriter, r *http.Request) {
 	routes := []map[string]string{}
 
-	chi.Walk(s.router, func(method string, route string, h http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+	if err := chi.Walk(s.router, func(method string, route string, h http.Handler, middlewares ...func(http.Handler) http.Handler) error {
 		routes = append(routes, map[string]string{
 			"method": method,
 			"route":  route,
 		})
 		return nil
-	})
+	}); err != nil {
+		http.Error(w, "Unable to list routes", http.StatusInternalServerError)
+		return
+	}
 
 	handler.WriteJSON(w, http.StatusOK, routes)
 }

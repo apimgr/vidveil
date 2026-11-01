@@ -5,8 +5,8 @@ package scheduler
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"strconv"
@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/metric"
 )
 
@@ -38,6 +39,10 @@ func resolveSchedulerLocation() *time.Location {
 
 // TaskFunc is a function that executes a scheduled task
 type TaskFunc func(ctx context.Context) error
+
+// TaskFailureNotifier receives completed failures so the application can send
+// configured operator notifications without coupling the scheduler to a channel.
+type TaskFailureNotifier func(task ScheduledTask, history TaskHistory)
 
 // ScheduledTask represents a scheduled task
 type ScheduledTask struct {
@@ -86,19 +91,83 @@ type TaskHistory struct {
 // Scheduler manages scheduled tasks per AI.md PART 18
 // Supports optional database persistence for task state survival across restarts
 type Scheduler struct {
-	tasks   map[string]*ScheduledTask
-	history []TaskHistory
-	mu      sync.RWMutex
-	ctx     context.Context
-	cancel  context.CancelFunc
-	running bool
-	maxHist int
+	tasks      map[string]*ScheduledTask
+	history    []TaskHistory
+	mu         sync.RWMutex
+	ctx        context.Context
+	cancel     context.CancelFunc
+	taskCtx    context.Context
+	taskCancel context.CancelFunc
+	taskWG     sync.WaitGroup
+	running    bool
+	stopping   bool
+	maxHist    int
 	// Optional database for persistence per AI.md PART 18
-	db *sql.DB
+	db              *sql.DB
+	logger          *logging.AppLogger
+	failureNotifier TaskFailureNotifier
 	// Catch-up window per AI.md PART 18: run missed tasks if within this duration
 	catchUpWindow time.Duration
 	// loc is the timezone used to evaluate cron schedules per AI.md PART 18
 	loc *time.Location
+}
+
+// SetLogger routes scheduler activity to the configured log files. Scheduler
+// tasks never write operational messages to the process console.
+func (s *Scheduler) SetLogger(logger *logging.AppLogger) {
+	s.mu.Lock()
+	s.logger = logger
+	s.mu.Unlock()
+}
+
+// SetFailureNotifier wires the application's configured operator notification
+// delivery for failed task runs.
+func (s *Scheduler) SetFailureNotifier(notifier TaskFailureNotifier) {
+	s.mu.Lock()
+	s.failureNotifier = notifier
+	s.mu.Unlock()
+}
+
+func (s *Scheduler) logTaskAudit(task *ScheduledTask, history TaskHistory) {
+	s.mu.RLock()
+	logger := s.logger
+	s.mu.RUnlock()
+	if logger == nil {
+		return
+	}
+	result := "success"
+	if history.Result == "failure" {
+		result = "failure"
+	}
+	details := map[string]interface{}{
+		"task_id":     task.ID,
+		"task_name":   task.Name,
+		"started_at":  history.StartTime.UTC().Format(time.RFC3339Nano),
+		"duration_ms": history.Duration.Milliseconds(),
+		"status":      history.Result,
+	}
+	if history.Error != "" {
+		details["error"] = history.Error
+	}
+	logger.Audit("scheduler.task", task.ID, "system", "", result, details)
+}
+
+func (s *Scheduler) logSchedulerError(message string, fields map[string]interface{}) {
+	s.mu.RLock()
+	logger := s.logger
+	s.mu.RUnlock()
+	if logger != nil {
+		logger.Error(message, fields)
+	}
+}
+
+func (s *Scheduler) logSchedulerInfo(message string, fields map[string]interface{}) {
+	s.mu.RLock()
+	logger := s.logger
+	s.mu.RUnlock()
+	if logger != nil {
+		logger.Info(message, fields)
+	}
 }
 
 // now returns the current time in the scheduler's configured timezone so cron
@@ -273,7 +342,7 @@ func (s *Scheduler) LoadHistoryFromDB(limit int) error {
 	if err != nil {
 		return fmt.Errorf("failed to load history: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var history []TaskHistory
 	for rows.Next() {
@@ -306,7 +375,10 @@ func (s *Scheduler) LoadHistoryFromDB(limit int) error {
 // Persisted state (run_count, fail_count, last_run) is restored from database
 func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn TaskFunc) error {
 	// Load existing state from DB before acquiring lock (db operations are thread-safe)
-	existingState, _ := s.loadTaskStateFromDB(id)
+	existingState, err := s.loadTaskStateFromDB(id)
+	if err != nil {
+		return fmt.Errorf("load persisted state for task %q: %w", id, err)
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -348,31 +420,26 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 			task.Enabled = existingState.Enabled
 		}
 		// Calculate proper next run based on last run if available
-		if !existingState.LastRun.IsZero() {
+		if !existingState.NextRun.IsZero() {
+			// Preserve overdue state so Start can apply the configured catch-up
+			// window instead of silently advancing missed work.
+			task.NextRun = existingState.NextRun
+		} else if !existingState.LastRun.IsZero() {
 			if task.cronSched != nil {
 				nextFromLast := task.cronSched.Next(existingState.LastRun)
-				// If next run from last run is in the past, calculate from now
-				if nextFromLast.Before(s.now()) {
-					task.NextRun = task.cronSched.Next(s.now())
-				} else {
-					task.NextRun = nextFromLast
-				}
+				task.NextRun = nextFromLast
 			} else {
 				nextFromLast := existingState.LastRun.Add(task.Interval)
-				// If next run from last run is in the past, calculate from now
-				if nextFromLast.Before(s.now()) {
-					task.NextRun = s.now().Add(task.Interval)
-				} else {
-					task.NextRun = nextFromLast
-				}
+				task.NextRun = nextFromLast
 			}
 		}
 	}
 
-	s.tasks[id] = task
-
 	// Persist initial state to database
-	s.saveTaskStateToDB(task)
+	if err := s.saveTaskStateToDB(task); err != nil {
+		return fmt.Errorf("persist initial state for task %q: %w", id, err)
+	}
+	s.tasks[id] = task
 
 	return nil
 }
@@ -471,7 +538,7 @@ func parseCronField(field string, min, max int) ([]int, error) {
 	set := make(map[int]struct{})
 
 	for _, part := range strings.Split(field, ",") {
-		var step int = 1
+		step := 1
 		// Handle step syntax: */n or range/n
 		if idx := strings.Index(part, "/"); idx >= 0 {
 			s, err := strconv.Atoi(part[idx+1:])
@@ -561,6 +628,8 @@ func (s *Scheduler) Start(ctx context.Context) {
 		return
 	}
 	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.taskCtx, s.taskCancel = context.WithCancel(context.Background())
+	s.stopping = false
 	s.running = true
 	catchUpWindow := s.catchUpWindow
 	s.mu.Unlock()
@@ -576,7 +645,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 // runMissedTasks runs tasks that were missed while the server was down
 // Per AI.md PART 18: Only runs if missed within catch_up_window
 func (s *Scheduler) runMissedTasks(window time.Duration) {
-	now := time.Now()
+	now := s.now()
 	cutoff := now.Add(-window)
 
 	// Snapshot the due tasks' schedule fields under the read lock so we never
@@ -600,7 +669,11 @@ func (s *Scheduler) runMissedTasks(window time.Duration) {
 	})
 
 	for _, c := range candidates {
-		log.Printf("running missed task: %s (was due at %s)", c.task.Name, c.nextRun.Format(time.RFC3339))
+		s.logSchedulerInfo("running missed scheduled task", map[string]interface{}{
+			"task_id":      c.task.ID,
+			"task_name":    c.task.Name,
+			"scheduled_at": c.nextRun.Format(time.RFC3339),
+		})
 		go s.runTask(c.task)
 	}
 }
@@ -608,12 +681,29 @@ func (s *Scheduler) runMissedTasks(window time.Duration) {
 // Stop stops the scheduler
 func (s *Scheduler) Stop() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.cancel != nil {
 		s.cancel()
 	}
 	s.running = false
+	s.stopping = true
+	taskCancel := s.taskCancel
+	s.taskCtx = nil
+	s.taskCancel = nil
+	s.mu.Unlock()
+
+	completed := make(chan struct{})
+	go func() {
+		s.taskWG.Wait()
+		close(completed)
+	}()
+	select {
+	case <-completed:
+	case <-time.After(30 * time.Second):
+		s.logSchedulerError("scheduler shutdown timed out waiting for tasks", map[string]interface{}{"timeout": "30s"})
+	}
+	if taskCancel != nil {
+		taskCancel()
+	}
 }
 
 // run is the main scheduler loop
@@ -633,7 +723,7 @@ func (s *Scheduler) run() {
 
 // checkAndRunTasks checks all tasks and runs any that are due
 func (s *Scheduler) checkAndRunTasks() {
-	now := time.Now()
+	now := s.now()
 	s.mu.RLock()
 	due := make([]*ScheduledTask, 0, len(s.tasks))
 	for _, task := range s.tasks {
@@ -660,7 +750,12 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 		s.recordSkip(task)
 		return
 	}
+	if s.stopping {
+		s.mu.Unlock()
+		return
+	}
 	task.running = true
+	s.taskWG.Add(1)
 	task.LastResult = "running"
 	startTime := s.now()
 	s.mu.Unlock()
@@ -671,6 +766,7 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 		s.mu.Lock()
 		task.running = false
 		s.mu.Unlock()
+		s.taskWG.Done()
 	}()
 
 	// Emit Prometheus scheduler metrics per AI.md PART 20
@@ -679,10 +775,14 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 	defer metric.SchedulerTasksRunning.WithLabelValues(task.ID).Dec()
 
 	// Create task context with timeout
-	ctx, cancel := context.WithTimeout(s.ctx, 5*time.Minute)
+	parentCtx := s.taskCtx
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parentCtx, 5*time.Minute)
 	defer cancel()
 
-	err := task.fn(ctx)
+	err := invokeTask(ctx, task.fn)
 
 	s.mu.Lock()
 	endTime := time.Now()
@@ -705,6 +805,7 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 	}
 
 	status := "success"
+	var retryLog map[string]interface{}
 	if err != nil {
 		status = "failure"
 		task.LastResult = "failure"
@@ -719,8 +820,13 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 			task.retryCount++
 			backoff := schedulerRetryDelay * time.Duration(1<<(task.retryCount-1))
 			task.NextRun = startTime.Add(backoff)
-			log.Printf("task %s failed, retry %d/%d scheduled in %s: %v",
-				task.ID, task.retryCount, schedulerMaxRetries, backoff, err)
+			retryLog = map[string]interface{}{
+				"task_id":     task.ID,
+				"retry":       task.retryCount,
+				"max_retries": schedulerMaxRetries,
+				"retry_delay": backoff.String(),
+				"error":       err.Error(),
+			}
 		} else {
 			task.retryCount = 0
 		}
@@ -745,11 +851,36 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 	// Make a copy of task for DB operations outside lock
 	taskCopy := *task
 	s.mu.Unlock()
+	if retryLog != nil {
+		s.logSchedulerError("scheduled task failed; retry scheduled", retryLog)
+	}
 
 	// Persist state to database per AI.md PART 18
 	// Done outside lock to avoid blocking other operations
-	s.saveTaskStateToDB(&taskCopy)
-	s.saveHistoryToDB(hist)
+	if err := s.saveTaskStateToDB(&taskCopy); err != nil {
+		s.logSchedulerError("failed to persist scheduled task state", map[string]interface{}{"task_id": task.ID, "error": err.Error()})
+	}
+	if err := s.saveHistoryToDB(hist); err != nil {
+		s.logSchedulerError("failed to persist scheduled task history", map[string]interface{}{"task_id": task.ID, "error": err.Error()})
+	}
+	s.logTaskAudit(&taskCopy, hist)
+	if hist.Result == "failure" {
+		s.mu.RLock()
+		notifyFailure := s.failureNotifier
+		s.mu.RUnlock()
+		if notifyFailure != nil {
+			notifyFailure(taskCopy, hist)
+		}
+	}
+}
+
+func invokeTask(ctx context.Context, fn TaskFunc) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = errors.New("scheduled task panicked")
+		}
+	}()
+	return fn(ctx)
 }
 
 // recordSkip records a skipped run for a task whose prior execution is still in
@@ -777,14 +908,17 @@ func (s *Scheduler) recordSkip(task *ScheduledTask) {
 		s.history = s.history[len(s.history)-s.maxHist:]
 	}
 
-	metric.SchedulerTasksTotal.WithLabelValues(task.ID, "skipped").Inc()
-
 	taskCopy := *task
 	s.mu.Unlock()
 
-	log.Printf("task %s skipped: previous run still in progress", task.ID)
-	s.saveTaskStateToDB(&taskCopy)
-	s.saveHistoryToDB(hist)
+	s.logSchedulerInfo("scheduled task skipped because its previous run is still active", map[string]interface{}{"task_id": task.ID})
+	if err := s.saveTaskStateToDB(&taskCopy); err != nil {
+		s.logSchedulerError("failed to persist skipped task state", map[string]interface{}{"task_id": task.ID, "error": err.Error()})
+	}
+	if err := s.saveHistoryToDB(hist); err != nil {
+		s.logSchedulerError("failed to persist skipped task history", map[string]interface{}{"task_id": task.ID, "error": err.Error()})
+	}
+	s.logTaskAudit(&taskCopy, hist)
 }
 
 // RunTaskNow manually triggers a task
@@ -811,6 +945,8 @@ func (s *Scheduler) EnableTask(taskID string) error {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
 
+	previousEnabled := task.Enabled
+	previousNextRun := task.NextRun
 	task.Enabled = true
 	if task.NextRun.Before(s.now()) {
 		// Calculate next run: use cron schedule if available, else use interval
@@ -821,10 +957,13 @@ func (s *Scheduler) EnableTask(taskID string) error {
 		}
 	}
 	taskCopy := *task
+	if err := s.saveTaskStateToDB(&taskCopy); err != nil {
+		task.Enabled = previousEnabled
+		task.NextRun = previousNextRun
+		s.mu.Unlock()
+		return fmt.Errorf("persist enabled state for task %q: %w", taskID, err)
+	}
 	s.mu.Unlock()
-
-	// Persist to database
-	s.saveTaskStateToDB(&taskCopy)
 	return nil
 }
 
@@ -838,12 +977,15 @@ func (s *Scheduler) DisableTask(taskID string) error {
 		return fmt.Errorf("task not found: %s", taskID)
 	}
 
+	previousEnabled := task.Enabled
 	task.Enabled = false
 	taskCopy := *task
+	if err := s.saveTaskStateToDB(&taskCopy); err != nil {
+		task.Enabled = previousEnabled
+		s.mu.Unlock()
+		return fmt.Errorf("persist disabled state for task %q: %w", taskID, err)
+	}
 	s.mu.Unlock()
-
-	// Persist to database
-	s.saveTaskStateToDB(&taskCopy)
 	return nil
 }
 
@@ -856,6 +998,10 @@ func (s *Scheduler) SetSchedule(taskID, schedule string) error {
 		s.mu.Unlock()
 		return fmt.Errorf("task not found: %s", taskID)
 	}
+	previousSchedule := task.Schedule
+	previousInterval := task.Interval
+	previousCron := task.cronSched
+	previousNextRun := task.NextRun
 
 	// Try parsing as cron expression first
 	if cronSched, err := parseCronSchedule(schedule); err == nil {
@@ -876,10 +1022,15 @@ func (s *Scheduler) SetSchedule(taskID, schedule string) error {
 
 	task.Schedule = schedule
 	taskCopy := *task
+	if err := s.saveTaskStateToDB(&taskCopy); err != nil {
+		task.Schedule = previousSchedule
+		task.Interval = previousInterval
+		task.cronSched = previousCron
+		task.NextRun = previousNextRun
+		s.mu.Unlock()
+		return fmt.Errorf("persist schedule for task %q: %w", taskID, err)
+	}
 	s.mu.Unlock()
-
-	// Persist to database
-	s.saveTaskStateToDB(&taskCopy)
 	return nil
 }
 
@@ -1006,90 +1157,109 @@ type BuiltinTaskFuncs struct {
 // were persisted under the legacy dot form ("ssl.renewal") are
 // renamed in-place by migrateLegacyTaskIDs() before registration so
 // run history and per-task config survive the rename.
-func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
-	s.migrateLegacyTaskIDs()
+func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) error {
+	if err := s.migrateLegacyTaskIDs(); err != nil {
+		return err
+	}
+	register := func(id, name, description, schedule string, fn TaskFunc) error {
+		if fn == nil {
+			return nil
+		}
+		if err := s.RegisterTask(id, name, description, schedule, fn); err != nil {
+			return fmt.Errorf("register scheduled task %s: %w", id, err)
+		}
+		return nil
+	}
 
 	// ssl_renewal - Daily at 03:00 per AI.md PART 18 (renews if within 7 days of expiry)
-	if funcs.SSLRenewal != nil {
-		s.RegisterTask("ssl_renewal", "SSL Certificate Renewal",
-			"Check and renew SSL certificates if needed (7 days before expiry)",
-			"0 3 * * *", funcs.SSLRenewal)
+	if err := register("ssl_renewal", "SSL Certificate Renewal",
+		"Check and renew SSL certificates if needed (7 days before expiry)",
+		"0 3 * * *", funcs.SSLRenewal); err != nil {
+		return err
 	}
 
 	// geoip_update - Weekly (Sunday 03:00) per AI.md PART 18
-	if funcs.GeoIPUpdate != nil {
-		s.RegisterTask("geoip_update", "GeoIP Database Update",
-			"Download and update GeoIP databases from sapics/ip-location-db",
-			"0 3 * * 0", funcs.GeoIPUpdate)
+	if err := register("geoip_update", "GeoIP Database Update",
+		"Download and update GeoIP databases from sapics/ip-location-db",
+		"0 3 * * 0", funcs.GeoIPUpdate); err != nil {
+		return err
 	}
 
 	// blocklist_update - Daily at 04:00 per AI.md PART 18
-	if funcs.BlocklistUpdate != nil {
-		s.RegisterTask("blocklist_update", "Blocklist Update",
-			"Download and update IP/domain blocklists",
-			"0 4 * * *", funcs.BlocklistUpdate)
+	if err := register("blocklist_update", "Blocklist Update",
+		"Download and update IP/domain blocklists",
+		"0 4 * * *", funcs.BlocklistUpdate); err != nil {
+		return err
 	}
 
 	// cve_update - Daily at 05:00 per AI.md PART 18
-	if funcs.CVEUpdate != nil {
-		s.RegisterTask("cve_update", "CVE Database Update",
-			"Download and update CVE/security vulnerability databases",
-			"0 5 * * *", funcs.CVEUpdate)
+	if err := register("cve_update", "CVE Database Update",
+		"Download and update CVE/security vulnerability databases",
+		"0 5 * * *", funcs.CVEUpdate); err != nil {
+		return err
 	}
 
 	// token_cleanup - Every 15 minutes per AI.md PART 18
-	if funcs.TokenCleanup != nil {
-		s.RegisterTask("token_cleanup", "Token Cleanup",
-			"Remove expired API tokens and reset tokens",
-			"@every 15m", funcs.TokenCleanup)
+	if err := register("token_cleanup", "Token Cleanup",
+		"Remove expired API tokens and reset tokens",
+		"@every 15m", funcs.TokenCleanup); err != nil {
+		return err
 	}
 
 	// log_rotation - Daily at 00:00 per AI.md PART 18
-	if funcs.LogRotation != nil {
-		s.RegisterTask("log_rotation", "Log Rotation",
-			"Rotate and compress old log files",
-			"0 0 * * *", funcs.LogRotation)
+	if err := register("log_rotation", "Log Rotation",
+		"Rotate and compress old log files",
+		"0 0 * * *", funcs.LogRotation); err != nil {
+		return err
 	}
 
 	// backup_daily - Per AI.md PART 18: Daily at 02:00, enabled by default
-	if funcs.BackupDaily != nil {
-		s.RegisterTask("backup_daily", "Daily Backup",
-			"Create daily full backup of configuration and databases",
-			"0 2 * * *", funcs.BackupDaily)
-		// Enabled by default per AI.md PART 18 (Skippable: Yes = admin can disable)
+	if err := register("backup_daily", "Daily Backup",
+		"Create daily full backup of configuration and databases",
+		"0 2 * * *", funcs.BackupDaily); err != nil {
+		return err
 	}
 
 	// backup_hourly - Per AI.md PART 18: Hourly incremental, disabled by default
 	if funcs.BackupHourly != nil {
-		s.RegisterTask("backup_hourly", "Hourly Backup",
+		if err := register("backup_hourly", "Hourly Backup",
 			"Create hourly incremental backup (disabled by default)",
-			"@hourly", funcs.BackupHourly)
+			"@hourly", funcs.BackupHourly); err != nil {
+			return err
+		}
 		// Disabled by default per AI.md PART 18
-		s.DisableTask("backup_hourly")
+		if err := s.DisableTask("backup_hourly"); err != nil {
+			return err
+		}
 	}
 
 	// healthcheck_self - Every 5 minutes
-	if funcs.HealthcheckSelf != nil {
-		s.RegisterTask("healthcheck_self", "Self Health Check",
-			"Perform internal health verification",
-			"@every 5m", funcs.HealthcheckSelf)
+	if err := register("healthcheck_self", "Self Health Check",
+		"Perform internal health verification",
+		"@every 5m", funcs.HealthcheckSelf); err != nil {
+		return err
 	}
 
 	// tor_health - Every 10 minutes (only when Tor is installed/enabled)
-	if funcs.TorHealth != nil {
-		s.RegisterTask("tor_health", "Tor Health Check",
-			"Check Tor connectivity and restart if needed",
-			"@every 10m", funcs.TorHealth)
+	if err := register("tor_health", "Tor Health Check",
+		"Check Tor connectivity and restart if needed",
+		"@every 10m", funcs.TorHealth); err != nil {
+		return err
+	}
+	if err := register("i2p_health", "I2P Health Check",
+		"Check I2P connectivity and restart if needed",
+		"@every 10m", funcs.I2PHealth); err != nil {
+		return err
 	}
 
 	// update_check - Daily at 06:00 per AI.md PART 18/22
 	// Notify-only unless update.auto_install is true; honors update.defer_days
-	if funcs.UpdateCheck != nil {
-		s.RegisterTask("update_check", "Update Check",
-			"Check release channel for a newer version; notify or auto-install per config",
-			"0 6 * * *", funcs.UpdateCheck)
+	if err := register("update_check", "Update Check",
+		"Check release channel for a newer version; notify or auto-install per config",
+		"0 6 * * *", funcs.UpdateCheck); err != nil {
+		return err
 	}
-
+	return nil
 }
 
 // migrateLegacyTaskIDs renames built-in task IDs from the old "xxx.yyy"
@@ -1097,10 +1267,11 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) {
 // scheduled_tasks and task_history tables, so historical state and
 // admin-tweaked schedules survive the upgrade. Idempotent — re-running
 // it after migration is a no-op.
-func (s *Scheduler) migrateLegacyTaskIDs() {
+func (s *Scheduler) migrateLegacyTaskIDs() error {
 	if s.db == nil {
-		return
+		return nil
 	}
+	var migrationErr error
 	rename := map[string]string{
 		"ssl.renewal":      "ssl_renewal",
 		"geoip.update":     "geoip_update",
@@ -1122,17 +1293,22 @@ func (s *Scheduler) migrateLegacyTaskIDs() {
 				`AND NOT EXISTS (SELECT 1 FROM scheduled_tasks WHERE id = ?)`,
 			newID, old, newID,
 		); err != nil {
-			log.Printf("scheduler: migrate task id %q->%q (scheduled_tasks): %v", old, newID, err)
+			s.logSchedulerError("failed to migrate legacy scheduler task ID", map[string]interface{}{"old_id": old, "new_id": newID, "error": err.Error()})
+			migrationErr = errors.Join(migrationErr, fmt.Errorf("migrate task ID %q to %q: %w", old, newID, err))
+			continue
 		}
 		if _, err := s.execCtx(`DELETE FROM scheduled_tasks WHERE id = ?`, old); err != nil {
-			log.Printf("scheduler: delete legacy task id %q: %v", old, err)
+			s.logSchedulerError("failed to delete legacy scheduler task ID", map[string]interface{}{"task_id": old, "error": err.Error()})
+			migrationErr = errors.Join(migrationErr, fmt.Errorf("delete legacy task ID %q: %w", old, err))
 		}
 
 		// Update task_history (run records).
 		if _, err := s.execCtx(`UPDATE task_history SET task_id = ? WHERE task_id = ?`, newID, old); err != nil {
-			log.Printf("scheduler: migrate task id %q->%q (task_history): %v", old, newID, err)
+			s.logSchedulerError("failed to migrate legacy scheduler task history", map[string]interface{}{"old_id": old, "new_id": newID, "error": err.Error()})
+			migrationErr = errors.Join(migrationErr, fmt.Errorf("migrate task history ID %q to %q: %w", old, newID, err))
 		}
 	}
+	return migrationErr
 }
 
 // RegisterDefaultTasks is deprecated, use RegisterBuiltinTasks instead
@@ -1148,5 +1324,7 @@ func (s *Scheduler) RegisterDefaultTasks(
 		TokenCleanup:    cleanup,
 		HealthcheckSelf: healthCheck,
 	}
-	s.RegisterBuiltinTasks(funcs)
+	if err := s.RegisterBuiltinTasks(funcs); err != nil {
+		s.logSchedulerError("failed to register default scheduled tasks", map[string]interface{}{"error": err.Error()})
+	}
 }

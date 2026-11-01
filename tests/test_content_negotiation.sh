@@ -45,8 +45,7 @@ run_curl() {
 }
 
 # Test an endpoint returns 2xx with a given Accept header
-# mode: "" (default), "L" (follow redirects), or "browser" (follow redirects
-# + send a browser User-Agent). Passed as a real arg — never as a shell-quoted
+# mode: "" (default) or "browser" (send a browser User-Agent). Passed as a real arg — never as a shell-quoted
 # string blob, which word-splits incorrectly when re-expanded unquoted.
 test_accept() {
     local description="$1"
@@ -55,10 +54,7 @@ test_accept() {
     local mode="${4:-}"
 
     local status
-    local -a curl_args=(-s -o /dev/null -w "%{http_code}" -H "Accept: ${accept}")
-    if [ "$mode" = "L" ] || [ "$mode" = "browser" ]; then
-        curl_args+=(-L)
-    fi
+    local -a curl_args=(-q -LSs -o /dev/null -w "%{http_code}" -H "Accept: ${accept}")
     if [ "$mode" = "browser" ]; then
         curl_args+=(-H "User-Agent: Mozilla/5.0")
     fi
@@ -79,7 +75,7 @@ test_txt() {
     local path="$2"
 
     local status
-    status=$(run_curl -s -o /dev/null -w "%{http_code}" "${BASE_URL}${path}" || echo "000")
+    status=$(run_curl -q -LSs -o /dev/null -w "%{http_code}" "${BASE_URL}${path}" || echo "000")
     case "$status" in
         2[0-9][0-9]|3[0-9][0-9])
             pass "${description} → ${status}"
@@ -91,7 +87,7 @@ test_txt() {
 }
 
 # Test that response body contains a pattern
-# mode: see test_accept() above — "", "L", or "browser".
+# mode: see test_accept() above — "" or "browser".
 test_body() {
     local description="$1"
     local accept="$2"
@@ -100,10 +96,7 @@ test_body() {
     local mode="${5:-}"
 
     local body
-    local -a curl_args=(-s -H "Accept: ${accept}")
-    if [ "$mode" = "L" ] || [ "$mode" = "browser" ]; then
-        curl_args+=(-L)
-    fi
+    local -a curl_args=(-q -LSsf -H "Accept: ${accept}")
     if [ "$mode" = "browser" ]; then
         curl_args+=(-H "User-Agent: Mozilla/5.0")
     fi
@@ -129,13 +122,13 @@ test_body   "/"           "text/html"  "/" "<!DOCTYPE html\|<html" "browser"
 test_accept "/"           "text/plain" "/"
 test_body   "/search"     "text/html"  "/search?q=test" "<!DOCTYPE html\|<html" "browser"
 test_accept "/search"     "text/plain" "/search?q=test"
-test_accept "/preferences"   "text/html"  "/preferences" "browser"
-test_accept "/preferences"   "text/plain" "/preferences"
+test_accept "/server/preferences"   "text/html"  "/server/preferences" "browser"
+test_accept "/server/preferences"   "text/plain" "/server/preferences"
 test_accept "/favorites"     "text/html"  "/favorites" "browser"
 test_accept "/favorites"     "text/plain" "/favorites"
-test_accept "/age-verify"    "text/html"  "/age-verify" "L"
+test_accept "/age-verify"    "text/html"  "/age-verify"
 test_accept "/age-verify"    "text/plain" "/age-verify"
-test_accept "/content-restricted" "text/html"  "/content-restricted" "L"
+test_accept "/content-restricted" "text/html"  "/content-restricted"
 test_accept "/content-restricted" "text/plain" "/content-restricted"
 test_accept "/server/about"  "text/html"  "/server/about" "browser"
 test_accept "/server/about"  "text/plain" "/server/about"
@@ -145,7 +138,7 @@ test_accept "/server/contact" "text/html"  "/server/contact" "browser"
 test_accept "/server/contact" "text/plain" "/server/contact"
 test_accept "/server/help"   "text/html"  "/server/help" "browser"
 test_accept "/server/help"   "text/plain" "/server/help"
-test_accept "/offline.html"  "text/html"  "/offline.html" "L"
+test_accept "/offline.html"  "text/html"  "/offline.html"
 test_accept "/offline.html"  "text/plain" "/offline.html"
 
 echo

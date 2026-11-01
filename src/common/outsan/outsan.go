@@ -83,6 +83,18 @@ func Sanitize(data interface{}, production bool) interface{} {
 	return walk("", tree, production)
 }
 
+// RedactURL removes known-sensitive query parameters before a URL is written
+// to a log or other diagnostic output.
+func RedactURL(raw string) string {
+	redacted := redactQueryParams(raw)
+	parsed, err := url.Parse(redacted)
+	if err != nil || parsed.User == nil {
+		return redacted
+	}
+	parsed.User = nil
+	return parsed.String()
+}
+
 // walk recursively applies stages 2-5 to v. key is the JSON object key that
 // held v (empty for array elements and the document root), used to pick the
 // field-name-based truncation limit.

@@ -35,7 +35,7 @@ func TestRunCLIUpdateCommand_HelpShortFlag_NoPanic(t *testing.T) {
 }
 
 func TestCLIUpdateValidBranches_ContainsExpectedKeys(t *testing.T) {
-	for _, b := range []string{"stable", "beta", "daily"} {
+	for _, b := range []string{"stable", "beta", "devel", "daily", "rolling", "dev", "development"} {
 		if !CLIUpdateValidBranches[b] {
 			t.Errorf("CLIUpdateValidBranches missing %q", b)
 		}
@@ -45,12 +45,6 @@ func TestCLIUpdateValidBranches_ContainsExpectedKeys(t *testing.T) {
 func TestCLIUpdateValidBranches_DoesNotContainUnknown(t *testing.T) {
 	if CLIUpdateValidBranches["bogus"] {
 		t.Error("CLIUpdateValidBranches should not contain 'bogus'")
-	}
-}
-
-func TestCLIUpdateBranchFile_IsNonEmpty(t *testing.T) {
-	if CLIUpdateBranchFile == "" {
-		t.Error("CLIUpdateBranchFile constant is empty")
 	}
 }
 
@@ -66,7 +60,7 @@ func TestGetCLIUpdateBranch_InvalidBranchDefaultsToStable(t *testing.T) {
 }
 
 func TestGetCLIUpdateBranch_ValidBranchPassesThrough(t *testing.T) {
-	for _, b := range []string{"stable", "beta", "daily"} {
+	for _, b := range []string{"stable", "beta", "devel", "daily", "rolling", "dev", "development"} {
 		if !CLIUpdateValidBranches[b] {
 			t.Errorf("branch %q should pass validation", b)
 		}

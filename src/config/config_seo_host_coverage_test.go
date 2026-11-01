@@ -2,7 +2,6 @@
 package config
 
 import (
-	"os"
 	"strings"
 	"testing"
 )
@@ -109,15 +108,7 @@ func TestValidateSEOVerification_EmptySkips(t *testing.T) {
 // TestGetDisplayHost_ProductionFQDN forces a production FQDN via DOMAIN and
 // verifies GetDisplayHost returns it unchanged.
 func TestGetDisplayHost_ProductionFQDN(t *testing.T) {
-	old, had := os.LookupEnv("DOMAIN")
-	t.Cleanup(func() {
-		if had {
-			os.Setenv("DOMAIN", old)
-		} else {
-			os.Unsetenv("DOMAIN")
-		}
-	})
-	os.Setenv("DOMAIN", "search.example.com")
+	t.Setenv("DOMAIN", "search.example.com")
 	if got := GetDisplayHost(nil); got != "search.example.com" {
 		t.Fatalf("expected production FQDN returned verbatim, got %q", got)
 	}
@@ -125,15 +116,7 @@ func TestGetDisplayHost_ProductionFQDN(t *testing.T) {
 
 // TestGetFQDN_DomainWins confirms the DOMAIN override short-circuits.
 func TestGetFQDN_DomainWins(t *testing.T) {
-	old, had := os.LookupEnv("DOMAIN")
-	t.Cleanup(func() {
-		if had {
-			os.Setenv("DOMAIN", old)
-		} else {
-			os.Unsetenv("DOMAIN")
-		}
-	})
-	os.Setenv("DOMAIN", "explicit.host.tld")
+	t.Setenv("DOMAIN", "explicit.host.tld")
 	if got := GetFQDN(); got != "explicit.host.tld" {
 		t.Fatalf("DOMAIN override should win, got %q", got)
 	}

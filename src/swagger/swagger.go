@@ -34,17 +34,12 @@ func DetectTheme(r *http.Request) string {
 }
 
 // GenerateSpec generates the OpenAPI 3.0 specification.
-// adminAPIPath is the spec-canonical admin API prefix per AI.md PART 14
-// (e.g. "server/admin"). Per spec line 4584 the API mirrors the web
-// hierarchy /server/{admin_path}/.
 // servers[0].url is resolved per request via BuildURL (AI.md PART 8/12) —
 // never a static/frozen value, so it matches the Host/proto the client
 // actually used, including behind a reverse proxy or over Tor.
 func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
-	adminAPIPath := "server/admin"
 	apiBase := "/api/v1"
 	if appConfig != nil {
-		adminAPIPath = strings.TrimPrefix(appConfig.AdminAPIPrefix(), "/")
 		apiBase = appConfig.APIBasePath()
 	}
 	spec := map[string]interface{}{
@@ -67,6 +62,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 		"paths": map[string]interface{}{
 			apiBase + "/search": map[string]interface{}{
 				"get": map[string]interface{}{
+					"operationId": "searchVideos",
 					"summary":     "Search videos",
 					"description": "Search across multiple adult video engines",
 					"parameters": []map[string]interface{}{
@@ -102,6 +98,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 			},
 			apiBase + "/search/batch": map[string]interface{}{
 				"post": map[string]interface{}{
+					"operationId": "batchSearch",
 					"summary":     "Batch search",
 					"description": "Search multiple queries in one request (max 5 queries)",
 					"requestBody": map[string]interface{}{
@@ -137,6 +134,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 			},
 			apiBase + "/engines": map[string]interface{}{
 				"get": map[string]interface{}{
+					"operationId": "listEngines",
 					"summary":     "List engines",
 					"description": "Get all search engines with status and privacy scores",
 					"responses": map[string]interface{}{
@@ -153,6 +151,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 			},
 			apiBase + "/engines/health": map[string]interface{}{
 				"get": map[string]interface{}{
+					"operationId": "getEngineHealth",
 					"summary":     "Engine health",
 					"description": "Get health status including circuit breaker state for each engine",
 					"responses": map[string]interface{}{
@@ -169,6 +168,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 			},
 			apiBase + "/server/healthz": map[string]interface{}{
 				"get": map[string]interface{}{
+					"operationId": "getServerHealth",
 					"summary":     "Health check",
 					"description": "Get API health status (per AI.md PART 13)",
 					"responses": map[string]interface{}{
@@ -180,6 +180,35 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 								},
 							},
 						},
+					},
+				},
+			},
+			apiBase + "/server/restore": map[string]interface{}{
+				"post": map[string]interface{}{
+					"operationId":  "restoreServerBackup",
+					"x-admin-only": true,
+					"summary":      "Restore a backup",
+					"description":  "Upload and verify a .tar.gz or .tar.gz.enc backup before restoring it. Requires the operator bearer token; encrypted archives also require the backup password.",
+					"security":     []map[string]interface{}{{"BearerAuth": []string{}}},
+					"requestBody": map[string]interface{}{
+						"required": true,
+						"content": map[string]interface{}{
+							"multipart/form-data": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type":     "object",
+									"required": []string{"backup"},
+									"properties": map[string]interface{}{
+										"backup":   map[string]string{"type": "string", "format": "binary"},
+										"password": map[string]string{"type": "string", "format": "password"},
+									},
+								},
+							},
+						},
+					},
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{"description": "Backup verified and restored"},
+						"400": map[string]interface{}{"description": "Invalid backup or encrypted backup password missing"},
+						"401": map[string]interface{}{"description": "Operator token required"},
 					},
 				},
 			},
@@ -260,95 +289,137 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 					},
 				},
 			},
-			apiBase + "/" + adminAPIPath + "/analytics": map[string]interface{}{
-				"get": map[string]interface{}{
-					"summary":     "Search analytics",
-					"description": "Aggregate search analytics — privacy-safe (no per-user data). Requires admin token.",
-					"security":    []map[string]interface{}{{"AdminToken": []string{}}},
-					"responses": map[string]interface{}{
-						"200": map[string]interface{}{
-							"description": "Analytics summary",
-							"content": map[string]interface{}{
-								"application/json": map[string]interface{}{
-									"schema": map[string]string{"type": "object"},
-								},
-							},
-						},
-						"401": map[string]interface{}{"description": "Unauthorized"},
-					},
-				},
-			},
-			apiBase + "/" + adminAPIPath + "/engines/{name}": map[string]interface{}{
-				"patch": map[string]interface{}{
-					"summary":     "Toggle engine",
-					"description": "Enable or disable a search engine by name. Requires admin token.",
-					"security":    []map[string]interface{}{{"AdminToken": []string{}}},
-					"parameters": []map[string]interface{}{
-						{
-							"name":        "name",
-							"in":          "path",
-							"required":    true,
-							"description": "Engine name",
-							"schema":      map[string]string{"type": "string"},
-						},
-					},
-					"requestBody": map[string]interface{}{
-						"required": true,
-						"content": map[string]interface{}{
-							"application/json": map[string]interface{}{
-								"schema": map[string]interface{}{
-									"type":     "object",
-									"required": []string{"enabled"},
-									"properties": map[string]interface{}{
-										"enabled": map[string]interface{}{
-											"type":        "boolean",
-											"description": "Whether the engine should be enabled",
-										},
-									},
-								},
-							},
-						},
-					},
-					"responses": map[string]interface{}{
-						"200": map[string]interface{}{"description": "Engine updated"},
-						"401": map[string]interface{}{"description": "Unauthorized"},
-						"404": map[string]interface{}{"description": "Engine not found"},
-					},
-				},
-			},
-			apiBase + "/" + adminAPIPath + "/engines/{name}/reset": map[string]interface{}{
-				"post": map[string]interface{}{
-					"summary":     "Reset circuit breaker",
-					"description": "Manually reset the circuit breaker for a search engine. Requires admin token.",
-					"security":    []map[string]interface{}{{"AdminToken": []string{}}},
-					"parameters": []map[string]interface{}{
-						{
-							"name":        "name",
-							"in":          "path",
-							"required":    true,
-							"description": "Engine name",
-							"schema":      map[string]string{"type": "string"},
-						},
-					},
-					"responses": map[string]interface{}{
-						"200": map[string]interface{}{"description": "Circuit breaker reset"},
-						"401": map[string]interface{}{"description": "Unauthorized"},
-						"404": map[string]interface{}{"description": "Engine not found"},
-					},
-				},
-			},
 		},
 		"components": map[string]interface{}{
 			"securitySchemes": map[string]interface{}{
-				"AdminToken": map[string]interface{}{
-					"type":        "apiKey",
-					"in":          "header",
-					"name":        "X-Admin-Token",
-					"description": "Admin API token (set in admin panel settings)",
+				"BearerAuth": map[string]interface{}{
+					"type":         "http",
+					"scheme":       "bearer",
+					"bearerFormat": "operator token",
 				},
 			},
 		},
 	}
+
+	paths := spec["paths"].(map[string]interface{})
+	addOperation := func(path, method, id, summary, description string, parameters []map[string]interface{}, requestBody map[string]interface{}) {
+		pathName := apiBase + path
+		pathItem, ok := paths[pathName].(map[string]interface{})
+		if !ok {
+			pathItem = map[string]interface{}{}
+			paths[pathName] = pathItem
+		}
+		operation := map[string]interface{}{
+			"operationId": id,
+			"summary":     summary,
+			"description": description,
+			"responses": map[string]interface{}{
+				"200": map[string]interface{}{
+					"description": "Successful response",
+					"content": map[string]interface{}{
+						"application/json": map[string]interface{}{"schema": map[string]string{"type": "object"}},
+					},
+				},
+			},
+		}
+		if len(parameters) > 0 {
+			operation["parameters"] = parameters
+		}
+		if requestBody != nil {
+			operation["requestBody"] = requestBody
+		}
+		pathItem[method] = operation
+	}
+	queryParameter := func(name, description, typ string, required bool) map[string]interface{} {
+		return map[string]interface{}{
+			"name": name, "in": "query", "required": required, "description": description,
+			"schema": map[string]string{"type": typ},
+		}
+	}
+	pathParameter := func(name, description string) map[string]interface{} {
+		return map[string]interface{}{
+			"name": name, "in": "path", "required": true, "description": description,
+			"schema": map[string]string{"type": "string"},
+		}
+	}
+	objectBody := func(properties map[string]interface{}, required []string, mediaType string) map[string]interface{} {
+		return map[string]interface{}{
+			"required": true,
+			"content": map[string]interface{}{
+				mediaType: map[string]interface{}{
+					"schema": map[string]interface{}{"type": "object", "properties": properties, "required": required},
+				},
+			},
+		}
+	}
+	stringProperty := func(description string) map[string]string {
+		return map[string]string{"type": "string", "description": description}
+	}
+	addOperation("/bangs", "get", "listBangs", "List bang shortcuts", "Return all available bang shortcuts and their search engines.", nil, nil)
+	addOperation("/bangs/autocomplete", "get", "autocompleteBangs", "Autocomplete bang shortcuts", "Return popular search terms or matching bang shortcuts.", []map[string]interface{}{queryParameter("q", "Search text or bang prefix", "string", false)}, nil)
+	addOperation("/engines/{name}", "get", "getEngineDetails", "Get search engine details", "Return the status and capabilities of a named search engine.", []map[string]interface{}{pathParameter("name", "Engine identifier")}, nil)
+	addOperation("/stats", "get", "getServerStats", "Get search statistics", "Return enabled and total search engine counts.", nil, nil)
+	addOperation("/version", "get", "getServerVersion", "Get server version", "Return version, commit, build date, and official site.", nil, nil)
+	addOperation("/server/about", "get", "getServerAbout", "Get server information", "Return the public server name, version, and description.", nil, nil)
+	addOperation("/server/privacy", "get", "getServerPrivacy", "Get privacy information", "Return the server privacy policy and privacy signals.", nil, nil)
+	addOperation("/server/help", "get", "getServerHelp", "Get server help", "Return usage and help information for this server.", nil, nil)
+	addOperation("/server/terms", "get", "getServerTerms", "Get server terms", "Return the server terms of service.", nil, nil)
+	addOperation("/server/contact", "post", "submitServerContact", "Submit a contact message", "Submit a message to the server contact form.", nil,
+		objectBody(map[string]interface{}{
+			"subject": stringProperty("Message subject"),
+			"message": stringProperty("Message body"),
+			"email":   stringProperty("Optional reply address"),
+		}, []string{"subject", "message"}, "application/x-www-form-urlencoded"))
+	for _, report := range []struct {
+		path string
+		id   string
+		name string
+	}{
+		{"/server/reports/default", "submitDefaultReport", "Submit a browser security report"},
+		{"/server/reports/nel", "submitNetworkErrorReport", "Submit a network error report"},
+		{"/server/reports/csp", "submitCSPReport", "Submit a content security policy report"},
+	} {
+		addOperation(report.path, "post", report.id, report.name, report.name+" payload for security monitoring.", nil,
+			objectBody(map[string]interface{}{}, nil, "application/json"))
+	}
+	addOperation("/server/preferences", "get", "getPreferences", "Get preferences", "Return effective guest preferences from cookies.", nil, nil)
+	addOperation("/server/preferences", "post", "savePreferences", "Save preferences", "Apply a partial guest preference update.", nil,
+		objectBody(map[string]interface{}{
+			"theme":                         map[string]interface{}{"type": "string", "enum": []string{"dark", "light", "auto"}},
+			"lang":                          stringProperty("Supported language tag"),
+			"vidveil_pref_results_per_page": map[string]interface{}{"type": "string", "enum": []string{"0", "20", "50", "100"}},
+			"vidveil_pref_open_new_tab":     map[string]interface{}{"type": "string", "enum": []string{"0", "1"}},
+		}, nil, "application/json"))
+	addOperation("/server/preferences/tokens", "get", "listOwnerTokens", "List owner tokens", "Return masked primary and linked-token metadata.", nil, nil)
+	addOperation("/server/preferences/tokens", "post", "createLinkedToken", "Create linked token", "Create a linked owner token. The raw value is returned only in this response.", nil,
+		objectBody(map[string]interface{}{"name": stringProperty("Token name"), "expires": stringProperty("never, 7d, 30d, 90d, 1y, or YYYY-MM-DD")}, []string{"name"}, "application/json"))
+	addOperation("/server/preferences/tokens/primary/reveal", "post", "revealPrimaryToken", "Reveal primary token", "Decrypt and return the primary token for this explicit reveal action.", nil, nil)
+	addOperation("/server/preferences/tokens/primary/rotate", "post", "rotatePrimaryToken", "Rotate primary token", "Replace the primary token in place; linked tokens remain active.", nil, nil)
+	addOperation("/server/preferences/tokens/{id}/reveal", "post", "revealLinkedToken", "Reveal linked token", "Decrypt and return the linked token for this explicit reveal action.", []map[string]interface{}{pathParameter("id", "Linked token ID")}, nil)
+	addOperation("/server/preferences/tokens/{id}/rotate", "post", "rotateLinkedToken", "Rotate linked token", "Replace a linked token in place.", []map[string]interface{}{pathParameter("id", "Linked token ID")}, nil)
+	addOperation("/server/preferences/tokens/{id}", "patch", "updateLinkedToken", "Update linked token", "Change a linked token name or expiry.", []map[string]interface{}{pathParameter("id", "Linked token ID")},
+		objectBody(map[string]interface{}{"name": stringProperty("Token name"), "expires": stringProperty("never, 7d, 30d, 90d, 1y, or YYYY-MM-DD")}, []string{"name"}, "application/json"))
+	addOperation("/server/preferences/tokens/{id}", "delete", "revokeLinkedToken", "Revoke linked token", "Permanently revoke a linked token.", []map[string]interface{}{pathParameter("id", "Linked token ID")}, nil)
+	for _, route := range []struct{ path, method string }{
+		{"/server/preferences/tokens", "get"}, {"/server/preferences/tokens", "post"},
+		{"/server/preferences/tokens/primary/reveal", "post"}, {"/server/preferences/tokens/primary/rotate", "post"},
+		{"/server/preferences/tokens/{id}/reveal", "post"}, {"/server/preferences/tokens/{id}/rotate", "post"},
+		{"/server/preferences/tokens/{id}", "patch"}, {"/server/preferences/tokens/{id}", "delete"},
+	} {
+		pathItem := paths[apiBase+route.path].(map[string]interface{})
+		operation := pathItem[route.method].(map[string]interface{})
+		operation["security"] = []map[string]interface{}{{"BearerAuth": []string{}}}
+	}
+	addOperation("/server/preferences/export", "get", "exportPreferences", "Export preferences", "Return effective preferences as a shareable import URL and code.", nil, nil)
+	addOperation("/server/preferences/import", "get", "importPreferences", "Import preferences", "Apply preference values or a share code to the current browser.", []map[string]interface{}{
+		queryParameter("theme", "Theme value", "string", false),
+		queryParameter("lang", "Language code", "string", false),
+		queryParameter("vidveil_pref_results_per_page", "Results per page preference", "string", false),
+		queryParameter("vidveil_pref_open_new_tab", "Open links in new tab preference", "string", false),
+		queryParameter("code", "Exported preferences code or URL", "string", false),
+	}, nil)
+	addOperation("/proxy/thumbnails", "get", "proxyThumbnail", "Fetch a remote thumbnail", "Fetch a validated public HTTP or HTTPS thumbnail URL through the server.", []map[string]interface{}{queryParameter("url", "Remote thumbnail URL", "string", true)}, nil)
+	addOperation("/proxy/videos", "get", "proxyVideo", "Fetch a remote video", "Fetch a validated public HTTP or HTTPS video URL through the server.", []map[string]interface{}{queryParameter("url", "Remote video URL", "string", true)}, nil)
 
 	data, _ := json.MarshalIndent(spec, "", "  ")
 	return string(data)
@@ -363,7 +434,7 @@ func Handler(appConfig *config.AppConfig) http.HandlerFunc {
 		dir := i18n.Direction(lang)
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(generateSwaggerUI(appConfig, r, theme, lang, dir)))
+		_, _ = w.Write([]byte(generateSwaggerUI(appConfig, r, theme, lang, dir)))
 	}
 }
 
@@ -374,7 +445,7 @@ func SpecHandler(appConfig *config.AppConfig) http.HandlerFunc {
 		// servers[0].url reflects the resolved Host/proto per AI.md PART 12.
 		spec := GenerateSpec(appConfig, r)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(spec))
+		_, _ = w.Write([]byte(spec))
 	}
 }
 
@@ -385,7 +456,9 @@ func generateSwaggerUI(appConfig *config.AppConfig, r *http.Request, theme, lang
 
 	// Parse spec to extract paths for rendering
 	var specData map[string]interface{}
-	json.Unmarshal([]byte(spec), &specData)
+	if err := json.Unmarshal([]byte(spec), &specData); err != nil {
+		return "<p>Unable to render the API specification.</p>"
+	}
 
 	// Build endpoint rows
 	endpointRows := ""

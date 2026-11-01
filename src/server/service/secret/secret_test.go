@@ -18,7 +18,9 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	t.Helper()
 
 	tmpDir := filepath.Join(os.TempDir(), "apimgr", "vidveil-test-"+t.Name())
-	os.MkdirAll(tmpDir, 0755)
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatalf("create temporary database directory: %v", err)
+	}
 	dbPath := filepath.Join(tmpDir, "test.db")
 
 	db, err := sql.Open("sqlite", dbPath)
@@ -40,8 +42,12 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	}
 
 	cleanup := func() {
-		db.Close()
-		os.RemoveAll(tmpDir)
+		if err := db.Close(); err != nil {
+			t.Errorf("close test database: %v", err)
+		}
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Errorf("remove temporary database directory: %v", err)
+		}
 	}
 
 	return db, cleanup
@@ -251,13 +257,14 @@ func TestValidateWithPrevious_InvalidValue(t *testing.T) {
 		t.Fatalf("EnsureSecrets: %v", err)
 	}
 
-	invalid := make([]byte, 32)
-	valid, err := m.ValidateWithPrevious(ctx, InstallationSecret, invalid)
-	if err != nil {
-		t.Fatalf("ValidateWithPrevious: %v", err)
-	}
-	if valid {
-		t.Error("invalid value should not validate")
+	for _, invalid := range [][]byte{make([]byte, 32), []byte("short"), make([]byte, 33)} {
+		valid, err := m.ValidateWithPrevious(ctx, InstallationSecret, invalid)
+		if err != nil {
+			t.Fatalf("ValidateWithPrevious: %v", err)
+		}
+		if valid {
+			t.Errorf("invalid value of length %d should not validate", len(invalid))
+		}
 	}
 }
 

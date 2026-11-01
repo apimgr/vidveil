@@ -234,6 +234,15 @@ func TestValidateCodeEmptyCodeReturnsFalse(t *testing.T) {
 	}
 }
 
+func TestValidateCodeRejectsWrongLength(t *testing.T) {
+	svc := newTOTPService("Test")
+	for _, code := range []string{"12345", "1234567"} {
+		if svc.ValidateCode("JBSWY3DPEHPK3PXP", code) {
+			t.Errorf("ValidateCode accepted code with length %d", len(code))
+		}
+	}
+}
+
 func TestValidateCodePreviousWindowAccepted(t *testing.T) {
 	svc := newTOTPService("issuer")
 	secret, err := svc.GenerateSecret()
@@ -289,6 +298,13 @@ func TestValidateBackupCodeNotInList(t *testing.T) {
 	svc := newTOTPService("issuer")
 	if svc.ValidateBackupCode("WXYZ-1234", []string{"ABCD-EFGH", "IJKL-MNOP"}) {
 		t.Error("expected false for code not in list")
+	}
+}
+
+func TestValidateBackupCodeRejectsWrongLength(t *testing.T) {
+	svc := newTOTPService("Test")
+	if svc.ValidateBackupCode("SHORT", []string{"ABCD-EFGH"}) {
+		t.Fatal("ValidateBackupCode accepted a code with the wrong length")
 	}
 }
 

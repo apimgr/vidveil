@@ -73,7 +73,7 @@ func (e *EpornerEngine) Search(ctx context.Context, query string, page int) ([]m
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var apiResp epornerAPIResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {

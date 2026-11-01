@@ -12,9 +12,10 @@
         <h1>{{ t "prefs.title" }}</h1>
         <p><em>{{ t "prefs.storage_note" }}</em></p>
 
-        <form method="post" action="/server/preferences/save">
+        <form method="post" action="/server/preferences">
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
-            {{if .ReturnTo}}<input type="hidden" name="return_to" value="{{.ReturnTo}}">{{end}}
+            {{if .ReturnTo}}<input type="hidden" name="redirect" value="{{.ReturnTo}}">{{end}}
+            <input type="hidden" name="engines_selection_set" value="1">
             <section>
                 <h2>{{ t "prefs.appearance" }}</h2>
                 <div class="form-group">
@@ -25,13 +26,25 @@
                         <option value="light" {{if eq .Theme "light"}}selected{{end}}>{{ t "prefs.theme.light" }}</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label for="language">Language:</label>
+                    <select id="language" name="lang">
+                        <option value="en"{{if eq .Lang "en"}} selected{{end}}>English</option>
+                        <option value="ar"{{if eq .Lang "ar"}} selected{{end}}>العربية</option>
+                        <option value="de"{{if eq .Lang "de"}} selected{{end}}>Deutsch</option>
+                        <option value="es"{{if eq .Lang "es"}} selected{{end}}>Español</option>
+                        <option value="fr"{{if eq .Lang "fr"}} selected{{end}}>Français</option>
+                        <option value="ja"{{if eq .Lang "ja"}} selected{{end}}>日本語</option>
+                        <option value="zh"{{if eq .Lang "zh"}} selected{{end}}>中文</option>
+                    </select>
+                </div>
             </section>
 
             <section>
                 <h2>{{ t "prefs.search_settings" }}</h2>
                 <div class="form-group">
                     <label for="results-per-page">{{ t "prefs.results_page" }}:</label>
-                    <select id="results-per-page" name="resultsPerPage">
+                    <select id="results-per-page" name="vidveil_pref_results_per_page">
                         <option value="20" {{if eq .ResultsPerPage "20"}}selected{{end}}>20</option>
                         <option value="50" {{if eq .ResultsPerPage "50"}}selected{{end}}>50</option>
                         <option value="100" {{if eq .ResultsPerPage "100"}}selected{{end}}>100</option>
@@ -41,10 +54,61 @@
 
                 <div class="form-group">
                     <label for="open-new-tab">
-                        <input type="checkbox" id="open-new-tab" name="openNewTab" {{if .OpenNewTab}}checked{{end}}>
+                        <input type="hidden" name="vidveil_pref_open_new_tab" value="0">
+                        <input type="checkbox" id="open-new-tab" name="vidveil_pref_open_new_tab" value="1" {{if .OpenNewTab}}checked{{end}}>
                         {{ t "prefs.open_new_tab" }}
                     </label>
                 </div>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.appearance" }}</h2>
+                <label for="grid-density">{{ t "prefs.grid_density" }}</label>
+                <select id="grid-density" name="vidveil_pref_grid_density">
+                    <option value="comfortable"{{if eq (index .Prefs "grid_density") "comfortable"}} selected{{end}}>{{ t "prefs.grid_comfortable" }}</option>
+                    <option value="default"{{if or (eq (index .Prefs "grid_density") "") (eq (index .Prefs "grid_density") "default")}} selected{{end}}>{{ t "prefs.grid_default" }}</option>
+                    <option value="compact"{{if eq (index .Prefs "grid_density") "compact"}} selected{{end}}>{{ t "prefs.grid_compact" }}</option>
+                </select>
+                <label for="thumbnail-size">{{ t "prefs.thumbnail_size" }}</label>
+                <select id="thumbnail-size" name="vidveil_pref_thumbnail_size">
+                    <option value="small"{{if eq (index .Prefs "thumbnail_size") "small"}} selected{{end}}>{{ t "prefs.size_small" }}</option>
+                    <option value="medium"{{if or (eq (index .Prefs "thumbnail_size") "") (eq (index .Prefs "thumbnail_size") "medium")}} selected{{end}}>{{ t "prefs.size_medium" }}</option>
+                    <option value="large"{{if eq (index .Prefs "thumbnail_size") "large"}} selected{{end}}>{{ t "prefs.size_large" }}</option>
+                </select>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.video_preview" }}</h2>
+                <input type="hidden" name="vidveil_pref_autoplay_preview" value="0">
+                <label><input type="checkbox" name="vidveil_pref_autoplay_preview" value="1"{{if or (eq (index .Prefs "autoplay_preview") "") (eq (index .Prefs "autoplay_preview") "1")}} checked{{end}}> {{ t "prefs.autoplay_preview" }}</label>
+                <label for="preview-delay">{{ t "prefs.preview_delay" }}</label>
+                <select id="preview-delay" name="vidveil_pref_preview_delay">
+                    <option value="0"{{if or (eq (index .Prefs "preview_delay") "") (eq (index .Prefs "preview_delay") "0")}} selected{{end}}>{{ t "prefs.delay_instant" }}</option><option value="200"{{if eq (index .Prefs "preview_delay") "200"}} selected{{end}}>200 ms</option><option value="500"{{if eq (index .Prefs "preview_delay") "500"}} selected{{end}}>500 ms</option><option value="1000"{{if eq (index .Prefs "preview_delay") "1000"}} selected{{end}}>1000 ms</option>
+                </select>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.default_filters" }}</h2>
+                <input type="hidden" name="vidveil_pref_default_preview_only" value="0">
+                <label><input type="checkbox" name="vidveil_pref_default_preview_only" value="1"{{if or (eq (index .Prefs "default_preview_only") "") (eq (index .Prefs "default_preview_only") "1")}} checked{{end}}> Preview first</label>
+                <input type="hidden" name="vidveil_pref_show_ai_content" value="0">
+                <label><input type="checkbox" name="vidveil_pref_show_ai_content" value="1"{{if eq (index .Prefs "show_ai_content") "1"}} checked{{end}}> {{ t "prefs.show_ai_content" }}</label>
+                <label for="default-duration">{{ t "prefs.default_duration" }}</label>
+                <select id="default-duration" name="vidveil_pref_default_duration"><option value="any"{{if or (eq (index .Prefs "default_duration") "") (eq (index .Prefs "default_duration") "any")}} selected{{end}}>{{ t "filter.any" }}</option><option value="short"{{if eq (index .Prefs "default_duration") "short"}} selected{{end}}>{{ t "filter.under_10" }}</option><option value="medium"{{if eq (index .Prefs "default_duration") "medium"}} selected{{end}}>{{ t "filter.10_30" }}</option><option value="long"{{if eq (index .Prefs "default_duration") "long"}} selected{{end}}>{{ t "filter.over_30" }}</option></select>
+                <label for="min-quality">{{ t "prefs.min_quality" }}</label>
+                <select id="min-quality" name="vidveil_pref_min_quality"><option value="0"{{if eq (index .Prefs "min_quality") "0"}} selected{{end}}>0</option><option value="240"{{if eq (index .Prefs "min_quality") "240"}} selected{{end}}>240</option><option value="360"{{if or (eq (index .Prefs "min_quality") "") (eq (index .Prefs "min_quality") "360")}} selected{{end}}>360</option><option value="480"{{if eq (index .Prefs "min_quality") "480"}} selected{{end}}>480</option><option value="720"{{if eq (index .Prefs "min_quality") "720"}} selected{{end}}>720</option><option value="1080"{{if eq (index .Prefs "min_quality") "1080"}} selected{{end}}>1080</option><option value="2160"{{if eq (index .Prefs "min_quality") "2160"}} selected{{end}}>2160</option></select>
+                <label for="default-sort">{{ t "prefs.default_sort" }}</label>
+                <select id="default-sort" name="vidveil_pref_default_sort"><option value="any"{{if or (eq (index .Prefs "default_sort") "") (eq (index .Prefs "default_sort") "any")}} selected{{end}}>{{ t "prefs.sort_relevance" }}</option><option value="duration-desc"{{if eq (index .Prefs "default_sort") "duration-desc"}} selected{{end}}>{{ t "prefs.sort_longest" }}</option><option value="duration-asc"{{if eq (index .Prefs "default_sort") "duration-asc"}} selected{{end}}>{{ t "prefs.sort_shortest" }}</option><option value="views"{{if eq (index .Prefs "default_sort") "views"}} selected{{end}}>{{ t "prefs.sort_views" }}</option><option value="quality"{{if eq (index .Prefs "default_sort") "quality"}} selected{{end}}>{{ t "prefs.sort_quality" }}</option></select>
+                <label for="min-duration">{{ t "prefs.min_duration" }}</label>
+                <select id="min-duration" name="vidveil_pref_min_duration"><option value="0"{{if eq (index .Prefs "min_duration") "0"}} selected{{end}}>0</option><option value="60"{{if eq (index .Prefs "min_duration") "60"}} selected{{end}}>1 min</option><option value="180"{{if eq (index .Prefs "min_duration") "180"}} selected{{end}}>3 min</option><option value="300"{{if eq (index .Prefs "min_duration") "300"}} selected{{end}}>5 min</option><option value="600"{{if or (eq (index .Prefs "min_duration") "") (eq (index .Prefs "min_duration") "600")}} selected{{end}}>10 min</option><option value="1200"{{if eq (index .Prefs "min_duration") "1200"}} selected{{end}}>20 min</option><option value="1800"{{if eq (index .Prefs "min_duration") "1800"}} selected{{end}}>30 min</option></select>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.history" }}</h2>
+                <label for="max-history">{{ t "prefs.max_history" }}</label>
+                <select id="max-history" name="vidveil_pref_max_history"><option value="0"{{if or (eq (index .Prefs "max_history") "") (eq (index .Prefs "max_history") "0")}} selected{{end}}>0</option><option value="10"{{if eq (index .Prefs "max_history") "10"}} selected{{end}}>10</option><option value="25"{{if eq (index .Prefs "max_history") "25"}} selected{{end}}>25</option><option value="50"{{if eq (index .Prefs "max_history") "50"}} selected{{end}}>50</option><option value="100"{{if eq (index .Prefs "max_history") "100"}} selected{{end}}>100</option></select>
+                <label for="auto-clear-history">{{ t "prefs.auto_clear_history" }}</label>
+                <select id="auto-clear-history" name="vidveil_pref_auto_clear_history"><option value="0"{{if or (eq (index .Prefs "auto_clear_history") "") (eq (index .Prefs "auto_clear_history") "0")}} selected{{end}}>0</option><option value="1"{{if eq (index .Prefs "auto_clear_history") "1"}} selected{{end}}>1</option><option value="7"{{if eq (index .Prefs "auto_clear_history") "7"}} selected{{end}}>7</option><option value="30"{{if eq (index .Prefs "auto_clear_history") "30"}} selected{{end}}>30</option></select>
             </section>
 
             <section>
@@ -55,6 +119,16 @@
                         {{ t "prefs.proxy_thumbnails_locked" }}
                     </label>
                 </div>
+                <input type="hidden" name="vidveil_pref_use_tor" value="0">
+                <label><input type="checkbox" name="vidveil_pref_use_tor" value="1"{{if eq (index .Prefs "use_tor") "1"}} checked{{end}}> {{ t "prefs.use_tor" }}</label>
+            </section>
+
+            <section>
+                <h2>{{ t "prefs.engines" }}</h2>
+                <p>{{ t "prefs.engines_desc" }}</p>
+                {{range .Engines}}
+                <label><input type="checkbox" name="engines" value="{{.Name}}"{{if .Enabled}} checked{{end}}> {{.DisplayName}}</label>
+                {{end}}
             </section>
 
             <div class="form-actions">
@@ -62,6 +136,71 @@
                 <button type="reset" class="btn-secondary">{{ t "prefs.reset" }}</button>
             </div>
         </form>
+        <section aria-labelledby="owner-tokens-heading">
+            <h2 id="owner-tokens-heading">{{ t "owner_tokens.title" }}</h2>
+            {{if .OwnerTokenEnabled}}
+            <p>{{ t "owner_tokens.primary_token" }}: <code>tok_••••••••••••{{.PrimaryToken.Suffix}}</code></p>
+            <p>{{ t "owner_tokens.created_at" }}: <time>{{.PrimaryToken.Created}}</time> · {{ t "owner_tokens.last_used" }}: {{if .PrimaryToken.LastUsed}}{{.PrimaryToken.LastUsed}}{{else}}{{ t "owner_tokens.never_used" }}{{end}}</p>
+            <form method="post" action="/server/preferences/token/reveal">{{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}<button type="submit" class="btn-secondary">{{ t "owner_tokens.reveal_primary" }}</button></form>
+            <form method="post" action="/server/preferences/token/rotate">{{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}<label><input type="checkbox" name="confirm" value="rotate" required>{{ t "owner_tokens.rotate_warning" }}</label><button type="submit" class="btn-danger">{{ t "owner_tokens.rotate_primary" }}</button></form>
+            <h3>{{ t "owner_tokens.linked_tokens" }}</h3>
+            {{range .LinkedTokens}}
+            <article><p><strong>{{.Name}}</strong> <code>tok_••••••••••••{{.Suffix}}</code> — {{if eq .Status "active"}}{{ t "owner_tokens.status_active" }}{{else if eq .Status "expired"}}{{ t "owner_tokens.status_expired" }}{{else}}{{ t "owner_tokens.status_revoked" }}{{end}}</p>
+                <p>{{ t "owner_tokens.created_at" }}: <time>{{.Created}}</time> · {{ t "owner_tokens.last_used" }}: {{if .LastUsed}}{{.LastUsed}}{{else}}{{ t "owner_tokens.never_used" }}{{end}} · {{ t "owner_tokens.expires" }}: {{if eq .Expires "never"}}{{ t "owner_tokens.never" }}{{else}}{{.Expires}}{{end}}</p>
+                {{if ne .Status "revoked"}}
+                <form method="post" action="/server/preferences/tokens/{{.ID}}/reveal">{{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}<button type="submit">{{ t "owner_tokens.reveal" }}</button></form>
+                <form method="post" action="/server/preferences/tokens/{{.ID}}/rotate">{{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}<button type="submit">{{ t "owner_tokens.rotate" }}</button></form>
+                <form method="post" action="/server/preferences/tokens/{{.ID}}/update">{{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}<label>{{ t "owner_tokens.name" }} <input name="name" value="{{.Name}}" required maxlength="64"></label><label>{{ t "owner_tokens.expiry_format" }} <input name="expires" value="{{.Expires}}" required></label><button type="submit">{{ t "owner_tokens.update" }}</button></form>
+                {{if eq .Status "active"}}<form method="post" action="/server/preferences/tokens/{{.ID}}/revoke">{{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}<button type="submit" class="btn-danger">{{ t "owner_tokens.revoke" }}</button></form>{{end}}
+                {{end}}
+            </article>
+            {{end}}
+            <h3>{{ t "owner_tokens.create_linked" }}</h3>
+            <form method="post" action="/server/preferences/tokens">{{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}<label>{{ t "owner_tokens.name" }} <input name="name" required minlength="1" maxlength="64"></label><label>{{ t "owner_tokens.expiry" }} <select name="expires_preset"><option value="never">{{ t "owner_tokens.never" }}</option><option value="7d">{{ t "owner_tokens.days_7" }}</option><option value="30d">{{ t "owner_tokens.days_30" }}</option><option value="90d">{{ t "owner_tokens.days_90" }}</option><option value="1y">{{ t "owner_tokens.year_1" }}</option></select></label><label>{{ t "owner_tokens.custom_expiry" }} <input type="date" name="expires_date"></label><button type="submit" class="btn-secondary">{{ t "owner_tokens.create_linked" }}</button></form>
+            {{else}}
+            <p>{{ t "owner_tokens.restore_description" }}</p>
+            <form method="post" action="/server/preferences/token/restore">{{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}<label for="owner-token-restore">{{ t "owner_tokens.primary_token" }}</label><input id="owner-token-restore" name="token" type="password" autocomplete="off" required><button type="submit" class="btn-secondary">{{ t "owner_tokens.restore" }}</button></form>
+            {{end}}
+        </section>
+        <section>
+            <h2>{{ t "prefs.sync" }}</h2>
+            <p class="section-description">{{ t "prefs.sync_desc" }}</p>
+            {{if .PreferenceExportURL}}
+            <label for="sync-url">{{ t "prefs.sync_url_label" }}</label>
+            <input type="text" id="sync-url" readonly value="{{.PreferenceExportURL}}">
+            <label for="sync-code">{{ t "prefs.sync_code_label" }}</label>
+            <input type="text" id="sync-code" readonly value="{{.PreferenceExportCode}}">
+            {{else}}
+            <a class="btn-secondary" href="/server/preferences/export">{{ t "prefs.sync_export" }}</a>
+            {{end}}
+            <form method="get" action="/server/preferences/import">
+                <label for="sync-import-code">{{ t "prefs.sync_import_label" }}</label>
+                <input type="text" id="sync-import-code" name="code" placeholder="{{ t "prefs.sync_import_placeholder" }}">
+                <button type="submit" class="btn-secondary">{{ t "prefs.sync_import" }}</button>
+            </form>
+        </section>
+        <section>
+            <h2>{{ t "privacy.cookie_preferences" }}</h2>
+            <form method="post" action="/server/consent">
+                {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                <input type="hidden" name="choice" value="save">
+                <label><input type="checkbox" checked disabled> {{ t "privacy.cookie_essential" }}</label>
+                <label><input type="checkbox" name="preferences" value="1"{{if .ConsentPreferences}} checked{{end}}> {{ t "privacy.cookie_preferences" }}</label>
+                <label><input type="checkbox" disabled{{if .AnalyticsConsent}} checked{{end}}> {{ t "privacy.cookie_analytics" }}</label>
+                <button type="submit" class="btn-secondary">{{ t "prefs.save" }}</button>
+            </form>
+        </section>
+        {{if .DataSold}}
+        <section>
+            <h2>{{ t "privacy.ccpa_title" }}</h2>
+            <p>{{ t "privacy.ccpa_body" }}</p>
+            <form method="post" action="/server/ccpa">
+                {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                {{if .CCPAOptedOut}}<input type="hidden" name="choice" value="opt-in"><button type="submit" class="btn-secondary">{{ t "privacy.ccpa_opt_in" }}</button>
+                {{else}}<input type="hidden" name="choice" value="opt-out"><button type="submit" class="btn-primary">{{ t "privacy.ccpa_opt_out" }}</button>{{end}}
+            </form>
+        </section>
+        {{end}}
     </main>
     {{template "public/footer" .}}
 </body>

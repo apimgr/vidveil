@@ -122,12 +122,13 @@ func GetReportStatus(ctx context.Context, db *sql.DB, trackingID, token string) 
 		createdAt          time.Time
 		closedAt           sql.NullTime
 		expectedDisclosure sql.NullTime
+		lastUsedDate       sql.NullString
 	)
 	err := db.QueryRowContext(ctx, `
 		SELECT status, report_token_hash, maintainer_comments, created_at,
-		       closed_at, expected_disclosure_date
+		       closed_at, expected_disclosure_date, report_token_last_used_date
 		FROM security_reports WHERE tracking_id = ?`, trackingID).
-		Scan(&status, &tokenHash, &maintainerComments, &createdAt, &closedAt, &expectedDisclosure)
+		Scan(&status, &tokenHash, &maintainerComments, &createdAt, &closedAt, &expectedDisclosure, &lastUsedDate)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("report not found")
@@ -141,10 +142,24 @@ func GetReportStatus(ctx context.Context, db *sql.DB, trackingID, token string) 
 	if closedAt.Valid && time.Now().After(closedAt.Time.Add(reportTokenGrace)) {
 		return nil, fmt.Errorf("report token expired")
 	}
-
-	_, _ = db.ExecContext(ctx,
-		`UPDATE security_reports SET report_token_last_used_date = ? WHERE tracking_id = ?`,
-		time.Now().Format("2006-01-02"), trackingID)
+	usedDate := time.Now().UTC().Format("2006-01-02")
+	if lastUsedDate.Valid && lastUsedDate.String == usedDate {
+		return nil, fmt.Errorf("report token already used today")
+	}
+	result, err := db.ExecContext(ctx, `
+		UPDATE security_reports SET report_token_last_used_date = ?
+		WHERE tracking_id = ? AND (report_token_last_used_date IS NULL OR report_token_last_used_date <> ?)`,
+		usedDate, trackingID, usedDate)
+	if err != nil {
+		return nil, fmt.Errorf("record report status token use: %w", err)
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("check report status token use: %w", err)
+	}
+	if updated != 1 {
+		return nil, fmt.Errorf("report token already used today")
+	}
 
 	return &Status{
 		TrackingID:             trackingID,
@@ -156,11 +171,10 @@ func GetReportStatus(ctx context.Context, db *sql.DB, trackingID, token string) 
 }
 
 func validTokenHash(storedHash, suppliedToken string) bool {
-	if storedHash == "" || suppliedToken == "" {
-		return false
-	}
 	sum := sha256.Sum256([]byte(suppliedToken))
-	return subtle.ConstantTimeCompare([]byte(storedHash), []byte(hex.EncodeToString(sum[:]))) == 1
+	expectedHash := sha256.Sum256([]byte(hex.EncodeToString(sum[:])))
+	storedHashDigest := sha256.Sum256([]byte(storedHash))
+	return subtle.ConstantTimeCompare(storedHashDigest[:], expectedHash[:]) == 1
 }
 
 func newTrackingID() (string, error) {

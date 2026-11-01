@@ -31,9 +31,10 @@ func formatGotify(rawURL string, p Payload) (body []byte, contentType, targetURL
 	targetURL = base + "/message?" + q.Encode()
 
 	priority := 5
-	if p.Severity == SeverityCritical {
+	switch p.Severity {
+	case SeverityCritical:
 		priority = 10
-	} else if p.Severity == SeverityWarning {
+	case SeverityWarning:
 		priority = 7
 	}
 

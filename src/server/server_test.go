@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/apimgr/vidveil/src/common/authpad"
+	"github.com/apimgr/vidveil/src/config"
 )
 
 // --- GetTemplatesFS ---
@@ -19,7 +22,7 @@ func TestGetTemplatesFS_NonEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTemplatesFS().Open('.') = %v, want no error", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 }
 
 // --- parseBodySize ---
@@ -376,4 +379,71 @@ func TestRecordError_NoPanic(t *testing.T) {
 		}
 	}()
 	recordError()
+}
+
+func TestWriteResponseTimingMiddlewarePadsWrites(t *testing.T) {
+	start := time.Now()
+	response := &timingObservationWriter{header: make(http.Header)}
+	handler := writeResponseTimingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/write", nil))
+	if elapsed := response.committedAt.Sub(start); elapsed < authpad.Floor {
+		t.Errorf("write response took %s, want at least 100ms", elapsed)
+	}
+}
+
+func TestWriteResponseTimingMiddlewarePadsBeforeBodyCommit(t *testing.T) {
+	start := time.Now()
+	response := &timingObservationWriter{header: make(http.Header)}
+	handler := writeResponseTimingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("response"))
+	}))
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/write", nil))
+	if elapsed := response.committedAt.Sub(start); elapsed < authpad.Floor {
+		t.Errorf("body committed after %s, want at least %s", elapsed, authpad.Floor)
+	}
+}
+
+func TestWriteResponseTimingMiddlewarePadsEmptyResponse(t *testing.T) {
+	handler := writeResponseTimingMiddleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	start := time.Now()
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/write", nil))
+	if elapsed := time.Since(start); elapsed < authpad.Floor {
+		t.Errorf("empty write response returned after %s, want at least %s", elapsed, authpad.Floor)
+	}
+}
+
+func TestRequireOperatorTokenPadsSuccessfulResponse(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Token = "operator-test-token"
+	s := &Server{appConfig: cfg}
+	s.RefreshOperatorTokenHash()
+	start := time.Now()
+	response := &timingObservationWriter{header: make(http.Header)}
+	handler := s.requireOperatorToken(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/debug/engines", nil)
+	req.Header.Set("Authorization", "Bearer operator-test-token")
+	handler.ServeHTTP(response, req)
+	if elapsed := response.committedAt.Sub(start); elapsed < authpad.Floor {
+		t.Errorf("authorized diagnostic response committed after %s, want at least %s", elapsed, authpad.Floor)
+	}
+}
+
+type timingObservationWriter struct {
+	header      http.Header
+	committedAt time.Time
+}
+
+func (w *timingObservationWriter) Header() http.Header { return w.header }
+
+func (w *timingObservationWriter) WriteHeader(int) {
+	w.committedAt = time.Now()
+}
+
+func (w *timingObservationWriter) Write([]byte) (int, error) {
+	w.committedAt = time.Now()
+	return 0, nil
 }

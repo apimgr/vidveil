@@ -21,7 +21,9 @@ func captureStdoutForTest(t *testing.T, outputFunc func() error) string {
 
 	os.Stdout = writePipe
 	runErr := outputFunc()
-	writePipe.Close()
+	if err := writePipe.Close(); err != nil {
+		t.Fatalf("closing stdout pipe: %v", err)
+	}
 	os.Stdout = originalStdout
 
 	if runErr != nil {

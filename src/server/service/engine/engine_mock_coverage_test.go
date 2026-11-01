@@ -82,6 +82,26 @@ func TestSearch_WithMockEngine_ReturnsResults(t *testing.T) {
 	}
 }
 
+func TestSearchWithOperators_AIFilterHonorsRequestPreference(t *testing.T) {
+	m := newMgrWithMock("mock-ai-sync", []model.VideoResult{
+		validResult("deepfake video", "https://example.com/deepfake"),
+		validResult("regular video", "https://example.com/regular"),
+	}, nil, true)
+	m.appConfig.Search.AIFilter.Enabled = true
+	m.appConfig.Search.AIFilter.Keywords = []string{"deepfake"}
+
+	filtered := m.SearchWithOperators(context.Background(), "video", 1, nil, nil, nil, nil, false, "", 0, ResultFilterOptions{})
+	if len(filtered.Data.Results) != 1 || filtered.Data.Results[0].URL != "https://example.com/regular" {
+		t.Fatalf("default AI filter results = %#v, want only the regular result", filtered.Data.Results)
+	}
+
+	showAIContext := WithShowAIContent(context.Background(), true)
+	shown := m.SearchWithOperators(showAIContext, "video", 1, nil, nil, nil, nil, false, "", 0, ResultFilterOptions{})
+	if len(shown.Data.Results) != 2 {
+		t.Fatalf("show-AI preference returned %d results, want 2", len(shown.Data.Results))
+	}
+}
+
 func TestSearch_WithMockEngineError_RecordsFailure(t *testing.T) {
 	m := newMgrWithMock("mock-err", nil, errors.New("engine failed"), true)
 

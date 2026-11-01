@@ -86,12 +86,12 @@ _GO_OPTS = docker run --rm \
 # Standard Go Docker command (per AI.md PART 25 — includes image for simple go commands)
 GO_DOCKER = $(_GO_OPTS) casjaysdev/go:latest
 
-.PHONY: build local release docker test dev clean i18n-validate
+.PHONY: build local release docker test dev
 
 # =============================================================================
 # BUILD — Compile all 8 platform binaries via Docker (AI.md PART 25)
 # =============================================================================
-build: clean
+build:
 	@mkdir -p $(BINDIR) $(GO_CACHE) $(GO_BUILD)
 	@echo "Building version $(VERSION)..."
 	@echo "Tidying and downloading Go modules..."
@@ -127,7 +127,7 @@ build: clean
 # =============================================================================
 # LOCAL — Build host-platform binaries only (fast local test builds)
 # =============================================================================
-local: clean
+local:
 	@mkdir -p $(BINDIR) $(GO_CACHE) $(GO_BUILD)
 	@echo "Building local binaries version $(VERSION)..."
 	@echo "Tidying and downloading Go modules..."
@@ -187,13 +187,38 @@ docker:
 		--build-arg BUILD_EPOCH="$(BUILD_EPOCH)" \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
 		--build-arg COMMIT_ID="$(COMMIT_ID)" \
+		--label "maintainer=$(PROJECTORG)" \
+		--label "org.opencontainers.image.vendor=$(PROJECTORG)" \
+		--label "org.opencontainers.image.authors=$(PROJECTORG)" \
+		--label "org.opencontainers.image.title=$(PROJECTNAME)" \
+		--label "org.opencontainers.image.base.name=$(PROJECTNAME)" \
+		--label "org.opencontainers.image.description=$(PROJECTNAME) - privacy-respecting meta search engine" \
+		--label "org.opencontainers.image.licenses=MIT" \
+		--label "org.opencontainers.image.created=$(BUILD_DATE)" \
+		--label "org.opencontainers.image.version=$(VERSION)" \
+		--label "org.opencontainers.image.schema-version=$(VERSION)" \
+		--label "org.opencontainers.image.revision=$(COMMIT_ID)" \
+		--label "org.opencontainers.image.url=https://github.com/$(PROJECTORG)/$(PROJECTNAME)" \
+		--label "org.opencontainers.image.source=https://github.com/$(PROJECTORG)/$(PROJECTNAME)" \
+		--label "org.opencontainers.image.documentation=https://github.com/$(PROJECTORG)/$(PROJECTNAME)" \
+		--label "org.opencontainers.image.vcs-type=Git" \
+		--label "com.github.containers.toolbox=false" \
+		--annotation "maintainer=$(PROJECTORG)" \
 		--annotation "org.opencontainers.image.title=$(PROJECTNAME)" \
 		--annotation "org.opencontainers.image.vendor=$(PROJECTORG)" \
+		--annotation "org.opencontainers.image.authors=$(PROJECTORG)" \
+		--annotation "org.opencontainers.image.base.name=$(PROJECTNAME)" \
+		--annotation "org.opencontainers.image.description=$(PROJECTNAME) - privacy-respecting meta search engine" \
+		--annotation "org.opencontainers.image.schema-version=$(VERSION)" \
+		--annotation "org.opencontainers.image.vcs-type=Git" \
+		--annotation "com.github.containers.toolbox=false" \
 		--annotation "org.opencontainers.image.licenses=MIT" \
 		--annotation "org.opencontainers.image.created=$(BUILD_DATE)" \
 		--annotation "org.opencontainers.image.version=$(VERSION)" \
 		--annotation "org.opencontainers.image.revision=$(COMMIT_ID)" \
+		--annotation "org.opencontainers.image.url=https://github.com/$(PROJECTORG)/$(PROJECTNAME)" \
 		--annotation "org.opencontainers.image.source=https://github.com/$(PROJECTORG)/$(PROJECTNAME)" \
+		--annotation "org.opencontainers.image.documentation=https://github.com/$(PROJECTORG)/$(PROJECTNAME)" \
 		-t $(REGISTRY):$(VERSION) \
 		-t $(REGISTRY):latest \
 		.
@@ -241,23 +266,3 @@ dev:
 		echo "Built: $$BUILD_DIR/$(PROJECTNAME)-cli"; \
 	fi && \
 	echo "Test:  docker run --rm -it --name $(PROJECTNAME)-test -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"
-
-# =============================================================================
-# I18N-VALIDATE — Validate all locale JSON files against en.json key set
-# Runs src/i18n-validate/main.go inside casjaysdev/go:latest container.
-# Fails if any locale is missing keys, has extra keys, has empty values, or
-# has mismatched interpolation variables compared to en.json.
-# =============================================================================
-i18n-validate:
-	@echo "Validating i18n locale files..."
-	@mkdir -p $(GO_CACHE) $(GO_BUILD)
-	@$(GO_DOCKER) go run ./src/i18n-validate/main.go
-	@echo "i18n validation complete ✓"
-
-# =============================================================================
-# CLEAN — Remove build artifacts
-# =============================================================================
-clean:
-	@echo "Cleaning build artifacts..."
-	@rm -rf $(BINDIR) $(RELDIR)
-	@echo "Clean complete"

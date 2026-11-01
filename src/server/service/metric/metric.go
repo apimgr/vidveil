@@ -3,6 +3,7 @@
 package metric
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/apimgr/vidveil/src/common/authpad"
+	"github.com/apimgr/vidveil/src/common/outsan"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 )
@@ -493,19 +496,29 @@ func ServiceHandler(appConfig *config.AppConfig, logger *logging.AppLogger) http
 		}
 
 		if !cfg.Auth.AllowUnauthenticated {
+			start := time.Now()
+			response := authpad.WrapResponse(w, start)
+			w = response
+			defer response.Finish()
+			deny := func() {
+				authpad.Wait(start)
+				w.WriteHeader(http.StatusForbidden)
+			}
 			// Empty token = that service disabled per AI.md PART 20.
 			if token == "" {
 				AuthAttemptsTotal.WithLabelValues("bearer_token", "disabled").Inc()
-				w.WriteHeader(http.StatusForbidden)
+				deny()
 				return
 			}
 			// Header only — query-string tokens are forbidden (they leak into
 			// access logs and reverse-proxy logs).
 			header := r.Header.Get("Authorization")
 			expected := "Bearer " + token
-			if subtle.ConstantTimeCompare([]byte(header), []byte(expected)) != 1 {
+			providedHash := sha256.Sum256([]byte(header))
+			expectedHash := sha256.Sum256([]byte(expected))
+			if subtle.ConstantTimeCompare(providedHash[:], expectedHash[:]) != 1 {
 				AuthAttemptsTotal.WithLabelValues("bearer_token", "failure").Inc()
-				w.WriteHeader(http.StatusForbidden)
+				deny()
 				return
 			}
 			AuthAttemptsTotal.WithLabelValues("bearer_token", "success").Inc()
@@ -527,8 +540,17 @@ func ServiceHandler(appConfig *config.AppConfig, logger *logging.AppLogger) http
 // variable, per AI.md PART 20.
 func serveGrafanaDashboard(w http.ResponseWriter) {
 	dashboard := buildGrafanaDashboard()
+	writeSanitizedJSON(w, dashboard)
+}
+
+func writeSanitizedJSON(w http.ResponseWriter, data any) {
+	output, err := json.MarshalIndent(outsan.Sanitize(data, config.IsProductionMode()), "", "  ")
+	if err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(dashboard)
+	_, _ = w.Write(append(output, '\n'))
 }
 
 // grafanaPanel is a minimal Grafana dashboard panel definition.
@@ -621,10 +643,8 @@ func buildGrafanaDashboard() map[string]interface{} {
 // streams, bounded by loki.max_entries/max_age, per AI.md PART 20. Credentials
 // are always redacted by the logging subsystem before entries are captured.
 func serveLokiStreams(w http.ResponseWriter, lokiCfg config.MetricsLokiConfig, logger *logging.AppLogger) {
-	w.Header().Set("Content-Type", "application/json")
-
 	if logger == nil {
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"streams": []interface{}{}})
+		writeSanitizedJSON(w, map[string]interface{}{"streams": []interface{}{}})
 		return
 	}
 
@@ -663,7 +683,7 @@ func serveLokiStreams(w http.ResponseWriter, lokiCfg config.MetricsLokiConfig, l
 		})
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"streams": streams})
+	writeSanitizedJSON(w, map[string]interface{}{"streams": streams})
 }
 
 // statusWriter wraps http.ResponseWriter to capture the status code and bytes written.

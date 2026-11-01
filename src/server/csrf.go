@@ -20,16 +20,20 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/apimgr/vidveil/src/common/authpad"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/handler"
+	mcpserver "github.com/apimgr/vidveil/src/server/mcp"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
@@ -39,6 +43,11 @@ import (
 func newCSRFMiddleware(cfg config.CSRFConfig, logger *logging.AppLogger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isMCPPath(r.URL.Path) || isGuestPreferencesAPIPath(r.URL.Path) || mcpserver.IsInternalDispatch(r.Context()) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Determine whether the Secure flag should be set on the CSRF cookie.
 			secureCookie := csrfSecureFlag(cfg.Secure, r)
 
@@ -50,7 +59,9 @@ func newCSRFMiddleware(cfg config.CSRFConfig, logger *logging.AppLogger) func(ht
 
 			// Validate the token — only when all bypass conditions are absent.
 			if !csrfBypass(cfg, r) {
+				authStart := time.Now()
 				if existingToken == "" {
+					authpad.Wait(authStart)
 					csrfDeny(w, r, "token_absent", r.URL.Path, logger)
 					return
 				}
@@ -67,10 +78,16 @@ func newCSRFMiddleware(cfg config.CSRFConfig, logger *logging.AppLogger) func(ht
 					submitted = r.FormValue(cfg.CookieName)
 				}
 				// Constant-time comparison per AI.md PART 11 (CSRF tokens are credentials).
-				if submitted == "" || subtle.ConstantTimeCompare([]byte(submitted), []byte(existingToken)) != 1 {
+				// Hash both values so attacker-controlled token lengths cannot make
+				// ConstantTimeCompare return early on a length mismatch.
+				submittedHash := sha256.Sum256([]byte(submitted))
+				existingHash := sha256.Sum256([]byte(existingToken))
+				if submitted == "" || subtle.ConstantTimeCompare(submittedHash[:], existingHash[:]) != 1 {
+					authpad.Wait(authStart)
 					csrfDeny(w, r, "token_mismatch", r.URL.Path, logger)
 					return
 				}
+				authpad.Wait(authStart)
 			}
 
 			// Ensure a CSRF cookie is always present on the response.
@@ -107,6 +124,15 @@ func csrfBypass(cfg config.CSRFConfig, r *http.Request) bool {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
 		return true
 	}
+	if isMCPPath(r.URL.Path) {
+		return true
+	}
+	if isGuestPreferencesAPIPath(r.URL.Path) {
+		return true
+	}
+	if mcpserver.IsInternalDispatch(r.Context()) {
+		return true
+	}
 
 	// Bearer / API token callers authenticate via credential, not cookie.
 	if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") ||
@@ -127,6 +153,35 @@ func csrfBypass(cfg config.CSRFConfig, r *http.Request) bool {
 	}
 
 	return false
+}
+
+func isGuestPreferencesAPIPath(path string) bool {
+	parts := strings.Split(path, "/")
+	if len(parts) != 5 || parts[1] != "api" || len(parts[2]) < 2 || parts[2][0] != 'v' || parts[3] != "server" || parts[4] != "preferences" {
+		return false
+	}
+	for _, digit := range parts[2][1:] {
+		if digit < '0' || digit > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func isMCPPath(path string) bool {
+	if path == "/mcp" || path == "/api/mcp" {
+		return true
+	}
+	parts := strings.Split(path, "/")
+	if len(parts) != 5 || parts[1] != "api" || len(parts[2]) < 2 || parts[2][0] != 'v' || parts[3] != "server" || parts[4] != "mcp" {
+		return false
+	}
+	for _, digit := range parts[2][1:] {
+		if digit < '0' || digit > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // csrfPathMatches checks whether path matches the given glob pattern.
@@ -163,9 +218,7 @@ func csrfDeny(w http.ResponseWriter, r *http.Request, reason, endpoint string, l
 	// instead of a raw JSON body (no-JS-first, PART 16).
 	wantsJSON := strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(accept, "application/json")
 	if wantsJSON {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		handler.WriteJSON(w, http.StatusForbidden, map[string]interface{}{
 			"ok":      false,
 			"error":   "CSRF_FAILED",
 			"message": message,
@@ -175,21 +228,25 @@ func csrfDeny(w http.ResponseWriter, r *http.Request, reason, endpoint string, l
 	if strings.Contains(accept, "text/plain") {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
-		fmt.Fprintf(w, "403 Forbidden: %s\n", message)
+		_, _ = fmt.Fprintf(w, "403 Forbidden: %s\n", message)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusForbidden)
-	fmt.Fprintf(w, `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>403 Forbidden</title></head><body><h1>403 Forbidden</h1><p>%s</p></body></html>`, message)
+	_, _ = fmt.Fprintf(w, `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>403 Forbidden</title></head><body><h1>403 Forbidden</h1><p>%s</p></body></html>`, message)
 }
 
 // csrfGenToken generates a random hex-encoded CSRF token of tokenLength bytes.
 func csrfGenToken(tokenLength int) string {
+	return csrfGenTokenFrom(rand.Reader, tokenLength)
+}
+
+func csrfGenTokenFrom(random io.Reader, tokenLength int) string {
 	if tokenLength <= 0 {
 		tokenLength = 32
 	}
 	b := make([]byte, tokenLength)
-	if _, err := rand.Read(b); err != nil {
+	if _, err := io.ReadFull(random, b); err != nil {
 		// Never emit a predictable token if the system CSPRNG fails. Returning an
 		// empty token causes protected requests to fail closed in the middleware.
 		return ""

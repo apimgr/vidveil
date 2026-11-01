@@ -8,8 +8,10 @@ package server
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,6 +72,24 @@ func (m *mockSrvGeoIPBlocker) IsBlocked(_ string) bool { return false }
 type mockSrvBlocklist struct{}
 
 func (m *mockSrvBlocklist) IsBlocked(_ string) bool { return false }
+
+func TestRefreshOperatorTokenHashAfterConfigReload(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Token = "first-operator-token"
+	s := &Server{appConfig: cfg}
+	s.RefreshOperatorTokenHash()
+	first, configured := s.getOperatorTokenHash()
+	if !configured {
+		t.Fatal("expected configured operator token hash")
+	}
+
+	cfg.Server.Token = "second-operator-token"
+	s.RefreshOperatorTokenHash()
+	second, configured := s.getOperatorTokenHash()
+	if !configured || first == second {
+		t.Fatal("operator token hash was not refreshed after config reload")
+	}
+}
 
 // ── server setters ────────────────────────────────────────────────────────────
 
@@ -390,4 +410,158 @@ func TestDebugLogCache_DebugEnabled_NoPanic(t *testing.T) {
 
 	s := &Server{appConfig: config.DefaultAppConfig()}
 	s.debugLogCache("GET", "test-key", true, 2*time.Millisecond)
+}
+
+func TestDebugRoutesRequireOperatorToken(t *testing.T) {
+	wasDebugEnabled := mode.IsDebugEnabled()
+	mode.SetDebug(true)
+	t.Cleanup(func() { mode.SetDebug(wasDebugEnabled) })
+
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Token = "operator-secret"
+	s := &Server{appConfig: cfg, router: chi.NewRouter()}
+	s.RefreshOperatorTokenHash()
+	s.registerDebugRoutes(s.router)
+	searchHandler := handler.NewSearchHandler(cfg, engine.NewEngineManager(cfg))
+	s.registerDebugAPIRoutes(s.router, "/api/debug", searchHandler)
+	s.registerDebugAPIRoutes(s.router, "/api/v1/debug", searchHandler)
+
+	paths := []string{
+		"/debug/config",
+		"/debug/pprof/goroutine",
+		"/api/debug/engines",
+		"/api/v1/debug/engines",
+	}
+	credentials := []struct {
+		name   string
+		value  string
+		header string
+		query  string
+	}{
+		{name: "Authorization Bearer", value: "Bearer operator-secret", header: "Authorization"},
+		{name: "Authorization Basic", value: "Basic " + base64.StdEncoding.EncodeToString([]byte("operator:operator-secret")), header: "Authorization"},
+		{name: "Authorization Digest", value: "Digest operator-secret", header: "Authorization"},
+		{name: "X-API-Key", value: "operator-secret", header: "X-API-Key"},
+		{name: "X-Api-Key", value: "operator-secret", header: "X-Api-Key"},
+		{name: "API-Key", value: "operator-secret", header: "API-Key"},
+		{name: "ApiKey", value: "operator-secret", header: "ApiKey"},
+		{name: "X-Auth-Token", value: "operator-secret", header: "X-Auth-Token"},
+		{name: "X-Access-Token", value: "operator-secret", header: "X-Access-Token"},
+		{name: "X-Token", value: "operator-secret", header: "X-Token"},
+		{name: "Token", value: "operator-secret", header: "Token"},
+		{name: "X-CSRF-Token", value: "operator-secret", header: "X-CSRF-Token"},
+		{name: "X-XSRF-Token", value: "operator-secret", header: "X-XSRF-Token"},
+		{name: "X-Session-ID", value: "operator-secret", header: "X-Session-ID"},
+		{name: "X-Service-Token", value: "operator-secret", header: "X-Service-Token"},
+		{name: "X-Internal-Token", value: "operator-secret", header: "X-Internal-Token"},
+		{name: "query token", query: "?token=operator-secret"},
+	}
+	for _, path := range paths {
+		path := path
+		t.Run(path, func(t *testing.T) {
+			for _, authorization := range []string{"", "Bearer wrong-secret", "Basic operator-secret"} {
+				req := httptest.NewRequest(http.MethodGet, path, nil)
+				req.Header.Set("Accept", "application/json")
+				if authorization != "" {
+					req.Header.Set("Authorization", authorization)
+				}
+				rec := httptest.NewRecorder()
+				s.router.ServeHTTP(rec, req)
+				if rec.Code != http.StatusUnauthorized {
+					t.Errorf("Authorization %q: status = %d, want 401", authorization, rec.Code)
+				}
+				if !strings.Contains(rec.Body.String(), `"error": "UNAUTHORIZED"`) {
+					t.Errorf("Authorization %q: error body = %q, want generic UNAUTHORIZED", authorization, rec.Body.String())
+				}
+			}
+
+			for _, credential := range credentials {
+				req := httptest.NewRequest(http.MethodGet, path+credential.query, nil)
+				if credential.header != "" {
+					req.Header.Set(credential.header, credential.value)
+				}
+				rec := httptest.NewRecorder()
+				s.router.ServeHTTP(rec, req)
+				if rec.Code != http.StatusOK {
+					t.Errorf("valid %s: status = %d, want 200", credential.name, rec.Code)
+				}
+			}
+		})
+	}
+
+	t.Run("credential priority is first found wins", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/debug/engines?token=operator-secret", nil)
+		req.Header.Set("Authorization", "Bearer wrong-secret")
+		req.Header.Set("X-API-Key", "operator-secret")
+		rec := httptest.NewRecorder()
+		s.router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("invalid higher-priority credential status = %d, want 401", rec.Code)
+		}
+
+		req = httptest.NewRequest(http.MethodGet, "/api/debug/engines?token=wrong-secret", nil)
+		req.Header.Set("Authorization", "Bearer operator-secret")
+		req.Header.Set("X-API-Key", "wrong-secret")
+		rec = httptest.NewRecorder()
+		s.router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("valid higher-priority credential status = %d, want 200", rec.Code)
+		}
+	})
+
+	t.Run("invalid token sources are rejected", func(t *testing.T) {
+		for _, credential := range []struct {
+			name   string
+			header string
+			value  string
+			query  string
+		}{
+			{name: "API key", header: "X-API-Key", value: "wrong-secret"},
+			{name: "service token", header: "X-Service-Token", value: "wrong-secret"},
+			{name: "digest credential", header: "Authorization", value: "Digest wrong-secret"},
+			{name: "query token", query: "?token=wrong-secret"},
+		} {
+			req := httptest.NewRequest(http.MethodGet, "/api/debug/engines"+credential.query, nil)
+			if credential.header != "" {
+				req.Header.Set(credential.header, credential.value)
+			}
+			rec := httptest.NewRecorder()
+			s.router.ServeHTTP(rec, req)
+			if rec.Code != http.StatusUnauthorized {
+				t.Errorf("invalid %s: status = %d, want 401", credential.name, rec.Code)
+			}
+		}
+	})
+}
+
+func TestDebugRoutesFailClosedWithoutConfiguredOperatorToken(t *testing.T) {
+	wasDebugEnabled := mode.IsDebugEnabled()
+	mode.SetDebug(true)
+	t.Cleanup(func() { mode.SetDebug(wasDebugEnabled) })
+
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Token = ""
+	s := &Server{appConfig: cfg, router: chi.NewRouter()}
+	s.registerDebugRoutes(s.router)
+
+	req := httptest.NewRequest(http.MethodGet, "/debug/config", nil)
+	req.Header.Set("X-API-Key", "any-token")
+	rec := httptest.NewRecorder()
+	s.router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("unconfigured operator token: status = %d, want 401", rec.Code)
+	}
+}
+
+func TestAuthorizationTokenRejectsMalformedAuthorization(t *testing.T) {
+	for _, value := range []string{"", "Bearer", "Bearer ", "Bearer  token", "Bearer token extra", "Basic token"} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Authorization", value)
+		if token, ok := extractRequestToken(req); ok {
+			t.Errorf("extractRequestToken(%q) = %q, true; want rejection", value, token)
+		}
+	}
+	if token, ok := bearerToken("bEaReR token"); !ok || token != "token" {
+		t.Errorf("bearerToken case-insensitive scheme = (%q, %t), want (token, true)", token, ok)
+	}
 }

@@ -19,6 +19,7 @@ internal_org:      apimgr
 app_name:          vidveil
 official_site:     https://x.scour.li
 coverage_minimum:  60
+owner_token:       vidveil_owner_token_ab5213f6
 
 `{plist_name}` is NOT stored - it is derived at substitution time as `io.github.apimgr.vidveil`.
 
@@ -35,7 +36,7 @@ coverage_minimum:  60
 - Thumbnail Proxy: All thumbnails proxied through server to prevent tracking
 - Video Preview: Hover (desktop) and swipe (mobile) preview support
 - Client-Side Preferences: Guest preferences use `theme`, `lang`, and `vidveil_pref_*` cookies per AI.md PART 16; values are readable by the server and work with or without JavaScript
-- Favorites & History: Server-side favorites (anonymous `visitor_id` cookie, works without JS) and local-only search history, both with export/import
+- Favorites & History: Server-side favorites owned by an anonymous primary API token (cookie-backed web access works without JS) and local-only search history, both with export/import
 - Tor Support: Built-in Tor hidden service support for maximum anonymity
 - Geographic Content Restriction: Admin-configurable warnings/blocks for regions with adult content laws
 - Static Binary: Single static binary with all assets embedded
@@ -50,7 +51,7 @@ coverage_minimum:  60
 
 | Role | Storage | Authentication | Permissions |
 |------|---------|----------------|-------------|
-| **Anonymous visitor** | Anonymous `visitor_id` cookie (favorites only) | None | Search, browse results, set cookie-based preferences, manage local search history and server-side favorites |
+| **Anonymous visitor** | Primary owner token in the project-specific HttpOnly cookie; optional localStorage convenience copy for JavaScript API calls | Possession of primary token | Search and browse publicly; manage only that owner's resources and linked tokens |
 | **Operator** | None (file-only) | OS-level access to server | Edit `server.yml` and restart the server — no web login, no DB accounts |
 
 There are no regular user accounts, organizations, or custom domains. There is no admin web UI; server administration uses `server.yml` and CLI commands. Token-protected APIs are limited to operations explicitly defined by AI.md.
@@ -161,15 +162,15 @@ type CombinedSuggestion struct {
 
 **Browser storage:**
 - `vidveil_history`: search history array
-- `vidveil_favorites_mirror`: favorites resilience mirror (reconciled against the server-side `favorites` table)
-- Search history remains in localStorage. The favorites mirror is sent to the server during reconciliation.
+- `vidveil_owner_token_ab5213f6`: optional convenience copy of the owner token for JavaScript API calls; the server reads the HttpOnly cookie for web forms, so localStorage is never required.
+- Search history remains in localStorage. Favorites remain server-authoritative and are never restored from localStorage.
 - Theme, language, and app-specific preferences live in server-readable cookies per AI.md PART 16.
 
 **Server-side favorites (per AI.md PART 16/32 - core functionality must work without JS):**
-- `favorites` table in `server.db`, rows keyed by an opaque, randomly generated `visitor_id` cookie (no personal data, not linked to any account).
-- Columns: `id`, `visitor_id`, `url`, `title`, `thumbnail`, `source`, `added_at`.
-- `/favorites` page is fully functional without JS (server-rendered list, POST-based add/remove/export/import/clear via the `_method` hidden-field convention); `app.js` layers instant no-reload feedback on top via `/api/v1/favorites*`.
-- Sensitivity: low (no PII, cookie is opaque); never logged, included in backups only as ordinary DB rows (no special handling required).
+- `favorites` table in `server.db`, rows carry `owner_id` referencing an anonymous owner. New owners receive a primary token when their first favorite is created; web forms use the HttpOnly owner cookie, while `/api/v1/favorites*` requires a Bearer token and ignores cookies.
+- Columns: `id`, `owner_id`, `url`, `title`, `thumbnail`, `source`, `created_at`.
+- `/favorites` page works without JS (server-rendered list, POST-based add/remove/export/import/clear); JavaScript enhances the same flow and stores only an optional owner-token convenience copy.
+- Sensitivity: favorites are private to their owner; token hashes and encrypted copies are credentials and receive dedicated backup and logging protections.
 
 ### Trust boundaries & external services
 
@@ -372,7 +373,7 @@ Standard Pages (`/server/*`, PART 16) — routes not restated here.
 - Video Preview: desktop hover with delay (Instant / 200ms / 500ms / 1000ms), mobile swipe-right (50px threshold, auto-stop 8s).
 - Autocomplete System: bang mode triggered by `!`, performer mode by `@`, search-term mode otherwise (2+ chars, 150ms debounce, hidden until typing). Multi-bang `!ph !rt lesbian` flow. Suggestion sources: user history (priority 1), static suggestions (priority 2), popular (priority 3).
 - Search History: localStorage (`vidveil_history`), max items configurable (default unlimited), auto-clear options (Never / 1d / 7d / 30d), Export/Import JSON.
-- Favorites: server-side (`favorites` table, keyed by anonymous `visitor_id` cookie) is the source of truth, each entry url+title+thumbnail+source+added_at, Export/Import JSON, Clear all with confirm. Fully functional without JS via server-rendered `/favorites` page; `app.js` layers instant no-reload add/remove/clear on top via `/api/v1/favorites*`, and mirrors the list into `localStorage` (`vidveil_favorites_mirror`) so favorites survive a server/DB wipe on that browser: on first load each session the mirror and server list are reconciled (mirror-only entries are re-POSTed to the server; entries the server already has are left alone), and every successful server read/write re-writes the mirror.
+- Favorites: server-side (`favorites` table, keyed by `owner_id`) is the source of truth, each entry url+title+thumbnail+source+created_at, Export/Import JSON, Clear all with confirm. Fully functional without JS via server-rendered `/favorites` page; browser POST forms use the owner cookie, and `/api/v1/favorites*` uses a Bearer token. The optional localStorage owner-token copy enhances JavaScript API calls; favorite data itself is never load-bearing in localStorage.
 - Related Searches: server-side rendered into HTML, client adds "Show more" toggle, up to 20 (first 8 visible).
 - Infinite Scroll: default via the `vidveil_pref_results_per_page` cookie, set to
   "Infinite scroll" unless the visitor picks 20/50/100 in Preferences.
@@ -419,7 +420,7 @@ authoritative for pagination, see "Search behavior" above):
 **Favorites:**
 - Export/Import/Clear buttons.
 - Count display.
-- Server-side list (`visitor_id` cookie) is authoritative; a `localStorage` mirror (`vidveil_favorites_mirror`) restores favorites on this browser if the server/DB is wiped, reconciled automatically on load.
+- Server-side list (`owner_id`) is authoritative; the owner's primary token can be restored on another browser at `/server/preferences`.
 
 **Privacy:**
 - Use Tor for all searches (toggle) - default: No (stored in a guest preference cookie; Tor routing is server-side).

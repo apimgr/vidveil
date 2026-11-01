@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/apimgr/vidveil/src/common/authpad"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/secreport"
@@ -37,7 +38,7 @@ func newSecurityTestHandler(t *testing.T) (*ServerHandler, string) {
 	if err := sm.EnsureSchema(); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
-	t.Cleanup(func() { sm.Close() })
+	t.Cleanup(func() { _ = sm.Close() })
 
 	db := sm.GetDB()
 	secretsMgr := secret.NewManager(db)
@@ -56,6 +57,29 @@ func newSecurityTestHandler(t *testing.T) (*ServerHandler, string) {
 	}
 	securityID := secreport.GenerateSecurityID(secret, time.Now())
 	return h, securityID
+}
+
+func TestValidSecurityIDAcceptsPreviousInstallationSecretDuringGrace(t *testing.T) {
+	h, previousID := newSecurityTestHandler(t)
+	if err := h.secretsMgr.Rotate(context.Background(), secret.InstallationSecret); err != nil {
+		t.Fatalf("rotate installation secret: %v", err)
+	}
+	if !h.validSecurityID(httptest.NewRequest(http.MethodGet, "/", nil), previousID) {
+		t.Fatal("security_id signed with the previous installation secret should remain valid during the grace period")
+	}
+}
+
+func TestValidSecurityIDRejectsExpiredPreviousInstallationSecret(t *testing.T) {
+	h, previousID := newSecurityTestHandler(t)
+	if err := h.secretsMgr.Rotate(context.Background(), secret.InstallationSecret); err != nil {
+		t.Fatalf("rotate installation secret: %v", err)
+	}
+	if _, err := h.db.Exec(`UPDATE app_secrets SET expires_at = ? WHERE key = ?`, time.Now().Add(-time.Hour), string(secret.InstallationSecret)); err != nil {
+		t.Fatalf("expire previous installation secret: %v", err)
+	}
+	if h.validSecurityID(httptest.NewRequest(http.MethodGet, "/", nil), previousID) {
+		t.Fatal("security_id signed with an expired previous installation secret must be rejected")
+	}
 }
 
 // ContactPage GET with a valid security_id switches to security mode and
@@ -207,7 +231,11 @@ func TestSecurityReportStatusPage(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/server/security/report/sec_doesnotexist?token=x", nil)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	rr := httptest.NewRecorder()
+	start := time.Now()
 	h.SecurityReportStatusPage(rr, req)
+	if elapsed := time.Since(start); elapsed < authpad.Floor {
+		t.Errorf("unknown tracking ID response took %s, want at least %s", elapsed, authpad.Floor)
+	}
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("unknown tracking id: status=%d want 404", rr.Code)
 	}
@@ -228,7 +256,11 @@ func TestSecurityReportStatusPage(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/server/security/report/"+sub.TrackingID+"?token="+sub.ReportToken, nil)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	rr = httptest.NewRecorder()
+	start = time.Now()
 	h.SecurityReportStatusPage(rr, req)
+	if elapsed := time.Since(start); elapsed < authpad.Floor {
+		t.Errorf("valid status response took %s, want at least %s", elapsed, authpad.Floor)
+	}
 	if rr.Code != http.StatusOK {
 		t.Errorf("valid tracking id/token: status=%d want 200; body=%s", rr.Code, rr.Body.String())
 	}

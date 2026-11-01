@@ -38,7 +38,9 @@ func newBlocklistServiceForTest(t *testing.T) *BlocklistService {
 
 func TestDownloadAndParse_IPType_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(ipListText))
+		if _, err := w.Write([]byte(ipListText)); err != nil {
+			t.Errorf("write test response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -59,7 +61,9 @@ func TestDownloadAndParse_IPType_Success(t *testing.T) {
 
 func TestDownloadAndParse_DomainType_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(domainListText))
+		if _, err := w.Write([]byte(domainListText)); err != nil {
+			t.Errorf("write test response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -111,7 +115,9 @@ func TestDownloadAndParse_ConnRefused(t *testing.T) {
 
 func TestUpdate_EnabledSingleSource(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(ipListText))
+		if _, err := w.Write([]byte(ipListText)); err != nil {
+			t.Errorf("write test response: %v", err)
+		}
 	}))
 	defer srv.Close()
 

@@ -29,8 +29,10 @@ Errors use:
 
 Public search and information endpoints do not require authentication.
 Operator-protected endpoints accept the server-wide `server.token` as a Bearer
-token. VidVeil has no admin web UI or web-based settings API; configuration is
-managed through `server.yml` and the CLI. See
+token. Owner-token management is available at
+`/api/{api_version}/server/preferences/tokens` and accepts only a primary owner
+token as Bearer authorization. The preferences API stores browser preferences
+in cookies; it does not change server configuration. See
 [authentication](authentication.md) for token scope.
 
 ## Search

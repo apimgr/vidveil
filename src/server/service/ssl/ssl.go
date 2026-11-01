@@ -232,8 +232,13 @@ func (m *SSLManager) generateSelfSigned() error {
 	if err != nil {
 		return fmt.Errorf("failed to create cert file: %w", err)
 	}
-	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	certOut.Close()
+	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
+		_ = certOut.Close()
+		return fmt.Errorf("write certificate: %w", err)
+	}
+	if err := certOut.Close(); err != nil {
+		return fmt.Errorf("close certificate: %w", err)
+	}
 
 	// Save private key
 	keyFile := filepath.Join(m.certPath, "key.pem")
@@ -245,8 +250,13 @@ func (m *SSLManager) generateSelfSigned() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal private key: %w", err)
 	}
-	pem.Encode(keyOut, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes})
-	keyOut.Close()
+	if err := pem.Encode(keyOut, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes}); err != nil {
+		_ = keyOut.Close()
+		return fmt.Errorf("write private key: %w", err)
+	}
+	if err := keyOut.Close(); err != nil {
+		return fmt.Errorf("close private key: %w", err)
+	}
 
 	return m.loadCertificate(certFile, keyFile)
 }
@@ -465,7 +475,7 @@ func (m *SSLManager) HTTP01Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(keyAuth))
+	_, _ = w.Write([]byte(keyAuth))
 }
 
 // SetHTTP01Challenge sets an HTTP-01 challenge response

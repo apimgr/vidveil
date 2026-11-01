@@ -31,21 +31,19 @@ func detectLinuxDark() bool {
 	if theme := os.Getenv("GTK_THEME"); theme != "" {
 		return strings.Contains(strings.ToLower(theme), "dark")
 	}
+	// Prefer explicit desktop hints before querying GNOME, which may be
+	// installed even when the active session uses another desktop environment.
+	if theme := os.Getenv("QT_QPA_PLATFORMTHEME"); theme != "" {
+		return strings.Contains(strings.ToLower(theme), "dark")
+	}
+	if colorScheme := os.Getenv("COLOR_SCHEME"); colorScheme != "" {
+		return strings.Contains(strings.ToLower(colorScheme), "dark")
+	}
 
 	// Try gsettings for GNOME
 	cmd := exec.Command("gsettings", "get", "org.gnome.desktop.interface", "gtk-theme")
 	if output, err := cmd.Output(); err == nil {
 		return strings.Contains(strings.ToLower(string(output)), "dark")
-	}
-
-	// Check KDE Plasma
-	if theme := os.Getenv("QT_QPA_PLATFORMTHEME"); theme != "" {
-		return strings.Contains(strings.ToLower(theme), "dark")
-	}
-
-	// Check for common dark theme environment variables
-	if colorScheme := os.Getenv("COLOR_SCHEME"); colorScheme != "" {
-		return strings.Contains(strings.ToLower(colorScheme), "dark")
 	}
 
 	// Default to dark for terminals (most developers prefer dark)

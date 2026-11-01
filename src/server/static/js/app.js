@@ -12,15 +12,7 @@ function setTheme(theme) {
 
     // Cookie is the authoritative preference — server reads it to render <html class="theme-X">
     // with no init JS and no FOUC (AI.md PART 16: "Store preference in the theme cookie")
-    var maxAge = 365 * 24 * 3600; // 1 year
-    document.cookie = 'theme=' + encodeURIComponent(theme) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
-
-    // Also persist in vidveil_prefs for localStorage-reading JS paths
-    try {
-        var prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
-        prefs.theme = theme;
-        localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-    } catch (e) {}
+    document.cookie = 'theme=' + encodeURIComponent(theme) + '; path=/; max-age=31536000; SameSite=Lax' + (window.location.protocol === 'https:' ? '; Secure' : '');
 
     // Update meta theme-color for mobile browsers
     updateMetaThemeColor(theme);
@@ -30,11 +22,6 @@ function getTheme() {
     // Cookie is the primary source — server reads it per AI.md PART 16
     var match = document.cookie.match(/(?:^|;\s*)theme=([^;]*)/);
     if (match) return decodeURIComponent(match[1]);
-    // Fall back to vidveil_prefs.theme in localStorage
-    try {
-        var prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
-        if (prefs.theme) return prefs.theme;
-    } catch (e) {}
     // Default 'auto' per AI.md PART 16
     return 'auto';
 }
@@ -49,7 +36,7 @@ function getTheme() {
 // validation and fall back to the caller's localStorage value only when the
 // cookie is absent or out of range.
 function getServerResultsPerPage(localFallback) {
-    var match = document.cookie.match(/(?:^|;\s*)results_per_page=([^;]*)/);
+    var match = document.cookie.match(/(?:^|;\s*)vidveil_pref_results_per_page=([^;]*)/);
     if (match) {
         var n = parseInt(decodeURIComponent(match[1]), 10);
         if ([0, 20, 50, 100].indexOf(n) !== -1) return n;
@@ -159,7 +146,6 @@ if (document.readyState === 'loading') {
 // ============================================================================
 // Preferences Management
 // ============================================================================
-const PREFS_KEY = 'vidveil_prefs';
 const defaultPrefs = {
     theme: 'auto',  // Per AI.md PART 16: 'auto' uses system preference
     gridDensity: 'default',
@@ -167,7 +153,7 @@ const defaultPrefs = {
     autoplayPreview: true,
     previewDelay: 0,  // Instant
     // Server-authoritative (IDEA.md "Search Settings") — mirrored into the
-    // results_per_page cookie on save; 0 = infinite scroll (the default)
+    // vidveil_pref_results_per_page cookie on save; 0 = infinite scroll (the default)
     resultsPerPage: 0,
     openNewTab: true,
     defaultPreviewOnly: true,
@@ -179,28 +165,60 @@ const defaultPrefs = {
     maxHistory: 0,  // 0 = unlimited
     autoClearHistory: 0,
     useTor: false,
-    proxyImages: true,
-    enabledEngines: [] // Empty means all enabled
+    enabledEngines: [],
+    engineSelectionSet: false
 };
 
 function getPreferences() {
-    try {
-        const stored = localStorage.getItem(PREFS_KEY);
-        return stored ? { ...defaultPrefs, ...JSON.parse(stored) } : defaultPrefs;
-    } catch {
-        return defaultPrefs;
-    }
+    return readPreferenceCookies(defaultPrefs);
 }
 
 function savePreferences(prefs) {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    mirrorPreferencesToCookies(prefs);
 }
 
 function resetPreferences() {
-    localStorage.removeItem(PREFS_KEY);
-    // Expire the theme cookie — server reads it, so clearing here resets server-rendered theme
-    document.cookie = 'theme=; path=/; max-age=0; SameSite=Lax';
+    document.cookie.split(';').forEach(function(cookie) {
+        var name = cookie.split('=')[0].trim();
+        if (name === 'theme' || name === 'lang' || name.indexOf('vidveil_pref_') === 0) {
+            document.cookie = name + '=; path=/; max-age=0; SameSite=Lax';
+        }
+    });
     location.reload();
+}
+
+function preferenceCookieName(key) {
+    return 'vidveil_pref_' + key.replace(/[A-Z]/g, function(letter) { return '_' + letter.toLowerCase(); });
+}
+
+function readPreferenceCookies(defaults) {
+    var prefs = Object.assign({}, defaults);
+    var cookies = document.cookie ? document.cookie.split(';') : [];
+    cookies.forEach(function(cookie) {
+        var parts = cookie.trim().split('=');
+        var name = parts.shift();
+        if (name.indexOf('vidveil_pref_') !== 0) return;
+        var raw = decodeURIComponent(parts.join('='));
+        var key = name.slice('vidveil_pref_'.length).replace(/_([a-z])/g, function(_, letter) { return letter.toUpperCase(); });
+        if (key.indexOf('engine_') === 0) {
+            if (!Array.isArray(prefs.enabledEngines)) prefs.enabledEngines = [];
+            if (raw === '1') prefs.enabledEngines.push(key.slice('engine_'.length));
+            return;
+        }
+        if (key === 'enginesSelected') {
+            prefs.engineSelectionSet = raw === '1';
+            return;
+        }
+        if (!(key in defaults)) return;
+        var fallback = defaults[key];
+        if (typeof fallback === 'boolean') prefs[key] = raw === '1' || raw === 'true';
+        else if (typeof fallback === 'number') prefs[key] = Number(raw);
+        else if (key === 'defaultDuration' || key === 'defaultSort') prefs[key] = raw === 'any' ? '' : raw;
+        else prefs[key] = raw;
+    });
+    var themeCookie = document.cookie.match(/(?:^|;\s*)theme=([^;]*)/);
+    if (themeCookie) prefs.theme = decodeURIComponent(themeCookie[1]);
+    return prefs;
 }
 
 // ============================================================================
@@ -366,9 +384,6 @@ function setupPreferencesForm() {
     const defaultDurationSelect = document.getElementById('default-duration');
     if (defaultDurationSelect) defaultDurationSelect.value = prefs.defaultDuration || '';
 
-    const defaultQualitySelect = document.getElementById('default-quality');
-    if (defaultQualitySelect) defaultQualitySelect.value = prefs.defaultQuality || '';
-
     const defaultSortSelect = document.getElementById('default-sort');
     if (defaultSortSelect) defaultSortSelect.value = prefs.defaultSort || '';
 
@@ -378,11 +393,8 @@ function setupPreferencesForm() {
     const torCheckbox = document.getElementById('use-tor');
     if (torCheckbox) torCheckbox.checked = prefs.useTor || false;
 
-    const proxyCheckbox = document.getElementById('proxy-images');
-    if (proxyCheckbox) proxyCheckbox.checked = prefs.proxyImages !== false;
-
     // Restore engine selections from localStorage
-    if (prefs.enabledEngines && prefs.enabledEngines.length > 0) {
+    if (prefs.engineSelectionSet || (prefs.enabledEngines && prefs.enabledEngines.length > 0)) {
         document.querySelectorAll('input[name="engines"]').forEach(cb => {
             cb.checked = prefs.enabledEngines.includes(cb.value);
         });
@@ -407,17 +419,16 @@ function setupPreferencesForm() {
             openNewTab: document.getElementById('open-new-tab')?.checked ?? true,
             defaultPreviewOnly: document.getElementById('default-preview-only')?.checked ?? true,
             defaultDuration: document.getElementById('default-duration')?.value || '',
-            defaultQuality: document.getElementById('default-quality')?.value || '',
             defaultSort: document.getElementById('default-sort')?.value || '',
             minDuration: parseInt(document.getElementById('min-duration')?.value ?? 600),
             useTor: document.getElementById('use-tor')?.checked || false,
-            proxyImages: document.getElementById('proxy-images')?.checked ?? true,
-            enabledEngines: engines
+            enabledEngines: engines,
+            engineSelectionSet: true
         };
 
         savePreferences(newPrefs);
         setTheme(newPrefs.theme);
-        mirrorServerPrefsToCookies(newPrefs);
+        mirrorPreferencesToCookies(newPrefs);
 
         showNotification('Preferences saved!', 'success');
     });
@@ -429,13 +440,34 @@ function setupPreferencesForm() {
 // later loads the same browser profile. Same pattern as the theme cookie
 // above (setTheme) — cookie name/values match resultsPerPageCookieName /
 // openNewTabCookieName in src/server/handler/handlers.go.
-function mirrorServerPrefsToCookies(prefs) {
-    var maxAge = 365 * 24 * 3600; // 1 year
-    var resultsPerPage = parseInt(prefs.resultsPerPage ?? 0, 10);
-    if (![0, 20, 50, 100].includes(resultsPerPage)) resultsPerPage = 0;
-    document.cookie = 'results_per_page=' + resultsPerPage + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
-    var openNewTab = prefs.openNewTab !== false;
-    document.cookie = 'open_new_tab=' + (openNewTab ? '1' : '0') + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+function mirrorPreferencesToCookies(prefs) {
+    var maxAge = 31536000;
+    var secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    // Engine selection is a client preference too. Store each enabled engine
+    // as a small cookie so it survives reloads and is available to the
+    // server-rendered preferences page's JavaScript enhancement.
+    if (Array.isArray(prefs.enabledEngines)) {
+        document.cookie.split(';').forEach(function(cookie) {
+            var name = cookie.split('=')[0].trim();
+            if (/^vidveil_pref_engine_[a-z0-9_]+$/.test(name)) {
+                document.cookie = name + '=; path=/; max-age=0; SameSite=Lax' + secure;
+            }
+        });
+        prefs.enabledEngines.forEach(function(engine) {
+            if (!/^[a-z0-9_]{1,48}$/.test(engine)) return;
+            document.cookie = 'vidveil_pref_engine_' + engine + '=1; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
+        });
+        document.cookie = 'vidveil_pref_engines_selected=1; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
+    }
+    Object.keys(prefs).forEach(function(key) {
+        if (key === 'theme' || key === 'enabledEngines' || key === 'engines') return;
+        var value = prefs[key];
+        if (typeof value === 'boolean') value = value ? '1' : '0';
+        if (value === '') value = 'any';
+        value = String(value);
+        if (!/^[A-Za-z0-9_.-]{1,64}$/.test(value)) return;
+        document.cookie = preferenceCookieName(key) + '=' + encodeURIComponent(value) + '; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
+    });
 }
 
 // ============================================================================
@@ -475,20 +507,35 @@ async function fetchAPI(endpoint, options = {}) {
         if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
             csrfHeaders['X-CSRF-Token'] = getCsrfToken();
         }
-        const response = await fetch(`/api${endpoint}`, {
+        var ownerHeaders = {};
+        if (/^\/v1\/favorites(?:\/|$)/.test(endpoint)) {
+            try {
+                var ownerToken = window.localStorage.getItem('vidveil_owner_token_ab5213f6');
+                if (ownerToken) ownerHeaders.Authorization = 'Bearer ' + ownerToken;
+            } catch (e) {
+                // The HttpOnly owner cookie keeps web forms usable without localStorage.
+            }
+        }
+        const requestOptions = {
+            ...options,
             headers: {
                 'Content-Type': 'application/json',
                 ...csrfHeaders,
+                ...ownerHeaders,
                 ...options.headers
-            },
-            ...options
-        });
+            }
+        };
+        const response = await fetch(`/api${endpoint}`, requestOptions);
 
         if (!response.ok) {
+            if (/^\/v1\/favorites(?:\/|$)/.test(endpoint) && (response.status === 401 || response.status === 403)) {
+                try { window.localStorage.removeItem('vidveil_owner_token_ab5213f6'); } catch (e) { /* Cookie-authorized forms remain available. */ }
+            }
             throw new Error(`API error: ${response.status}`);
         }
 
-        return await response.json();
+        const payload = await response.json();
+        return payload && payload.ok === true && Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
     } catch (error) {
         console.error('API request failed:', error);
         throw error;
@@ -508,6 +555,30 @@ async function getEngineCount() {
 // Initialize
 // ============================================================================
 document.addEventListener('DOMContentLoaded', async function() {
+    document.querySelectorAll('[data-copy-owner-token]').forEach(function(button) {
+        button.addEventListener('click', async function() {
+            var token = button.closest('main')?.querySelector('[data-owner-token-value]');
+            var status = button.parentElement?.querySelector('[role="status"]');
+            if (!token || !status) return;
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(token.textContent);
+                } else {
+                    var selection = window.getSelection();
+                    var range = document.createRange();
+                    range.selectNodeContents(token);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    if (!document.execCommand('copy')) throw new Error('copy failed');
+                    selection.removeAllRanges();
+                }
+                status.textContent = button.dataset.copySuccess;
+            } catch (error) {
+                status.textContent = button.dataset.copyFailed;
+            }
+        });
+    });
+
     // Set theme
     setTheme(getTheme());
 
@@ -581,42 +652,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ============================================================================
-// Admin Panel Functions - AI.md PART 16
+// Shared UI Helpers - AI.md PART 16
 // ============================================================================
-
-// Admin section collapse state management
-function toggleSection(name) {
-    var section = document.getElementById('section-' + name);
-    if (section) {
-        section.classList.toggle('collapsed');
-        saveCollapsedState();
-    }
-}
-
-function saveCollapsedState() {
-    var collapsed = [];
-    document.querySelectorAll('.nav-section.collapsed').forEach(function(el) {
-        collapsed.push(el.id.replace('section-', ''));
-    });
-    localStorage.setItem('vidveil_admin_collapsed', JSON.stringify(collapsed));
-}
-
-function loadCollapsedState() {
-    try {
-        var collapsed = JSON.parse(localStorage.getItem('vidveil_admin_collapsed')) || [];
-        collapsed.forEach(function(name) {
-            var section = document.getElementById('section-' + name);
-            if (section) section.classList.add('collapsed');
-        });
-    } catch(e) {}
-
-    // Auto-expand section containing active link
-    var activeLink = document.querySelector('.nav-section-links .nav-link.active');
-    if (activeLink) {
-        var section = activeLink.closest('.nav-section');
-        if (section) section.classList.remove('collapsed');
-    }
-}
 
 // Toast notification system per AI.md PART 16: max 5 stacked, auto-dismiss
 // Success 3s / Info 3s / Warning 5s, Error never auto-dismisses,
@@ -839,35 +876,13 @@ function handleDownloadClick(event, downloadUrl) {
 }
 
 // ============================================================================
-// Favorites (AI.md PART 16/32: server-side storage via anonymous visitor
-// cookie is the source of truth and keeps /favorites and the Preferences
-// page fully functional without JS. This module layers instant (no-reload)
-// feedback on top via the JSON API through fetchAPI(), AND mirrors the list
-// into localStorage so favorites survive a server/DB wipe on this browser:
-// on first load each session the mirror and the server list are reconciled
-// (any entry present only in the mirror is re-POSTed to the server, so a
-// wiped server is restored from the browser; any entry the server already
-// has is left alone), and every successful server read/write re-writes the
-// mirror so both sides stay in sync going forward.
+// Favorites are server-owned resources. The owner cookie authorizes browser
+// forms; the optional localStorage token copy authorizes JavaScript API calls.
 // ============================================================================
 (function() {
     'use strict';
     var cache = null;
     var loadPromise = null;
-    var synced = false;
-    var STORAGE_KEY = 'vidveil_favorites_mirror';
-
-    var hasStorage = (function() {
-        try {
-            var t = '__vidveil_storage_test__';
-            window.localStorage.setItem(t, '1');
-            window.localStorage.removeItem(t);
-            return true;
-        } catch (e) {
-            return false;
-        }
-    })();
-
     function normalize(list) {
         var i18n = getAppI18n();
         return (list || []).map(function(f) {
@@ -879,28 +894,6 @@ function handleDownloadClick(event, downloadUrl) {
                 source: f.source || ''
             };
         });
-    }
-
-    function readMirror() {
-        if (!hasStorage) {
-            return [];
-        }
-        try {
-            return normalize(JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '[]'));
-        } catch (e) {
-            return [];
-        }
-    }
-
-    function writeMirror(list) {
-        if (!hasStorage) {
-            return;
-        }
-        try {
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list || []));
-        } catch (e) {
-            // Storage full/unavailable mid-session; server stays source of truth.
-        }
     }
 
     function loadFromDataIsland() {
@@ -918,85 +911,31 @@ function handleDownloadClick(event, downloadUrl) {
     function refresh() {
         loadPromise = fetchAPI('/v1/favorites').then(function(data) {
             cache = normalize(data.favorites);
-            writeMirror(cache);
             return cache;
         }).catch(function() {
-            cache = cache || readMirror();
+            cache = cache || [];
             return cache;
         });
         return loadPromise;
-    }
-
-    // restoreMissing re-creates on the server any mirror entries the server
-    // doesn't currently have (e.g. after a server/DB wipe), then re-reads the
-    // server list so cache/mirror end up with real server-assigned ids.
-    function restoreMissing(missing) {
-        var i18n = getAppI18n();
-        return Promise.all(missing.map(function(f) {
-            return fetchAPI('/v1/favorites', {
-                method: 'POST',
-                body: JSON.stringify({
-                    url: f.url,
-                    title: f.title || i18n.searchCardUntitled || 'Untitled',
-                    thumbnail: f.thumbnail || '',
-                    source: f.source || ''
-                })
-            }).catch(function() { return null; });
-        })).then(refresh);
-    }
-
-    // reconcileWithMirror runs once per page load: compares the localStorage
-    // mirror against the current server list (preferring the already-fresh
-    // server-rendered data island over an extra fetch when it fully covers
-    // the mirror) and restores anything the server is missing.
-    function reconcileWithMirror() {
-        synced = true;
-        var island = loadFromDataIsland();
-        if (!hasStorage) {
-            if (island) {
-                cache = island;
-                return Promise.resolve(cache);
-            }
-            return refresh();
-        }
-        var mirror = readMirror();
-        if (island) {
-            var islandUrls = {};
-            island.forEach(function(f) { islandUrls[f.url] = true; });
-            var missingFromIsland = mirror.filter(function(f) { return !islandUrls[f.url]; });
-            if (!missingFromIsland.length) {
-                cache = island;
-                writeMirror(cache);
-                return Promise.resolve(cache);
-            }
-            return restoreMissing(missingFromIsland);
-        }
-        if (!mirror.length) {
-            return refresh();
-        }
-        return fetchAPI('/v1/favorites').then(function(data) {
-            var serverList = normalize(data.favorites);
-            var serverUrls = {};
-            serverList.forEach(function(f) { serverUrls[f.url] = true; });
-            var missing = mirror.filter(function(f) { return !serverUrls[f.url]; });
-            if (!missing.length) {
-                cache = serverList;
-                writeMirror(cache);
-                return cache;
-            }
-            return restoreMissing(missing);
-        }).catch(function() {
-            cache = mirror;
-            return cache;
-        });
     }
 
     function ensureLoaded() {
         if (cache) {
             return Promise.resolve(cache);
         }
-        if (!synced) {
-            return reconcileWithMirror();
+        var island = loadFromDataIsland();
+        if (island) {
+            cache = island;
+            return Promise.resolve(cache);
+        }
+        try {
+            if (!window.localStorage.getItem('vidveil_owner_token_ab5213f6')) {
+                cache = [];
+                return Promise.resolve(cache);
+            }
+        } catch (e) {
+            cache = [];
+            return Promise.resolve(cache);
         }
         if (loadPromise) {
             return loadPromise;
@@ -1022,7 +961,10 @@ function handleDownloadClick(event, downloadUrl) {
                 thumbnail: video.thumbnail || '',
                 source: video.source || ''
             })
-        }).then(function() {
+        }).then(function(result) {
+            if (result.owner_token) {
+                try { window.localStorage.setItem('vidveil_owner_token_ab5213f6', result.owner_token); } catch (e) { /* The owner cookie remains authoritative for web forms. */ }
+            }
             return refresh();
         });
     }
@@ -1070,11 +1012,6 @@ function handleDownloadClick(event, downloadUrl) {
     };
 
     document.addEventListener('DOMContentLoaded', function() {
-        // ensureLoaded() triggers reconcileWithMirror(), which re-POSTs any
-        // mirror-only entries back to the server (restoring a wiped DB) but
-        // only updates the in-memory cache — the /favorites page's grid was
-        // already server-rendered from the (pre-restore) DB state, so without
-        // this it silently shows empty/stale until the visitor reloads.
         ensureLoaded().then(function(list) {
             if (typeof window.renderFavoritesGrid === 'function') {
                 window.renderFavoritesGrid(list);
@@ -1082,73 +1019,6 @@ function handleDownloadClick(event, downloadUrl) {
         });
     });
 })();
-
-// Admin keyboard shortcuts per AI.md PART 15
-function setupAdminKeyboardShortcuts() {
-    var keySequence = '';
-    var keyTimeout = null;
-    document.addEventListener('keydown', function(e) {
-        // Skip if in input/textarea
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-
-        // Ctrl+S: Save current form
-        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-            e.preventDefault();
-            var saveBtn = document.querySelector('button[type="submit"], .btn-primary');
-            if (saveBtn) saveBtn.click();
-            return;
-        }
-
-        // Escape: Close modal/menu
-        if (e.key === 'Escape') {
-            var modal = document.querySelector('.modal.show, .modal[open]');
-            if (modal) modal.remove();
-            return;
-        }
-
-        // /: Focus search
-        if (e.key === '/') {
-            e.preventDefault();
-            var search = document.querySelector('input[type="search"], input[name="search"], input[name="q"]');
-            if (search) search.focus();
-            return;
-        }
-
-        // ?: Show shortcuts help
-        if (e.key === '?') {
-            window.location.href = '/admin/help';
-            return;
-        }
-
-        // Handle g + key sequences
-        clearTimeout(keyTimeout);
-        keySequence += e.key.toLowerCase();
-        keyTimeout = setTimeout(function() { keySequence = ''; }, 500);
-
-        if (keySequence === 'gd') {
-            window.location.href = '/admin/dashboard';
-        } else if (keySequence === 'gs') {
-            window.location.href = '/admin/server/settings';
-        } else if (keySequence === 'gl') {
-            window.location.href = '/admin/server/logs';
-        }
-    });
-}
-
-// Initialize admin-specific features if on admin page
-function initAdmin() {
-    if (document.querySelector('.admin-nav')) {
-        loadCollapsedState();
-        setupAdminKeyboardShortcuts();
-    }
-}
-
-// Run admin init on DOMContentLoaded
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAdmin);
-} else {
-    initAdmin();
-}
 
 // ============================================================================
 // Autocomplete System - Reusable for all search inputs
@@ -1376,12 +1246,15 @@ if (document.readyState === 'loading') {
         var btn = form.querySelector('button[type="submit"]') || form.querySelector('button');
         if (!btn) return true;
         if (btn.disabled) return false;
-        btn.disabled = true;
+        // Keep the submitter enabled until the browser starts its native GET
+        // navigation; Chromium can cancel that action if the submit event
+        // disables the active button synchronously.
+        window.setTimeout(function() { btn.disabled = true; }, 0);
 
         if (btn.classList.contains('search-btn--compact') || btn.querySelector('svg')) {
             btn.classList.add('btn-loading');
         } else {
-            btn.innerHTML = '<span class="btn-spinner"></span> Searching...';
+            btn.innerHTML = '<span class="btn-spinner"></span> ' + getAppI18n().searchSearching;
         }
 
         // Hide all autocomplete dropdowns
@@ -1405,8 +1278,7 @@ if (document.readyState === 'loading') {
         try {
             var history = JSON.parse(localStorage.getItem('vidveil_history') || '[]');
             // Auto-clear old entries based on preference
-            var prefs = {};
-            try { prefs = JSON.parse(localStorage.getItem('vidveil_prefs') || '{}'); } catch(e) {}
+            var prefs = getPreferences();
             var autoClear = parseInt(prefs.autoClearHistory) || 0;
             if (autoClear > 0) {
                 var cutoff = Date.now() - (autoClear * 86400000);
@@ -1435,8 +1307,7 @@ if (document.readyState === 'loading') {
         history.unshift({ query: query, timestamp: Date.now() });
 
         // Respect maxHistory preference (0 = unlimited)
-        var prefs = {};
-        try { prefs = JSON.parse(localStorage.getItem('vidveil_prefs') || '{}'); } catch(e) {}
+        var prefs = getPreferences();
         var maxHist = parseInt(prefs.maxHistory) || 0;
         if (maxHist > 0 && history.length > maxHist) history = history.slice(0, maxHist);
         else if (maxHist === 0 && history.length > 200) history = history.slice(0, 200); // hard cap
@@ -1515,7 +1386,7 @@ if (document.readyState === 'loading') {
     // Show spinner when clicking search history link
     function showSearchSpinner(link, event) {
         // Change link text to spinner
-        link.innerHTML = '<span class="btn-spinner"></span> Searching...';
+        link.innerHTML = '<span class="btn-spinner"></span> ' + getAppI18n().searchSearching;
         link.classList.add('searching');
         // Allow navigation to continue
         return true;
@@ -1583,6 +1454,7 @@ if (document.readyState === 'loading') {
     var searchQuery = '';
     var RESULTS_PER_BATCH = 20;
     var allResults = [];
+    var resultCountFormats = [];
     var displayedCount = 0;
     // True while a refetchSearchResults() background update is in flight and
     // the still-visible #video-grid content is the OLD (pre-refetch) result
@@ -1612,7 +1484,6 @@ if (document.readyState === 'loading') {
     var searchCurrentSourceFilters = new Set(); // Multiple sources allowed
     var searchCurrentSort = '';
     var searchPreviewFirst = false; // Sort priority, not exclusive filter
-    var startTime = 0; // Reset right before each search request for accuracy
     var isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     var currentPage = 1;
     var isLoadingMore = false;
@@ -1645,9 +1516,41 @@ if (document.readyState === 'loading') {
         });
     }
 
+    function formatResultNumber(count, displayText) {
+        if (!Number.isInteger(count) || count < 0) count = allResults.length;
+        if (typeof displayText === 'string' && displayText !== '') {
+            resultCountFormats[count] = displayText;
+        }
+        var formatted = resultCountFormats[count];
+        if (typeof formatted !== 'string') formatted = formatFallbackNumber(count);
+        return formatted;
+    }
+
+    function formatResultCount(count, displayText) {
+        return fmtI18n(getSearchI18n().resultsCount, formatResultNumber(count, displayText));
+    }
+
+    function formatFallbackNumber(value) {
+        var locale = document.documentElement.lang || undefined;
+        try {
+            return new Intl.NumberFormat(locale).format(value);
+        } catch (e) {
+            return String(value);
+        }
+    }
+
+    function formatSearchNumber(value) {
+        if (!Number.isInteger(value) || value < 0) return String(value);
+        var formatted = resultCountFormats[value];
+        return typeof formatted === 'string' ? formatted : formatFallbackNumber(value);
+    }
+
     function initSearchPage() {
         var searchMeta = document.getElementById('search-meta');
         if (!searchMeta) return; // Not on search page
+
+        var initialSearchI18n = getSearchI18n();
+        resultCountFormats = Array.isArray(initialSearchI18n.resultCountFormats) ? initialSearchI18n.resultCountFormats.slice() : [];
 
         // Initialize autocomplete for results page search
         setupAutocomplete('results-search-input', 'autocomplete-dropdown-results');
@@ -1673,38 +1576,33 @@ if (document.readyState === 'loading') {
         // Apply default filters from preferences. Preview-first stays a
         // client-side sort priority (mirrors the server's own previewFirst
         // stream ordering, never a data filter). Duration/quality/sort are
-        // real server-authoritative filters (AI.md PART 16) but the defaults
-        // themselves live in localStorage only (IDEA.md "User preferences" -
-        // only results_per_page/open_new_tab are server-side cookies), so the
-        // server can't have applied them to the page it already rendered. A
+        // real server-authoritative filters (AI.md PART 16) and their defaults
+        // are stored in app preference cookies. A saved default takes effect
+        // through an in-place refetch when it was not applied during rendering. A
         // saved default takes effect via an in-place refetch (same request
         // parseResultFilterOptions/SearchWithOperators would apply from a
         // real query param) - never a full-page navigation, which was
         // causing a visible second page load (grid reset, scroll jump,
         // "in Xms" flicker) on every search that had a saved default.
-        if (userPrefs.defaultPreviewOnly) {
-            searchPreviewFirst = true;
-            var previewCheckbox = document.getElementById('filter-preview-first');
-            if (previewCheckbox) previewCheckbox.checked = true;
-        }
+        searchPreviewFirst = searchMeta.dataset.previewFirst === 'true';
+        var previewCheckbox = document.getElementById('filter-preview-first');
+        if (previewCheckbox) previewCheckbox.checked = searchPreviewFirst;
         var urlParams = new URLSearchParams(window.location.search);
         var missingDefaults = new URLSearchParams();
-        if (userPrefs.defaultDuration && !urlParams.get('duration')) {
+        var preferencesAppliedByServer = searchMeta.dataset.preferencesApplied === 'true';
+        if (!preferencesAppliedByServer && userPrefs.defaultDuration && !urlParams.has('duration')) {
             missingDefaults.set('duration', userPrefs.defaultDuration);
         }
-        if (userPrefs.defaultQuality && !urlParams.get('quality')) {
-            missingDefaults.set('quality', userPrefs.defaultQuality);
-        }
-        if (userPrefs.defaultSort && !urlParams.get('sort')) {
+        if (!preferencesAppliedByServer && userPrefs.defaultSort && !urlParams.has('sort')) {
             missingDefaults.set('sort', userPrefs.defaultSort);
         }
         var hasMissingDefaults = [...missingDefaults.keys()].length > 0;
         if (hasMissingDefaults) {
             missingDefaults.forEach(function(value, key) { urlParams.set(key, value); });
         }
-        searchCurrentDurationFilter = urlParams.get('duration') || '';
-        searchCurrentQualityFilter = urlParams.get('quality') || '';
-        searchCurrentSort = urlParams.get('sort') || '';
+        searchCurrentDurationFilter = urlParams.has('duration') ? (urlParams.get('duration') || '') : (searchMeta.dataset.filterDuration || '');
+        searchCurrentQualityFilter = urlParams.has('quality') ? (urlParams.get('quality') || '') : (searchMeta.dataset.filterQuality || '');
+        searchCurrentSort = urlParams.has('sort') ? (urlParams.get('sort') || '') : (searchMeta.dataset.filterSort || '');
         var durationSelect = document.getElementById('filter-duration');
         if (durationSelect) durationSelect.value = searchCurrentDurationFilter;
         var qualitySelect = document.getElementById('filter-quality');
@@ -1714,7 +1612,7 @@ if (document.readyState === 'loading') {
 
         // Save to search history
         if (searchQuery) {
-            searchSessionID = generateSearchSessionID();
+            searchSessionID = searchMeta.dataset.searchSession || generateSearchSessionID();
             saveSearchPageHistory(searchQuery);
             if (hasMissingDefaults) {
                 // The page the server rendered didn't have these defaults
@@ -1746,6 +1644,9 @@ if (document.readyState === 'loading') {
         }
         if (!Array.isArray(serverResults)) return false;
 
+        var searchI18n = getSearchI18n();
+        resultCountFormats = Array.isArray(searchI18n.resultCountFormats) ? searchI18n.resultCountFormats.slice() : [];
+
         isSearching = false;
         hideSearchElement('initial-loading');
 
@@ -1768,7 +1669,7 @@ if (document.readyState === 'loading') {
 
         for (var i = 0; i < serverResults.length; i++) {
             var r = serverResults[i];
-            // Client-side min-duration filter (localStorage preference)
+            // Client-side min-duration filter from the guest preference cookies.
             if (minDuration > 0 && r.duration_seconds > 0 && r.duration_seconds < minDuration) {
                 continue;
             }
@@ -1783,14 +1684,14 @@ if (document.readyState === 'loading') {
         }
 
         var countEl = document.getElementById('result-count');
-        if (countEl) countEl.textContent = fmtI18n(getSearchI18n().resultsCount, allResults.length);
+        if (countEl) countEl.textContent = formatResultNumber(allResults.length);
 
         // The server rendered page 1; infinite scroll fetches further pages via SSE.
         currentPage = 1;
         hasMoreResults = true;
         setupInfiniteScroll();
         applySearchFiltersAndSort();
-        announce(fmtI18n(getSearchI18n().resultsCount, allResults.length));
+        announce(formatResultCount(allResults.length));
         initRelatedSearchesToggle();
         updateSearchStatus();
         return true;
@@ -1800,7 +1701,7 @@ if (document.readyState === 'loading') {
         if (!searchQuery) return;
 
         // Build search URL with optional parameters
-        var searchUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&session=' + encodeURIComponent(searchSessionID);
+        var searchUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&session=' + encodeURIComponent(searchSessionID) + '&display_offset=0';
 
         // Add show_ai parameter if user has enabled AI content in preferences
         if (userPrefs.showAIContent) {
@@ -1823,6 +1724,7 @@ if (document.readyState === 'loading') {
         var streamEngineList = (searchCurrentSourceFilters.size > 0)
             ? Array.from(searchCurrentSourceFilters)
             : (userPrefs.enabledEngines || []);
+        if (searchCurrentSourceFilters.size === 0 && userPrefs.engineSelectionSet && streamEngineList.length === 0) streamEngineList = ['__none__'];
         if (streamEngineList.length > 0) {
             searchUrl += '&engines=' + encodeURIComponent(streamEngineList.join(','));
         }
@@ -1842,7 +1744,6 @@ if (document.readyState === 'loading') {
             searchUrl += '&min_duration=' + parseInt(userPrefs.minDuration);
         }
 
-        startTime = performance.now();
         var eventSource = new EventSource(searchUrl);
         activeEventSource = eventSource;
         var firstResult = true;
@@ -1864,7 +1765,7 @@ if (document.readyState === 'loading') {
                 pendingGridSwap = false;
                 updateSearchStatus();
                 hideSearchElement('status-bar');
-                showToast('Some engines failed to respond', 'warning');
+                showToast(getSearchI18n().enginesFailed, 'warning');
             }
         }, 25000);
 
@@ -1879,9 +1780,10 @@ if (document.readyState === 'loading') {
                 isSearching = false;
                 if (data.engines_total != null) enginesTotal = data.engines_total;
                 if (data.engines_with_results != null) enginesWithResultsFinal = data.engines_with_results;
-                var elapsed = data.elapsed_ms != null ? data.elapsed_ms : Math.round(performance.now() - startTime);
                 var timeContainer = document.getElementById('search-time-container');
-                if (timeContainer) timeContainer.textContent = fmtI18n(getSearchI18n().resultsTime, elapsed);
+                if (timeContainer && typeof data.elapsed_display === 'string') {
+                    timeContainer.textContent = fmtI18n(getSearchI18n().resultsDuration, data.elapsed_display);
+                }
                 updateSearchStatus();
                 hideSearchElement('status-bar');
 
@@ -1894,7 +1796,7 @@ if (document.readyState === 'loading') {
                         var staleGrid = document.getElementById('video-grid');
                         if (staleGrid) staleGrid.innerHTML = '';
                         var staleCountEl = document.getElementById('result-count');
-                        if (staleCountEl) staleCountEl.textContent = fmtI18n(getSearchI18n().resultsCount, 0);
+                        if (staleCountEl) staleCountEl.textContent = formatResultNumber(0);
                     }
                     showNoResultsMessage();
                     hasMoreResults = false;
@@ -1907,7 +1809,7 @@ if (document.readyState === 'loading') {
                     // Apply default filters from preferences
                     applySearchFiltersAndSort();
                     // A11Y: Announce result count to screen readers
-                    announce(fmtI18n(getSearchI18n().resultsCount, allResults.length));
+                    announce(formatResultCount(allResults.length));
                     // Related searches are server-rendered — just add show-more toggle
                     initRelatedSearchesToggle();
                 }
@@ -1951,7 +1853,7 @@ if (document.readyState === 'loading') {
                         var oldGrid = document.getElementById('video-grid');
                         if (oldGrid) oldGrid.innerHTML = '';
                         var oldCountEl = document.getElementById('result-count');
-                        if (oldCountEl) oldCountEl.textContent = fmtI18n(getSearchI18n().resultsCount, 0);
+                        if (oldCountEl) oldCountEl.textContent = formatResultNumber(0);
                     }
                 }
 
@@ -1961,7 +1863,8 @@ if (document.readyState === 'loading') {
                 addResultCard(r);
 
                 var countEl = document.getElementById('result-count');
-                if (countEl) countEl.textContent = fmtI18n(getSearchI18n().resultsCount, allResults.length);
+                var streamDisplayCount = data.display_count === allResults.length ? data.display_count_text : null;
+                if (countEl) countEl.textContent = formatResultNumber(allResults.length, streamDisplayCount);
 
                 // Add to source filter if new
                 var source = r.source || '';
@@ -1996,14 +1899,14 @@ if (document.readyState === 'loading') {
                     pendingGridSwap = false;
                     updateSearchStatus();
                     hideSearchElement('status-bar');
-                    showToast('Search is busy — please try again shortly', 'warning');
+                    showToast(getSearchI18n().searchBusy, 'warning');
                     return;
                 }
             }
             // SSE failed - fallback to JSON API
             if (allResults.length === 0) {
                 // Show user-friendly error message
-                showToast('Connection interrupted. Retrying...', 'warning');
+                showToast(getSearchI18n().connectionRetry, 'warning');
                 fallbackToJSONSearch(minDuration);
             } else {
                 // We have some results, just finish gracefully
@@ -2011,24 +1914,25 @@ if (document.readyState === 'loading') {
                 pendingGridSwap = false;
                 updateSearchStatus();
                 hideSearchElement('status-bar');
-                showToast('Some engines failed to respond', 'warning');
+                showToast(getSearchI18n().enginesFailed, 'warning');
             }
         };
 
         // Update loading text
         var loadingText = document.getElementById('loading-text');
-        if (loadingText) loadingText.textContent = 'Searching engines...';
+        if (loadingText) loadingText.textContent = getSearchI18n().searchingEngines;
     }
 
     // Fallback to JSON API when SSE fails (e.g., proxy doesn't support SSE)
     function fallbackToJSONSearch(minDuration) {
         var loadingText = document.getElementById('loading-text');
-        if (loadingText) loadingText.textContent = 'Loading results...';
+        if (loadingText) loadingText.textContent = getSearchI18n().loadingResults;
 
-        var fallbackUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&session=' + encodeURIComponent(searchSessionID);
+        var fallbackUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&session=' + encodeURIComponent(searchSessionID) + '&display=human';
         var fallbackEngineList = (searchCurrentSourceFilters.size > 0)
             ? Array.from(searchCurrentSourceFilters)
             : (userPrefs.enabledEngines || []);
+        if (searchCurrentSourceFilters.size === 0 && userPrefs.engineSelectionSet && fallbackEngineList.length === 0) fallbackEngineList = ['__none__'];
         if (fallbackEngineList.length > 0) {
             fallbackUrl += '&engines=' + encodeURIComponent(fallbackEngineList.join(','));
         }
@@ -2053,12 +1957,14 @@ if (document.readyState === 'loading') {
         })
         .then(function(data) {
             isSearching = false;
-            // Prefer server-reported time; fall back to client measurement
-            var elapsed = (data.data && data.data.search_time_ms != null)
-                ? data.data.search_time_ms
-                : Math.round(performance.now() - startTime);
             var timeContainer = document.getElementById('search-time-container');
-            if (timeContainer) timeContainer.textContent = fmtI18n(getSearchI18n().resultsTime, elapsed);
+            var displayData = data.data && data.data.display;
+            if (timeContainer && displayData && typeof displayData.search_time === 'string') {
+                timeContainer.textContent = fmtI18n(getSearchI18n().resultsDuration, displayData.search_time);
+            }
+            if (displayData && Array.isArray(displayData.result_count_formats)) {
+                resultCountFormats = displayData.result_count_formats.slice();
+            }
 
             if (!data.ok || !data.data || !data.data.results || data.data.results.length === 0) {
                 // Confirmed: the new filter/sort truly has zero results - now
@@ -2068,7 +1974,7 @@ if (document.readyState === 'loading') {
                     var staleGrid = document.getElementById('video-grid');
                     if (staleGrid) staleGrid.innerHTML = '';
                     var staleCountEl = document.getElementById('result-count');
-                    if (staleCountEl) staleCountEl.textContent = fmtI18n(getSearchI18n().resultsCount, 0);
+                    if (staleCountEl) staleCountEl.textContent = formatResultNumber(0);
                 }
                 hideSearchElement('initial-loading');
                 showNoResultsMessage();
@@ -2086,7 +1992,7 @@ if (document.readyState === 'loading') {
                 var oldGrid = document.getElementById('video-grid');
                 if (oldGrid) oldGrid.innerHTML = '';
                 var oldCountEl = document.getElementById('result-count');
-                if (oldCountEl) oldCountEl.textContent = fmtI18n(getSearchI18n().resultsCount, 0);
+                if (oldCountEl) oldCountEl.textContent = formatResultNumber(0);
             }
             hideSearchElement('initial-loading');
             hideNoResultsMessage();
@@ -2117,12 +2023,15 @@ if (document.readyState === 'loading') {
             }
 
             var countEl = document.getElementById('result-count');
-            if (countEl) countEl.textContent = fmtI18n(getSearchI18n().resultsCount, allResults.length);
+            var displayCount = displayData && displayData.result_count === allResults.length
+                ? displayData.result_count_text
+                : null;
+            if (countEl) countEl.textContent = formatResultNumber(allResults.length, displayCount);
 
             setupInfiniteScroll();
             // Apply default filters from preferences
             applySearchFiltersAndSort();
-            announce(fmtI18n(getSearchI18n().resultsCount, allResults.length));
+            announce(formatResultCount(allResults.length, displayCount));
             updateSearchStatus();
             hideSearchElement('status-bar');
         })
@@ -2196,12 +2105,9 @@ if (document.readyState === 'loading') {
         var targetAttr = userPrefs.openNewTab !== false ? ' target="_blank"' : '';
         var html = '<a href="' + escapeHtmlUtil(r.url) + '"' + targetAttr + ' rel="noopener noreferrer nofollow" class="card-link">';
         html += '<div class="thumb-container"' + (hasPreview ? ' data-preview="' + escapeHtmlUtil(proxiedPreviewUrl) + '"' : '') + '>';
-        // Proxy thumbnail based on proxyImages preference (default: true for privacy)
         var thumbSrc = '/static/images/placeholder.svg';
         if (r.thumbnail) {
-            thumbSrc = userPrefs.proxyImages !== false
-                ? '/api/v1/proxy/thumbnails?url=' + encodeURIComponent(r.thumbnail)
-                : r.thumbnail;
+            thumbSrc = '/api/v1/proxy/thumbnails?url=' + encodeURIComponent(r.thumbnail);
         }
         html += '<img class="thumb-static" src="' + escapeHtmlUtil(thumbSrc) + '" alt="' + escapeHtmlUtil(r.title) + '" loading="lazy" data-fallback="/static/images/placeholder.svg">';
 
@@ -2446,7 +2352,7 @@ if (document.readyState === 'loading') {
         var label = document.getElementById('source-filter-label');
         if (label) {
             if (allChecked || selectedSources.length === 0) {
-                label.textContent = 'All Sources';
+                label.textContent = getAppI18n().searchAllSources;
             } else if (selectedSources.length === 1) {
                 label.textContent = selectedSources[0];
             } else {
@@ -2553,31 +2459,27 @@ if (document.readyState === 'loading') {
         var engineStatus = document.getElementById('engine-status');
 
         // Load min duration from prefs for display
-        var prefs = {};
-        try {
-            prefs = JSON.parse(localStorage.getItem('vidveil_prefs') || '{}');
-        } catch (e) {}
+        var prefs = getPreferences();
         var minDuration = parseInt(prefs.minDuration) || 0;
 
+        var appI18n = getAppI18n();
+        var searchI18n = getSearchI18n();
         if (isSearching) {
-            // Still streaming: no authoritative server count yet, so this is a
-            // live client-side tally (progress indicator only, not the final claim).
-            if (statusText) statusText.textContent = allResults.length + ' results (streaming...)';
-            if (engineStatus) engineStatus.textContent = enginesWithResults.size + ' engines responding';
+            // This live tally is a progress indicator, not the final server count.
+            if (statusText) statusText.textContent = formatResultCount(allResults.length) + ' (' + appI18n.searchStreaming + ')';
+            if (engineStatus) engineStatus.textContent = fmtI18n(appI18n.searchEnginesResponding, {count: formatSearchNumber(enginesWithResults.size)});
         } else {
-            var msg = allResults.length + ' results found';
+            var msg = formatResultCount(allResults.length);
             if (minDuration > 0) {
-                msg += ' (min ' + Math.floor(minDuration / 60) + ' min)';
+                msg += ' ' + fmtI18n(appI18n.searchMinimumDuration, {minutes: formatSearchNumber(Math.floor(minDuration / 60))});
             }
             if (statusText) statusText.textContent = msg;
-            // Final state: use the server-authoritative counts from the SSE
-            // 'done' payload, not the client-side tally, per PART 14's
-            // server-side-processing philosophy.
+            // Final state: use server-authoritative counts from the SSE done payload.
             if (engineStatus) {
                 if (enginesWithResultsFinal != null && enginesTotal > 0) {
-                    engineStatus.textContent = enginesWithResultsFinal + ' of ' + enginesTotal + ' engines had results';
+                    engineStatus.textContent = fmtI18n(appI18n.searchEnginesWithResults, {count: formatSearchNumber(enginesWithResultsFinal), total: formatSearchNumber(enginesTotal)});
                 } else {
-                    engineStatus.textContent = enginesWithResults.size + ' engines';
+                    engineStatus.textContent = fmtI18n(appI18n.searchEnginesCount, {count: formatSearchNumber(enginesWithResults.size)});
                 }
             }
         }
@@ -2596,15 +2498,15 @@ if (document.readyState === 'loading') {
         var showMoreBtn = document.createElement('button');
         showMoreBtn.type = 'button';
         showMoreBtn.className = 'related-show-more';
-        showMoreBtn.innerHTML = '<span>+' + hiddenTags.length + ' more</span>';
+        showMoreBtn.innerHTML = '<span>' + getAppI18n().searchRelatedShowMore.replace('{count}', formatSearchNumber(hiddenTags.length)) + '</span>';
         showMoreBtn.onclick = function() {
             tagsContainer.classList.toggle('related-tags--expanded');
             var all = tagsContainer.querySelectorAll('.related-tag--hidden');
             if (tagsContainer.classList.contains('related-tags--expanded')) {
-                showMoreBtn.innerHTML = '<span>Show less</span>';
+                showMoreBtn.innerHTML = '<span>' + getAppI18n().searchRelatedShowLess + '</span>';
                 all.forEach(function(t) { t.classList.add('related-tag--visible'); });
             } else {
-                showMoreBtn.innerHTML = '<span>+' + all.length + ' more</span>';
+                showMoreBtn.innerHTML = '<span>' + getAppI18n().searchRelatedShowMore.replace('{count}', formatSearchNumber(all.length)) + '</span>';
                 all.forEach(function(t) { t.classList.remove('related-tag--visible'); });
             }
         };
@@ -2614,7 +2516,7 @@ if (document.readyState === 'loading') {
     // Infinite scroll - loads more pages as user scrolls.
     // Server-authoritative per IDEA.md "Search Settings": the server always
     // decides page size/content; JS only decides *when* to request the next
-    // page, and auto-fetches by default (results_per_page cookie "0",
+    // page, and auto-fetches by default (vidveil_pref_results_per_page cookie "0",
     // "Infinite scroll") unless the visitor picks 20/50/100 in Preferences.
     // In that case the server renders real Prev/Next links
     // (search.tmpl #pagination-container) and this function returns
@@ -2665,7 +2567,7 @@ if (document.readyState === 'loading') {
         if (loadIndicator) loadIndicator.classList.remove('hidden');
 
         // Stream next page of results (include AI, quality, preview, and engine preferences)
-        var pageUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&page=' + currentPage + '&session=' + encodeURIComponent(searchSessionID);
+        var pageUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&page=' + currentPage + '&session=' + encodeURIComponent(searchSessionID) + '&display_offset=' + allResults.length;
         if (userPrefs.showAIContent) {
             pageUrl += '&show_ai=1';
         }
@@ -2675,8 +2577,8 @@ if (document.readyState === 'loading') {
         if (searchPreviewFirst) {
             pageUrl += '&preview_first=1';
         }
-        if (userPrefs.enabledEngines && userPrefs.enabledEngines.length > 0) {
-            pageUrl += '&engines=' + encodeURIComponent(userPrefs.enabledEngines.join(','));
+        if (userPrefs.enabledEngines && (userPrefs.enabledEngines.length > 0 || userPrefs.engineSelectionSet)) {
+            pageUrl += '&engines=' + encodeURIComponent(userPrefs.enabledEngines.length ? userPrefs.enabledEngines.join(',') : '__none__');
         }
         if (userPrefs.minDuration && parseInt(userPrefs.minDuration) > 0) {
             pageUrl += '&min_duration=' + parseInt(userPrefs.minDuration);
@@ -2706,7 +2608,7 @@ if (document.readyState === 'loading') {
                         // Replace sentinel with end-of-results message
                         var endMsg = document.createElement('p');
                         endMsg.className = 'no-more-results';
-                        endMsg.textContent = 'No more results';
+                        endMsg.textContent = getAppI18n().searchNoMoreResults;
                         sentinel.replaceWith(endMsg);
                     }
                 } else {
@@ -2736,7 +2638,8 @@ if (document.readyState === 'loading') {
                 addResultCard(r);
 
                 var countEl = document.getElementById('result-count');
-                if (countEl) countEl.textContent = fmtI18n(getSearchI18n().resultsCount, allResults.length);
+                var streamDisplayCount = data.display_count === allResults.length ? data.display_count_text : null;
+                if (countEl) countEl.textContent = formatResultNumber(allResults.length, streamDisplayCount);
             }
         };
 
@@ -2763,7 +2666,7 @@ if (document.readyState === 'loading') {
                 } catch (e) {
                     overloaded = false;
                 }
-                showToast(overloaded ? 'Search is busy — please try again shortly' : 'Failed to load more results', 'warning');
+                showToast(overloaded ? getSearchI18n().searchBusy : getSearchI18n().failedLoadMore, 'warning');
                 return;
             }
 
@@ -2782,7 +2685,7 @@ if (document.readyState === 'loading') {
             // counter so the next scroll retries this same page.
             currentPage--;
             // Show subtle error - don't block the user
-            showToast('Failed to load more results', 'warning');
+            showToast(getSearchI18n().failedLoadMore, 'warning');
         };
     }
 
@@ -2972,7 +2875,7 @@ Object.assign(window.Vidveil, {
     selectAllEngines: selectAllEngines,
     selectNoneEngines: selectNoneEngines,
     selectTier: selectTier,
-    updateSort: updateSort,
+    updateSort: window.sortResults,
     filterBySource: filterBySource,
     filterByDuration: filterByDuration,
     showNotification: showNotification,
@@ -2982,8 +2885,6 @@ Object.assign(window.Vidveil, {
     announce: announce
 });
 
-// Export admin functions globally
-window.toggleSection = toggleSection;
 window.showToast = showToast;
 window.dismissToast = dismissToast;
 window.dismissAllToasts = dismissAllToasts;
@@ -3012,7 +2913,7 @@ window.addEventListener('offline', function() {
         indicator = document.createElement('div');
         indicator.id = 'offline-indicator';
         indicator.className = 'offline-banner';
-        indicator.textContent = 'You are offline. Some features may be unavailable.';
+        indicator.textContent = getAppI18n().offlineMessage;
         document.body.insertBefore(indicator, document.body.firstChild);
     }
     indicator.hidden = false;
@@ -3089,9 +2990,9 @@ function showUpdateNotification() {
     var banner = document.createElement('div');
     banner.id = 'update-banner';
     banner.className = 'update-banner';
-    banner.innerHTML = '<span>A new version is available</span>'
-        + '<button type="button" data-action="update-app" class="btn btn-primary btn-sm">Update Now</button>'
-        + '<button type="button" data-action="dismiss-update" class="btn btn-secondary btn-sm">Later</button>';
+    banner.innerHTML = '<span>' + getAppI18n().updateAvailable + '</span>'
+        + '<button type="button" data-action="update-app" class="btn btn-primary btn-sm">' + getAppI18n().updateNow + '</button>'
+        + '<button type="button" data-action="dismiss-update" class="btn btn-secondary btn-sm">' + getAppI18n().later + '</button>';
     document.body.appendChild(banner);
 }
 
@@ -3305,12 +3206,23 @@ function getSearchI18n() {
 }
 
 // Substitutes the single placeholder verb in a translated string (the same
-// %d/%s the Go side formats server-side) with a client-side value, so the
+// {count} that the Go side fills server-side) with a client-side value, so the
 // count/time labels stay translated while results stream in. Falls back to
 // the bare value when the key is missing from the #search-i18n payload.
-function fmtI18n(tpl, value) {
-    if (!tpl) return String(value);
-    return tpl.replace(/%[dsv]/, String(value));
+function fmtI18n(tpl, values) {
+    if (!tpl) return String(values);
+    var replacements = values && typeof values === 'object' ? values : null;
+    var usedScalar = false;
+    return tpl.replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, function(placeholder, name) {
+        if (replacements && Object.prototype.hasOwnProperty.call(replacements, name)) {
+            return String(replacements[name]);
+        }
+        if (!replacements && !usedScalar) {
+            usedScalar = true;
+            return String(values);
+        }
+        return placeholder;
+    });
 }
 
 // Shows the in-body "no results" state. Reuses the server-rendered
@@ -3391,21 +3303,19 @@ function updateFavoritesCountLabel(count) {
     var label = document.getElementById('favorites-count-label');
     if (label) {
         label.textContent = count === 1 ? (i18n.countSingular || i18n.favCountSingular || String(count)) :
-            i18n.countPlural.replace('%d', count);
+            i18n.countPlural.replace('{count}', count);
     }
-    // Preferences page count span (server-supplied data-format, e.g. "%d favorites").
+    // Preferences page count span (server-supplied data-format, e.g. "{count} favorites").
     var prefsCount = document.getElementById('favorites-count');
     if (prefsCount) {
-        var fmt = prefsCount.getAttribute('data-format') || '%d';
-        prefsCount.textContent = fmt.replace('%d', count);
+        var fmt = prefsCount.getAttribute('data-format') || '{count}';
+        prefsCount.textContent = fmt.replace('{count}', count);
     }
 }
 
 // Rebuilds the /favorites page grid from the resolved favorites list.
-// Called after ensureLoaded() so entries restored from the localStorage
-// mirror (server/DB-wipe recovery, see the Favorites module comment above)
-// appear immediately instead of only after a manual page reload — the SSR
-// grid was built from the DB state before restoreMissing() ran.
+// Called after ensureLoaded() to refresh the server-rendered list after an
+// API mutation without requiring a page reload.
 function renderFavoritesGrid(list) {
     var grid = document.getElementById('favorites-grid');
     if (!grid) {
@@ -3747,7 +3657,6 @@ document.addEventListener('error', function(e) {
             try { i18n = JSON.parse(island.textContent); } catch (e) { i18n = {}; }
         }
 
-        var STORAGE_KEY = 'vidveil_prefs';
         var HISTORY_KEY = 'vidveil_history';
 
         var defaults = {
@@ -3767,13 +3676,11 @@ document.addEventListener('error', function(e) {
             maxHistory: '0',
             autoClearHistory: '0',
             useTor: false,
-            proxyImages: true,
             engines: []
         };
 
         function loadPreferences() {
-            var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-            var prefs = Object.assign({}, defaults, saved);
+            var prefs = readPreferenceCookies(defaults);
 
             document.getElementById('theme').value = prefs.theme;
             document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
@@ -3798,7 +3705,6 @@ document.addEventListener('error', function(e) {
             document.getElementById('auto-clear-history').value = prefs.autoClearHistory;
 
             document.getElementById('use-tor').checked = prefs.useTor;
-            document.getElementById('proxy-images').checked = prefs.proxyImages;
 
             var savedEngines = prefs.enabledEngines || prefs.engines || [];
             if (savedEngines.length > 0) {
@@ -3847,24 +3753,14 @@ document.addEventListener('error', function(e) {
                 maxHistory: document.getElementById('max-history').value,
                 autoClearHistory: document.getElementById('auto-clear-history').value,
                 useTor: document.getElementById('use-tor').checked,
-                proxyImages: document.getElementById('proxy-images').checked,
-                enabledEngines: engines
+                enabledEngines: engines,
+                engineSelectionSet: true
             };
-
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 
             document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + prefs.theme);
-            var maxAge = 365 * 24 * 3600;
-            // Cookie name must match getTheme()/setTheme() ("theme") so the
-            // server's theme cookie reader stays authoritative regardless of
-            // which of the two preferences-save handlers ran (see
-            // mirrorServerPrefsToCookies for the same pattern applied to
-            // resultsPerPage/openNewTab).
-            document.cookie = 'theme=' + encodeURIComponent(prefs.theme) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
-            if (typeof mirrorServerPrefsToCookies === 'function') {
-                mirrorServerPrefsToCookies(prefs);
-            }
+            setTheme(prefs.theme);
+            mirrorPreferencesToCookies(prefs);
 
             showToast(i18n.saved, 'success');
             setTimeout(function() {
@@ -3873,7 +3769,12 @@ document.addEventListener('error', function(e) {
         }
 
         window.resetPreferences = function() {
-            localStorage.removeItem(STORAGE_KEY);
+            document.cookie.split(';').forEach(function(cookie) {
+                var name = cookie.split('=')[0].trim();
+                if (name === 'theme' || name === 'lang' || name.indexOf('vidveil_pref_') === 0) {
+                    document.cookie = name + '=; path=/; max-age=0; SameSite=Lax';
+                }
+            });
             loadPreferences();
             showToast(i18n.resetDone, 'info');
         };
@@ -3901,7 +3802,7 @@ document.addEventListener('error', function(e) {
                     var data = JSON.parse(e.target.result);
                     if (Array.isArray(data)) {
                         localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
-                        showToast(i18n.historyImported.replace('%d', data.length), 'success');
+                        showToast(i18n.historyImported.replace('{count}', data.length), 'success');
                     } else {
                         showToast(i18n.historyInvalidFile, 'error');
                     }

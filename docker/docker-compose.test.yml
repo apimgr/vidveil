@@ -1,7 +1,7 @@
 # vidveil - Test compose (DEBUG enabled, ephemeral valkey cache)
 # Per AI.md PART 26: Uses temp directory workflow - MUST use image, not build
 
-name: vidveil-test
+name: vidveil
 
 x-logging: &default-logging
   options:
@@ -22,7 +22,7 @@ services:
       PORT: 80
       DEBUG: true
       TZ: America/New_York
-      CACHE_URL: valkey://vidveil-cache-test:6379
+      CACHE_URL: valkey://vidveil-cache:6379
     volumes:
       - ./volumes/config:/config:z
       - ./volumes/data:/data:z
@@ -35,15 +35,15 @@ services:
       retries: 3
       start_period: 90s
     depends_on:
-      vidveil-cache-test:
+      vidveil-cache:
         condition: service_healthy
     networks:
-      - vidveil-test
+      - vidveil
 
-  vidveil-cache-test:
+  vidveil-cache:
     image: valkey/valkey:alpine
     pull_policy: always
-    container_name: vidveil-cache-test
+    container_name: vidveil-cache
     restart: "no"
     logging: *default-logging
     tmpfs:
@@ -55,9 +55,9 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - vidveil-test
+      - vidveil
 
 networks:
-  vidveil-test:
-    name: vidveil-test
+  vidveil:
+    name: vidveil
     external: false

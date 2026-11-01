@@ -309,7 +309,7 @@ func TestGetInfo_ConnectedEnabledTrue(t *testing.T) {
 	}
 }
 
-func TestGetInfo_NoTorBinaryEnabledTrue(t *testing.T) {
+func TestGetInfo_NoTorBinaryDisabled(t *testing.T) {
 	s := newTestService(t)
 	s.status = TorServiceStatusNoTorBinary
 	info := s.GetInfo()
@@ -317,8 +317,11 @@ func TestGetInfo_NoTorBinaryEnabledTrue(t *testing.T) {
 	if !ok {
 		t.Fatal("GetInfo: 'enabled' is not bool")
 	}
-	if !enabled {
-		t.Error("GetInfo: NoTorBinary status should have enabled=true")
+	if enabled {
+		t.Error("GetInfo: Tor features must be disabled when the Tor binary is missing")
+	}
+	if _, present := info["onion_address"]; present {
+		t.Error("GetInfo: disabled Tor must not expose an active onion address")
 	}
 }
 

@@ -456,7 +456,7 @@ func TestNewRotatingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile() error: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	// File must exist after creation
 	if _, err := os.Stat(path); err != nil {
@@ -504,7 +504,7 @@ func TestNewRotatingFileNeedsRotationFalseInitially(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile() error: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	if rf.needsRotation() {
 		t.Error("needsRotation() = true on fresh file, want false")
@@ -528,7 +528,7 @@ func TestNewRotatingFileNeedsRotationTrueWhenFull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile() error: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	// Bypass the public Write so we set currentSize directly without triggering rotate
 	rf.currentSize = rf.maxSize
@@ -555,7 +555,7 @@ func TestRotatingFileRotatesOnSizeThreshold(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRotatingFile() error: %v", err)
 	}
-	defer rf.Close()
+	defer func() { _ = rf.Close() }()
 
 	// Write enough data to exceed maxSize; the call must succeed
 	_, err = rf.Write([]byte("ab"))

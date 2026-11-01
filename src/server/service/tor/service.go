@@ -21,11 +21,11 @@ import (
 	"sync"
 	"time"
 
+	"crypto/sha3"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/cretz/bine/tor"
 	"github.com/pires/go-proxyproto"
-	"golang.org/x/crypto/sha3"
 )
 
 // TorService represents the embedded Tor hidden service per AI.md PART 31
@@ -308,7 +308,7 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	// the current backend port; the .onion identity persists via the keys
 	// under HiddenServiceDir, so overwriting torrc is always safe.
 	if s.configDir == "" {
-		proxyLn.Close()
+		_ = proxyLn.Close()
 		s.status = TorServiceStatusError
 		return fmt.Errorf("tor config directory not set, cannot write torrc")
 	}
@@ -320,7 +320,7 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	}
 	torrcContent := buildTorrc(s.torConfig, siteDir, torBackendPort, torLogFile)
 	if _, err := ensureTorrc(torrcFile, torrcContent); err != nil {
-		proxyLn.Close()
+		_ = proxyLn.Close()
 		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to write torrc: %w", err)
 	}
@@ -353,7 +353,7 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	s.logger.Info("Starting dedicated Tor process...", nil)
 	t, err := tor.Start(ctx, startConf)
 	if err != nil {
-		proxyLn.Close()
+		_ = proxyLn.Close()
 		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to start dedicated tor: %w", err)
 	}
@@ -369,9 +369,9 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	defer cancel()
 
 	if err := t.EnableNetwork(dialCtx, true); err != nil {
-		t.Close()
+		_ = t.Close()
 		s.torInstance = nil
-		proxyLn.Close()
+		_ = proxyLn.Close()
 		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to enable tor network: %w", err)
 	}
@@ -383,9 +383,9 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	hostnamePath := filepath.Join(siteDir, "hostname")
 	onionBytes, err := os.ReadFile(hostnamePath)
 	if err != nil {
-		t.Close()
+		_ = t.Close()
 		s.torInstance = nil
-		proxyLn.Close()
+		_ = proxyLn.Close()
 		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to read onion hostname: %w", err)
 	}
@@ -537,7 +537,7 @@ func (s *TorService) Stop() error {
 	s.torBackendPort = 0
 
 	// Per AI.md PART 31: remove tor.pid when the Tor process is stopped
-	os.Remove(filepath.Join(s.dataDir, "tor.pid"))
+	_ = os.Remove(filepath.Join(s.dataDir, "tor.pid"))
 
 	s.status = TorServiceStatusDisconnected
 	return nil
@@ -651,9 +651,8 @@ func (s *TorService) generateOnionAddress() string {
 	checksumInput := append([]byte(".onion checksum"), s.publicKey...)
 	checksumInput = append(checksumInput, version)
 
-	hasher := sha3.New256()
-	hasher.Write(checksumInput)
-	checksum := hasher.Sum(nil)[:2]
+	checksumSum := sha3.Sum256(checksumInput)
+	checksum := checksumSum[:2]
 
 	// Build address bytes
 	addressBytes := append([]byte{}, s.publicKey...)
@@ -761,9 +760,9 @@ func (s *TorService) RegenerateAddress() error {
 	siteDir := filepath.Join(s.dataDir, "site")
 
 	// Delete existing keys
-	os.Remove(filepath.Join(siteDir, "hs_ed25519_secret_key"))
-	os.Remove(filepath.Join(siteDir, "hs_ed25519_public_key"))
-	os.Remove(filepath.Join(siteDir, "hostname"))
+	_ = os.Remove(filepath.Join(siteDir, "hs_ed25519_secret_key"))
+	_ = os.Remove(filepath.Join(siteDir, "hs_ed25519_public_key"))
+	_ = os.Remove(filepath.Join(siteDir, "hostname"))
 
 	// Generate new keys
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
@@ -865,9 +864,8 @@ func (s *TorService) runVanityGeneration(ctx context.Context, prefix string) {
 			version := byte(0x03)
 			checksumInput := append([]byte(".onion checksum"), pub...)
 			checksumInput = append(checksumInput, version)
-			hasher := sha3.New256()
-			hasher.Write(checksumInput)
-			checksum := hasher.Sum(nil)[:2]
+			checksumSum := sha3.Sum256(checksumInput)
+			checksum := checksumSum[:2]
 
 			addressBytes := append([]byte{}, pub...)
 			addressBytes = append(addressBytes, checksum...)
@@ -893,20 +891,32 @@ func (s *TorService) runVanityGeneration(ctx context.Context, prefix string) {
 				s.mu.Lock()
 
 				pendingDir := filepath.Join(s.dataDir, "vanity_pending")
-				os.MkdirAll(pendingDir, 0700)
+				if err := os.MkdirAll(pendingDir, 0700); err != nil {
+					s.mu.Unlock()
+					return
+				}
 
 				// Save keys to pending directory
 				header := []byte("== ed25519v1-secret: type0 ==\x00\x00\x00")
 				secretData := append(header, priv.Seed()...)
 				secretData = append(secretData, priv[32:]...)
-				os.WriteFile(filepath.Join(pendingDir, "hs_ed25519_secret_key"), secretData, 0600)
+				if err := os.WriteFile(filepath.Join(pendingDir, "hs_ed25519_secret_key"), secretData, 0600); err != nil {
+					s.mu.Unlock()
+					return
+				}
 
 				pubHeader := []byte("== ed25519v1-public: type0 ==\x00\x00\x00")
 				pubData := append(pubHeader, pub...)
-				os.WriteFile(filepath.Join(pendingDir, "hs_ed25519_public_key"), pubData, 0600)
+				if err := os.WriteFile(filepath.Join(pendingDir, "hs_ed25519_public_key"), pubData, 0600); err != nil {
+					s.mu.Unlock()
+					return
+				}
 
 				hostname := address + ".onion\n"
-				os.WriteFile(filepath.Join(pendingDir, "hostname"), []byte(hostname), 0600)
+				if err := os.WriteFile(filepath.Join(pendingDir, "hostname"), []byte(hostname), 0600); err != nil {
+					s.mu.Unlock()
+					return
+				}
 
 				if s.vanityStatus != nil {
 					s.vanityStatus.Active = false
@@ -966,18 +976,22 @@ func (s *TorService) ApplyVanityAddress() error {
 
 	// Backup current keys
 	backupDir := filepath.Join(s.dataDir, "backup_"+time.Now().Format("20060102150405"))
-	os.MkdirAll(backupDir, 0700)
-	copyFile(filepath.Join(siteDir, "hs_ed25519_secret_key"), filepath.Join(backupDir, "hs_ed25519_secret_key"))
-	copyFile(filepath.Join(siteDir, "hs_ed25519_public_key"), filepath.Join(backupDir, "hs_ed25519_public_key"))
-	copyFile(filepath.Join(siteDir, "hostname"), filepath.Join(backupDir, "hostname"))
-
-	// Move pending keys to site
-	os.Rename(filepath.Join(pendingDir, "hs_ed25519_secret_key"), filepath.Join(siteDir, "hs_ed25519_secret_key"))
-	os.Rename(filepath.Join(pendingDir, "hs_ed25519_public_key"), filepath.Join(siteDir, "hs_ed25519_public_key"))
-	os.Rename(filepath.Join(pendingDir, "hostname"), filepath.Join(siteDir, "hostname"))
-
-	// Remove pending directory
-	os.RemoveAll(pendingDir)
+	if err := os.MkdirAll(backupDir, 0700); err != nil {
+		return fmt.Errorf("create onion key backup: %w", err)
+	}
+	for _, name := range []string{"hs_ed25519_secret_key", "hs_ed25519_public_key", "hostname"} {
+		if err := copyFile(filepath.Join(siteDir, name), filepath.Join(backupDir, name)); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("backup onion key %s: %w", name, err)
+		}
+	}
+	for _, name := range []string{"hs_ed25519_secret_key", "hs_ed25519_public_key", "hostname"} {
+		if err := os.Rename(filepath.Join(pendingDir, name), filepath.Join(siteDir, name)); err != nil {
+			return fmt.Errorf("apply vanity onion key %s: %w", name, err)
+		}
+	}
+	if err := os.RemoveAll(pendingDir); err != nil {
+		return fmt.Errorf("remove pending vanity keys: %w", err)
+	}
 
 	// Reload keys
 	return s.loadOrGenerateKeys()
@@ -997,10 +1011,14 @@ func (s *TorService) ImportKeys(secretKey []byte) error {
 
 	// Backup current keys
 	backupDir := filepath.Join(s.dataDir, "backup_"+time.Now().Format("20060102150405"))
-	os.MkdirAll(backupDir, 0700)
-	copyFile(filepath.Join(siteDir, "hs_ed25519_secret_key"), filepath.Join(backupDir, "hs_ed25519_secret_key"))
-	copyFile(filepath.Join(siteDir, "hs_ed25519_public_key"), filepath.Join(backupDir, "hs_ed25519_public_key"))
-	copyFile(filepath.Join(siteDir, "hostname"), filepath.Join(backupDir, "hostname"))
+	if err := os.MkdirAll(backupDir, 0700); err != nil {
+		return fmt.Errorf("create onion key backup: %w", err)
+	}
+	for _, name := range []string{"hs_ed25519_secret_key", "hs_ed25519_public_key", "hostname"} {
+		if err := copyFile(filepath.Join(siteDir, name), filepath.Join(backupDir, name)); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("backup onion key %s: %w", name, err)
+		}
+	}
 
 	// Write new secret key
 	if err := os.WriteFile(filepath.Join(siteDir, "hs_ed25519_secret_key"), secretKey, 0600); err != nil {
@@ -1027,8 +1045,9 @@ func (s *TorService) GetInfo() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Per PART 31: Tor is enabled if binary found and running
-	enabled := s.status == TorServiceStatusConnected || s.status == TorServiceStatusNoTorBinary
+	// A generated onion key is retained for later use, but without the Tor
+	// binary the hidden-service feature is disabled per AI.md PART 31.
+	enabled := s.status == TorServiceStatusConnected
 
 	info := map[string]interface{}{
 		"enabled": enabled,
@@ -1040,9 +1059,6 @@ func (s *TorService) GetInfo() map[string]interface{} {
 		if s.status == TorServiceStatusConnected {
 			info["uptime"] = s.GetUptime()
 			info["process_running"] = true
-		} else {
-			info["process_running"] = false
-			info["note"] = "Tor binary not found - key-only mode"
 		}
 	}
 
@@ -1135,13 +1151,13 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer sourceFile.Close()
+	defer func() { _ = sourceFile.Close() }()
 
 	destFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer destFile.Close()
+	defer func() { _ = destFile.Close() }()
 
 	_, err = io.Copy(destFile, sourceFile)
 	return err

@@ -27,7 +27,11 @@ func newClosedValkeyCache() *ValkeyCache {
 
 func TestSearchCacheWarmIsNoOpReturnsNil(t *testing.T) {
 	c := NewSearchCache(time.Minute, 10)
-	defer c.Close()
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("close cache: %v", err)
+		}
+	})
 
 	err := c.Warm(context.Background(), WarmCacheData{
 		BlocklistHashes: []string{"a", "b"},
@@ -43,7 +47,11 @@ func TestSearchCacheWarmIsNoOpReturnsNil(t *testing.T) {
 
 func TestValkeyCacheClosedGetReturnsNilFalse(t *testing.T) {
 	vc := newClosedValkeyCache()
-	defer vc.client.Close()
+	t.Cleanup(func() {
+		if err := vc.client.Close(); err != nil {
+			t.Errorf("close Redis client: %v", err)
+		}
+	})
 
 	resp, ok := vc.Get("key")
 	if ok {
@@ -56,7 +64,11 @@ func TestValkeyCacheClosedGetReturnsNilFalse(t *testing.T) {
 
 func TestValkeyCacheClosedSetNoPanic(t *testing.T) {
 	vc := newClosedValkeyCache()
-	defer vc.client.Close()
+	t.Cleanup(func() {
+		if err := vc.client.Close(); err != nil {
+			t.Errorf("close Redis client: %v", err)
+		}
+	})
 
 	// Must return early without panicking.
 	vc.Set("key", &model.SearchResponse{})
@@ -64,7 +76,11 @@ func TestValkeyCacheClosedSetNoPanic(t *testing.T) {
 
 func TestValkeyCacheClosedDeleteNoPanic(t *testing.T) {
 	vc := newClosedValkeyCache()
-	defer vc.client.Close()
+	t.Cleanup(func() {
+		if err := vc.client.Close(); err != nil {
+			t.Errorf("close Redis client: %v", err)
+		}
+	})
 
 	// Must return early without panicking.
 	vc.Delete("key")
@@ -72,7 +88,11 @@ func TestValkeyCacheClosedDeleteNoPanic(t *testing.T) {
 
 func TestValkeyCacheClosedClearNoPanic(t *testing.T) {
 	vc := newClosedValkeyCache()
-	defer vc.client.Close()
+	t.Cleanup(func() {
+		if err := vc.client.Close(); err != nil {
+			t.Errorf("close Redis client: %v", err)
+		}
+	})
 
 	// Must return early without panicking.
 	vc.Clear()
@@ -80,7 +100,11 @@ func TestValkeyCacheClosedClearNoPanic(t *testing.T) {
 
 func TestValkeyCacheClosedSizeReturnsZero(t *testing.T) {
 	vc := newClosedValkeyCache()
-	defer vc.client.Close()
+	t.Cleanup(func() {
+		if err := vc.client.Close(); err != nil {
+			t.Errorf("close Redis client: %v", err)
+		}
+	})
 
 	if sz := vc.Size(); sz != 0 {
 		t.Errorf("expected Size()=0 when cache is closed, got %d", sz)
@@ -89,7 +113,11 @@ func TestValkeyCacheClosedSizeReturnsZero(t *testing.T) {
 
 func TestValkeyCacheClosedStatsContainsTypeAndClosedTrue(t *testing.T) {
 	vc := newClosedValkeyCache()
-	defer vc.client.Close()
+	t.Cleanup(func() {
+		if err := vc.client.Close(); err != nil {
+			t.Errorf("close Redis client: %v", err)
+		}
+	})
 
 	stats := vc.Stats()
 
@@ -145,7 +173,11 @@ func newOpenValkeyCache() *ValkeyCache {
 
 func TestValkeyCache_Open_Get_ConnRefused_ReturnsFalse(t *testing.T) {
 	vc := newOpenValkeyCache()
-	defer vc.client.Close()
+	t.Cleanup(func() {
+		if err := vc.client.Close(); err != nil {
+			t.Errorf("close Redis client: %v", err)
+		}
+	})
 
 	resp, ok := vc.Get("missing-key")
 	if ok {
@@ -158,28 +190,44 @@ func TestValkeyCache_Open_Get_ConnRefused_ReturnsFalse(t *testing.T) {
 
 func TestValkeyCache_Open_Set_ConnRefused_NoPanic(t *testing.T) {
 	vc := newOpenValkeyCache()
-	defer vc.client.Close()
+	t.Cleanup(func() {
+		if err := vc.client.Close(); err != nil {
+			t.Errorf("close Redis client: %v", err)
+		}
+	})
 
 	vc.Set("k", &model.SearchResponse{Ok: true})
 }
 
 func TestValkeyCache_Open_Delete_ConnRefused_NoPanic(t *testing.T) {
 	vc := newOpenValkeyCache()
-	defer vc.client.Close()
+	t.Cleanup(func() {
+		if err := vc.client.Close(); err != nil {
+			t.Errorf("close Redis client: %v", err)
+		}
+	})
 
 	vc.Delete("k")
 }
 
 func TestValkeyCache_Open_Clear_ConnRefused_NoPanic(t *testing.T) {
 	vc := newOpenValkeyCache()
-	defer vc.client.Close()
+	t.Cleanup(func() {
+		if err := vc.client.Close(); err != nil {
+			t.Errorf("close Redis client: %v", err)
+		}
+	})
 
 	vc.Clear()
 }
 
 func TestValkeyCache_Open_Size_ConnRefused_ReturnsZero(t *testing.T) {
 	vc := newOpenValkeyCache()
-	defer vc.client.Close()
+	t.Cleanup(func() {
+		if err := vc.client.Close(); err != nil {
+			t.Errorf("close Redis client: %v", err)
+		}
+	})
 
 	sz := vc.Size()
 	if sz != 0 {
@@ -189,7 +237,11 @@ func TestValkeyCache_Open_Size_ConnRefused_ReturnsZero(t *testing.T) {
 
 func TestValkeyCache_Open_Stats_ConnRefused_ContainsAddr(t *testing.T) {
 	vc := newOpenValkeyCache()
-	defer vc.client.Close()
+	t.Cleanup(func() {
+		if err := vc.client.Close(); err != nil {
+			t.Errorf("close Redis client: %v", err)
+		}
+	})
 
 	stats := vc.Stats()
 	if _, ok := stats["addr"]; !ok {

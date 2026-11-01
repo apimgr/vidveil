@@ -94,7 +94,7 @@ func defaultCfg() *config.AppConfig {
 func TestAlphaPornoEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newAlphaPornoEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -103,7 +103,7 @@ func TestAlphaPornoEngine_Search_HttpTest(t *testing.T) {
 func TestAnyPornEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newAnyPornEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -112,7 +112,7 @@ func TestAnyPornEngine_Search_HttpTest(t *testing.T) {
 func TestDrTuberEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newDrTuberEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -121,7 +121,7 @@ func TestDrTuberEngine_Search_HttpTest(t *testing.T) {
 func TestEpornerEngine_Search_HttpTest(t *testing.T) {
 	srv := newEpornerServer(t)
 	e := newEpornerEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	results, err := e.Search(context.Background(), "test", 1)
 	if err != nil {
 		t.Logf("EpornerEngine.Search error (acceptable): %v", err)
@@ -137,7 +137,7 @@ func TestEpornerEngine_Search_HttpTest(t *testing.T) {
 func TestEMPFlixEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newEMPFlixEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -146,7 +146,7 @@ func TestEMPFlixEngine_Search_HttpTest(t *testing.T) {
 func TestFlyflvEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newFlyflvEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -155,7 +155,7 @@ func TestFlyflvEngine_Search_HttpTest(t *testing.T) {
 func TestFourTubeEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newFourTubeEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -164,7 +164,7 @@ func TestFourTubeEngine_Search_HttpTest(t *testing.T) {
 func TestFuxEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newFuxEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -173,7 +173,7 @@ func TestFuxEngine_Search_HttpTest(t *testing.T) {
 func TestGotPornEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newGotPornEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -182,7 +182,7 @@ func TestGotPornEngine_Search_HttpTest(t *testing.T) {
 func TestHellPornoEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newHellPornoEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -191,7 +191,7 @@ func TestHellPornoEngine_Search_HttpTest(t *testing.T) {
 func TestHqpornerEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newHqpornerEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -200,7 +200,7 @@ func TestHqpornerEngine_Search_HttpTest(t *testing.T) {
 func TestLoveHomePornEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newLoveHomePornEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -209,7 +209,7 @@ func TestLoveHomePornEngine_Search_HttpTest(t *testing.T) {
 func TestMotherlessEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newMotherlessEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -218,7 +218,7 @@ func TestMotherlessEngine_Search_HttpTest(t *testing.T) {
 func TestNonkTubeEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newNonkTubeEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -227,7 +227,7 @@ func TestNonkTubeEngine_Search_HttpTest(t *testing.T) {
 func TestNubilesPornEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newNubilesPornEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -236,7 +236,7 @@ func TestNubilesPornEngine_Search_HttpTest(t *testing.T) {
 func TestNuvidEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newNuvidEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -245,7 +245,7 @@ func TestNuvidEngine_Search_HttpTest(t *testing.T) {
 func TestPornboxEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newPornboxEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -254,7 +254,7 @@ func TestPornboxEngine_Search_HttpTest(t *testing.T) {
 func TestPornerBrosEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newPornerBrosEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -263,7 +263,7 @@ func TestPornerBrosEngine_Search_HttpTest(t *testing.T) {
 func TestPornFlipEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newPornFlipEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -272,7 +272,7 @@ func TestPornFlipEngine_Search_HttpTest(t *testing.T) {
 func TestPornTrexEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newPornTrexEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -281,7 +281,7 @@ func TestPornTrexEngine_Search_HttpTest(t *testing.T) {
 func TestPornTubeEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newPornTubeEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -290,7 +290,7 @@ func TestPornTubeEngine_Search_HttpTest(t *testing.T) {
 func TestRedTubeEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newRedTubeEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -299,7 +299,7 @@ func TestRedTubeEngine_Search_HttpTest(t *testing.T) {
 func TestSunPornoEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newSunPornoEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -308,7 +308,7 @@ func TestSunPornoEngine_Search_HttpTest(t *testing.T) {
 func TestThreeMovsEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newThreeMovsEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -317,7 +317,7 @@ func TestThreeMovsEngine_Search_HttpTest(t *testing.T) {
 func TestTNAFlixEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newTNAFlixEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -326,7 +326,7 @@ func TestTNAFlixEngine_Search_HttpTest(t *testing.T) {
 func TestTube8Engine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newTube8Engine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -335,7 +335,7 @@ func TestTube8Engine_Search_HttpTest(t *testing.T) {
 func TestTubeGaloreEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newTubeGaloreEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -344,7 +344,7 @@ func TestTubeGaloreEngine_Search_HttpTest(t *testing.T) {
 func TestTxxxEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newTxxxEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -353,7 +353,7 @@ func TestTxxxEngine_Search_HttpTest(t *testing.T) {
 func TestVJAVEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newVJAVEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -362,7 +362,7 @@ func TestVJAVEngine_Search_HttpTest(t *testing.T) {
 func TestXBabeEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newXBabeEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -371,7 +371,7 @@ func TestXBabeEngine_Search_HttpTest(t *testing.T) {
 func TestXHamsterEngine_Search_HttpTest_Page1(t *testing.T) {
 	srv := newXHamsterServer(t)
 	e := newXHamsterEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	results, err := e.Search(context.Background(), "test", 1)
 	if err != nil {
 		t.Logf("XHamsterEngine.Search page 1 error (acceptable): %v", err)
@@ -392,7 +392,7 @@ func TestXHamsterEngine_Search_HttpTest_Page1(t *testing.T) {
 func TestXHamsterEngine_Search_HttpTest_Page2(t *testing.T) {
 	srv := newXHamsterServer(t)
 	e := newXHamsterEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 2)
 }
 
@@ -401,7 +401,7 @@ func TestXHamsterEngine_Search_HttpTest_Page2(t *testing.T) {
 func TestXNXXEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newXNXXEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -410,7 +410,7 @@ func TestXNXXEngine_Search_HttpTest(t *testing.T) {
 func TestXVideosEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newXVideosEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -419,7 +419,7 @@ func TestXVideosEngine_Search_HttpTest(t *testing.T) {
 func TestXXXYMoviesEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newXXXYMoviesEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -428,7 +428,7 @@ func TestXXXYMoviesEngine_Search_HttpTest(t *testing.T) {
 func TestYouJizzEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newYouJizzEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -437,7 +437,7 @@ func TestYouJizzEngine_Search_HttpTest(t *testing.T) {
 func TestYouPornEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newYouPornEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -450,7 +450,7 @@ func TestBaseEngine_MakeRequestWithMod_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MakeRequest: unexpected error: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestBaseEngine_MakeRequestWithMod_WithModifier(t *testing.T) {
@@ -462,7 +462,7 @@ func TestBaseEngine_MakeRequestWithMod_WithModifier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MakeRequestWithMod: unexpected error: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestBaseEngine_MakeRequest_ServerError_RecordsFailure(t *testing.T) {
@@ -515,7 +515,7 @@ func TestGenericSearch_NoMatchingSelector_EmptyResults(t *testing.T) {
 func TestPornHubEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := NewPornHubEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -524,7 +524,7 @@ func TestPornHubEngine_Search_HttpTest(t *testing.T) {
 func TestPornHatEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newPornHatEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -533,7 +533,7 @@ func TestPornHatEngine_Search_HttpTest(t *testing.T) {
 func TestPornHDEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newPornHDEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -542,7 +542,7 @@ func TestPornHDEngine_Search_HttpTest(t *testing.T) {
 func TestPornMDEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newPornMDEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -551,7 +551,7 @@ func TestPornMDEngine_Search_HttpTest(t *testing.T) {
 func TestPornOneEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newPornOneEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
@@ -560,6 +560,6 @@ func TestPornOneEngine_Search_HttpTest(t *testing.T) {
 func TestPornTopEngine_Search_HttpTest(t *testing.T) {
 	srv := newUniversalServer(t)
 	e := newPornTopEngine(defaultCfg())
-	e.BaseEngine.baseURL = srv.URL
+	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
 }

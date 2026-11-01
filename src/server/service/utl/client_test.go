@@ -2,7 +2,6 @@
 package utl
 
 import (
-	"net/http"
 	"testing"
 	"time"
 )
@@ -77,7 +76,7 @@ func TestNewRoundTripper_NonNil(t *testing.T) {
 // TestNewRoundTripper_ImplementsInterface verifies the returned value satisfies
 // the http.RoundTripper interface at compile and runtime.
 func TestNewRoundTripper_ImplementsInterface(t *testing.T) {
-	var rt http.RoundTripper = NewRoundTripper(10 * time.Second)
+	rt := NewRoundTripper(10 * time.Second)
 	if rt == nil {
 		t.Fatal("NewRoundTripper does not satisfy http.RoundTripper")
 	}

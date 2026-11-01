@@ -431,8 +431,12 @@ func TestPrintCLIVersionInfo_WithoutSite(t *testing.T) {
 
 	PrintCLIVersionInfo()
 
-	w.Close()
-	io.ReadAll(r)
+	if err := w.Close(); err != nil {
+		t.Fatalf("close version output pipe: %v", err)
+	}
+	if _, err := io.ReadAll(r); err != nil {
+		t.Fatalf("read version output: %v", err)
+	}
 	os.Stdout = old
 }
 
@@ -447,8 +451,12 @@ func TestPrintCLIVersionInfo_WithSite(t *testing.T) {
 
 	PrintCLIVersionInfo()
 
-	w.Close()
-	io.ReadAll(r)
+	if err := w.Close(); err != nil {
+		t.Fatalf("close version output pipe: %v", err)
+	}
+	if _, err := io.ReadAll(r); err != nil {
+		t.Fatalf("read version output: %v", err)
+	}
 	os.Stdout = old
 }
 
@@ -470,8 +478,14 @@ func TestEnsureCLIConfigFilePermissions_InsecurePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating temp file: %v", err)
 	}
-	defer os.Remove(f.Name())
-	f.Close()
+	t.Cleanup(func() {
+		if err := os.Remove(f.Name()); err != nil {
+			t.Errorf("remove temporary config file: %v", err)
+		}
+	})
+	if err := f.Close(); err != nil {
+		t.Fatalf("close temporary config file: %v", err)
+	}
 	if err := os.Chmod(f.Name(), 0o644); err != nil {
 		t.Fatalf("chmod: %v", err)
 	}
@@ -496,8 +510,14 @@ func TestEnsureCLIDefaultTokenFilePermissions_InsecurePermissions(t *testing.T) 
 	if err != nil {
 		t.Fatalf("creating temp file: %v", err)
 	}
-	defer os.Remove(f.Name())
-	f.Close()
+	t.Cleanup(func() {
+		if err := os.Remove(f.Name()); err != nil {
+			t.Errorf("remove temporary token file: %v", err)
+		}
+	})
+	if err := f.Close(); err != nil {
+		t.Fatalf("close temporary token file: %v", err)
+	}
 	if err := os.Chmod(f.Name(), 0o644); err != nil {
 		t.Fatalf("chmod: %v", err)
 	}
@@ -514,7 +534,11 @@ func TestPrintConnectionWarning_NilErrNoPanic(t *testing.T) {
 
 	printConnectionWarning(nil)
 
-	w.Close()
-	io.ReadAll(r)
+	if err := w.Close(); err != nil {
+		t.Fatalf("close connection warning pipe: %v", err)
+	}
+	if _, err := io.ReadAll(r); err != nil {
+		t.Fatalf("read connection warning output: %v", err)
+	}
 	os.Stderr = old
 }

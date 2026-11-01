@@ -23,6 +23,31 @@ var envPrefix = strings.ToUpper(path.ProjectName) + "_"
 func applyEnvOverrides(cfg *AppConfig) {
 	applyEnvToStruct(reflect.ValueOf(cfg).Elem(), nil)
 	applyBareCacheURL(cfg)
+	applyI2PEnabled(cfg)
+}
+
+// applyI2PEnabled supports the documented unprefixed opt-in variable while
+// preserving the standard project-prefixed overrides as higher priority.
+func applyI2PEnabled(cfg *AppConfig) {
+	if cfg == nil {
+		return
+	}
+	if _, ok := os.LookupEnv(envPrefix + "SERVER_I2P_ENABLED"); ok {
+		return
+	}
+	if _, ok := os.LookupEnv(envPrefix + "I2P_ENABLED"); ok {
+		return
+	}
+	value, ok := os.LookupEnv("I2P_ENABLED")
+	if !ok {
+		return
+	}
+	enabled, err := ParseBool(value, false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: invalid boolean for I2P_ENABLED: %q (ignored)\n", value)
+		return
+	}
+	cfg.Server.I2P.Enabled = enabled
 }
 
 // applyBareCacheURL honors the bare CACHE_URL env var used by the shipped

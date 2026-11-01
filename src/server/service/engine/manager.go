@@ -384,6 +384,9 @@ collect:
 				if !isValidThumbnail(r.Thumbnail) {
 					continue
 				}
+				if m.appConfig != nil && m.appConfig.Search.AIFilter.Enabled && !ShowAIContentFromContext(ctx) && isAIGeneratedContent(strings.ToLower(r.Title), r.Tags, m.appConfig.Search.AIFilter.Keywords) {
+					continue
+				}
 				// Skip if duration is known and below minimum
 				if minDuration > 0 && r.DurationSeconds > 0 && r.DurationSeconds < minDuration {
 					continue
@@ -937,6 +940,11 @@ func overloadedSearchResponse(startTime time.Time) *model.SearchResponse {
 
 func (m *EngineManager) getEnginesToUse(engineNames []string) []SearchEngine {
 	var engines []SearchEngine
+	for _, name := range engineNames {
+		if name == "__none__" {
+			return engines
+		}
+	}
 
 	if len(engineNames) == 0 {
 		// Use all enabled engines
@@ -952,6 +960,9 @@ func (m *EngineManager) getEnginesToUse(engineNames []string) []SearchEngine {
 	maxTier := 0
 	tierFilter := false
 	for _, name := range engineNames {
+		if name == "__none__" {
+			continue
+		}
 		switch name {
 		case "tier1":
 			tierFilter = true
@@ -992,8 +1003,8 @@ func (m *EngineManager) GetEngine(name string) (SearchEngine, bool) {
 	return engine, ok
 }
 
-// UnknownEngineNames returns the subset of engineNames that are neither a
-// registered engine nor a recognized tier-filter alias ("tier1", "tier12").
+// UnknownEngineNames returns names that are neither registered engines nor
+// recognized special filters.
 // Per IDEA.md Validation: "Engine names must be valid registered engines" -
 // getEnginesToUse silently drops unrecognized names instead of erroring, so
 // callers (APISearch, batch search, SSE) must validate up front and reject
@@ -1004,7 +1015,7 @@ func (m *EngineManager) UnknownEngineNames(engineNames []string) []string {
 
 	var unknown []string
 	for _, name := range engineNames {
-		if name == "tier1" || name == "tier12" {
+		if name == "tier1" || name == "tier12" || name == "__none__" {
 			continue
 		}
 		if _, ok := m.engines[name]; !ok {
@@ -1658,10 +1669,12 @@ func resultMatchesAllTerms(r model.VideoResult, query string) bool {
 
 // StreamResult represents a single result sent via SSE
 type StreamResult struct {
-	Result model.VideoResult `json:"result,omitempty"`
-	Engine string            `json:"engine"`
-	Done   bool              `json:"done"`
-	Error  string            `json:"error,omitempty"`
+	Result           model.VideoResult `json:"result,omitempty"`
+	Engine           string            `json:"engine"`
+	Done             bool              `json:"done"`
+	Error            string            `json:"error,omitempty"`
+	DisplayCount     int               `json:"display_count,omitempty"`
+	DisplayCountText string            `json:"display_count_text,omitempty"`
 	// Overloaded is set instead of a normal per-engine Error when the
 	// searchSem concurrency guard could not be acquired within
 	// searchQueueTimeout (see overloadedSearchResponse / SearchWithOperators).

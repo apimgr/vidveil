@@ -5,8 +5,8 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -16,6 +16,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/pgp"
@@ -62,7 +63,7 @@ func openSecretDB(dataDir string) (*database.MigrationManager, error) {
 		return nil, err
 	}
 	if err := mgr.RunMigrations(); err != nil {
-		mgr.Close()
+		_ = mgr.Close()
 		return nil, err
 	}
 	return mgr, nil
@@ -73,8 +74,9 @@ func rotateInstallationSecret(configDir, dataDir string) error {
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
-	defer mgr.Close()
-	ctx := context.Background()
+	defer func() { _ = mgr.Close() }()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	secrets := secret.NewManager(mgr.GetDB())
 	if err := secrets.EnsureSecrets(ctx); err != nil {
 		return err
@@ -124,17 +126,19 @@ func rotateEncryptionKey(configDir, dataDir string) error {
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
-	defer mgr.Close()
+	defer func() { _ = mgr.Close() }()
 	db := mgr.GetDB()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	// Re-encrypt AES-backed report bodies in one transaction. PGP rows are
 	// intentionally untouched: their key material is independent of this key.
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	rows, err := tx.Query("SELECT tracking_id, encrypted_body FROM security_reports WHERE encryption_method = ?", string(secreport.EncryptionMethodAES))
+	rows, err := tx.QueryContext(ctx, "SELECT tracking_id, encrypted_body FROM security_reports WHERE encryption_method = ?", string(secreport.EncryptionMethodAES))
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return err
 	}
 	type reportBlob struct {
@@ -145,39 +149,60 @@ func rotateEncryptionKey(configDir, dataDir string) error {
 	for rows.Next() {
 		var r reportBlob
 		if err := rows.Scan(&r.id, &r.body); err != nil {
-			rows.Close()
-			tx.Rollback()
+			_ = rows.Close()
+			_ = tx.Rollback()
 			return err
 		}
 		reports = append(reports, r)
 	}
-	rows.Close()
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		_ = tx.Rollback()
+		return fmt.Errorf("read encrypted reports: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("close encrypted reports: %w", err)
+	}
 	for _, r := range reports {
 		plain, err := secreport.DecryptAESGCM(old, r.body)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("decrypt report %s: %w", r.id, err)
 		}
 		enc, err := secreport.EncryptAESGCM(newKey, plain)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return err
 		}
-		if _, err = tx.Exec("UPDATE security_reports SET encrypted_body = ?, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = ?", enc, r.id); err != nil {
-			tx.Rollback()
+		if _, err = tx.ExecContext(ctx, "UPDATE security_reports SET encrypted_body = ?, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = ?", enc, r.id); err != nil {
+			_ = tx.Rollback()
 			return err
 		}
 	}
-	if _, err = tx.Exec("INSERT INTO settings(key,value,type,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP", "security.previous_encryption_key", old, "secret"); err != nil {
-		tx.Rollback()
-		return err
+	if err := apitoken.ReencryptHashes(ctx, tx, old, newKey); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("rotate API-token digests: %w", err)
 	}
-	if err = tx.Commit(); err != nil {
+	if err := apitoken.ReencryptTokens(ctx, tx, old, newKey); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("rotate API-token copies: %w", err)
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO settings(key,value,type,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP", "security.previous_encryption_key", old, "secret"); err != nil {
+		_ = tx.Rollback()
 		return err
 	}
 	cfg.Server.Security.EncryptionKey = newKey
 	if err := config.SaveAppConfig(cfg, path); err != nil {
-		return err
+		_ = tx.Rollback()
+		return fmt.Errorf("save rotated encryption key: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		cfg.Server.Security.EncryptionKey = old
+		if restoreErr := config.SaveAppConfig(cfg, path); restoreErr != nil {
+			return fmt.Errorf("commit encryption-key rotation: %w", errors.Join(err, fmt.Errorf("restore configuration key: %w", restoreErr)))
+		}
+		return fmt.Errorf("commit encryption-key rotation: %w", err)
 	}
 	return emitSecretRotationAudit(configDir, dataDir, "security.encryption_key_rotated")
 }
@@ -199,5 +224,3 @@ func emitSecretRotationAudit(configDir, dataDir, event string) error {
 	logger.Audit(event, operator, "operator", localOperatorIP(), "success", map[string]interface{}{"grace_period": map[string]string{"security.installation_secret_rotated": "7d", "security.encryption_key_rotated": "30d"}[event]})
 	return nil
 }
-
-var _ *sql.DB

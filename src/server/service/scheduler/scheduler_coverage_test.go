@@ -47,7 +47,11 @@ func openTestDB(t *testing.T) *sql.DB {
 	)`); err != nil {
 		t.Fatalf("create task_history: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close database: %v", err)
+		}
+	})
 	return db
 }
 
@@ -208,7 +212,9 @@ func TestCheckAndRunTasks_SkipsFutureTask(t *testing.T) {
 
 func TestRegisterBuiltinTasks_AllNilFuncsNoTasks(t *testing.T) {
 	s := NewScheduler()
-	s.RegisterBuiltinTasks(BuiltinTaskFuncs{})
+	if err := s.RegisterBuiltinTasks(BuiltinTaskFuncs{}); err != nil {
+		t.Fatalf("RegisterBuiltinTasks with no functions: %v", err)
+	}
 	// With all nil funcs, none of the if-blocks fire, so no tasks registered.
 	tasks := s.ListTasks()
 	if len(tasks) != 0 {
@@ -218,9 +224,11 @@ func TestRegisterBuiltinTasks_AllNilFuncsNoTasks(t *testing.T) {
 
 func TestRegisterBuiltinTasks_SSLRenewalRegistered(t *testing.T) {
 	s := NewScheduler()
-	s.RegisterBuiltinTasks(BuiltinTaskFuncs{
+	if err := s.RegisterBuiltinTasks(BuiltinTaskFuncs{
 		SSLRenewal: func(_ context.Context) error { return nil },
-	})
+	}); err != nil {
+		t.Fatalf("RegisterBuiltinTasks: %v", err)
+	}
 	if _, err := s.GetTask("ssl_renewal"); err != nil {
 		t.Errorf("ssl_renewal task not found after RegisterBuiltinTasks: %v", err)
 	}
@@ -228,7 +236,7 @@ func TestRegisterBuiltinTasks_SSLRenewalRegistered(t *testing.T) {
 
 func TestRegisterBuiltinTasks_MultipleTasksRegistered(t *testing.T) {
 	s := NewScheduler()
-	s.RegisterBuiltinTasks(BuiltinTaskFuncs{
+	if err := s.RegisterBuiltinTasks(BuiltinTaskFuncs{
 		SSLRenewal:      func(_ context.Context) error { return nil },
 		GeoIPUpdate:     func(_ context.Context) error { return nil },
 		BlocklistUpdate: func(_ context.Context) error { return nil },
@@ -236,7 +244,9 @@ func TestRegisterBuiltinTasks_MultipleTasksRegistered(t *testing.T) {
 		LogRotation:     func(_ context.Context) error { return nil },
 		BackupDaily:     func(_ context.Context) error { return nil },
 		HealthcheckSelf: func(_ context.Context) error { return nil },
-	})
+	}); err != nil {
+		t.Fatalf("RegisterBuiltinTasks: %v", err)
+	}
 	expected := []string{
 		"ssl_renewal", "geoip_update", "blocklist_update",
 		"cve_update", "log_rotation", "backup_daily", "healthcheck_self",
@@ -250,10 +260,12 @@ func TestRegisterBuiltinTasks_MultipleTasksRegistered(t *testing.T) {
 
 func TestRegisterBuiltinTasks_TokenCleanupAndTorHealth(t *testing.T) {
 	s := NewScheduler()
-	s.RegisterBuiltinTasks(BuiltinTaskFuncs{
+	if err := s.RegisterBuiltinTasks(BuiltinTaskFuncs{
 		TokenCleanup: func(_ context.Context) error { return nil },
 		TorHealth:    func(_ context.Context) error { return nil },
-	})
+	}); err != nil {
+		t.Fatalf("RegisterBuiltinTasks: %v", err)
+	}
 	// session_cleanup is NOT a built-in task per AI.md PART 18 (only 11 tasks)
 	for _, id := range []string{"token_cleanup", "tor_health"} {
 		if _, err := s.GetTask(id); err != nil {
@@ -273,8 +285,12 @@ func TestRegisterBuiltinTasks_Idempotent(t *testing.T) {
 		SSLRenewal:  func(_ context.Context) error { return nil },
 		GeoIPUpdate: func(_ context.Context) error { return nil },
 	}
-	s.RegisterBuiltinTasks(f)
-	s.RegisterBuiltinTasks(f)
+	if err := s.RegisterBuiltinTasks(f); err != nil {
+		t.Fatalf("first RegisterBuiltinTasks: %v", err)
+	}
+	if err := s.RegisterBuiltinTasks(f); err != nil {
+		t.Fatalf("second RegisterBuiltinTasks: %v", err)
+	}
 
 	// Still exactly one ssl_renewal entry in the map.
 	count := 0
@@ -285,6 +301,34 @@ func TestRegisterBuiltinTasks_Idempotent(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("expected 1 ssl_renewal task after double-register, got %d", count)
+	}
+}
+
+func TestRegisterTaskReturnsPersistenceFailure(t *testing.T) {
+	db := openTestDB(t)
+	if _, err := db.Exec(`CREATE TRIGGER reject_scheduled_task_insert
+		BEFORE INSERT ON scheduled_tasks
+		BEGIN SELECT RAISE(FAIL, 'registration blocked'); END`); err != nil {
+		t.Fatalf("create rejecting trigger: %v", err)
+	}
+	s := NewSchedulerWithDB(db)
+	if err := s.RegisterTask("persist-failure", "Task", "desc", "hourly", func(context.Context) error { return nil }); err == nil {
+		t.Fatal("RegisterTask returned nil after database rejected persistence")
+	}
+	if _, err := s.GetTask("persist-failure"); err == nil {
+		t.Fatal("task became runnable after persistence failed")
+	}
+}
+
+func TestRegisterBuiltinTasksReturnsMigrationFailure(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite database: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	s := NewSchedulerWithDB(db)
+	if err := s.RegisterBuiltinTasks(BuiltinTaskFuncs{}); err == nil {
+		t.Fatal("RegisterBuiltinTasks returned nil when scheduler tables were missing")
 	}
 }
 
@@ -325,7 +369,9 @@ func TestMigrateLegacyTaskIDs_NilDBIsNoop(t *testing.T) {
 			t.Errorf("migrateLegacyTaskIDs panicked with nil db: %v", r)
 		}
 	}()
-	s.migrateLegacyTaskIDs()
+	if err := s.migrateLegacyTaskIDs(); err != nil {
+		t.Fatalf("migrate legacy task IDs: %v", err)
+	}
 }
 
 func TestMigrateLegacyTaskIDs_WithDB_RenamesLegacyIDs(t *testing.T) {
@@ -339,15 +385,21 @@ func TestMigrateLegacyTaskIDs_WithDB_RenamesLegacyIDs(t *testing.T) {
 		t.Fatalf("insert legacy row: %v", err)
 	}
 
-	s.migrateLegacyTaskIDs()
+	if err := s.migrateLegacyTaskIDs(); err != nil {
+		t.Fatalf("migrate legacy task IDs: %v", err)
+	}
 
 	// The old ID must be gone and the new ID must exist.
 	var count int
-	db.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE id = ?`, "ssl.renewal").Scan(&count)
+	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE id = ?`, "ssl.renewal").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
 	if count != 0 {
 		t.Error("legacy ID ssl.renewal still present after migration")
 	}
-	db.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE id = ?`, "ssl_renewal").Scan(&count)
+	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE id = ?`, "ssl_renewal").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
 	if count != 1 {
 		t.Error("new ID ssl_renewal not found after migration")
 	}
@@ -360,12 +412,18 @@ func TestMigrateLegacyTaskIDs_WithDB_Idempotent(t *testing.T) {
 	_, _ = db.Exec(`INSERT INTO scheduled_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
 		"geoip.update", "GeoIP", "daily", 1)
 
-	s.migrateLegacyTaskIDs()
+	if err := s.migrateLegacyTaskIDs(); err != nil {
+		t.Fatalf("migrate legacy task IDs: %v", err)
+	}
 	// Run again — must not panic or create duplicate rows.
-	s.migrateLegacyTaskIDs()
+	if err := s.migrateLegacyTaskIDs(); err != nil {
+		t.Fatalf("migrate legacy task IDs: %v", err)
+	}
 
 	var count int
-	db.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE id = ?`, "geoip_update").Scan(&count)
+	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE id = ?`, "geoip_update").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
 	if count != 1 {
 		t.Errorf("geoip_update count after double migration = %d, want 1", count)
 	}
@@ -434,7 +492,9 @@ func TestSaveTaskStateToDB_NilDBNoOp(t *testing.T) {
 	s := NewScheduler()
 	task := &ScheduledTask{ID: "x", Name: "X", Schedule: "hourly"}
 	// Must not panic.
-	s.saveTaskStateToDB(task)
+	if err := s.saveTaskStateToDB(task); err != nil {
+		t.Fatalf("save task state: %v", err)
+	}
 }
 
 func TestSaveTaskStateToDB_PersistsTask(t *testing.T) {
@@ -451,11 +511,15 @@ func TestSaveTaskStateToDB_PersistsTask(t *testing.T) {
 		FailCount:  1,
 		NextRun:    time.Now().Add(time.Hour),
 	}
-	s.saveTaskStateToDB(task)
+	if err := s.saveTaskStateToDB(task); err != nil {
+		t.Fatalf("save task state: %v", err)
+	}
 
 	var name string
 	var runCount int
-	db.QueryRow(`SELECT name, run_count FROM scheduled_tasks WHERE id = ?`, "persist").Scan(&name, &runCount)
+	if err := db.QueryRow(`SELECT name, run_count FROM scheduled_tasks WHERE id = ?`, "persist").Scan(&name, &runCount); err != nil {
+		t.Fatal(err)
+	}
 	if name != "Persist" {
 		t.Errorf("saved name = %q, want 'Persist'", name)
 	}
@@ -468,7 +532,9 @@ func TestSaveHistoryToDB_NilDBNoOp(t *testing.T) {
 	s := NewScheduler()
 	h := TaskHistory{TaskID: "x", Result: "success"}
 	// Must not panic.
-	s.saveHistoryToDB(h)
+	if err := s.saveHistoryToDB(h); err != nil {
+		t.Fatalf("save task history: %v", err)
+	}
 }
 
 func TestSaveHistoryToDB_PersistsEntry(t *testing.T) {
@@ -486,10 +552,14 @@ func TestSaveHistoryToDB_PersistsEntry(t *testing.T) {
 		Duration:  5 * time.Second,
 		Result:    "success",
 	}
-	s.saveHistoryToDB(h)
+	if err := s.saveHistoryToDB(h); err != nil {
+		t.Fatalf("save task history: %v", err)
+	}
 
 	var count int
-	db.QueryRow(`SELECT COUNT(*) FROM task_history WHERE task_id = ?`, "htask").Scan(&count)
+	if err := db.QueryRow(`SELECT COUNT(*) FROM task_history WHERE task_id = ?`, "htask").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
 	if count != 1 {
 		t.Errorf("task_history rows for htask = %d, want 1", count)
 	}
@@ -532,7 +602,9 @@ func TestRegisterTask_PersistsToDBAndLoadsState(t *testing.T) {
 	_ = s.RegisterTask("dbr1", "DB Task", "desc", "hourly", noop)
 
 	var count int
-	db.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE id = ?`, "dbr1").Scan(&count)
+	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE id = ?`, "dbr1").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
 	if count != 1 {
 		t.Errorf("scheduled_tasks rows for dbr1 = %d, want 1", count)
 	}

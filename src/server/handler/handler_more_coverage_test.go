@@ -316,6 +316,16 @@ func TestHealthCheck_PlainTextFormat(t *testing.T) {
 	if !strings.Contains(body, "checks.database: ") {
 		t.Errorf("HealthCheck plain: missing 'checks.database:' line, got %q", body)
 	}
+	for _, field := range []string{
+		"features.i2p.enabled: false",
+		"features.i2p.running: false",
+		"features.i2p.status: disabled",
+		"features.i2p.provider: none",
+	} {
+		if !strings.Contains(body, field) {
+			t.Errorf("HealthCheck plain: missing %q, got %q", field, body)
+		}
+	}
 }
 
 func TestHealthCheck_JSONContainsProject(t *testing.T) {

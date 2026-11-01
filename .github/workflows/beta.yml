@@ -18,7 +18,7 @@ env:
 jobs:
   # Compute VERSION once — matrix legs must never each compute their own timestamp
   version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       version: ${{ steps.set.outputs.version }}
       commit_id: ${{ steps.set.outputs.commit_id }}
@@ -38,7 +38,7 @@ jobs:
 
   build:
     needs: [version]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     container:
       image: casjaysdev/go:latest
       options: "--user 0:0"
@@ -118,7 +118,7 @@ jobs:
 
   release:
     needs: [version, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
       # GitHub artifact attestations (SBOM, provenance)

@@ -141,6 +141,9 @@ func TestGenerateSpecContainsRequiredPaths(t *testing.T) {
 	paths := []string{
 		"/api/v1/search",
 		"/api/v1/engines",
+		"/api/v1/server/preferences/tokens",
+		"/api/v1/server/preferences/tokens/primary/reveal",
+		"/api/v1/server/preferences/tokens/{id}",
 	}
 
 	for _, cfg := range []*config.AppConfig{nil, config.DefaultAppConfig()} {
@@ -158,24 +161,48 @@ func TestGenerateSpecContainsRequiredPaths(t *testing.T) {
 	}
 }
 
-// TestGenerateSpecAdminPathDefault verifies that a nil config uses "server/admin"
-// as the admin API path in the generated spec.
-func TestGenerateSpecAdminPathDefault(t *testing.T) {
-	spec := GenerateSpec(nil, httptest.NewRequest("GET", "/", nil))
-	if !strings.Contains(spec, "server/admin") {
-		t.Errorf("GenerateSpec(nil) missing default admin path \"server/admin\"")
+func TestGenerateSpecDocumentsImplementedAPIOperations(t *testing.T) {
+	var document struct {
+		Paths map[string]map[string]map[string]interface{} `json:"paths"`
+	}
+	if err := json.Unmarshal([]byte(GenerateSpec(config.DefaultAppConfig(), httptest.NewRequest(http.MethodGet, "/", nil))), &document); err != nil {
+		t.Fatalf("unmarshal OpenAPI document: %v", err)
+	}
+	operations := map[string]string{
+		"get /api/v1/bangs":                     "listBangs",
+		"get /api/v1/bangs/autocomplete":        "autocompleteBangs",
+		"get /api/v1/engines/{name}":            "getEngineDetails",
+		"get /api/v1/stats":                     "getServerStats",
+		"get /api/v1/version":                   "getServerVersion",
+		"post /api/v1/server/contact":           "submitServerContact",
+		"post /api/v1/server/reports/default":   "submitDefaultReport",
+		"get /api/v1/server/preferences/export": "exportPreferences",
+		"get /api/v1/server/preferences/import": "importPreferences",
+		"get /api/v1/proxy/thumbnails":          "proxyThumbnail",
+		"get /api/v1/proxy/videos":              "proxyVideo",
+	}
+	for endpoint, operationID := range operations {
+		parts := strings.SplitN(endpoint, " ", 2)
+		method, path := parts[0], parts[1]
+		operation, ok := document.Paths[path][method]
+		if !ok {
+			t.Errorf("OpenAPI missing %s %s", method, path)
+			continue
+		}
+		if got := operation["operationId"]; got != operationID {
+			t.Errorf("OpenAPI %s %s operationId = %v, want %s", method, path, got, operationID)
+		}
 	}
 }
 
-// TestGenerateSpecAdminPathCustom verifies that a custom admin path is reflected in
-// the generated spec when provided via AppConfig.
-func TestGenerateSpecAdminPathCustom(t *testing.T) {
-	cfg := config.DefaultAppConfig()
-	cfg.Server.Admin.Path = "myadmin"
-
-	spec := GenerateSpec(cfg, httptest.NewRequest("GET", "/", nil))
-	if !strings.Contains(spec, "server/myadmin") {
-		t.Errorf("GenerateSpec with custom admin path: missing \"server/myadmin\" in spec")
+// TestGenerateSpecOmitsAdminAPIRoutes ensures the spec does not publish
+// nonexistent admin route or credential contracts.
+func TestGenerateSpecOmitsAdminAPIRoutes(t *testing.T) {
+	spec := GenerateSpec(config.DefaultAppConfig(), httptest.NewRequest("GET", "/", nil))
+	for _, forbidden := range []string{"/server/admin", "X-Admin-Token", "AdminToken"} {
+		if strings.Contains(spec, forbidden) {
+			t.Errorf("GenerateSpec() unexpectedly contains %q", forbidden)
+		}
 	}
 }
 

@@ -5,6 +5,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -38,13 +39,17 @@ func RunSearchCommand(args []string) error {
 		case "--limit":
 			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
-				fmt.Sscanf(flagValue, "%d", &searchResultLimit)
+				if limit, err := strconv.Atoi(flagValue); err == nil {
+					searchResultLimit = limit
+				}
 				i = nextIndex
 			}
 		case "--page":
 			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
-				fmt.Sscanf(flagValue, "%d", &searchPageNumber)
+				if page, err := strconv.Atoi(flagValue); err == nil {
+					searchPageNumber = page
+				}
 				i = nextIndex
 			}
 		case "--engines":
@@ -183,15 +188,23 @@ func OutputSearchResultsAsTable(searchResponse *api.SearchResponse) error {
 	tableWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
 	// Header
-	fmt.Fprintf(tableWriter, "TITLE\tDURATION\tENGINE\tURL\n")
-	fmt.Fprintf(tableWriter, "-----\t--------\t------\t---\n")
+	if _, err := fmt.Fprintf(tableWriter, "TITLE\tDURATION\tENGINE\tURL\n"); err != nil {
+		return fmt.Errorf("write search table header: %w", err)
+	}
+	if _, err := fmt.Fprintf(tableWriter, "-----\t--------\t------\t---\n"); err != nil {
+		return fmt.Errorf("write search table separator: %w", err)
+	}
 
 	for _, result := range searchResponse.Results {
 		truncatedTitle := TruncateSearchResultText(result.Title, SearchTitleTruncateLength)
-		fmt.Fprintf(tableWriter, "%s\t%s\t%s\t%s\n", truncatedTitle, result.Duration, result.Engine, result.URL)
+		if _, err := fmt.Fprintf(tableWriter, "%s\t%s\t%s\t%s\n", truncatedTitle, result.Duration, result.Engine, result.URL); err != nil {
+			return fmt.Errorf("write search result row: %w", err)
+		}
 	}
 
-	tableWriter.Flush()
+	if err := tableWriter.Flush(); err != nil {
+		return fmt.Errorf("flush search table: %w", err)
+	}
 
 	fmt.Printf("\nFound %d results for \"%s\"\n", searchResponse.Count, searchResponse.Query)
 	return nil

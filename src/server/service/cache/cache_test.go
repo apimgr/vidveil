@@ -33,12 +33,18 @@ func TestNewSearchCacheNonNil(t *testing.T) {
 	if c == nil {
 		t.Fatal("expected non-nil cache")
 	}
-	c.Close()
+	if err := c.Close(); err != nil {
+		t.Errorf("close cache: %v", err)
+	}
 }
 
 func TestNewSearchCacheZeroTTLDefaultsThirtySeconds(t *testing.T) {
 	c := NewSearchCache(0, 100)
-	defer c.Close()
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("close cache: %v", err)
+		}
+	})
 	if c.ttl != 30*time.Second {
 		t.Errorf("expected 30s default TTL, got %v", c.ttl)
 	}
@@ -46,7 +52,11 @@ func TestNewSearchCacheZeroTTLDefaultsThirtySeconds(t *testing.T) {
 
 func TestNewSearchCacheZeroMaxSizeDefaults1000(t *testing.T) {
 	c := NewSearchCache(5*time.Minute, 0)
-	defer c.Close()
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("close cache: %v", err)
+		}
+	})
 	if c.maxSize != 1000 {
 		t.Errorf("expected 1000 default max size, got %d", c.maxSize)
 	}
@@ -56,7 +66,11 @@ func TestNewSearchCacheZeroMaxSizeDefaults1000(t *testing.T) {
 
 func TestGetOnEmptyCacheReturnsFalse(t *testing.T) {
 	c := NewSearchCache(5*time.Minute, 100)
-	defer c.Close()
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("close cache: %v", err)
+		}
+	})
 
 	resp, ok := c.Get("missing-key")
 	if ok {
@@ -69,7 +83,11 @@ func TestGetOnEmptyCacheReturnsFalse(t *testing.T) {
 
 func TestSetThenGetReturnsSameResponse(t *testing.T) {
 	c := NewSearchCache(5*time.Minute, 100)
-	defer c.Close()
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("close cache: %v", err)
+		}
+	})
 
 	want := makeResponse("golang")
 	c.Set("k1", want)
@@ -86,7 +104,11 @@ func TestSetThenGetReturnsSameResponse(t *testing.T) {
 func TestGetAfterTTLExpiredReturnsFalse(t *testing.T) {
 	// Use a 1 ms TTL so the entry expires almost immediately.
 	c := NewSearchCache(time.Millisecond, 100)
-	defer c.Close()
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("close cache: %v", err)
+		}
+	})
 
 	c.Set("expiring", makeResponse("expiring"))
 	time.Sleep(5 * time.Millisecond)
@@ -104,7 +126,11 @@ func TestGetAfterTTLExpiredReturnsFalse(t *testing.T) {
 
 func TestDeleteRemovesKey(t *testing.T) {
 	c := NewSearchCache(5*time.Minute, 100)
-	defer c.Close()
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("close cache: %v", err)
+		}
+	})
 
 	c.Set("del-me", makeResponse("del"))
 	c.Delete("del-me")
@@ -117,7 +143,11 @@ func TestDeleteRemovesKey(t *testing.T) {
 
 func TestDeleteNonExistentKeyNoPanic(t *testing.T) {
 	c := NewSearchCache(5*time.Minute, 100)
-	defer c.Close()
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("close cache: %v", err)
+		}
+	})
 	// Must not panic.
 	c.Delete("does-not-exist")
 }
@@ -126,7 +156,11 @@ func TestDeleteNonExistentKeyNoPanic(t *testing.T) {
 
 func TestClearEmptiesCache(t *testing.T) {
 	c := NewSearchCache(5*time.Minute, 100)
-	defer c.Close()
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("close cache: %v", err)
+		}
+	})
 
 	c.Set("a", makeResponse("a"))
 	c.Set("b", makeResponse("b"))
@@ -141,7 +175,11 @@ func TestClearEmptiesCache(t *testing.T) {
 
 func TestSizeReturnsCorrectCount(t *testing.T) {
 	c := NewSearchCache(5*time.Minute, 100)
-	defer c.Close()
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("close cache: %v", err)
+		}
+	})
 
 	if c.Size() != 0 {
 		t.Errorf("expected initial size=0, got %d", c.Size())
@@ -157,7 +195,11 @@ func TestSizeReturnsCorrectCount(t *testing.T) {
 
 func TestStatsContainsRequiredKeys(t *testing.T) {
 	c := NewSearchCache(30*time.Second, 500)
-	defer c.Close()
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("close cache: %v", err)
+		}
+	})
 
 	stats := c.Stats()
 	for _, key := range []string{"size", "max_size", "ttl_sec"} {
@@ -192,7 +234,11 @@ func TestEvictionKeepsSizeWithinBounds(t *testing.T) {
 	// maxSize=2, add 3 entries; the implementation evicts 10% (min 1) on overflow.
 	// After the third Set, size must be ≤ 3 (eviction shrinks by at least 1).
 	c := NewSearchCache(5*time.Minute, 2)
-	defer c.Close()
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("close cache: %v", err)
+		}
+	})
 
 	c.Set("e1", makeResponse("e1"))
 	// Small sleep so timestamps differ and oldest-first ordering is reliable.
@@ -291,7 +337,9 @@ func TestNewSearchResultCacheEmptyTypeDefaultsToMemory(t *testing.T) {
 	if cache == nil {
 		t.Fatal("expected non-nil cache")
 	}
-	cache.Close()
+	if err := cache.Close(); err != nil {
+		t.Errorf("close cache: %v", err)
+	}
 }
 
 // ---- MemoryLockStore — AcquireLock ----

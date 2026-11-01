@@ -35,14 +35,17 @@ import (
 type ServerHandler struct {
 	appConfig  *config.AppConfig
 	torSvc     TorStatusChecker
+	i2pSvc     I2PStatusChecker
 	db         *sql.DB
 	secretsMgr *secret.Manager
 	configDir  string
+	dataDir    string
 	logger     *logging.AppLogger
 	emailSvc   *email.EmailService
 	// notifyDispatcher routes contact-form and other events to the configured
 	// PART 12 webhook transports. Nil until wired via SetNotifyDispatcher.
 	notifyDispatcher *notify.Dispatcher
+	restoreRestart   func()
 }
 
 // NewServerHandler creates a new server handler
@@ -62,6 +65,11 @@ func (h *ServerHandler) SetTorService(t TorStatusChecker) {
 	h.torSvc = t
 }
 
+// SetI2PService wires the optional eepsite state used by public pages.
+func (h *ServerHandler) SetI2PService(service I2PStatusChecker) {
+	h.i2pSvc = service
+}
+
 // SetDB wires the database connection used by the coordinated-disclosure
 // pipeline (AI.md PART 11 "Security Reports") to store/read security_reports rows.
 func (h *ServerHandler) SetDB(db *sql.DB) {
@@ -78,6 +86,22 @@ func (h *ServerHandler) SetSecretsManager(m *secret.Manager) {
 // the project PGP keypair under {config_dir}/security/.
 func (h *ServerHandler) SetConfigDir(dir string) {
 	h.configDir = dir
+}
+
+// SetDataDir wires the data directory used by authenticated restore operations.
+func (h *ServerHandler) SetDataDir(dir string) {
+	h.dataDir = dir
+}
+
+// SetRestoreRestartHandler schedules a full server restart after a successful restore.
+func (h *ServerHandler) SetRestoreRestartHandler(restart func()) {
+	h.restoreRestart = restart
+}
+
+func (h *ServerHandler) restartAfterRestore() {
+	if h.restoreRestart != nil {
+		h.restoreRestart()
+	}
 }
 
 // SetLogger wires the app logger so security-report events can be recorded
@@ -121,6 +145,8 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		templateFile = "template/page/server-security-thanks.tmpl"
 	case "server-security-report":
 		templateFile = "template/page/server-security-report.tmpl"
+	case "server-restore":
+		templateFile = "template/page/server-restore.tmpl"
 	default:
 		writeGuaranteedErrorPage(w, r, http.StatusInternalServerError, i18n.Translate(i18n.DetectLocale(r), "error.server"), i18n.Translate(i18n.DetectLocale(r), "error.generic"))
 		return
@@ -287,6 +313,11 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 			data["TorOnionAddr"] = addr
 		}
 	}
+	if h.i2pSvc != nil && h.i2pSvc.Enabled() && h.i2pSvc.IsRunning() {
+		data["I2PEnabled"] = true
+		data["I2PRunning"] = true
+		data["I2PAddress"] = h.i2pSvc.Address()
+	}
 
 	// Merge extra data
 	for k, v := range extraData {
@@ -310,8 +341,12 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	// Set headers and write buffered response
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
-	w.WriteHeader(http.StatusOK)
-	w.Write(buf.Bytes())
+	status := http.StatusOK
+	if configuredStatus, ok := data["HTTPStatus"].(int); ok && configuredStatus >= 400 && configuredStatus <= 599 {
+		status = configuredStatus
+	}
+	w.WriteHeader(status)
+	_, _ = w.Write(buf.Bytes())
 }
 
 // AboutPage renders /server/about web page
@@ -334,10 +369,10 @@ func (h *ServerHandler) ConsentSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// "accept" enables the optional preferences category; anything else is
-	// essential-only. Analytics stays false either way — the IDEA.md non-goal
-	// "No tracking, logging, or analytics" means there is no tracker to allow.
-	prefs := r.PostFormValue("choice") == "accept"
+	// Accept enables configured optional preferences, decline disables them,
+	// and save persists the explicit preferences-page category toggle.
+	choice := r.PostFormValue("choice")
+	prefs := choice == "accept" || (choice == "save" && (r.PostFormValue("preferences") == "1" || r.PostFormValue("preferences") == "on"))
 	value := fmt.Sprintf(`{"essential":true,"preferences":%t,"analytics":false,"timestamp":%d}`, prefs, time.Now().Unix())
 
 	// Secure flag when the request arrived over HTTPS (directly or via proxy)
@@ -460,11 +495,11 @@ func (h *ServerHandler) validSecurityID(r *http.Request, id string) bool {
 	if id == "" || h.secretsMgr == nil {
 		return false
 	}
-	secret, err := h.secretsMgr.GetInstallationSecret(r.Context())
-	if err != nil {
-		return false
-	}
-	return secreport.ValidateSecurityID(secret, id, time.Now())
+	now := time.Now()
+	valid, err := h.secretsMgr.ValidateDerivedWithPrevious(r.Context(), secret.InstallationSecret, func(secretBytes []byte) bool {
+		return secreport.ValidateSecurityID(secretBytes, id, now)
+	})
+	return err == nil && valid
 }
 
 // defaultDisclosureDays returns the configured default coordinated-disclosure
@@ -824,7 +859,7 @@ func (h *ServerHandler) SecurityThanksPage(w http.ResponseWriter, r *http.Reques
 			WHERE disclosed = 1 AND credit_preference != 'none'
 			ORDER BY created_at DESC`)
 		if err == nil {
-			defer rows.Close()
+			defer func() { _ = rows.Close() }()
 			n := 0
 			for rows.Next() {
 				var pref, name string
@@ -870,6 +905,7 @@ func (h *ServerHandler) SecurityReportStatusPage(w http.ResponseWriter, r *http.
 		http.NotFound(w, r)
 		return
 	}
+	authpad.Wait(start)
 	h.renderServerTemplate(w, r, "server-security-report", map[string]interface{}{
 		"TrackingID":         status.TrackingID,
 		"Status":             status.Status,
@@ -894,7 +930,7 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 			"Real-time SSE streaming as each engine responds",
 			"Thumbnail proxy so source sites never see your IP",
 			"Video preview on hover (desktop) and swipe (mobile)",
-			"Client-side preferences, favorites, and history (localStorage only)",
+			"Cookie-based preferences with browser-local search history and favorites mirror",
 			"Built-in Tor hidden service support",
 			"Admin-configurable geographic content restriction",
 			"Single static binary with all assets embedded",
@@ -906,7 +942,7 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 	}
 	if getAPIResponseFormat(r) == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "name: %s\ntagline: %s\ndescription: %s\nversion: %s\n",
+		_, _ = fmt.Fprintf(w, "name: %s\ntagline: %s\ndescription: %s\nversion: %s\n",
 			data["name"], data["tagline"], data["description"], data["version"])
 		return
 	}
@@ -921,7 +957,7 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 	privacy := h.appConfig.Server.Privacy
 	if getAPIResponseFormat(r) == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "policy_version: 1.0\nlast_updated: %s\nuser_accounts: false\nsearch_queries_logged: false\nip_addresses_stored: false\ntracking_cookies: false\nthird_party_sharing: %t\ndata_stored_on_server: %t\ndata_sold: %t\nfavorites_storage: server_side_anonymous_visitor_id\n",
+		_, _ = fmt.Fprintf(w, "policy_version: 1.0\nlast_updated: %s\nuser_accounts: false\nsearch_queries_logged: false\nip_addresses_stored: false\ntracking_cookies: false\nthird_party_sharing: %t\ndata_stored_on_server: %t\ndata_sold: %t\nfavorites_storage: server_side_anonymous_visitor_id\n",
 			time.Now().Format("2006-01-02"), len(privacy.ThirdParty.Services) > 0, privacy.Data.StoredOnServer, privacy.Data.Sold)
 		return
 	}
@@ -972,14 +1008,16 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 				"data_sold":             privacy.Data.Sold,
 			},
 			"client_side_storage": []string{
-				"vidveil-theme",
-				"vidveil_prefs",
 				"vidveil_history",
+				"vidveil_favorites_mirror",
 			},
 			"server_side_storage": []string{
 				"favorites (identified by an anonymous visitor_id cookie, no personal data)",
 			},
 			"cookies_used": []string{
+				"theme and lang (rendering preferences)",
+				"vidveil_pref_* (guest preferences)",
+				"cookie_consent and ccpa_opt_out (privacy choices)",
 				"age_verification (required by law)",
 				"content_restriction_acknowledgment (soft-block regions only)",
 				"forward_ip (opt-in only, when operator enables geo-forwarding)",
@@ -1090,15 +1128,15 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 	apiBase := h.appConfig.APIBasePath()
 	if getAPIResponseFormat(r) == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "search: GET %s/search  params: q, page, engines (bang shortcuts like !ph supported in q)\n", apiBase)
-		fmt.Fprintf(w, "bangs: GET %s/bangs\n", apiBase)
-		fmt.Fprintf(w, "autocomplete: GET %s/bangs/autocomplete?q={partial}\n", apiBase)
-		fmt.Fprintf(w, "engines: GET %s/engines\n", apiBase)
-		fmt.Fprintf(w, "engines_health: GET %s/engines/health\n", apiBase)
-		fmt.Fprintf(w, "thumbnail_proxy: GET %s/proxy/thumbnails?url={url}\n", apiBase)
-		fmt.Fprintf(w, "health: GET %s/server/healthz\n", apiBase)
-		fmt.Fprintf(w, "swagger: /server/docs/swagger\n")
-		fmt.Fprintf(w, "graphql: /server/docs/graphql\n")
+		_, _ = fmt.Fprintf(w, "search: GET %s/search  params: q, page, engines (bang shortcuts like !ph supported in q)\n", apiBase)
+		_, _ = fmt.Fprintf(w, "bangs: GET %s/bangs\n", apiBase)
+		_, _ = fmt.Fprintf(w, "autocomplete: GET %s/bangs/autocomplete?q={partial}\n", apiBase)
+		_, _ = fmt.Fprintf(w, "engines: GET %s/engines\n", apiBase)
+		_, _ = fmt.Fprintf(w, "engines_health: GET %s/engines/health\n", apiBase)
+		_, _ = fmt.Fprintf(w, "thumbnail_proxy: GET %s/proxy/thumbnails?url={url}\n", apiBase)
+		_, _ = fmt.Fprintf(w, "health: GET %s/server/healthz\n", apiBase)
+		_, _ = fmt.Fprintf(w, "swagger: /server/docs/swagger\n")
+		_, _ = fmt.Fprintf(w, "graphql: /server/docs/graphql\n")
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
@@ -1167,9 +1205,9 @@ func (h *ServerHandler) APITerms(w http.ResponseWriter, r *http.Request) {
 	}
 	if getAPIResponseFormat(r) == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintf(w, "terms_version: 1.0\nlast_updated: %s\n", updated)
+		_, _ = fmt.Fprintf(w, "terms_version: 1.0\nlast_updated: %s\n", updated)
 		for _, s := range sections {
-			fmt.Fprintf(w, "section: %s\n", s)
+			_, _ = fmt.Fprintf(w, "section: %s\n", s)
 		}
 		return
 	}
@@ -1206,17 +1244,17 @@ func writeGuaranteedErrorPage(w http.ResponseWriter, r *http.Request, status int
 	if wantsJSON {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(status)
-		fmt.Fprintf(w, `{"ok":false,"error":"SERVER_ERROR","message":%q,"details":{}}`+"\n", message)
+		_, _ = fmt.Fprintf(w, `{"ok":false,"error":"SERVER_ERROR","message":%q,"details":{}}`+"\n", message)
 		return
 	}
 	if strings.Contains(accept, "text/plain") {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(status)
-		fmt.Fprintf(w, "%d %s: %s\n", status, title, message)
+		_, _ = fmt.Fprintf(w, "%d %s: %s\n", status, title, message)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	fmt.Fprintf(w, `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>%d %s</title></head><body><h1>%d %s</h1><p>%s</p></body></html>`,
+	_, _ = fmt.Fprintf(w, `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>%d %s</title></head><body><h1>%d %s</h1><p>%s</p></body></html>`,
 		status, title, status, title, message)
 }

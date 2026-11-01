@@ -513,7 +513,9 @@ func TestSupportsUnicodeLiveLookup(t *testing.T) {
 		t.Error("SupportsUnicode() = false after setting LANG=en_US.UTF-8")
 	}
 
-	os.Unsetenv("LANG")
+	if err := os.Unsetenv("LANG"); err != nil {
+		t.Fatalf("Unsetenv LANG: %v", err)
+	}
 	t.Setenv("LANG", "C")
 	if e.SupportsUnicode() {
 		t.Error("SupportsUnicode() = true after changing LANG to C")

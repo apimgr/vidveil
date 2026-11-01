@@ -5,19 +5,25 @@
 package system
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/apimgr/vidveil/src/common/i18n"
 )
 
 // DropPrivileges drops from root to the specified user after port binding
 // Per AI.md PART 23: "Unix: Service starts as root, binary drops to user after port binding"
 // This should be called AFTER binding to privileged ports but BEFORE serving requests
-func DropPrivileges(username string) error {
+func DropPrivileges(username string, configDirs ...string) error {
 	// Only drop if we're root
 	if os.Getuid() != 0 {
 		// Already non-root, nothing to do
@@ -33,7 +39,11 @@ func DropPrivileges(username string) error {
 	u, err := user.Lookup(username)
 	if err != nil {
 		// User doesn't exist - create it
-		if err := createSystemUser(username); err != nil {
+		configDir := ""
+		if len(configDirs) > 0 {
+			configDir = configDirs[0]
+		}
+		if err := createSystemUser(username, configDir); err != nil {
 			return fmt.Errorf("failed to create user %s: %w", username, err)
 		}
 		u, err = user.Lookup(username)
@@ -76,18 +86,75 @@ func DropPrivileges(username string) error {
 }
 
 // createSystemUser creates a system user for the service
-func createSystemUser(username string) error {
+func createSystemUser(username, configDir string) error {
 	// Find available UID in 200-899 range per AI.md PART 23
-	uid := findAvailableID(200, 899)
+	uid, err := findAvailableSystemID()
+	if runtime.GOOS == "darwin" {
+		uid, err = findAvailableMacOSSystemID()
+	}
+	if err != nil {
+		return err
+	}
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" && runtime.GOOS != "freebsd" {
+		return fmt.Errorf("automatic service user creation is unsupported on %s", runtime.GOOS)
+	}
 
 	// Determine home directory
 	homeDir := fmt.Sprintf("/var/lib/apimgr/%s", username)
+	if runtime.GOOS == "darwin" {
+		homeDir = filepath.Join("/usr/local/var", "apimgr", username)
+	}
 
 	// groupadd --system --gid {id} {name} per AI.md PART 23
 	// --gid is numeric; Alpine uses addgroup -g -S
+	if configDir == "" {
+		switch runtime.GOOS {
+		case "darwin":
+			configDir = filepath.Join("/Library/Application Support", "apimgr", username)
+		case "freebsd":
+			configDir = filepath.Join("/usr/local/etc", "apimgr", username)
+		default:
+			configDir = filepath.Join("/etc", "apimgr", username)
+		}
+	}
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("create config directory for service user: %w", err)
+	}
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		return fmt.Errorf("create home directory for service user: %w", err)
+	}
+	if runtime.GOOS == "darwin" {
+		if err := createMacOSServiceUser(username, uid, homeDir); err != nil {
+			return err
+		}
+		if err := chownServiceTree(homeDir, uid, uid); err != nil {
+			return err
+		}
+		if err := chownServiceTree(configDir, uid, uid); err != nil {
+			return err
+		}
+		return markServiceUserCreated(configDir, username)
+	}
+	if runtime.GOOS == "freebsd" {
+		if err := exec.Command("pw", "groupadd", "-n", username, "-g", strconv.Itoa(uid)).Run(); err != nil {
+			return fmt.Errorf("create service group: %w", err)
+		}
+		if err := exec.Command("pw", "useradd", "-n", username, "-u", strconv.Itoa(uid), "-g", strconv.Itoa(uid), "-d", homeDir, "-s", "/usr/sbin/nologin", "-c", username+" service account").Run(); err != nil {
+			return fmt.Errorf("create service user: %w", err)
+		}
+		if err := chownServiceTree(homeDir, uid, uid); err != nil {
+			return err
+		}
+		if err := chownServiceTree(configDir, uid, uid); err != nil {
+			return err
+		}
+		return markServiceUserCreated(configDir, username)
+	}
 	if _, err := exec.LookPath("groupadd"); err == nil {
 		// Group may already exist; useradd below fails loudly if it does not
-		_ = exec.Command("groupadd", "--system", "--gid", strconv.Itoa(uid), username).Run()
+		if err := exec.Command("groupadd", "--system", "--gid", strconv.Itoa(uid), username).Run(); err != nil {
+			return fmt.Errorf("create service group: %w", err)
+		}
 		// useradd: --system, numeric --gid per AI.md PART 23
 		cmd := exec.Command("useradd",
 			"--system",
@@ -98,13 +165,24 @@ func createSystemUser(username string) error {
 			"--comment", username+" service account",
 			username,
 		)
-		return cmd.Run()
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+		if err := chownServiceTree(homeDir, uid, uid); err != nil {
+			return err
+		}
+		if err := chownServiceTree(configDir, uid, uid); err != nil {
+			return err
+		}
+		return markServiceUserCreated(configDir, username)
 	}
 
 	// Alpine Linux uses addgroup/adduser (busybox)
 	// Group may already exist; adduser below fails loudly if it does not
-	_ = exec.Command("addgroup", "-g", strconv.Itoa(uid), "-S", username).Run()
-	return exec.Command("adduser",
+	if err := exec.Command("addgroup", "-g", strconv.Itoa(uid), "-S", username).Run(); err != nil {
+		return fmt.Errorf("create service group: %w", err)
+	}
+	if err := exec.Command("adduser",
 		"-D",
 		"-S",
 		"-H",
@@ -112,7 +190,16 @@ func createSystemUser(username string) error {
 		"-G", username,
 		"-s", "/sbin/nologin",
 		username,
-	).Run()
+	).Run(); err != nil {
+		return err
+	}
+	if err := chownServiceTree(homeDir, uid, uid); err != nil {
+		return err
+	}
+	if err := chownServiceTree(configDir, uid, uid); err != nil {
+		return err
+	}
+	return markServiceUserCreated(configDir, username)
 }
 
 // ShouldDropPrivileges returns true if running as root and should drop
@@ -183,7 +270,11 @@ func canEscalate() bool {
 // HandleEscalation prompts user and re-executes with elevated privileges per AI.md PART 23
 // Returns nil if already elevated or if escalation succeeded
 // Returns error if user cannot escalate or declined
-func HandleEscalation(action string) error {
+func HandleEscalation(action string, locales ...string) error {
+	locale := "en"
+	if len(locales) > 0 && strings.TrimSpace(locales[0]) != "" {
+		locale = locales[0]
+	}
 	if IsElevated() {
 		// Already elevated
 		return nil
@@ -191,19 +282,22 @@ func HandleEscalation(action string) error {
 
 	if !canEscalate() {
 		// User CANNOT escalate - don't ask, just inform
-		return fmt.Errorf("%s requires administrator privileges\n\n"+
-			"You do not have sudo/admin access. Contact your system administrator", action)
+		return errors.New(strings.ReplaceAll(i18n.Translate(locale, "cli.privilege.unavailable"), "{action}", action))
 	}
 
 	// User CAN escalate - ask and re-exec with elevated privileges
-	fmt.Printf("%s requires elevated privileges.\n", action)
-	fmt.Print("Escalate with sudo? [Y/n]: ")
+	fmt.Print(strings.ReplaceAll(i18n.Translate(locale, "cli.privilege.prompt_unix"), "{action}", action))
 
 	var response string
-	fmt.Scanln(&response)
+	if _, err := fmt.Scanln(&response); err != nil {
+		if errors.Is(err, io.EOF) {
+			return errors.New(i18n.Translate(locale, "cli.privilege.declined"))
+		}
+		return fmt.Errorf("read privilege confirmation: %w", err)
+	}
 	response = strings.TrimSpace(strings.ToLower(response))
 	if response != "" && response != "y" && response != "yes" {
-		return fmt.Errorf("escalation declined")
+		return errors.New(i18n.Translate(locale, "cli.privilege.declined"))
 	}
 
 	// Re-execute with sudo

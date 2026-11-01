@@ -8,6 +8,7 @@ on:
   schedule:
     # Weekly security run (Monday 06:00 UTC) — only security jobs run on schedule
     - cron: '0 6 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - run: go vet ./...
-      - run: staticcheck ./...
+      - run: GOTOOLCHAIN=go1.26.4 staticcheck ./...
 
   secret-scan:
     runs-on: ubuntu-latest

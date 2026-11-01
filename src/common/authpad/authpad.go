@@ -6,7 +6,10 @@
 // user") by response latency.
 package authpad
 
-import "time"
+import (
+	"net/http"
+	"time"
+)
 
 // Floor is the minimum response time for auth-failure and other
 // timing-sensitive responses, per AI.md PART 11 (Authentication & Identity
@@ -20,5 +23,40 @@ const Floor = 100 * time.Millisecond
 func Wait(start time.Time) {
 	if elapsed := time.Since(start); elapsed < Floor {
 		time.Sleep(Floor - elapsed)
+	}
+}
+
+// ResponseWriter delays the first response commit until the timing floor has
+// elapsed. Finish also pads handlers that return without writing a response.
+type ResponseWriter struct {
+	http.ResponseWriter
+	start     time.Time
+	committed bool
+}
+
+// WrapResponse creates a response writer that enforces the timing floor.
+func WrapResponse(w http.ResponseWriter, start time.Time) *ResponseWriter {
+	return &ResponseWriter{ResponseWriter: w, start: start}
+}
+
+func (w *ResponseWriter) WriteHeader(status int) {
+	w.waitBeforeCommit()
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *ResponseWriter) Write(body []byte) (int, error) {
+	w.waitBeforeCommit()
+	return w.ResponseWriter.Write(body)
+}
+
+// Finish ensures even an empty response does not escape before the floor.
+func (w *ResponseWriter) Finish() {
+	w.waitBeforeCommit()
+}
+
+func (w *ResponseWriter) waitBeforeCommit() {
+	if !w.committed {
+		Wait(w.start)
+		w.committed = true
 	}
 }

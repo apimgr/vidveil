@@ -22,10 +22,8 @@ var hrefPattern = regexp.MustCompile(`(?i)(?:href|src)\s*=\s*"([^"]+)"`)
 var crawlSeeds = []string{
 	"/",
 	"/search?q=crawl+probe",
-	"/engines",
-	"/bangs",
 	"/favorites",
-	"/preferences",
+	"/server/preferences",
 	"/server/about",
 	"/server/help",
 }
@@ -43,6 +41,10 @@ func skipCrawl(link string) bool {
 		strings.HasPrefix(link, "data:"), strings.HasPrefix(link, "javascript:"):
 		return true
 	case !strings.HasPrefix(link, "/"):
+		return true
+	case strings.HasPrefix(link, "/api/"):
+		return true
+	case strings.HasPrefix(link, "/search?"):
 		return true
 	}
 	for _, prefix := range []string{

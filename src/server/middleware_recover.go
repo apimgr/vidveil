@@ -77,17 +77,17 @@ func writeGuaranteedError(w http.ResponseWriter, r *http.Request, status int) {
 	if wantsJSON {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(status)
-		fmt.Fprintf(w, `{"ok":false,"error":"SERVER_ERROR","message":%q,"details":{}}`+"\n", message)
+		_, _ = fmt.Fprintf(w, `{"ok":false,"error":"SERVER_ERROR","message":%q,"details":{}}`+"\n", message)
 		return
 	}
 	if strings.Contains(accept, "text/plain") {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(status)
-		fmt.Fprintf(w, "%d Server Error: %s\n", status, message)
+		_, _ = fmt.Fprintf(w, "%d Server Error: %s\n", status, message)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	fmt.Fprintf(w, `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>%d Server Error</title></head><body><h1>%d Server Error</h1><p>%s</p></body></html>`,
+	_, _ = fmt.Fprintf(w, `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>%d Server Error</title></head><body><h1>%d Server Error</h1><p>%s</p></body></html>`,
 		status, status, message)
 }

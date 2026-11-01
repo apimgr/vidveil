@@ -25,6 +25,10 @@ from OpenAPI and omits metrics and operator-only actions.
 server:
   mcp:
     enabled: true
+  tokens:
+    max_linked: 25
+    cookie_max_age: 1y
+    idle_purge_days: 0
 web:
   api_contact: api@example.org
   llms:
@@ -37,6 +41,11 @@ web:
 MCP is available at `/api/{api_version}/server/mcp`, `/api/mcp`, and `/mcp`.
 The discovery file is available at `/.well-known/llms.txt` and `/llms.txt`.
 `web.api_contact` and `web.security.contact` populate the contact section.
+`server.tokens` controls the active linked-token limit, sliding owner-cookie
+lifetime, and optional idle-owner purge. When `idle_purge_days` is greater
+than zero, the built-in daily scheduler removes tokens for owners with no
+favorites and no token use during that period. Owners with favorites are
+retained. The default value `0` disables purging.
 
 ## Minimal Example
 

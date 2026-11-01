@@ -1,10 +1,22 @@
+def isScheduledBuildAtUtcHour(int hour) {
+    def timerCauses = currentBuild.getBuildCauses('hudson.triggers.TimerTrigger$TimerTriggerCause')
+    if (timerCauses.isEmpty()) {
+        return false
+    }
+
+    // timeInMillis is the scheduled timestamp; startTimeInMillis shifts when
+    // an executor is queued and can misclassify the 3am and 4am jobs.
+    long buildHour = (currentBuild.timeInMillis / 3600000L) as long
+    return buildHour % 24L == hour
+}
+
 pipeline {
     agent none
 
     triggers {
-        // Daily build at 3am UTC (matches GitHub Actions daily.yml) and
+        // Devel build at 3am UTC (matches GitHub Actions devel.yml) and
         // daily devel image rebuild at 4am UTC (matches docker.yml build-devel job)
-        cron('0 3 * * *\n0 4 * * *')
+        cron('TZ=UTC\n0 3 * * *\n0 4 * * *')
     }
 
     environment {
@@ -40,8 +52,8 @@ pipeline {
                         env.BUILD_TYPE = 'beta'
                         env.VERSION = sh(script: 'date -u +"%Y%m%d%H%M%S"', returnStdout: true).trim() + '-beta'
                     } else if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master') {
-                        // Daily identity is the commit being built, not a timestamp
-                        env.BUILD_TYPE = 'daily'
+                        // Devel identity is the commit being built, not a timestamp
+                        env.BUILD_TYPE = 'devel'
                         env.VERSION = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
                     } else {
                         env.BUILD_TYPE = 'dev'
@@ -60,6 +72,10 @@ pipeline {
         }
 
         stage('Build Server') {
+            when {
+                // The 4am timer exists only to refresh the devel image.
+                expression { !isScheduledBuildAtUtcHour(4) }
+            }
             parallel {
                 stage('Linux AMD64') {
                     agent { label 'amd64' }
@@ -210,7 +226,10 @@ pipeline {
 
         stage('Build CLI') {
             when {
-                expression { env.HAS_CLI == 'true' }
+                allOf {
+                    expression { env.HAS_CLI == 'true' }
+                    expression { !isScheduledBuildAtUtcHour(4) }
+                }
             }
             parallel {
                 stage('CLI Linux AMD64') {
@@ -362,6 +381,10 @@ pipeline {
 
         stage('Test') {
             agent { label 'amd64' }
+            when {
+                beforeAgent true
+                expression { !isScheduledBuildAtUtcHour(4) }
+            }
             steps {
                 sh '''
                     docker run --rm \
@@ -442,10 +465,14 @@ pipeline {
             }
         }
 
-        stage('Release: Daily') {
+        stage('Release: Devel') {
             agent { label 'amd64' }
             when {
-                expression { env.BUILD_TYPE == 'daily' }
+                beforeAgent true
+                allOf {
+                    expression { env.BUILD_TYPE == 'devel' }
+                    expression { !isScheduledBuildAtUtcHour(4) }
+                }
             }
             steps {
                 sh 'echo "${VERSION}" > ${RELDIR}/version.txt'
@@ -477,6 +504,10 @@ pipeline {
 
         stage('Docker') {
             agent { label 'amd64' }
+            when {
+                beforeAgent true
+                expression { !isScheduledBuildAtUtcHour(4) }
+            }
             steps {
                 script {
                     def tags = "-t ${REGISTRY}:${COMMIT_ID}"
@@ -537,6 +568,10 @@ pipeline {
 
         stage('Docker: Devel') {
             agent { label 'amd64' }
+            when {
+                beforeAgent true
+                expression { !isScheduledBuildAtUtcHour(3) }
+            }
             steps {
                 script {
                     sh """

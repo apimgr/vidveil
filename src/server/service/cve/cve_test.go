@@ -31,9 +31,12 @@ func writeTempJSON(t *testing.T, v interface{}) string {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if err := json.NewEncoder(f).Encode(v); err != nil {
 		t.Fatalf("failed to encode JSON: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("failed to close temporary JSON file: %v", err)
 	}
 	return f.Name()
 }
@@ -420,7 +423,9 @@ func TestLoadCVEData_InvalidJSON(t *testing.T) {
 	if _, err := f.WriteString("{not valid json{{"); err != nil {
 		t.Fatalf("failed to write bad JSON: %v", err)
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		t.Fatalf("close temporary invalid JSON file: %v", err)
+	}
 
 	if err := svc.loadCVEData(f.Name()); err == nil {
 		t.Error("expected error for invalid JSON, got nil")

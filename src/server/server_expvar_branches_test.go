@@ -49,12 +49,18 @@ func newTestServerWithCfg(t *testing.T, modify func(cfg *config.AppConfig)) *Ser
 		modify(cfg)
 	}
 	base := filepath.Join(os.TempDir(), "apimgr")
-	os.MkdirAll(base, 0755)
+	if err := os.MkdirAll(base, 0755); err != nil {
+		t.Fatal(err)
+	}
 	tmp, err := os.MkdirTemp(base, "vidveil-srv-cfg-")
 	if err != nil {
 		t.Fatalf("MkdirTemp: %v", err)
 	}
-	t.Cleanup(func() { os.RemoveAll(tmp) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmp); err != nil {
+			t.Errorf("remove temp dir: %v", err)
+		}
+	})
 	engineMgr := engine.NewEngineManager(cfg)
 	sched := scheduler.NewScheduler()
 	// The scheduler is ALWAYS running in production (AI.md PART 18); start it so
@@ -300,6 +306,7 @@ func TestOnionLocationWriter_NonHTML_NoHeader(t *testing.T) {
 
 func TestOnionMiddleware_OnionHost_Skipped(t *testing.T) {
 	s := newTestServer(t)
+	s.appConfig.Server.Tor.OnionAddress = "abcdef1234.onion"
 	s.SetTorService(&mockTorWithOnion{addr: "abcdef1234.onion"})
 	req := httptest.NewRequest(http.MethodGet, "/server/healthz", nil)
 	req.Host = "abcdef1234.onion"

@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -79,7 +80,11 @@ func newMaintMgrWithTempDirs(t *testing.T) (*MaintenanceManager, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(tmp) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmp); err != nil {
+			t.Errorf("remove temp dir: %v", err)
+		}
+	})
 
 	cfgDir := filepath.Join(tmp, "config")
 	dataDir := filepath.Join(tmp, "data")
@@ -169,7 +174,7 @@ func TestBackupWithOptions_IncludeSSL_ExistsAndIncluded(t *testing.T) {
 	if err := os.MkdirAll(restoreDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	m2 := NewMaintenanceManager(restoreDir, restoreDir, "1.0.0")
+	m2 := NewMaintenanceManager(filepath.Join(restoreDir, "config"), filepath.Join(restoreDir, "data"), "1.0.0")
 	m2.paths.Backup = m.paths.Backup
 	m2.paths.SSL = filepath.Join(restoreDir, "ssl")
 	if err := m2.RestoreWithPassword(outFile, ""); err != nil {
@@ -223,7 +228,7 @@ func TestBackupAndRestoreWithPassword_RoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m2 := NewMaintenanceManager(restoreDir, restoreDir, "1.0.0")
+	m2 := NewMaintenanceManager(filepath.Join(restoreDir, "config"), filepath.Join(restoreDir, "data"), "1.0.0")
 	m2.paths.Backup = m.paths.Backup
 
 	if err := m2.RestoreWithPassword(outFile, password); err != nil {
@@ -344,7 +349,7 @@ func TestRestoreWithPassword_WithSSLEntries_RestoresSSL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m2 := NewMaintenanceManager(restoreDir, restoreDir, "1.0.0")
+	m2 := NewMaintenanceManager(filepath.Join(restoreDir, "config"), filepath.Join(restoreDir, "data"), "1.0.0")
 	m2.paths.Backup = m.paths.Backup
 	m2.paths.SSL = filepath.Join(restoreDir, "ssl")
 
@@ -384,7 +389,7 @@ func TestRestoreWithPassword_WithDataEntries_RestoresData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m2 := NewMaintenanceManager(restoreDir, restoreDir, "1.0.0")
+	m2 := NewMaintenanceManager(filepath.Join(restoreDir, "config"), filepath.Join(restoreDir, "data"), "1.0.0")
 	m2.paths.Backup = m.paths.Backup
 
 	if err := m2.RestoreWithPassword(outFile, ""); err != nil {
@@ -635,6 +640,18 @@ func TestRestoreWithPassword_ChecksumMismatch(t *testing.T) {
 	}
 }
 
+func TestRestoreWithPassword_MissingChecksum(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+	data := buildTestBackupArchive(t, BackupManifest{Version: "1"}, map[string]string{"config/server.yml": "content"})
+	path := filepath.Join(m.paths.Backup, "vidveil_backup_nosum.tar.gz")
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.RestoreWithPassword(path, ""); err == nil || !strings.Contains(err.Error(), "missing checksum") {
+		t.Fatalf("expected missing-checksum error, got %v", err)
+	}
+}
+
 // TestRestoreWithPassword_ValidChecksumSucceeds verifies a manifest whose
 // Checksum matches the recomputed content hash restores successfully and
 // extracts the file to the config directory.
@@ -676,11 +693,18 @@ func TestRestoreWithPassword_ValidChecksumSucceeds(t *testing.T) {
 // failing the restore.
 func TestRestoreWithPassword_AppVersionMismatchWarns(t *testing.T) {
 	m, _ := newMaintMgrWithTempDirs(t)
+	const name, content = "config/server.yml", "content"
+	hasher := sha256.New()
+	hasher.Write([]byte(name))
+	hasher.Write([]byte{0})
+	hasher.Write([]byte(content))
+	hasher.Write([]byte{0})
 
 	data := buildTestBackupArchive(t, BackupManifest{
 		Version:    "1",
 		AppVersion: "0.0.1-does-not-match",
-	}, map[string]string{"config/server.yml": "content"})
+		Checksum:   "sha256:" + hex.EncodeToString(hasher.Sum(nil)),
+	}, map[string]string{name: content})
 	path := filepath.Join(m.paths.Backup, "vidveil_backup_oldver.tar.gz")
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		t.Fatal(err)
@@ -797,5 +821,26 @@ func TestBackupWithOptions_ComplianceModeWithPassword_Allowed(t *testing.T) {
 	}
 	if _, statErr := os.Stat(outFile); os.IsNotExist(statErr) {
 		t.Error("BackupWithOptions ComplianceMode with password: output file missing")
+	}
+}
+
+func TestBackupWithOptions_RejectsPasswordBoundaryWhitespace(t *testing.T) {
+	m, tmp := newMaintMgrWithTempDirs(t)
+	outFile := filepath.Join(tmp, "whitespace-password.tar.gz.enc")
+	err := m.BackupWithOptions(BackupOptions{Filename: outFile, Password: " secret "})
+	if !errors.Is(err, ErrBackupPasswordWhitespace) {
+		t.Fatalf("BackupWithOptions error = %v, want ErrBackupPasswordWhitespace", err)
+	}
+	if _, statErr := os.Stat(outFile); !os.IsNotExist(statErr) {
+		t.Error("BackupWithOptions wrote an archive despite rejecting its password")
+	}
+}
+
+func TestRestoreWithPassword_RejectsPasswordBoundaryWhitespaceBeforeFileAccess(t *testing.T) {
+	m, tmp := newMaintMgrWithTempDirs(t)
+	missingFile := filepath.Join(tmp, "missing-backup.tar.gz.enc")
+	err := m.RestoreWithPassword(missingFile, " secret ")
+	if !errors.Is(err, ErrBackupPasswordWhitespace) {
+		t.Fatalf("RestoreWithPassword error = %v, want ErrBackupPasswordWhitespace", err)
 	}
 }

@@ -115,7 +115,21 @@ decision before implementation:
   body bytes, including handlers that return without writing; operator-token
   diagnostic reads are padded on success and failure. Regression tests and the
   full Go suite plus browser E2E suite pass.
-
+- Resolved from the PART 29 documentation review: `docs/security.md` no longer
+  claims admin password hashing or TOTP login, and `docs/integrations.md` now
+  reflects the no-account operator model, the 33 engines defined by IDEA.md,
+  MCP/agent-discovery routes, actual outbound-request categories, and avoids
+  claiming an unverified onion-address display location.
+- Resolved PART 0 rule sync after the 2026-10-16 AI.md update: reviewed all 13
+  `.claude/rules/` summaries and updated their sync markers. Corrected token
+  reveal/storage rules and added the current token config, MCP, preference
+  export/import, and E2E requirements. Required headers, PART mappings, YAML
+  workflow parsing, and `git diff --check` pass.
+- Resolved from the PART 1 audit: backup and restore service entry points
+  reject passwords with leading or trailing whitespace instead of trimming
+  them. Loopback Tor control failures now return a generic API error while
+  retaining the internal cause in server logs. Regression tests and the
+  wrapped `make test` gate pass at 72% coverage.
 Findings from the PART 16 frontend/PWA compliance pass (2026-08-20),
 flagged but not fixed:
 
@@ -157,8 +171,8 @@ for both GitHub workflows. `act` rejects Gitea/Forgejo-specific context names
 (`gitea`/`forgejo`), so those workflows require provider-native validation;
 the same command cannot validate them.
 
-AI.md diff implementation follow-ups (2026-09-03), flagged during the
-Tor Circuit-ID/PROXY-protocol implementation pass, not yet fixed:
+Resolved AI.md implementation follow-ups (2026-09-03), verified during the
+Tor Circuit-ID/PROXY-protocol implementation pass:
 
 - Resolved: the runtime account identity comes from
 `system.ServiceUserName()` and is frozen as `vidveil`; `NewServiceManager`
@@ -231,21 +245,25 @@ executable name is used only for the user-facing service description.
 - Resolved: added the AI.md PART 27 CycloneDX SBOM generation step to the
   Gitea release, beta, and daily workflows, matching the existing Forgejo
   workflows.
-- AI.md PART 27 has no Gitea/Forgejo `ci.yml` spec block (only release, beta,
-  daily, docker), yet `cicd-rules.md` requires `ci.yml` everywhere. Both files
-  exist and are sound but have no authority to be judged against.
-- Jenkins identifies timer-triggered builds by their UTC start
-  hour. The 3am build runs the normal build, test, daily release, and standard
-  Docker stages while skipping the devel image; the 4am timer skips those
-  stages and runs only the devel image; pushes and other non-timer builds keep
-  both Docker stages. This uses Jenkins' documented `currentBuild.getBuildCauses`
-  and `startTimeInMillis` APIs. It has not been exercised on a Jenkins
-  controller; long queue delays crossing an hour can misclassify a scheduled
-  run. Jenkins core's `TimerTriggerCause` exposes no scheduled-time method
-  ([Javadoc](https://javadoc.jenkins.io/hudson/triggers/TimerTrigger.TimerTriggerCause.html));
-  parameterizing separate cron lines requires the optional Parameterized
-  Scheduler plugin ([plugin documentation](https://plugins.jenkins.io/parameterized-scheduler/)).
-  Resolve the controller/plugin contract before replacing the current heuristic.
+- AI.md PART 27 provides no separate Gitea/Forgejo `ci.yml` example, so their
+  CI workflows follow the common job graph and security gates from
+  `.claude/rules/cicd-rules.md`. Added manual dispatch to both CI and release
+  workflows to match the AI.md provider examples. GitHub-hosted workflows use
+  the fixed `ubuntu-26.04` runner required by the current AI.md examples; Gitea
+  and Forgejo runner labels remain configurable for their self-hosted
+  instances. GitHub `act --list` and Ruby YAML parsing for the changed
+  Gitea/Forgejo workflows pass.
+- Resolved: Jenkins classifies the 3am and 4am timer runs using
+  `currentBuild.timeInMillis`, the scheduled build timestamp, instead of the
+  executor start time. Queue delays no longer change which scheduled workflow
+  runs. The pipeline still needs provider-native execution on a Jenkins
+  controller for integration verification.
+- Resolved during the 2026-11-01 AI.md alignment audit: GitHub API 404 responses
+  now mean no CLI updates in both client and server metadata discovery, and
+  unmatched rolling releases return empty metadata. Server metadata parsing
+  recognizes canonical `Devel Build` release labels plus legacy `Daily Build`
+  labels already published before the workflow rename. Release metadata for a
+  matched release still requires supported platform assets and checksums.
 - Resolved: `.gitlab-ci.yml` now derives the daily version with POSIX
   `printf | cut` instead of Bash substring syntax. The daily source archive,
   artifact path, and release link use the `RELEASE_VERSION` dotenv value, so
@@ -282,6 +300,12 @@ executable name is used only for the user-facing service description.
 
 ## Frontend (PART 16) items deferred during the CSS/JS/a11y verification pass
 
+- Resolved: engine selection now persists as validated per-engine preference
+  cookies, including an explicit empty selection. The no-JS preferences form
+  exposes the same engine checkboxes; server-rendered search, API search, RSS,
+  and Atom use the saved selection unless a bang or explicit `engines` query
+  overrides it. Verified with `make test` in the project Go container (72%
+  coverage).
 - Resolved: AI.md PART 16 branding images now use the secure fetcher, decode
   supported raster formats, generate the required logo/favicon/OpenGraph
   variants, and store them in the data directory. Same-origin routes serve
@@ -293,6 +317,11 @@ executable name is used only for the user-facing service description.
   related-search toggles, end-of-results, offline status, and the update banner
   now use locale keys through the global or search-page i18n data islands.
 - Resolved: the search status bar uses translated result counts, streaming status, engine response counts, and minimum-duration text with named tokens.
+- Resolved: native search pagination preserves the active query and filters,
+  and uses stateless page links so Previous works after Next. The infinite-scroll
+  preference keeps no-JS pagination links, while each rendered page shares its
+  deduplication token with later JS batches. The results counter now renders a
+  localized number once instead of repeating the localized “results” label.
 
 ## Resolved: named i18n interpolation (AI.md PART 30)
 
@@ -384,29 +413,53 @@ executable name is used only for the user-facing service description.
 
 Resolved since the 2026-09-30 audit: `--maintenance secret`, `token`, and
 `data` now have dispatch paths and are listed in `--maintenance --help`.
-`api_tokens` follows the schema in AI.md PART 5, and token list/revoke commands
-are operator-authorized. Secret rotation and personal-data export/erasure have
+Token list/revoke commands are operator-authorized. Secret rotation and personal-data export/erasure have
 initial implementations in `src/maint_secret.go` and `src/maint_data.go`.
 
 PART 5/11 review update: secret rotation has typed confirmation and sensitive-
 operation authorization; installation-secret rotation re-encrypts the PGP key
 and preserves the prior secret for seven days; encryption-key rotation
-re-encrypts API-token digests and AES-encrypted security reports transactionally
-and preserves the prior key. Startup upgrades legacy plaintext token digests
+re-encrypts owner-token copies and AES-encrypted security reports transactionally
+and preserves the prior key. Token digests remain SHA-256 values; startup
+normalizes the former encrypted-digest format
 before serving. Data export uses fixed explicit column lists, omits secret
 material and encrypted report bodies, and now records correlated compliance
 request / completion events. Erasure records compliance events and redacts
 retained audit-log user IDs.
 
-Remaining decision: IDEA.md says VidVeil has no user accounts and favorites
-belong to an opaque visitor cookie, but AI.md PART 11 describes per-subject
-export/deletion requests. The maintenance commands take no subject identifier;
-`data delete` therefore affects every visitor's favorites and every resource
-owner token. Do not change that scope until the product defines how a request
-identifies its subject.
+Resolved against AI.md PART 11: `--maintenance data export` and
+`--maintenance data delete` are operator commands with no subject selector.
+Deletion therefore applies to the whole instance: it removes favorites,
+owners, and API tokens, while anonymizing retained audit/security-report data
+under the documented erasure-versus-retention rule. The implementation requires
+sensitive-operation authorization and typed confirmation; no per-owner selector
+or account model is implied by AI.md or IDEA.md.
 
-Resolved using AI.md's explicit data-protection and rotation requirement:
-`api_tokens.token_hash` contains an authenticated-encryption encoding of the
-SHA-256 digest, never the raw token. Legacy plaintext digests are upgraded at
-startup, and key rotation re-encrypts them in the same transaction as the
-AES-backed security-report bodies. SHA-256 remains the token digest algorithm.
+Owner-token implementation (AI.md current PART 8/10/11/14/16/32):
+the schema now adds `owners` and owner/kind/name/suffix/rotation/raw-token-copy
+fields while preserving legacy resource-token rows. The token manager supports
+primary issuance/authentication and linked-token create/list/reveal/rotate/
+update/revoke. The versioned bearer-only preferences API is wired, audit events
+record owner IDs and prefixes only, and operator list/revoke uses owner
+semantics. Raw token copies use AES-256-GCM; `token_hash` contains the SHA-256
+digest. Legacy encrypted digests are normalized at startup, and key rotation
+re-encrypts raw-token copies transactionally with security-report bodies.
+
+Favorites now use owner IDs; legacy favorites are retained under migration
+owners. First resource creation issues a primary token through the browser or
+API flow. The web cookie is strict, sliding, cleared when invalid, and used
+only by web routes; API favorites require Bearer tokens. Preferences now
+supports restore and primary/linked token management without JavaScript. The
+optional localStorage token copy supports JavaScript API calls, while favorite
+data itself is no longer mirrored there. API/MCP token-management routes stay
+out of MCP discovery. The owner-token UI and one-time token pages use all seven
+supported locale files. Token reveal/creation pages have a copy enhancement
+with manual-copy fallback, linked-token rows include creation/last-use/expiry
+metadata, and creation accepts preset or chosen-date expiries. The browser E2E
+suite covers favorite ownership, linked-token restrictions, primary-token
+rotation, and cookie-only web access. The configured idle-owner purge is now
+registered with the built-in daily scheduler; it removes tokens only for idle
+owners with no favorites, and the default disabled setting is a no-op.
+The approved cookie/storage name is recorded in IDEA.md. The current AI.md
+compliance audit is checking the implementation and this backlog for any
+remaining mismatches.

@@ -372,6 +372,42 @@ func TestInitializeAppModeProdFlagOverridesDevEnv(t *testing.T) {
 	}
 }
 
+func TestInitializeAppModeDebugModeRespectsExplicitDebugEnvironment(t *testing.T) {
+	resetState(t)
+	t.Setenv("MODE", "production")
+	t.Setenv("DEBUG", "false")
+	InitializeAppModeWithDebugOverride("debug", false, false)
+	if currentMode != Development {
+		t.Fatalf("mode = %v, want Development", currentMode)
+	}
+	if debugEnabled {
+		t.Fatal("explicit DEBUG=false was overridden by --mode debug")
+	}
+}
+
+func TestInitializeAppModeExplicitFalseDebugFlagOverridesDebugMode(t *testing.T) {
+	resetState(t)
+	t.Setenv("MODE", "")
+	t.Setenv("DEBUG", "")
+	InitializeAppModeWithDebugOverride("debug", false, true)
+	if currentMode != Development {
+		t.Fatalf("mode = %v, want Development", currentMode)
+	}
+	if debugEnabled {
+		t.Fatal("explicit --debug=false was ignored")
+	}
+}
+
+func TestInitializeAppModeExplicitTrueDebugFlagOverridesEnvironment(t *testing.T) {
+	resetState(t)
+	t.Setenv("MODE", "")
+	t.Setenv("DEBUG", "false")
+	InitializeAppModeWithDebugOverride("production", true, true)
+	if !debugEnabled {
+		t.Fatal("explicit --debug=true did not override DEBUG=false")
+	}
+}
+
 // --- ConsoleIcon ---
 
 func TestConsoleIconProduction(t *testing.T) {

@@ -1065,6 +1065,33 @@ func TestIsTorRequest_DifferentHost(t *testing.T) {
 	}
 }
 
+func TestIsTorRequest_RequiresConfiguredOnionMatch(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	cfg := &config.AppConfig{}
+	cfg.Server.Tor.OnionAddress = "abc123fake.onion"
+	r.SetAppConfig(cfg)
+
+	for _, host := range []string{"other.onion", "abc123fake.onion.example.com"} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = host
+		if r.isTorRequest(req) {
+			t.Errorf("isTorRequest(%q) = true, want false", host)
+		}
+	}
+}
+
+func TestIsTorRequest_MatchesConfiguredOnionCaseInsensitively(t *testing.T) {
+	r := NewURLResolver(DefaultURLVarsConfig())
+	cfg := &config.AppConfig{}
+	cfg.Server.Tor.OnionAddress = "abc123fake.onion"
+	r.SetAppConfig(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "ABC123FAKE.ONION"
+	if !r.isTorRequest(req) {
+		t.Error("isTorRequest should match DNS host names case-insensitively")
+	}
+}
+
 // ── isTrustedProxy additional CIDR path ──────────────────────────────────────
 
 func TestIsTrustedProxy_AdditionalCIDR_Matches(t *testing.T) {

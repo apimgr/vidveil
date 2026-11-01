@@ -5,6 +5,7 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,10 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 )
+
+type failingCSRFReader struct{}
+
+func (failingCSRFReader) Read([]byte) (int, error) { return 0, errors.New("random source unavailable") }
 
 func csrfTestConfig() config.CSRFConfig {
 	return config.CSRFConfig{
@@ -38,6 +43,25 @@ func TestCsrfGenToken(t *testing.T) {
 	neg := csrfGenToken(-5)
 	if len(neg) != 64 {
 		t.Errorf("len(csrfGenToken(-5)) = %d, want 64", len(neg))
+	}
+}
+
+func TestCsrfGenTokenFailsClosedWhenRandomSourceFails(t *testing.T) {
+	if token := csrfGenTokenFrom(failingCSRFReader{}, 16); token != "" {
+		t.Fatalf("token = %q, want empty token when randomness fails", token)
+	}
+
+	called := false
+	handler := newCSRFMiddleware(csrfTestConfig(), nil)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+	}))
+	post := httptest.NewRequest(http.MethodPost, "/", nil)
+	post.AddCookie(&http.Cookie{Name: "csrf_token", Value: ""})
+	post.Header.Set("X-CSRF-Token", "")
+	blocked := httptest.NewRecorder()
+	handler.ServeHTTP(blocked, post)
+	if called || blocked.Code != http.StatusForbidden {
+		t.Fatalf("protected request called=%v status=%d, want called=false status=%d", called, blocked.Code, http.StatusForbidden)
 	}
 }
 

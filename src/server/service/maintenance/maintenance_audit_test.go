@@ -81,7 +81,9 @@ func TestBackupWithOptions_EmitsBackupCreatedAudit(t *testing.T) {
 	backupDir := t.TempDir()
 	t.Setenv("BACKUP_DIR", backupDir)
 	m, configDir, _ := newManagerWithDirs(t)
-	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+	if err := os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	logger, auditFile := newAuditTestLogger(t)
 	m.SetLogger(logger)
@@ -111,7 +113,9 @@ func TestBackupWithOptions_EmitsVerificationFailedAudit(t *testing.T) {
 	backupDir := t.TempDir()
 	t.Setenv("BACKUP_DIR", backupDir)
 	m, configDir, _ := newManagerWithDirs(t)
-	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+	if err := os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	logger, auditFile := newAuditTestLogger(t)
 	m.SetLogger(logger)
@@ -165,7 +169,9 @@ func TestApplyRetentionWithOptions_EmitsRetentionCleanupAudit(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		name := filepath.Join(backupDir, "vidveil_backup_2026-01-0"+string(rune('1'+i))+"_120000.tar.gz")
-		os.WriteFile(name, []byte("data"), 0644)
+		if err := os.WriteFile(name, []byte("data"), 0644); err != nil {
+			t.Fatal(err)
+		}
 		time.Sleep(2 * time.Millisecond)
 	}
 
@@ -189,7 +195,9 @@ func TestBackupDailyFull_EmitsDailyUpdatedAudit(t *testing.T) {
 	backupDir := t.TempDir()
 	t.Setenv("BACKUP_DIR", backupDir)
 	m, configDir, _ := newManagerWithDirs(t)
-	os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644)
+	if err := os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	logger, auditFile := newAuditTestLogger(t)
 	m.SetLogger(logger)

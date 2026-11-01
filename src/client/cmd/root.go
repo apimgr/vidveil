@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,7 +38,6 @@ var (
 type CLIServerConfig struct {
 	Address    string
 	APIVersion string
-	AdminPath  string
 	Token      string
 	Timeout    int
 	Retry      int
@@ -141,7 +141,6 @@ func (cliServerConfig *CLIServerConfig) UnmarshalYAML(node *yaml.Node) error {
 		Primary    string      `yaml:"primary"`
 		Address    string      `yaml:"address"`
 		APIVersion string      `yaml:"api_version"`
-		AdminPath  string      `yaml:"admin_path"`
 		Token      string      `yaml:"token"`
 		Timeout    interface{} `yaml:"timeout"`
 		Retry      int         `yaml:"retry"`
@@ -157,7 +156,6 @@ func (cliServerConfig *CLIServerConfig) UnmarshalYAML(node *yaml.Node) error {
 		cliServerConfig.Address = rawServerConfig.Address
 	}
 	cliServerConfig.APIVersion = rawServerConfig.APIVersion
-	cliServerConfig.AdminPath = rawServerConfig.AdminPath
 	cliServerConfig.Token = rawServerConfig.Token
 	timeoutSeconds, err := parseCLITimeoutSeconds(rawServerConfig.Timeout)
 	if err != nil {
@@ -178,7 +176,6 @@ func (cliServerConfig CLIServerConfig) MarshalYAML() (interface{}, error) {
 	return struct {
 		Primary    string `yaml:"primary,omitempty"`
 		APIVersion string `yaml:"api_version,omitempty"`
-		AdminPath  string `yaml:"admin_path,omitempty"`
 		Token      string `yaml:"token,omitempty"`
 		Timeout    string `yaml:"timeout,omitempty"`
 		Retry      int    `yaml:"retry,omitempty"`
@@ -186,7 +183,6 @@ func (cliServerConfig CLIServerConfig) MarshalYAML() (interface{}, error) {
 	}{
 		Primary:    cliServerConfig.Address,
 		APIVersion: cliServerConfig.APIVersion,
-		AdminPath:  cliServerConfig.AdminPath,
 		Token:      cliServerConfig.Token,
 		Timeout:    formatCLITimeoutDuration(cliServerConfig.Timeout),
 		Retry:      cliServerConfig.Retry,
@@ -200,11 +196,19 @@ type CLIConfig struct {
 	Server  CLIServerConfig  `yaml:"server"`
 	Auth    CLIAuthConfig    `yaml:"auth"`
 	Token   string           `yaml:"token,omitempty"`
+	Update  CLIUpdateConfig  `yaml:"update"`
 	Output  CLIOutputConfig  `yaml:"output"`
 	Logging CLILoggingConfig `yaml:"logging"`
 	Cache   CLICacheConfig   `yaml:"cache"`
 	TUI     CLITUIConfig     `yaml:"tui"`
 	Debug   bool             `yaml:"debug"`
+}
+
+// CLIUpdateConfig controls per-invocation update discovery and channel.
+type CLIUpdateConfig struct {
+	Auto          bool   `yaml:"auto"`
+	CheckInterval string `yaml:"check_interval"`
+	Channel       string `yaml:"channel"`
 }
 
 // Global flags per AI.md PART 32
@@ -252,9 +256,15 @@ func ExecuteCLI() error {
 	if err := initializeCLILogging(); err != nil {
 		return err
 	}
+	logCLIUpdateCompletionIfRestarted()
 
 	// Initialize API client
 	initAPIClient()
+	startupDisplayEnv := display.DetectDisplayEnv()
+	if err := checkCLIUpdateBeforeRequests(startupDisplayEnv.IsTerminal); err != nil {
+		return err
+	}
+	startCLIBackgroundDiscovery()
 
 	// Per AI.md PART 32: Automatic Mode Detection using display.DetectDisplayEnv()
 	// - Local display + not SSH/Mosh = GUI mode (native GTK/Cocoa/Win32 when available)
@@ -264,7 +274,7 @@ func ExecuteCLI() error {
 	// - Piped/redirected output = Plain output (no TUI)
 	if len(args) == 0 {
 		// Use display.DetectDisplayEnv() from src/common/display for mode detection
-		displayEnv := display.DetectDisplayEnv()
+		displayEnv := startupDisplayEnv
 
 		// Priority 1: GUI mode — local display, not a remote session
 		if displayEnv.IsAutoDetectDisplayModeGUI() && gui.IsAvailable() {
@@ -280,6 +290,10 @@ func ExecuteCLI() error {
 					return err
 				}
 				initAPIClient()
+				if err := checkCLIUpdateBeforeRequests(displayEnv.IsTerminal); err != nil {
+					return err
+				}
+				startCLIBackgroundDiscovery()
 			}
 			guiCfg := &gui.Config{
 				BinaryName: BinaryName,
@@ -308,6 +322,10 @@ func ExecuteCLI() error {
 					return err
 				}
 				initAPIClient()
+				if err := checkCLIUpdateBeforeRequests(displayEnv.IsTerminal); err != nil {
+					return err
+				}
+				startCLIBackgroundDiscovery()
 			}
 			return runInteractiveTUI()
 		}
@@ -492,7 +510,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 			if hasFlagValue {
 				// Store in env for downstream use; i18n is handled server-side for
 				// web content, but the CLI uses this for Accept-Language headers.
-				os.Setenv("VIDVEIL_LANG", flagValue)
+				_ = os.Setenv("VIDVEIL_LANG", flagValue)
 				i = nextIndex + 1
 			} else {
 				i++
@@ -500,7 +518,9 @@ func ParseCLIGlobalFlags(args []string) []string {
 		case "--timeout":
 			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
-				fmt.Sscanf(flagValue, "%d", &requestTimeoutSeconds)
+				if timeout, err := strconv.Atoi(flagValue); err == nil {
+					requestTimeoutSeconds = timeout
+				}
 				i = nextIndex + 1
 			} else {
 				i++
@@ -563,7 +583,6 @@ func LoadCLIConfigFromFile() error {
 
 	// Default config
 	cliConfig.Server.APIVersion = "v1"
-	cliConfig.Server.AdminPath = "admin"
 	cliConfig.Server.Timeout = 30
 	cliConfig.Server.Retry = 3
 	cliConfig.Server.RetryDelay = 1
@@ -581,6 +600,8 @@ func LoadCLIConfigFromFile() error {
 	cliConfig.TUI.Mouse = true
 	cliConfig.TUI.Unicode = true
 	cliConfig.Debug = false
+	cliConfig.Update.CheckInterval = "per_invocation"
+	cliConfig.Update.Channel = "stable"
 
 	// Determine config path per AI.md PART 32
 	// Uses paths module for OS-specific resolution
@@ -926,9 +947,6 @@ func writeCLIConfigFile(fileCLIConfig CLIConfig, configFilePath string) error {
 	if fileCLIConfig.Server.APIVersion == "" {
 		fileCLIConfig.Server.APIVersion = "v1"
 	}
-	if fileCLIConfig.Server.AdminPath == "" {
-		fileCLIConfig.Server.AdminPath = "admin"
-	}
 	if fileCLIConfig.Server.Retry == 0 {
 		fileCLIConfig.Server.Retry = 3
 	}
@@ -952,6 +970,14 @@ func writeCLIConfigFile(fileCLIConfig CLIConfig, configFilePath string) error {
 	}
 	if fileCLIConfig.Cache.MaxSize == "" {
 		fileCLIConfig.Cache.MaxSize = "100MB"
+	}
+	if fileCLIConfig.Update.CheckInterval == "" {
+		fileCLIConfig.Update.CheckInterval = "per_invocation"
+	}
+	if channel, valid := config.NormalizeUpdateChannel(fileCLIConfig.Update.Channel); valid {
+		fileCLIConfig.Update.Channel = channel
+	} else {
+		fileCLIConfig.Update.Channel = "stable"
 	}
 	if fileCLIConfig.Auth.Token == "" {
 		if fileCLIConfig.Token != "" {
@@ -979,10 +1005,6 @@ func writeCLIConfigFile(fileCLIConfig CLIConfig, configFilePath string) error {
 // initAPIClient initializes the API client
 // Per AI.md PART 1: Function names MUST reveal intent - "initClient" is ambiguous
 func initAPIClient() {
-	resolvedServerAddress := resolveCLIReachableServerAddress()
-	if resolvedServerAddress != "" {
-		cliConfig.Server.Address = resolvedServerAddress
-	}
 	apiClient = api.NewAPIClient(cliConfig.Server.Address, cliConfig.Server.Token, cliConfig.Server.Timeout, cliConfig.Server.APIVersion)
 	// Per AI.md PART 32: User-Agent uses hardcoded project name with version
 	apiClient.SetUserAgent(Version)
@@ -990,7 +1012,6 @@ func initAPIClient() {
 	// with every CLI API request. Read from the environment so both the flag
 	// and a pre-set env var apply.
 	apiClient.SetLanguage(os.Getenv("VIDVEIL_LANG"))
-	startCLIBackgroundDiscovery()
 }
 
 // CheckServerConnection checks if the server is reachable
@@ -1001,38 +1022,6 @@ func CheckServerConnection() (bool, error) {
 		return false, nil
 	}
 	return apiClient.Health()
-}
-
-// resolveCLIReachableServerAddress returns the first healthy server from the primary node.
-func resolveCLIReachableServerAddress() string {
-	if cliConfig == nil {
-		return ""
-	}
-
-	serverCandidates := make([]string, 0, 1)
-	if cliConfig.Server.Address != "" {
-		serverCandidates = append(serverCandidates, cliConfig.Server.Address)
-	}
-
-	seenServerAddress := make(map[string]struct{}, len(serverCandidates))
-	for _, serverAddress := range serverCandidates {
-		trimmedServerAddress := strings.TrimSpace(serverAddress)
-		if trimmedServerAddress == "" {
-			continue
-		}
-		if _, alreadySeen := seenServerAddress[trimmedServerAddress]; alreadySeen {
-			continue
-		}
-		seenServerAddress[trimmedServerAddress] = struct{}{}
-
-		testClient := api.NewAPIClient(trimmedServerAddress, cliConfig.Server.Token, cliConfig.Server.Timeout, cliConfig.Server.APIVersion)
-		isHealthy, err := testClient.Health()
-		if err == nil && isHealthy {
-			return trimmedServerAddress
-		}
-	}
-
-	return cliConfig.Server.Address
 }
 
 // startCLIBackgroundDiscovery refreshes server connection settings from /api/autodiscover.
@@ -1049,7 +1038,9 @@ func startCLIBackgroundDiscovery() {
 		if err != nil {
 			return
 		}
-		_ = writeCLIConfigFile(discoveredConfig, configFilePath)
+		if err := writeCLIConfigFile(discoveredConfig, configFilePath); err != nil {
+			log.Printf("warning: failed to save autodiscovered CLI configuration: %v", err)
+		}
 	}()
 }
 

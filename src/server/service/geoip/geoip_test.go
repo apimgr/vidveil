@@ -270,9 +270,8 @@ func TestIsBlocked_Enabled_NoLists_NotBlocked(t *testing.T) {
 	}
 }
 
-// Enabled, allowlist ["US"], no DB → CountryCode is "" → unknown country is
-// blocked because an allowlist is active.
-func TestIsBlocked_Enabled_AllowList_UnknownCountry_Blocked(t *testing.T) {
+// A missing GeoIP database fails open even when an allowlist is configured.
+func TestIsBlocked_Enabled_AllowList_UnknownCountry_FailsOpen(t *testing.T) {
 	cfg := config.DefaultAppConfig()
 	cfg.Server.GeoIP.Enabled = true
 	cfg.Server.GeoIP.Dir = t.TempDir()
@@ -283,8 +282,8 @@ func TestIsBlocked_Enabled_AllowList_UnknownCountry_Blocked(t *testing.T) {
 	cfg.Server.GeoIP.Databases.City = false
 	svc := NewGeoIPService(cfg)
 
-	if !svc.IsBlocked("1.2.3.4") {
-		t.Error("IsBlocked() = false for unknown country with allowlist active, want true")
+	if svc.IsBlocked("1.2.3.4") {
+		t.Error("IsBlocked() = true for unknown country with unavailable database, want false")
 	}
 }
 
@@ -418,10 +417,10 @@ func TestCheckContentRestriction_ResultModeMatchesCfg(t *testing.T) {
 
 func TestURLConstants_NonEmpty(t *testing.T) {
 	for name, url := range map[string]string{
-		"ASNURL":          ASNURL,
-		"CountryURL":      CountryURL,
-		"CityURL":         CityURL,
-		"CityURLFallback": CityURLFallback,
+		"ASNURL":     ASNURL,
+		"CountryURL": CountryURL,
+		"CityURL":    CityURL,
+		"CityURLv6":  CityURLv6,
 	} {
 		if url == "" {
 			t.Errorf("%s is empty", name)

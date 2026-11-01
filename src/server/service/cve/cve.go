@@ -130,7 +130,7 @@ func (s *CVEService) downloadCVEFeed(ctx context.Context, source string) error {
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed with status: %d", resp.StatusCode)
@@ -142,11 +142,14 @@ func (s *CVEService) downloadCVEFeed(ctx context.Context, source string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Copy response to file
 	if _, err := io.Copy(file, resp.Body); err != nil {
 		return fmt.Errorf("failed to save file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("failed to close CVE data file: %w", err)
 	}
 
 	// Parse and load into memory
@@ -159,7 +162,7 @@ func (s *CVEService) loadCVEData(filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open CVE data: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var nvdResp NVDResponse
 	if err := json.NewDecoder(file).Decode(&nvdResp); err != nil {

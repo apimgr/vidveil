@@ -13,18 +13,22 @@ E2E_INTERNAL_NAME="vidveil"
 
 E2E_GO_IMAGE="casjaysdev/go:latest"
 E2E_CHROME_IMAGE="chromedp/headless-shell:latest"
-E2E_NETWORK="${E2E_PROJECT_NAME}-e2e"
-E2E_CHROME_CONTAINER="${E2E_PROJECT_NAME}-e2e-chrome"
-E2E_GO_CONTAINER="${E2E_PROJECT_NAME}-e2e-runner"
+E2E_RUN_ID="$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
+E2E_NETWORK="${E2E_PROJECT_NAME}-e2e-${E2E_RUN_ID}"
+E2E_CHROME_CONTAINER="${E2E_PROJECT_NAME}-e2e-chrome-${E2E_RUN_ID}"
+E2E_GO_CONTAINER="${E2E_PROJECT_NAME}-e2e-runner-${E2E_RUN_ID}"
+E2E_TEST_FILTER="${E2E_TEST_FILTER:-}"
 
 # Failure artifacts and caches live outside the project tree (AI.md PART 29)
 mkdir -p "${TMPDIR:-/tmp}/${E2E_PROJECT_ORG}"
 E2E_TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/${E2E_PROJECT_ORG}/${E2E_INTERNAL_NAME}-XXXXXX")"
 
-E2E_GO_CACHE="${HOME}/go/pkg/mod"
-E2E_GO_BUILD="${HOME}/.cache/go-build/${E2E_PROJECT_NAME}"
+E2E_GO_CACHE="${E2E_TEMP_DIR}/go-mod"
+E2E_GO_BUILD="${E2E_TEMP_DIR}/go-build"
 mkdir -p "${E2E_GO_CACHE}" "${E2E_GO_BUILD}" "${E2E_TEMP_DIR}/artifacts"
 
+# ShellCheck does not count the indirect EXIT/INT/TERM trap invocation.
+# shellcheck disable=SC2329
 __cleanup() {
   docker rm -f "${E2E_GO_CONTAINER}" >/dev/null 2>&1 || true
   docker rm -f "${E2E_CHROME_CONTAINER}" >/dev/null 2>&1 || true
@@ -50,7 +54,6 @@ docker pull -q "${E2E_GO_IMAGE}" >/dev/null
 docker pull -q "${E2E_CHROME_IMAGE}" >/dev/null
 
 printf '→ Creating isolated network %s\n' "${E2E_NETWORK}"
-docker network rm "${E2E_NETWORK}" >/dev/null 2>&1 || true
 docker network create "${E2E_NETWORK}" >/dev/null
 
 printf '→ Starting headless Chromium sidecar\n'
@@ -58,15 +61,10 @@ docker run -d --rm \
   --name "${E2E_CHROME_CONTAINER}" \
   --network "${E2E_NETWORK}" \
   --shm-size=1g \
-  "${E2E_CHROME_IMAGE}" \
-  --no-sandbox \
-  --disable-gpu \
-  --remote-debugging-address=0.0.0.0 \
-  --remote-debugging-port=9222 >/dev/null
+  "${E2E_CHROME_IMAGE}" >/dev/null
 
-printf '→ Running go test -tags e2e ./tests/e2e/...\n\n'
-set +e
-docker run --rm \
+printf '→ Starting E2E Go runner\n'
+docker run -d --rm \
   --name "${E2E_GO_CONTAINER}" \
   --hostname "${E2E_GO_CONTAINER}" \
   --network "${E2E_NETWORK}" \
@@ -79,12 +77,33 @@ docker run --rm \
   -e GOFLAGS=-buildvcs=false \
   -e GOPATH=/usr/local/share/go \
   -e GOCACHE=/usr/local/share/go/cache \
-  -e E2E_CHROME_URL="http://${E2E_CHROME_CONTAINER}:9222" \
-  -e E2E_SERVER_HOST="${E2E_GO_CONTAINER}" \
   -e E2E_ARTIFACT_DIR=/e2e/artifacts \
   -e E2E_WORK_DIR=/e2e \
   "${E2E_GO_IMAGE}" \
-  go test -tags e2e -count=1 -timeout 20m -v ./tests/e2e/...
+  sh -c 'while :; do sleep 3600; done' >/dev/null
+
+# The server drops to its dedicated uid. Give it path traversal through the
+# private temp root without allowing directory listing; its runtime subdirs
+# retain their owner-only permissions.
+docker exec "${E2E_GO_CONTAINER}" chmod 0711 /e2e
+
+E2E_CHROME_IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "${E2E_CHROME_CONTAINER}")"
+E2E_GO_IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "${E2E_GO_CONTAINER}")"
+printf '→ Running go test -tags e2e ./tests/e2e/...\n\n'
+set +e
+if [ -n "${E2E_TEST_FILTER}" ]; then
+  docker exec \
+    -e "E2E_CHROME_URL=http://${E2E_CHROME_IP}:9222" \
+    -e "E2E_SERVER_HOST=${E2E_GO_IP}" \
+    "${E2E_GO_CONTAINER}" \
+    go test -tags e2e -count=1 -timeout 20m -v -run "${E2E_TEST_FILTER}" ./tests/e2e/...
+else
+  docker exec \
+    -e "E2E_CHROME_URL=http://${E2E_CHROME_IP}:9222" \
+    -e "E2E_SERVER_HOST=${E2E_GO_IP}" \
+    "${E2E_GO_CONTAINER}" \
+    go test -tags e2e -count=1 -timeout 20m -v ./tests/e2e/...
+fi
 E2E_STATUS=$?
 set -e
 

@@ -11,7 +11,7 @@
         <p>{{.PolicyText}}</p>
         {{else}}
         <h2>{{ t "security.policy_window_title" }}</h2>
-        <p>{{tf "security.policy_window_body" .DisclosureDays}}</p>
+        <p>{{tf "security.policy_window_body" "days" .DisclosureDays}}</p>
 
         <h2>{{ t "security.policy_in_scope_title" }}</h2>
         <ul>

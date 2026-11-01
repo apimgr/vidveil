@@ -9,7 +9,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/apimgr/vidveil/src/common/authpad"
 	"github.com/apimgr/vidveil/src/config"
 )
 
@@ -345,7 +347,7 @@ func TestInstrumentMiddlewareRecordsNon200(t *testing.T) {
 
 func TestInstrumentMiddlewareWithRequestBody(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("hello"))
+		_, _ = w.Write([]byte("hello"))
 	})
 	handler := InstrumentMiddleware(inner)
 	body := []byte(`{"query":"test"}`)
@@ -550,6 +552,18 @@ func TestServiceHandler_Prometheus_CorrectToken_Returns200(t *testing.T) {
 	ServiceHandler(cfg, nil).ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Errorf("prometheus service status = %d, want 200", rr.Code)
+	}
+}
+
+func TestServiceHandler_AuthenticatedResponseUsesTimingFloor(t *testing.T) {
+	cfg := newTestAppConfig()
+	req := httptest.NewRequest(http.MethodGet, "/server/metrics/grafana", nil)
+	req.Header.Set("Authorization", "Bearer grafana-token")
+	start := time.Now()
+	response := httptest.NewRecorder()
+	ServiceHandler(cfg, nil).ServeHTTP(response, req)
+	if elapsed := time.Since(start); elapsed < authpad.Floor {
+		t.Errorf("authenticated metrics response took %s, want at least %s", elapsed, authpad.Floor)
 	}
 }
 

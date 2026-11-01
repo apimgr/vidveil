@@ -892,8 +892,10 @@ run_rc_command "$1"
 		if err != nil {
 			return fmt.Errorf("failed to open rc.conf: %w", err)
 		}
-		defer f.Close()
-		f.WriteString(enableLine + "\n")
+		defer func() { _ = f.Close() }()
+		if _, err := f.WriteString(enableLine + "\n"); err != nil {
+			return fmt.Errorf("failed to enable BSD service: %w", err)
+		}
 	}
 
 	fmt.Printf("%s Installed BSD rc.d service: %s\n", terminal.StatusIcon(true), rcPath)

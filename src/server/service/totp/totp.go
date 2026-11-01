@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base32"
 	"encoding/binary"
@@ -84,28 +85,30 @@ func (s *TOTPService) GetProvisioningURI(accountName, secret string) string {
 func (s *TOTPService) ValidateCode(secret, code string) bool {
 	// Allow 1 time step before and after for clock drift
 	now := time.Now().Unix()
+	valid := 0
 	for i := int64(-1); i <= 1; i++ {
 		counter := (now / DefaultPeriod) + i
 		expectedCode := s.generateCode(secret, counter)
-		// Constant-time comparison per AI.md PART 11 (applies to TOTP codes).
-		if subtle.ConstantTimeCompare([]byte(expectedCode), []byte(code)) == 1 {
-			return true
-		}
+		valid |= constantTimeStringCompare(expectedCode, code)
 	}
-	return false
+	return valid == 1
 }
 
 // ValidateBackupCode checks if a backup code is valid (caller must track used codes)
 func (s *TOTPService) ValidateBackupCode(code string, validCodes []string) bool {
 	code = strings.ToUpper(strings.ReplaceAll(code, "-", ""))
+	validMatch := 0
 	for _, valid := range validCodes {
 		normalizedValid := strings.ToUpper(strings.ReplaceAll(valid, "-", ""))
-		// Constant-time comparison per AI.md PART 11 (backup codes are credentials).
-		if subtle.ConstantTimeCompare([]byte(code), []byte(normalizedValid)) == 1 {
-			return true
-		}
+		validMatch |= constantTimeStringCompare(code, normalizedValid)
 	}
-	return false
+	return validMatch == 1
+}
+
+func constantTimeStringCompare(left, right string) int {
+	leftHash := sha256.Sum256([]byte(left))
+	rightHash := sha256.Sum256([]byte(right))
+	return subtle.ConstantTimeCompare(leftHash[:], rightHash[:])
 }
 
 // generateCode generates a TOTP code for a given counter

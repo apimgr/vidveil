@@ -5,6 +5,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -491,6 +492,7 @@ func TestServerMetrics_IncrementSearches_NilCounter_NoPanic(t *testing.T) {
 // ── MaintenanceModeMiddleware — active maintenance mode ───────────────────────
 
 func TestMaintenanceModeMiddleware_MaintenanceFlagExists_Returns503(t *testing.T) {
+	isolateMaintenanceDataDir(t)
 	h := newRenderTestHandler()
 
 	// Write maintenance flag to the expected location
@@ -502,7 +504,7 @@ func TestMaintenanceModeMiddleware_MaintenanceFlagExists_Returns503(t *testing.T
 	if err := os.WriteFile(flagFile, []byte(""), 0644); err != nil {
 		t.Skipf("cannot create maintenance flag: %v", err)
 	}
-	defer os.Remove(flagFile)
+	defer func() { _ = os.Remove(flagFile) }()
 
 	handler := h.MaintenanceModeMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -522,6 +524,7 @@ func TestMaintenanceModeMiddleware_MaintenanceFlagExists_Returns503(t *testing.T
 // {"ok":false,"error":"MAINTENANCE",...} JSON body and X-Maintenance-*
 // headers per AI.md PART 5/6, not the hardcoded HTML page.
 func TestMaintenanceModeMiddleware_APIPath_ReturnsJSONEnvelope(t *testing.T) {
+	isolateMaintenanceDataDir(t)
 	h := newRenderTestHandler()
 
 	paths := config.GetAppPaths("", "")
@@ -532,7 +535,7 @@ func TestMaintenanceModeMiddleware_APIPath_ReturnsJSONEnvelope(t *testing.T) {
 	if err := os.WriteFile(flagFile, []byte(""), 0644); err != nil {
 		t.Skipf("cannot create maintenance flag: %v", err)
 	}
-	defer os.Remove(flagFile)
+	defer func() { _ = os.Remove(flagFile) }()
 
 	handler := h.MaintenanceModeMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -559,7 +562,11 @@ func TestMaintenanceModeMiddleware_APIPath_ReturnsJSONEnvelope(t *testing.T) {
 		t.Error("MaintenanceModeMiddleware(/api/v1/search): Retry-After header missing")
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, `"ok":false`) || !strings.Contains(body, `"error":"MAINTENANCE"`) {
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(body), &envelope); err != nil {
+		t.Fatalf("MaintenanceModeMiddleware(/api/v1/search): invalid JSON body %q: %v", body, err)
+	}
+	if ok, _ := envelope["ok"].(bool); ok || envelope["error"] != "MAINTENANCE" {
 		t.Errorf("MaintenanceModeMiddleware(/api/v1/search): body = %q, want canonical MAINTENANCE envelope", body)
 	}
 }
@@ -568,6 +575,7 @@ func TestMaintenanceModeMiddleware_APIPath_ReturnsJSONEnvelope(t *testing.T) {
 // browser request blocked by maintenance mode still gets the HTML page, not
 // the JSON envelope.
 func TestMaintenanceModeMiddleware_BrowserPath_ReturnsHTML(t *testing.T) {
+	isolateMaintenanceDataDir(t)
 	h := newRenderTestHandler()
 
 	paths := config.GetAppPaths("", "")
@@ -578,7 +586,7 @@ func TestMaintenanceModeMiddleware_BrowserPath_ReturnsHTML(t *testing.T) {
 	if err := os.WriteFile(flagFile, []byte(""), 0644); err != nil {
 		t.Skipf("cannot create maintenance flag: %v", err)
 	}
-	defer os.Remove(flagFile)
+	defer func() { _ = os.Remove(flagFile) }()
 
 	handler := h.MaintenanceModeMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -603,6 +611,7 @@ func TestMaintenanceModeMiddleware_BrowserPath_ReturnsHTML(t *testing.T) {
 }
 
 func TestMaintenanceModeMiddleware_HealthzPath_PassesThrough(t *testing.T) {
+	isolateMaintenanceDataDir(t)
 	h := newRenderTestHandler()
 
 	called := false
@@ -775,5 +784,35 @@ func TestLlmsTxt_RateLimitShownWhenEnabled(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "Rate limit:") {
 		t.Errorf("LlmsTxt(rate limit enabled): expected rate-limit line, got %q", rr.Body.String())
+	}
+}
+
+func TestLlmsTxt_ConfigurableSectionsAndMCP(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Server.MCP.Enabled = true
+	cfg.Web.APIContact = "api@example.test"
+	cfg.Web.LLMS.CustomSections = []string{"## Integration\nUse the API directly."}
+	h := NewSearchHandler(cfg, nil)
+	rr := httptest.NewRecorder()
+	h.LlmsTxt(rr, httptest.NewRequest(http.MethodGet, "/llms.txt", nil))
+	body := rr.Body.String()
+	for _, want := range []string{"MCP: ", "/mcp (Streamable HTTP; same Bearer token as the API)", "API issues: api@example.test", "## Integration", "Bearer token for protected endpoints"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("llms output missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "Operator endpoints") || strings.Contains(body, "all listed endpoints are public") {
+		t.Errorf("llms output includes stale or admin-only authentication claims: %s", body)
+	}
+}
+
+func TestLlmsTxtDisabledReturnsNotFound(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Web.LLMS.Enabled = false
+	h := NewSearchHandler(cfg, nil)
+	rr := httptest.NewRecorder()
+	h.LlmsTxt(rr, httptest.NewRequest(http.MethodGet, "/llms.txt", nil))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("disabled llms status = %d, want 404", rr.Code)
 	}
 }

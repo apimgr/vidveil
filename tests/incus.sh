@@ -16,7 +16,6 @@ INTERNAL_NAME="vidveil"
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
@@ -185,6 +184,8 @@ if incus exec "${INSTANCE_NAME}" -- systemctl is-active ${PROJECT_NAME} | grep -
     pass "Service is active"
 else
     fail "Service is not active"
+    incus exec "${INSTANCE_NAME}" -- systemctl --no-pager --full status ${PROJECT_NAME} || true
+    incus exec "${INSTANCE_NAME}" -- journalctl -u ${PROJECT_NAME} --no-pager -n 80 || true
 fi
 
 # Detect port from service logs (random 64xxx per AI.md PART 5)
@@ -203,22 +204,22 @@ info "Service running on port: ${SERVICE_PORT}"
 # Step 13: Test HTTP endpoints
 # Per AI.md PART 13: /server/healthz is canonical; /healthz is opt-in via config
 info "Testing API endpoints..."
-if incus exec "${INSTANCE_NAME}" -- curl -s -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/server/healthz" | grep -q "^200$"; then
+if incus exec "${INSTANCE_NAME}" -- curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/server/healthz" | grep -q "^200$"; then
     pass "Health endpoint responding"
 else
     fail "Health endpoint not responding"
 fi
 
 # Per AI.md PART 14: API endpoints return JSON when Accept: application/json
-ENGINES_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -s -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/api/v1/engines" 2>&1 || echo "curl failed")
-if echo "$ENGINES_OUT" | grep -q '"ok"'; then
+ENGINES_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -q -LSsf -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/api/v1/engines" 2>&1 || echo "curl failed")
+if echo "$ENGINES_OUT" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
     pass "Engines API responding"
 else
     fail "Engines API not responding (got: ${ENGINES_OUT:0:200})"
 fi
 
-BANGS_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -s -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/api/v1/bangs" 2>&1 || echo "curl failed")
-if echo "$BANGS_OUT" | grep -q '"ok"'; then
+BANGS_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -q -LSsf -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/api/v1/bangs" 2>&1 || echo "curl failed")
+if echo "$BANGS_OUT" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
     pass "Bangs API responding"
 else
     fail "Bangs API not responding (got: ${BANGS_OUT:0:200})"
@@ -228,7 +229,7 @@ fi
 info "Testing content negotiation..."
 
 # Test API with text/plain
-PLAIN_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -s -H "Accept: text/plain" "http://localhost:${SERVICE_PORT}/api/v1/engines" 2>&1 || echo "curl failed")
+PLAIN_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -q -LSsf -H "Accept: text/plain" "http://localhost:${SERVICE_PORT}/api/v1/engines" 2>&1 || echo "curl failed")
 if echo "$PLAIN_OUT" | grep -qE "^(engines:|ok:)"; then
     pass "API Accept: text/plain"
 else
@@ -237,7 +238,7 @@ fi
 
 # Test frontend with text/html (browser)
 # Use -L to follow redirects (homepage may redirect to /age-verify for browser UA)
-HTML_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -s -L -H "Accept: text/html" -H "User-Agent: Mozilla/5.0" "http://localhost:${SERVICE_PORT}/" 2>&1 || echo "curl failed")
+HTML_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -q -LSsf -H "Accept: text/html" -H "User-Agent: Mozilla/5.0" "http://localhost:${SERVICE_PORT}/" 2>&1 || echo "curl failed")
 if echo "$HTML_OUT" | grep -qi "<!DOCTYPE html\|<html"; then
     pass "Frontend Accept: text/html"
 else
@@ -245,7 +246,7 @@ else
 fi
 
 # Test frontend with text/plain (CLI)
-PLAIN_FRONT=$(incus exec "${INSTANCE_NAME}" -- curl -s -H "Accept: text/plain" "http://localhost:${SERVICE_PORT}/" 2>&1 || echo "curl failed")
+PLAIN_FRONT=$(incus exec "${INSTANCE_NAME}" -- curl -q -LSsf -H "Accept: text/plain" "http://localhost:${SERVICE_PORT}/" 2>&1 || echo "curl failed")
 if [ -n "$PLAIN_FRONT" ]; then
     pass "Frontend Accept: text/plain"
 else
@@ -254,19 +255,19 @@ fi
 
 # Test .txt endpoints (PART 28 requirement)
 info "Testing .txt endpoints..."
-if incus exec "${INSTANCE_NAME}" -- curl -s -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/api/v1/engines.txt" | grep -q "^200$"; then
+if incus exec "${INSTANCE_NAME}" -- curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/api/v1/engines.txt" | grep -q "^200$"; then
     pass "Engines .txt extension"
 else
     fail "Engines .txt extension"
 fi
 
-if incus exec "${INSTANCE_NAME}" -- curl -s -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/api/v1/bangs.txt" | grep -q "^200$"; then
+if incus exec "${INSTANCE_NAME}" -- curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/api/v1/bangs.txt" | grep -q "^200$"; then
     pass "Bangs .txt extension"
 else
     fail "Bangs .txt extension"
 fi
 
-if incus exec "${INSTANCE_NAME}" -- curl -s -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/robots.txt" | grep -q "^200$"; then
+if incus exec "${INSTANCE_NAME}" -- curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/robots.txt" | grep -q "^200$"; then
     pass "robots.txt"
 else
     fail "robots.txt"
@@ -274,7 +275,7 @@ fi
 
 # Test SSE streaming (informational - may fail without configured engines)
 info "Testing SSE streaming..."
-SSE_OUTPUT=$(incus exec "${INSTANCE_NAME}" -- timeout 5 curl -s -N -H "Accept: text/event-stream" "http://localhost:${SERVICE_PORT}/api/v1/search?q=test" 2>/dev/null || true)
+SSE_OUTPUT=$(incus exec "${INSTANCE_NAME}" -- timeout 5 curl -q -LSsfN -H "Accept: text/event-stream" "http://localhost:${SERVICE_PORT}/api/v1/search?q=test" 2>/dev/null || true)
 if echo "$SSE_OUTPUT" | grep -q "data:\|event:"; then
     pass "SSE streaming responding"
 else
@@ -306,6 +307,11 @@ else
 fi
 
 # Step 16: Test service stop
+if [ "${TESTS_FAILED}" -gt 0 ]; then
+    info "Service journal after failed checks..."
+    incus exec "${INSTANCE_NAME}" -- journalctl -u ${PROJECT_NAME} --no-pager -n 100 || true
+fi
+
 info "Testing service stop..."
 if incus exec "${INSTANCE_NAME}" -- systemctl stop ${PROJECT_NAME}; then
     pass "Service stopped cleanly"

@@ -191,7 +191,7 @@ func TestAPISearch_NoCacheParam_ReturnsJSON(t *testing.T) {
 func TestAPISearch_TorCookieTrue_Covered(t *testing.T) {
 	h := newAPITestHandler()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test", nil)
-	r.AddCookie(&http.Cookie{Name: "vidveil-use-tor", Value: "1"})
+	r.AddCookie(&http.Cookie{Name: "vidveil_pref_use_tor", Value: "1"})
 	w := httptest.NewRecorder()
 	h.APISearch(w, r)
 	if w.Code != http.StatusOK {
@@ -202,7 +202,7 @@ func TestAPISearch_TorCookieTrue_Covered(t *testing.T) {
 func TestAPISearch_TorCookieFalse_Covered(t *testing.T) {
 	h := newAPITestHandler()
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test", nil)
-	r.AddCookie(&http.Cookie{Name: "vidveil-use-tor", Value: "0"})
+	r.AddCookie(&http.Cookie{Name: "vidveil_pref_use_tor", Value: "0"})
 	w := httptest.NewRecorder()
 	h.APISearch(w, r)
 	if w.Code != http.StatusOK {
@@ -620,6 +620,7 @@ func TestRenderErrorPage_EmptyFS_FallsBackToPlainText(t *testing.T) {
 // ── MaintenanceModeMiddleware ─────────────────────────────────────────────────
 
 func TestMaintenanceModeMiddleware_HealthzPath_CallsNext(t *testing.T) {
+	isolateMaintenanceDataDir(t)
 	h := newAPITestHandler()
 	called := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -637,6 +638,7 @@ func TestMaintenanceModeMiddleware_HealthzPath_CallsNext(t *testing.T) {
 
 // Normal path without maintenance file → calls next (stat fails → no maintenance).
 func TestMaintenanceModeMiddleware_NormalPath_CallsNext(t *testing.T) {
+	isolateMaintenanceDataDir(t)
 	h := newAPITestHandler()
 	called := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

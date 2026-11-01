@@ -9,6 +9,13 @@
         <button type="button" class="copy-btn" data-copy="{{.OnionAddress}}" aria-live="polite" aria-label="{{ t "footer.copy_onion_label" }}">&#128203;</button>
     </p>
     {{ end }}
+    {{ if and .I2PEnabled .I2PRunning .I2PAddress }}
+    <p class="footer-i2p">
+        <a href="/server/help#i2p-access" aria-label="I2P Support">&#128279;</a>
+        <code class="i2p-address">{{.I2PAddress}}</code>
+        <button type="button" class="copy-btn" data-copy="{{.I2PAddress}}" aria-live="polite" aria-label="Copy I2P address">&#128203;</button>
+    </p>
+    {{ end }}
 
     {{/* Standard page links per spec - /server/* prefix per AI.md PART 14 Route Scopes */}}
     <p>
@@ -30,7 +37,7 @@
 
     {{/* Build stamp */}}
     <p>
-        <a href="/server/healthz">{{ tf "footer.last_update" .BuildDateTime }}</a>
+        <a href="/server/healthz">{{ tf "footer.last_update" "date" .BuildDateTime }}</a>
     </p>
 </footer>
 

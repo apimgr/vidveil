@@ -53,15 +53,17 @@ The CLI automatically selects the appropriate interface:
 | `--timeout <seconds>` | Request timeout (default: 30) |
 | `--debug` | Enable debug output |
 | `--lang <code>` | Language tag (e.g. `en`, `de-DE`) sent as the `Accept-Language` request header. Values containing anything other than letters, digits, `-`, or `_` are ignored |
-| `--update [check|yes|branch <stable|beta|daily>]` | Check for updates, install the latest update, or select the release branch. With no subcommand, performs `yes`. |
+| `--update [check|yes|branch <stable|beta|devel>]` | Check for updates, install the latest update, or select the release channel. With no subcommand, performs `yes`. |
 | `-h, --help` | Show help |
 | `-v, --version` | Show version |
 
 `--update check` checks for a release without installing it. `--update yes`
 downloads and installs the latest eligible release, then restarts the service.
-`--update branch <stable|beta|daily>` changes the configured update branch.
+`--update branch <stable|beta|devel>` changes the configured update channel.
+The aliases `daily`, `rolling`, `dev`, and `development` are accepted and
+stored as `devel`.
 The equivalent maintenance command is `--maintenance update [check|yes|branch
-<stable|beta|daily>]`.
+<stable|beta|devel>]`.
 
 With a configured server, the CLI checks for updates before normal commands.
 Interactive runs ask before installing; non-interactive runs install silently

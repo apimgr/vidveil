@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 28: Coverage tests for CheckUpdate, fetchLatestRelease,
-// fetchLatestBetaRelease, fetchLatestDailyRelease, fetchAllReleases,
+// fetchLatestBetaRelease, fetchLatestDevelRelease, fetchAllReleases,
 // and the no-update path of ApplyUpdate.
 // All GitHub API calls are intercepted via a mock HTTP transport — no real
 // network calls are made.
 package maintenance
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -42,7 +43,7 @@ func installMaintenanceMockTransport(t *testing.T, srv *httptest.Server) {
 
 // newGitHubMockServer returns a server that serves GitHub-like release responses:
 //   - GET **/releases/latest  → single release JSON with tag_name=latestTag
-//   - GET **/releases?**      → array with a beta and a daily release
+//   - GET **/releases?**      → array with beta, devel, and stable releases
 //   - everything else         → 200 with dummy bytes (download simulation)
 func newGitHubMockServer(latestTag string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -51,16 +52,16 @@ func newGitHubMockServer(latestTag string) *httptest.Server {
 		switch {
 		case len(path) >= 7 && path[len(path)-7:] == "/latest":
 			rel := GitHubRelease{TagName: latestTag, HTMLURL: "https://example.com", Assets: []GitHubAsset{}}
-			json.NewEncoder(w).Encode(rel)
+			_ = json.NewEncoder(w).Encode(rel)
 		case r.URL.Query().Get("per_page") != "" || (len(path) >= 9 && path[len(path)-9:] == "/releases"):
 			releases := []GitHubRelease{
 				{TagName: "v2.0.0-beta", HTMLURL: "https://example.com/beta"},
-				{TagName: "202601010000", HTMLURL: "https://example.com/daily"},
+				{TagName: "devel", HTMLURL: "https://example.com/devel"},
 				{TagName: latestTag, HTMLURL: "https://example.com/stable"},
 			}
-			json.NewEncoder(w).Encode(releases)
+			_ = json.NewEncoder(w).Encode(releases)
 		default:
-			w.Write([]byte("binarydata"))
+			_, _ = w.Write([]byte("binarydata"))
 		}
 	}))
 }
@@ -108,7 +109,7 @@ func TestFetchLatestRelease_ServerError(t *testing.T) {
 func TestFetchLatestRelease_BadJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("not-json"))
+		_, _ = w.Write([]byte("not-json"))
 	}))
 	defer srv.Close()
 	installMaintenanceMockTransport(t, srv)
@@ -154,7 +155,7 @@ func TestFetchAllReleases_ServerError(t *testing.T) {
 func TestFetchAllReleases_BadJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("{bad"))
+		_, _ = w.Write([]byte("{bad"))
 	}))
 	defer srv.Close()
 	installMaintenanceMockTransport(t, srv)
@@ -189,7 +190,7 @@ func TestFetchLatestBetaRelease_Found(t *testing.T) {
 func TestFetchLatestBetaRelease_StableFallback(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]GitHubRelease{
+		_ = json.NewEncoder(w).Encode([]GitHubRelease{
 			{TagName: "v1.0.0", HTMLURL: "https://example.com"},
 		})
 	}))
@@ -206,44 +207,44 @@ func TestFetchLatestBetaRelease_StableFallback(t *testing.T) {
 	}
 }
 
-// With zero releases the beta channel has nothing to select and must error.
+// With zero releases the beta channel has no update.
 func TestFetchLatestBetaRelease_NoneFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]GitHubRelease{})
+		_ = json.NewEncoder(w).Encode([]GitHubRelease{})
 	}))
 	defer srv.Close()
 	installMaintenanceMockTransport(t, srv)
 
 	m := newMaintManagerTmp(t, "1.0.0")
-	_, err := m.fetchLatestBetaRelease()
-	if err == nil {
-		t.Error("fetchLatestBetaRelease(no releases): expected error, got nil")
+	release, err := m.fetchLatestBetaRelease()
+	if err != nil || release != nil {
+		t.Errorf("fetchLatestBetaRelease(no releases) = (%+v, %v), want (nil, nil)", release, err)
 	}
 }
 
-// ── fetchLatestDailyRelease ───────────────────────────────────────────────────
+// ── fetchLatestDevelRelease ──────────────────────────────────────────────────
 
-func TestFetchLatestDailyRelease_Found(t *testing.T) {
+func TestFetchLatestDevelRelease_Found(t *testing.T) {
 	srv := newGitHubMockServer("v2.0.0")
 	defer srv.Close()
 	installMaintenanceMockTransport(t, srv)
 
 	m := newMaintManagerTmp(t, "1.0.0")
-	rel, err := m.fetchLatestDailyRelease()
+	rel, err := m.fetchLatestDevelRelease()
 	if err != nil {
-		t.Fatalf("fetchLatestDailyRelease: %v", err)
+		t.Fatalf("fetchLatestDevelRelease: %v", err)
 	}
-	if rel == nil {
-		t.Error("fetchLatestDailyRelease: expected non-nil release")
+	if rel == nil || rel.TagName != "v2.0.0-beta" {
+		t.Errorf("fetchLatestDevelRelease = %+v, want newest cumulative release v2.0.0-beta", rel)
 	}
 }
 
-// Cumulative: with only a stable release, the daily channel falls back to it.
-func TestFetchLatestDailyRelease_StableFallback(t *testing.T) {
+// Cumulative: with only a stable release, the devel channel falls back to it.
+func TestFetchLatestDevelRelease_StableFallback(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]GitHubRelease{
+		_ = json.NewEncoder(w).Encode([]GitHubRelease{
 			{TagName: "v1.0.0"},
 		})
 	}))
@@ -251,28 +252,28 @@ func TestFetchLatestDailyRelease_StableFallback(t *testing.T) {
 	installMaintenanceMockTransport(t, srv)
 
 	m := newMaintManagerTmp(t, "1.0.0")
-	rel, err := m.fetchLatestDailyRelease()
+	rel, err := m.fetchLatestDevelRelease()
 	if err != nil {
-		t.Fatalf("fetchLatestDailyRelease(stable fallback): %v", err)
+		t.Fatalf("fetchLatestDevelRelease(stable fallback): %v", err)
 	}
 	if rel == nil || rel.TagName != "v1.0.0" {
-		t.Errorf("fetchLatestDailyRelease(stable fallback): got %+v, want v1.0.0", rel)
+		t.Errorf("fetchLatestDevelRelease(stable fallback): got %+v, want v1.0.0", rel)
 	}
 }
 
-// With zero releases the daily channel must error.
-func TestFetchLatestDailyRelease_NoneFound(t *testing.T) {
+// With zero releases the devel channel has no update.
+func TestFetchLatestDevelRelease_NoneFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]GitHubRelease{})
+		_ = json.NewEncoder(w).Encode([]GitHubRelease{})
 	}))
 	defer srv.Close()
 	installMaintenanceMockTransport(t, srv)
 
 	m := newMaintManagerTmp(t, "1.0.0")
-	_, err := m.fetchLatestDailyRelease()
-	if err == nil {
-		t.Error("fetchLatestDailyRelease(no releases): expected error, got nil")
+	release, err := m.fetchLatestDevelRelease()
+	if err != nil || release != nil {
+		t.Errorf("fetchLatestDevelRelease(no releases) = (%+v, %v), want (nil, nil)", release, err)
 	}
 }
 
@@ -318,8 +319,12 @@ func TestCheckUpdate_BetaBranch(t *testing.T) {
 
 	m := newMaintManagerTmp(t, "1.0.0")
 	tmp := t.TempDir()
-	os.MkdirAll(tmp, 0755)
-	os.WriteFile(tmp+"/update-branch", []byte("beta"), 0644)
+	if err := os.MkdirAll(tmp, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tmp+"/update-branch", []byte("beta"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	m.paths.Config = tmp
 
 	_, err := m.CheckUpdate()
@@ -335,8 +340,12 @@ func TestCheckUpdate_DailyBranch(t *testing.T) {
 
 	m := newMaintManagerTmp(t, "1.0.0")
 	tmp := t.TempDir()
-	os.MkdirAll(tmp, 0755)
-	os.WriteFile(tmp+"/update-branch", []byte("daily"), 0644)
+	if err := os.MkdirAll(tmp, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tmp+"/update-branch", []byte("daily"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	m.paths.Config = tmp
 
 	_, err := m.CheckUpdate()
@@ -352,8 +361,12 @@ func TestCheckUpdate_UnknownBranch_DefaultsToStable(t *testing.T) {
 
 	m := newMaintManagerTmp(t, "1.0.0")
 	tmp := t.TempDir()
-	os.MkdirAll(tmp, 0755)
-	os.WriteFile(tmp+"/update-branch", []byte("nightly"), 0644)
+	if err := os.MkdirAll(tmp, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tmp+"/update-branch", []byte("nightly"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	m.paths.Config = tmp
 
 	_, err := m.CheckUpdate()
@@ -373,6 +386,32 @@ func TestCheckUpdate_NetworkError_ReturnsError(t *testing.T) {
 	_, err := m.CheckUpdate()
 	if err == nil {
 		t.Error("CheckUpdate on 503: expected error, got nil")
+	}
+}
+
+func TestCheckUpdateContext_Cancelled(t *testing.T) {
+	m := newMaintManagerTmp(t, "1.0.0")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := m.CheckUpdateContext(ctx); err == nil {
+		t.Fatal("CheckUpdateContext with canceled context: expected error, got nil")
+	}
+}
+
+func TestCheckUpdate_NotFoundMeansNoUpdate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+	installMaintenanceMockTransport(t, srv)
+
+	m := newMaintManagerTmp(t, "1.0.0")
+	info, err := m.CheckUpdate()
+	if err != nil {
+		t.Fatalf("CheckUpdate on 404: %v", err)
+	}
+	if info == nil || info.UpdateAvailable {
+		t.Fatalf("CheckUpdate on 404 = %+v, want no update", info)
 	}
 }
 
@@ -421,7 +460,7 @@ func TestApplyUpdate_DirectURL_NotFound_ReturnsError(t *testing.T) {
 func TestApplyUpdate_DirectURL_200_DownloadsAndFails(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("#!/bin/sh\necho hello\n"))
+		_, _ = w.Write([]byte("#!/bin/sh\necho hello\n"))
 	}))
 	defer srv.Close()
 	installMaintenanceMockTransport(t, srv)
@@ -478,7 +517,7 @@ func TestVerifyUpdateChecksum_ServerError_ReturnsError(t *testing.T) {
 func TestVerifyUpdateChecksum_EmptyBody_ReturnsError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("   \n"))
+		_, _ = w.Write([]byte("   \n"))
 	}))
 	defer srv.Close()
 	installMaintenanceMockTransport(t, srv)
@@ -494,7 +533,7 @@ func TestVerifyUpdateChecksum_Mismatch_ReturnsError(t *testing.T) {
 	data := []byte("my binary data")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  binary\n"))
+		_, _ = w.Write([]byte("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  binary\n"))
 	}))
 	defer srv.Close()
 	installMaintenanceMockTransport(t, srv)
@@ -513,7 +552,7 @@ func TestVerifyUpdateChecksum_Match_ReturnsNil(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "%s  binary\n", hexSum)
+		_, _ = fmt.Fprintf(w, "%s  binary\n", hexSum)
 	}))
 	defer srv.Close()
 	installMaintenanceMockTransport(t, srv)

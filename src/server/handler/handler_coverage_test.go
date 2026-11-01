@@ -8,9 +8,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/engine"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 // TestGetRequestTheme_NoCookie verifies that the config default theme is returned when no cookie is present.
@@ -60,9 +62,12 @@ func TestGetRequestTheme_InvalidCookie(t *testing.T) {
 	}
 }
 
-// TestIsTorRequest_OnionHost verifies that a .onion host is detected as a Tor request.
+// TestIsTorRequest_OnionHost verifies only the configured onion host is detected.
 func TestIsTorRequest_OnionHost(t *testing.T) {
 	cfg := createTestConfig()
+	cfg.Server.Tor.OnionAddress = "example.onion"
+	urlvar.GlobalResolver().SetAppConfig(cfg)
+	defer urlvar.GlobalResolver().SetAppConfig(nil)
 	h := &SearchHandler{appConfig: cfg}
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Host = "example.onion"
@@ -71,20 +76,27 @@ func TestIsTorRequest_OnionHost(t *testing.T) {
 	}
 }
 
-// TestIsTorRequest_TorHeader verifies that the X-Tor-Hidden-Service header triggers Tor detection.
+// TestIsTorRequest_TorHeader verifies untrusted headers cannot trigger Tor detection.
 func TestIsTorRequest_TorHeader(t *testing.T) {
 	cfg := createTestConfig()
+	cfg.Server.Tor.OnionAddress = "example.onion"
+	urlvar.GlobalResolver().SetAppConfig(cfg)
+	defer urlvar.GlobalResolver().SetAppConfig(nil)
 	h := &SearchHandler{appConfig: cfg}
 	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "example.com"
 	req.Header.Set("X-Tor-Hidden-Service", "1")
-	if !h.isTorRequest(req) {
-		t.Error("isTorRequest should return true for X-Tor-Hidden-Service: 1 header")
+	if h.isTorRequest(req) {
+		t.Error("isTorRequest should ignore X-Tor-Hidden-Service header")
 	}
 }
 
 // TestIsTorRequest_PlainHost verifies that a plain host returns false.
 func TestIsTorRequest_PlainHost(t *testing.T) {
 	cfg := createTestConfig()
+	cfg.Server.Tor.OnionAddress = "example.onion"
+	urlvar.GlobalResolver().SetAppConfig(cfg)
+	defer urlvar.GlobalResolver().SetAppConfig(nil)
 	h := &SearchHandler{appConfig: cfg}
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Host = "example.com"
@@ -984,18 +996,20 @@ func TestFavicon_RedirectsToCorrectPath(t *testing.T) {
 	}
 }
 
-// TestAppleTouchIcon_RedirectsToIconPng verifies AppleTouchIcon redirects to icon PNG.
-func TestAppleTouchIcon_RedirectsToIconPng(t *testing.T) {
+// TestAppleTouchIcon_ServesEmbeddedPng verifies the embedded icon is served directly.
+func TestAppleTouchIcon_ServesEmbeddedPng(t *testing.T) {
+	SetTemplatesFS(fstest.MapFS{"static/icons/icon-180.png": &fstest.MapFile{Data: []byte("png-data")}})
+	t.Cleanup(func() { SetTemplatesFS(nil) })
 	h := &SearchHandler{appConfig: createTestConfig()}
 	req := httptest.NewRequest("GET", "/apple-touch-icon.png", nil)
 	rr := httptest.NewRecorder()
 	h.AppleTouchIcon(rr, req)
 
-	if rr.Code != http.StatusMovedPermanently {
-		t.Errorf("AppleTouchIcon status = %d, want %d", rr.Code, http.StatusMovedPermanently)
+	if rr.Code != http.StatusOK {
+		t.Errorf("AppleTouchIcon status = %d, want %d", rr.Code, http.StatusOK)
 	}
-	if loc := rr.Header().Get("Location"); !strings.Contains(loc, "icon") {
-		t.Errorf("AppleTouchIcon redirect location = %q, want icon path", loc)
+	if got := rr.Body.String(); got != "png-data" {
+		t.Errorf("AppleTouchIcon body = %q, want embedded bytes", got)
 	}
 }
 
@@ -1004,6 +1018,7 @@ func TestAppleTouchIcon_RedirectsToIconPng(t *testing.T) {
 // TestMaintenanceModeMiddleware_HealthzBypassed verifies /healthz is never
 // intercepted by maintenance mode even when the flag file exists.
 func TestMaintenanceModeMiddleware_HealthzBypassed(t *testing.T) {
+	isolateMaintenanceDataDir(t)
 	h := &SearchHandler{appConfig: createTestConfig()}
 	called := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1024,6 +1039,7 @@ func TestMaintenanceModeMiddleware_HealthzBypassed(t *testing.T) {
 // TestMaintenanceModeMiddleware_NoFlag passes regular request through when there
 // is no maintenance flag file.
 func TestMaintenanceModeMiddleware_NoFlag(t *testing.T) {
+	isolateMaintenanceDataDir(t)
 	h := &SearchHandler{appConfig: createTestConfig()}
 	called := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1125,6 +1141,16 @@ func TestAPIHealthCheck_TextOutput(t *testing.T) {
 	body := rr.Body.String()
 	if !strings.Contains(body, "status:") {
 		t.Errorf("APIHealthCheck text output missing 'status:' line; got: %q", body)
+	}
+	for _, field := range []string{
+		"features.i2p.enabled: false",
+		"features.i2p.running: false",
+		"features.i2p.status: disabled",
+		"features.i2p.provider: none",
+	} {
+		if !strings.Contains(body, field) {
+			t.Errorf("APIHealthCheck text output missing %q; got: %q", field, body)
+		}
 	}
 }
 

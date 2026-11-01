@@ -14,7 +14,7 @@
         <div class="favorites-toolbar">
             <h1>{{ t "favorites.title" }}</h1>
             <div class="favorites-actions">
-                <span id="favorites-count-label" class="favorites-count">{{tf "favorites.count" (len .Favorites)}}</span>
+                <span id="favorites-count-label" class="favorites-count">{{tf "favorites.count" "count" (len .Favorites)}}</span>
                 <a class="btn-secondary btn-sm" href="/favorites/export">{{ t "favorites.export" }}</a>
                 <form action="/favorites/import" method="post" enctype="multipart/form-data" class="favorites-import-form">
                     {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
@@ -48,7 +48,7 @@
             {{range .Favorites}}
             <div class="video-card" role="listitem" data-source="{{.Source}}" data-fav-id="{{.ID}}">
                 <a href="{{.URL}}" rel="noopener noreferrer nofollow" aria-label="{{.Title}} - {{.Source}}">
-                    <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" .Title}}" loading="lazy">
+                    <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">
                     <div class="video-info">
                         <h3 class="video-title">{{.Title}}</h3>
                         <p class="video-source">{{.Source}}</p>

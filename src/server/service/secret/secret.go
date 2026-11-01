@@ -7,6 +7,7 @@ package secret
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
@@ -138,7 +139,7 @@ func (m *Manager) ValidateWithPrevious(ctx context.Context, key SecretKey, value
 	// Check current value
 	if current.Valid {
 		currentBytes, err := base64.StdEncoding.DecodeString(current.String)
-		if err == nil && subtle.ConstantTimeCompare(currentBytes, value) == 1 {
+		if err == nil && constantTimeBytesEqual(currentBytes, value) {
 			return true, nil
 		}
 	}
@@ -146,12 +147,48 @@ func (m *Manager) ValidateWithPrevious(ctx context.Context, key SecretKey, value
 	// Check previous value if not expired
 	if previous.Valid && (!expiresAt.Valid || time.Now().Before(expiresAt.Time)) {
 		prevBytes, err := base64.StdEncoding.DecodeString(previous.String)
-		if err == nil && subtle.ConstantTimeCompare(prevBytes, value) == 1 {
+		if err == nil && constantTimeBytesEqual(prevBytes, value) {
 			return true, nil
 		}
 	}
 
 	return false, nil
+}
+
+func constantTimeBytesEqual(left, right []byte) bool {
+	leftHash := sha256.Sum256(left)
+	rightHash := sha256.Sum256(right)
+	return subtle.ConstantTimeCompare(leftHash[:], rightHash[:]) == 1
+}
+
+// ValidateDerivedWithPrevious applies validate to the current secret and any
+// unexpired previous secret. It lets callers validate derived values such as
+// HMACs without exposing the previous secret outside this manager.
+func (m *Manager) ValidateDerivedWithPrevious(ctx context.Context, key SecretKey, validate func([]byte) bool) (bool, error) {
+	if validate == nil {
+		return false, fmt.Errorf("secret validator is required")
+	}
+	var current, previous sql.NullString
+	var expiresAt sql.NullTime
+	if err := m.db.QueryRowContext(ctx,
+		"SELECT value, previous_value, expires_at FROM app_secrets WHERE key = ?",
+		string(key)).Scan(&current, &previous, &expiresAt); err != nil {
+		return false, fmt.Errorf("get secret for validation: %w", err)
+	}
+
+	valid := false
+	if current.Valid {
+		if currentBytes, err := base64.StdEncoding.DecodeString(current.String); err == nil {
+			valid = validate(currentBytes)
+		}
+	}
+	if previous.Valid && (!expiresAt.Valid || time.Now().Before(expiresAt.Time)) {
+		if previousBytes, err := base64.StdEncoding.DecodeString(previous.String); err == nil {
+			previousValid := validate(previousBytes)
+			valid = valid || previousValid
+		}
+	}
+	return valid, nil
 }
 
 // exists checks if a secret key exists in the database

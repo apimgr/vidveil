@@ -90,6 +90,50 @@ func TestGetDefaultBackupDirLinuxRoot(t *testing.T) {
 	}
 }
 
+func TestResolveBackupDirPrefersWritableSystemPath(t *testing.T) {
+	got := resolveBackupDir(true, "/data", func(path string) bool {
+		return path == GetDefaultBackupDir(true)
+	})
+	if want := GetDefaultBackupDir(true); got != want {
+		t.Fatalf("resolveBackupDir() = %q, want writable system path %q", got, want)
+	}
+}
+
+func TestResolveBackupDirFallsBackByPrivilegeMode(t *testing.T) {
+	writable := func(string) bool { return false }
+	if got, want := resolveBackupDir(true, "/data", writable), filepath.Join("/data", "backup"); got != want {
+		t.Errorf("system-mode fallback = %q, want %q", got, want)
+	}
+	if got, want := resolveBackupDir(false, "/data", writable), GetDefaultBackupDir(false); got != want {
+		t.Errorf("user-mode fallback = %q, want %q", got, want)
+	}
+}
+
+func TestCanWritePathChecksExistingAndCreatableDirectories(t *testing.T) {
+	root := t.TempDir()
+	if !canWritePath(root) {
+		t.Fatalf("canWritePath(%q) = false, want true", root)
+	}
+	if !canWritePath(filepath.Join(root, "not-created", "backup")) {
+		t.Fatal("canWritePath should accept a path whose existing ancestor is writable")
+	}
+	file := filepath.Join(root, "file")
+	if err := os.WriteFile(file, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if canWritePath(file) {
+		t.Fatal("canWritePath accepted a regular file as a backup directory")
+	}
+}
+
+func TestGetMaintenanceLockDirIsAdjacentToDataRoot(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	got := GetMaintenanceLockDir(dataDir)
+	if got == dataDir || filepath.Dir(got) != filepath.Dir(dataDir) {
+		t.Fatalf("GetMaintenanceLockDir(%q) = %q, want a sibling directory", dataDir, got)
+	}
+}
+
 func TestGetDefaultPIDFileLinuxUser(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("linux-only assertion")

@@ -8,8 +8,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
+
+	"golang.org/x/text/feature/plural"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 // ctxKey is an unexported type for context keys in this package.
@@ -279,9 +284,9 @@ func (t *Translator) loadDefaultTranslations() {
 
 		// Time
 		"time.now":      "Just now",
-		"time.minutes":  "%d minutes ago",
-		"time.hours":    "%d hours ago",
-		"time.days":     "%d days ago",
+		"time.minutes":  "{count} minutes ago",
+		"time.hours":    "{count} hours ago",
+		"time.days":     "{count} days ago",
 		"time.duration": "Duration",
 		"time.views":    "views",
 
@@ -324,9 +329,78 @@ func (t *Translator) Translate(locale, key string) string {
 	return key
 }
 
-// TranslateFormat translates with format arguments
+// TranslatePlural selects a CLDR cardinal form from flattened locale keys.
+func (t *Translator) TranslatePlural(locale, key string, count int) string {
+	tag, err := language.Parse(locale)
+	if err != nil {
+		tag = language.English
+	}
+	form := pluralFormName(plural.Cardinal.MatchPlural(tag, count, 0, 0, 0, 0))
+	translationKey := key + "_" + form
+	translation := t.Translate(locale, translationKey)
+	if translation == translationKey {
+		return t.Translate(locale, key+"_other")
+	}
+	return translation
+}
+
+func pluralFormName(form plural.Form) string {
+	switch form {
+	case plural.Zero:
+		return "zero"
+	case plural.One:
+		return "one"
+	case plural.Two:
+		return "two"
+	case plural.Few:
+		return "few"
+	case plural.Many:
+		return "many"
+	default:
+		return "other"
+	}
+}
+
+// TranslateFormat replaces named placeholders using alternating token and value arguments.
 func (t *Translator) TranslateFormat(locale, key string, args ...interface{}) string {
-	return fmt.Sprintf(t.Translate(locale, key), args...)
+	return replaceNamedValues(t.Translate(locale, key), args...)
+}
+
+// TranslatePluralFormat applies named values to the CLDR-selected translation.
+func (t *Translator) TranslatePluralFormat(locale, key string, count int, args ...interface{}) string {
+	return replaceNamedValues(t.TranslatePlural(locale, key, count), args...)
+}
+
+func replaceNamedValues(translation string, args ...interface{}) string {
+	var values map[string]string
+	if len(args) == 1 {
+		values, _ = args[0].(map[string]string)
+	} else {
+		if len(args)%2 != 0 {
+			return translation
+		}
+		values = make(map[string]string, len(args)/2)
+		for i := 0; i < len(args); i += 2 {
+			token, ok := args[i].(string)
+			if !ok || strings.TrimSpace(token) == "" {
+				return translation
+			}
+			values[token] = fmt.Sprint(args[i+1])
+		}
+	}
+	tokens := make([]string, 0, len(values))
+	for token := range values {
+		tokens = append(tokens, token)
+	}
+	sort.Strings(tokens)
+	replacements := make([]string, 0, len(values)*2)
+	for _, token := range tokens {
+		if strings.TrimSpace(token) == "" || strings.ContainsAny(token, "{}") {
+			return translation
+		}
+		replacements = append(replacements, "{"+token+"}", values[token])
+	}
+	return strings.NewReplacer(replacements...).Replace(translation)
 }
 
 // GetLocale extracts the preferred locale from an HTTP request per AI.md
@@ -516,6 +590,30 @@ func GlobalTranslator() *Translator {
 // Translate is a convenience function for the global translator
 func Translate(locale, key string) string {
 	return GlobalTranslator().Translate(locale, key)
+}
+
+// TranslatePlural is a convenience function for the global translator.
+func TranslatePlural(locale, key string, count int) string {
+	return GlobalTranslator().TranslatePlural(locale, key, count)
+}
+
+// Pluralize selects a CLDR cardinal form for a flattened translation key.
+func Pluralize(key string, count int, locale string) string {
+	return TranslatePlural(locale, key, count)
+}
+
+// TranslatePluralFormat is a convenience function for the global translator.
+func TranslatePluralFormat(locale, key string, count int, args ...interface{}) string {
+	return GlobalTranslator().TranslatePluralFormat(locale, key, count, args...)
+}
+
+// FormatNumber formats a decimal number using the locale's grouping and decimal separators.
+func FormatNumber(value float64, locale string) string {
+	tag, err := language.Parse(locale)
+	if err != nil {
+		tag = language.English
+	}
+	return message.NewPrinter(tag).Sprintf("%.2f", value)
 }
 
 // TranslateFormat is a convenience function for the global translator with formatting

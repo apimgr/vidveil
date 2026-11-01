@@ -6,6 +6,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	cryptoRand "crypto/rand"
@@ -24,21 +25,90 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
+	projectpath "github.com/apimgr/vidveil/src/path"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"golang.org/x/crypto/argon2"
 )
 
+var maintenanceOperationMu sync.Mutex
+
+// ErrBackupPasswordWhitespace reports a backup password with boundary whitespace.
+var ErrBackupPasswordWhitespace = errors.New("backup password must not start or end with whitespace")
+
 // MaintenanceManager handles maintenance operations
 type MaintenanceManager struct {
-	paths   *config.AppPaths
-	version string
+	paths      *config.AppPaths
+	version    string
+	buildEpoch int64
+	limits     RestoreLimits
 	// logger is optional — when nil, audit events per AI.md PART 21 "Audit Events"
 	// are silently skipped. Set via SetLogger once a logger is available.
 	logger *logging.AppLogger
+}
+
+// RestoreLimits are the validated byte and entry ceilings for backup restore.
+type RestoreLimits struct {
+	MaxArchiveBytes  uint64
+	MaxExpandedBytes uint64
+	MaxFiles         int
+	MaxFileBytes     uint64
+	MaxRatio         uint64
+}
+
+func DefaultRestoreLimits() RestoreLimits {
+	return RestoreLimits{
+		MaxArchiveBytes: 1 << 30, MaxExpandedBytes: 4 << 30,
+		MaxFiles: 10000, MaxFileBytes: 512 << 20, MaxRatio: 100,
+	}
+}
+
+// RestoreLimitsFromConfig converts the server.yml restore policy to runtime limits.
+func RestoreLimitsFromConfig(cfg config.RestoreConfig) (RestoreLimits, error) {
+	limits := DefaultRestoreLimits()
+	var err error
+	if limits.MaxArchiveBytes, err = config.ParseSizeBytes(cfg.MaxArchiveSize); err != nil {
+		return RestoreLimits{}, fmt.Errorf("restore.max_archive_size: %w", err)
+	}
+	if limits.MaxExpandedBytes, err = config.ParseSizeBytes(cfg.MaxExpandedSize); err != nil {
+		return RestoreLimits{}, fmt.Errorf("restore.max_expanded_size: %w", err)
+	}
+	if limits.MaxFileBytes, err = config.ParseSizeBytes(cfg.MaxFileSize); err != nil {
+		return RestoreLimits{}, fmt.Errorf("restore.max_file_size: %w", err)
+	}
+	maxInt64 := uint64(^uint64(0) >> 1)
+	if limits.MaxArchiveBytes > maxInt64-(1<<20) {
+		return RestoreLimits{}, fmt.Errorf("restore.max_archive_size leaves no room for multipart framing")
+	}
+	if limits.MaxExpandedBytes >= maxInt64 {
+		return RestoreLimits{}, fmt.Errorf("restore.max_expanded_size is too large")
+	}
+	if cfg.MaxFiles < 1 {
+		return RestoreLimits{}, fmt.Errorf("restore.max_files must be at least 1")
+	}
+	if cfg.MaxRatio < 1 {
+		return RestoreLimits{}, fmt.Errorf("restore.max_ratio must be at least 1")
+	}
+	limits.MaxFiles = cfg.MaxFiles
+	limits.MaxRatio = uint64(cfg.MaxRatio)
+	return limits, nil
+}
+
+func (m *MaintenanceManager) SetRestoreLimits(limits RestoreLimits) {
+	m.limits = limits
+}
+
+func (m *MaintenanceManager) ConfigureRestore(cfg config.RestoreConfig) error {
+	limits, err := RestoreLimitsFromConfig(cfg)
+	if err != nil {
+		return err
+	}
+	m.SetRestoreLimits(limits)
+	return nil
 }
 
 // SetLogger attaches the audit logger used to emit the PART 21 backup audit
@@ -102,6 +172,7 @@ func NewMaintenanceManager(configDir, dataDir, version string) *MaintenanceManag
 	return &MaintenanceManager{
 		paths:   config.GetAppPaths(configDir, dataDir),
 		version: version,
+		limits:  DefaultRestoreLimits(),
 	}
 }
 
@@ -118,15 +189,21 @@ func (m *MaintenanceManager) Backup(backupFile string) error {
 // BackupIncremental creates an hourly incremental backup per AI.md PART 21.
 // Always writes to a fixed filename so only one file is kept (replaced each hour).
 func (m *MaintenanceManager) BackupIncremental(backupFile string) error {
+	return m.withMaintenanceOperation(func() error {
+		return m.backupIncremental(backupFile)
+	})
+}
+
+func (m *MaintenanceManager) backupIncremental(backupFile string) error {
 	if backupFile == "" {
 		// Fixed filename per PART 21: vidveil-hourly.tar.gz — always 1 file
 		backupFile = filepath.Join(m.paths.Backup, "vidveil-hourly.tar.gz")
 	}
-	return m.BackupWithOptions(BackupOptions{
+	return m.backupWithOptions(BackupOptions{
 		Filename:    backupFile,
 		IncludeData: true,
 		MaxBackups:  1,
-	})
+	}, false)
 }
 
 // BackupDailyFull creates the scheduled backup_daily run per AI.md PART 21
@@ -137,6 +214,12 @@ func (m *MaintenanceManager) BackupIncremental(backupFile string) error {
 // opts carries encryption/inclusion/retention settings sourced from the caller's
 // server.backup.retention configuration.
 func (m *MaintenanceManager) BackupDailyFull(opts BackupOptions) error {
+	return m.withMaintenanceOperation(func() error {
+		return m.backupDailyFull(opts)
+	})
+}
+
+func (m *MaintenanceManager) backupDailyFull(opts BackupOptions) error {
 	ext := ".tar.gz"
 	if opts.Password != "" {
 		ext = ".tar.gz.enc"
@@ -148,7 +231,7 @@ func (m *MaintenanceManager) BackupDailyFull(opts BackupOptions) error {
 		dateStr := time.Now().Format("2006-01-02")
 		fullOpts.Filename = filepath.Join(m.paths.Backup, fmt.Sprintf("vidveil_backup_%s%s", dateStr, ext))
 	}
-	if err := m.BackupWithOptions(fullOpts); err != nil {
+	if err := m.backupWithOptions(fullOpts, false); err != nil {
 		return fmt.Errorf("daily full backup failed: %w", err)
 	}
 
@@ -160,8 +243,11 @@ func (m *MaintenanceManager) BackupDailyFull(opts BackupOptions) error {
 	dailyOpts.KeepMonthly = 0
 	dailyOpts.KeepYearly = 0
 	dailyOpts.MaxTotalSize = ""
-	if err := m.BackupWithOptions(dailyOpts); err != nil {
+	if err := m.backupWithOptions(dailyOpts, false); err != nil {
 		return fmt.Errorf("daily incremental backup failed: %w", err)
+	}
+	if err := m.applyRetentionWithOptions(opts.MaxBackups, opts.KeepWeekly, opts.KeepMonthly, opts.KeepYearly, opts.MaxTotalSize); err != nil {
+		fmt.Printf("Warning: failed to apply retention policy after verified backup pair: %v\n", err)
 	}
 
 	// "Changes since last" per AI.md PART 21 Audit Events: this manager always
@@ -181,6 +267,15 @@ func (m *MaintenanceManager) BackupDailyFull(opts BackupOptions) error {
 
 // BackupWithOptions creates a backup with full options per AI.md PART 21
 func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
+	return m.withMaintenanceOperation(func() error {
+		return m.backupWithOptions(opts, true)
+	})
+}
+
+func (m *MaintenanceManager) backupWithOptions(opts BackupOptions, applyRetention bool) (retErr error) {
+	if opts.Password != strings.TrimSpace(opts.Password) {
+		return ErrBackupPasswordWhitespace
+	}
 	// Per AI.md PART 21 "Compliance Mode Enforcement": when compliance mode is
 	// active (server.compliance.enabled), backup.encryption.enabled MUST be true -
 	// reject unencrypted backups before touching disk.
@@ -203,16 +298,6 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 	backupDir := filepath.Dir(backupFile)
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return fmt.Errorf("failed to create backup directory: %w", err)
-	}
-
-	// Run retention sweep BEFORE creating the new archive per AI.md PART 21
-	// Backup Creation Flow step 1 (prevents transient over-capacity of the backup dir).
-	maxBackups := opts.MaxBackups
-	if maxBackups == 0 {
-		maxBackups = 1
-	}
-	if err := m.applyRetentionWithOptions(maxBackups, opts.KeepWeekly, opts.KeepMonthly, opts.KeepYearly, opts.MaxTotalSize); err != nil {
-		fmt.Printf("Warning: failed to apply retention policy: %v\n", err)
 	}
 
 	// Disk-space precheck per AI.md PART 21: abort (do NOT create the backup) if
@@ -284,7 +369,10 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 	}
 
 	// Add manifest to archive
-	manifestData, _ := json.MarshalIndent(manifest, "", "  ")
+	manifestData, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to encode backup manifest: %w", err)
+	}
 	manifestHeader := &tar.Header{
 		Name:    "manifest.json",
 		Mode:    0644,
@@ -298,9 +386,13 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 		return fmt.Errorf("failed to write manifest: %w", err)
 	}
 
-	// Close writers
-	tarWriter.Close()
-	gzWriter.Close()
+	// Close both archive layers before treating the in-memory bytes as complete.
+	if err := tarWriter.Close(); err != nil {
+		return fmt.Errorf("close backup tar archive: %w", err)
+	}
+	if err := gzWriter.Close(); err != nil {
+		return fmt.Errorf("close backup gzip archive: %w", err)
+	}
 
 	// Calculate checksum
 	archiveData := archiveBuf.Bytes()
@@ -320,26 +412,45 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 		finalData = archiveData
 	}
 
-	// Write atomically: a crash mid-write must never leave a partial archive
-	// masquerading as a valid backup.
-	tmpBackup := backupFile + ".tmp"
-	if err := os.WriteFile(tmpBackup, finalData, 0600); err != nil {
-		return fmt.Errorf("failed to write backup file: %w", err)
+	// Verify a private temporary archive before replacing any existing good
+	// backup at the target filename.
+	tmp, err := os.CreateTemp(backupDir, ".vidveil-backup-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temporary backup file: %w", err)
 	}
-	if err := os.Rename(tmpBackup, backupFile); err != nil {
-		os.Remove(tmpBackup)
-		return fmt.Errorf("failed to write backup file: %w", err)
+	tmpBackup := tmp.Name()
+	defer func() {
+		if err := os.Remove(tmpBackup); err != nil && !os.IsNotExist(err) {
+			retErr = errors.Join(retErr, fmt.Errorf("remove temporary backup %q: %w", tmpBackup, err))
+		}
+	}()
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("set temporary backup permissions: %w", err)
 	}
-
-	// Verify backup integrity
-	if err := m.verifyBackup(backupFile, checksumStr, opts.Password); err != nil {
-		// Remove failed backup
-		os.Remove(backupFile)
+	if _, err := tmp.Write(finalData); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temporary backup: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("sync temporary backup: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temporary backup: %w", err)
+	}
+	if err := m.verifyBackup(tmpBackup, checksumStr, opts.Password); err != nil {
+		if removeErr := os.Remove(tmpBackup); removeErr != nil && !os.IsNotExist(removeErr) {
+			return fmt.Errorf("backup verification failed: %w (remove failed archive: %v)", err, removeErr)
+		}
 		m.audit("backup.verification_failed", "failure", map[string]interface{}{
 			"filename": filepath.Base(backupFile),
 			"check":    err.Error(),
 		})
 		return fmt.Errorf("backup verification failed: %w", err)
+	}
+	if err := replaceBackupFile(tmpBackup, backupFile); err != nil {
+		return fmt.Errorf("install verified backup: %w", err)
 	}
 
 	fmt.Printf("Backup created: %s\n", backupFile)
@@ -350,7 +461,28 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 		"encrypted": opts.Password != "",
 		"verified":  true,
 	})
+	if applyRetention && sameBackupDirectory(backupDir, m.paths.Backup) {
+		maxBackups := opts.MaxBackups
+		if maxBackups == 0 {
+			maxBackups = 1
+		}
+		if err := m.applyRetentionWithOptions(maxBackups, opts.KeepWeekly, opts.KeepMonthly, opts.KeepYearly, opts.MaxTotalSize); err != nil {
+			fmt.Printf("Warning: failed to apply retention policy after verified backup: %v\n", err)
+		}
+	}
 	return nil
+}
+
+func sameBackupDirectory(first, second string) bool {
+	firstAbs, err := filepath.Abs(filepath.Clean(first))
+	if err != nil {
+		return false
+	}
+	secondAbs, err := filepath.Abs(filepath.Clean(second))
+	if err != nil {
+		return false
+	}
+	return firstAbs == secondAbs
 }
 
 // checkDiskSpace aborts the backup per AI.md PART 21 if free space is less than
@@ -467,7 +599,7 @@ func (m *MaintenanceManager) decryptBackup(data []byte, password string) ([]byte
 // verifyBackup verifies backup integrity per AI.md PART 21 (7 checks):
 // 1. File exists  2. Size > 0  3. Checksum valid  4. Decrypt test
 // 5. Manifest readable  6. Content extraction  7. Database integrity
-func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password string) error {
+func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password string) (retErr error) {
 	// Check 1: File exists
 	info, err := os.Stat(backupFile)
 	if err != nil {
@@ -500,20 +632,29 @@ func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password
 	}
 
 	// Checks 5, 6, 7: extract to temp dir, parse manifest, verify database
-	if err := os.MkdirAll("/tmp/apimgr", 0755); err != nil {
+	tempOrgDir := filepath.Join(os.TempDir(), projectpath.ProjectOrg)
+	if err := os.MkdirAll(tempOrgDir, 0755); err != nil {
 		return fmt.Errorf("failed to create temp base dir: %w", err)
 	}
-	tmpDir, err := os.MkdirTemp("/tmp/apimgr", "vidveil-XXXXXX")
+	tmpDir, err := os.MkdirTemp(tempOrgDir, projectpath.ProjectName+"-")
 	if err != nil {
 		return fmt.Errorf("failed to create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("remove backup verification directory: %w", err))
+		}
+	}()
 
 	gzReader, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("invalid gzip: %w", err)
 	}
-	defer gzReader.Close()
+	defer func() {
+		if err := gzReader.Close(); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close backup gzip reader: %w", err))
+		}
+	}()
 
 	tarReader := tar.NewReader(gzReader)
 	var manifestData []byte
@@ -831,7 +972,16 @@ func (m *MaintenanceManager) Restore(backupFile string) error {
 }
 
 // RestoreWithPassword restores from a backup file with optional decryption
-func (m *MaintenanceManager) RestoreWithPassword(backupFile, password string) error {
+func (m *MaintenanceManager) RestoreWithPassword(backupFile, password string) (retErr error) {
+	return m.withMaintenanceOperation(func() error {
+		return m.restoreWithPassword(backupFile, password)
+	})
+}
+
+func (m *MaintenanceManager) restoreWithPassword(backupFile, password string) (retErr error) {
+	if password != strings.TrimSpace(password) {
+		return ErrBackupPasswordWhitespace
+	}
 	if backupFile == "" {
 		// Find most recent backup
 		files, err := filepath.Glob(filepath.Join(m.paths.Backup, "vidveil_backup_*.tar.gz*"))
@@ -843,10 +993,30 @@ func (m *MaintenanceManager) RestoreWithPassword(backupFile, password string) er
 		backupFile = files[len(files)-1]
 	}
 
-	// Read backup file
-	data, err := os.ReadFile(backupFile)
+	// Check compressed archive size before allocating memory or decrypting it.
+	if m.limits.MaxArchiveBytes == 0 {
+		m.limits = DefaultRestoreLimits()
+	}
+	archiveFile, err := os.Open(backupFile)
 	if err != nil {
 		return fmt.Errorf("failed to read backup file: %w", err)
+	}
+	info, err := archiveFile.Stat()
+	if err != nil {
+		return errors.Join(fmt.Errorf("inspect backup file: %w", err), archiveFile.Close())
+	}
+	if info.Size() < 0 || uint64(info.Size()) > m.limits.MaxArchiveBytes {
+		return errors.Join(fmt.Errorf("backup archive exceeds configured maximum of %d bytes", m.limits.MaxArchiveBytes), archiveFile.Close())
+	}
+	data, err := io.ReadAll(io.LimitReader(archiveFile, int64(m.limits.MaxArchiveBytes)+1))
+	if err != nil {
+		return errors.Join(fmt.Errorf("failed to read backup file: %w", err), archiveFile.Close())
+	}
+	if err := archiveFile.Close(); err != nil {
+		return fmt.Errorf("close backup file: %w", err)
+	}
+	if uint64(len(data)) > m.limits.MaxArchiveBytes {
+		return fmt.Errorf("backup archive exceeds configured maximum of %d bytes", m.limits.MaxArchiveBytes)
 	}
 
 	// Decrypt if .enc extension or password provided
@@ -859,9 +1029,32 @@ func (m *MaintenanceManager) RestoreWithPassword(backupFile, password string) er
 			return fmt.Errorf("failed to decrypt backup: %w", err)
 		}
 	}
+	if uint64(len(data)) > m.limits.MaxArchiveBytes {
+		return fmt.Errorf("decrypted backup archive exceeds configured maximum of %d bytes", m.limits.MaxArchiveBytes)
+	}
 
-	// Phase 1: decrypt + parse fully into memory, validating before touching disk.
-	entry, err := loadRestoreArchive(data)
+	// Keep expanded archive entries in a private project-scoped temp directory
+	// while validating so large restores do not buffer every file in memory.
+	tempBase := filepath.Join(os.TempDir(), projectpath.ProjectOrg)
+	if err := os.MkdirAll(tempBase, 0755); err != nil {
+		return fmt.Errorf("prepare restore temporary directory: %w", err)
+	}
+	tempDir, err := os.MkdirTemp(tempBase, projectpath.ProjectName+"-restore-expanded-")
+	if err != nil {
+		return fmt.Errorf("create restore temporary directory: %w", err)
+	}
+	if err := os.Chmod(tempDir, 0700); err != nil {
+		return errors.Join(fmt.Errorf("protect restore temporary directory: %w", err), os.RemoveAll(tempDir))
+	}
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("remove expanded restore temporary directory: %w", err))
+		}
+	}()
+
+	// Phase 1 streams expanded entries to private temporary files, validating
+	// the complete archive and checksum before touching the restore roots.
+	entry, err := loadRestoreArchiveToTemp(data, tempDir, m.limits)
 	if err != nil {
 		return err
 	}
@@ -869,62 +1062,74 @@ func (m *MaintenanceManager) RestoreWithPassword(backupFile, password string) er
 	if entry.manifest.Version == "" {
 		return fmt.Errorf("invalid backup: manifest.json missing or has empty version")
 	}
-
-	if entry.manifest.Checksum != "" {
-		computed := "sha256:" + hex.EncodeToString(entry.contentHash.Sum(nil))
-		if computed != entry.manifest.Checksum {
-			return fmt.Errorf("backup checksum mismatch: manifest says %s, computed %s", entry.manifest.Checksum, computed)
-		}
+	if entry.manifest.Checksum == "" {
+		return fmt.Errorf("invalid backup: manifest.json missing checksum")
+	}
+	computed := "sha256:" + hex.EncodeToString(entry.contentHash.Sum(nil))
+	if computed != entry.manifest.Checksum {
+		return fmt.Errorf("backup checksum mismatch: manifest says %s, computed %s", entry.manifest.Checksum, computed)
 	}
 
 	if entry.manifest.AppVersion != "" && entry.manifest.AppVersion != m.version {
 		fmt.Printf("Warning: backup was created by app version %s, current version is %s\n", entry.manifest.AppVersion, m.version)
 	}
 
-	// Phase 2: all checks passed - write buffered contents to real paths.
-	for _, f := range entry.files {
-		var targetRoot, relative string
-		switch {
-		case strings.HasPrefix(f.name, "config/"):
-			targetRoot, relative = m.paths.Config, strings.TrimPrefix(f.name, "config/")
-		case strings.HasPrefix(f.name, "data/"):
-			targetRoot, relative = m.paths.Data, strings.TrimPrefix(f.name, "data/")
-		case strings.HasPrefix(f.name, "ssl/"):
-			targetRoot, relative = m.paths.SSL, strings.TrimPrefix(f.name, "ssl/")
-		default:
-			continue
-		}
-
-		targetPath, err := resolveRestoreTarget(targetRoot, relative)
-		if err != nil {
-			return fmt.Errorf("refusing to extract %q: %w", f.name, err)
-		}
-
-		if f.isDir {
-			if err := os.MkdirAll(targetPath, os.FileMode(f.mode)); err != nil {
-				return fmt.Errorf("failed to create directory: %w", err)
-			}
-			continue
-		}
-
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-			return fmt.Errorf("failed to create parent directory: %w", err)
-		}
-		if err := os.WriteFile(targetPath, f.content, os.FileMode(f.mode)); err != nil {
-			return fmt.Errorf("failed to extract file: %w", err)
-		}
+	// Phase 2: stage all affected roots, then swap them into place. Verification
+	// and all staged writes finish before any current config/data is replaced.
+	if err := restoreFilesAtomically(entry.files, map[string]string{
+		"config": m.paths.Config,
+		"data":   m.paths.Data,
+		"ssl":    m.paths.SSL,
+	}); err != nil {
+		return fmt.Errorf("restore files: %w", err)
 	}
+	m.audit("backup.restored", "success", map[string]interface{}{"filename": filepath.Base(backupFile)})
 
 	fmt.Printf("Restored from: %s\n", backupFile)
 	return nil
 }
 
-// restoreFileEntry is a fully-buffered tar entry staged for Phase 2 extraction.
+func ensureRestorePathHasNoSymlinks(root, target string) error {
+	root = filepath.Clean(root)
+	target = filepath.Clean(target)
+	relative, err := filepath.Rel(root, target)
+	if err != nil {
+		return fmt.Errorf("cannot resolve restore target: %w", err)
+	}
+	if relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+		return fmt.Errorf("restore target escapes its root")
+	}
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("resolve restore root %q: %w", root, err)
+	}
+
+	current := resolvedRoot
+	for _, component := range append([]string{"."}, strings.Split(relative, string(filepath.Separator))...) {
+		if component != "." {
+			current = filepath.Join(current, component)
+		}
+		info, err := os.Lstat(current)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("inspect restore path %q: %w", current, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("restore path %q traverses a symbolic link", current)
+		}
+	}
+	return nil
+}
+
+// restoreFileEntry is a validated tar entry staged for Phase 2 extraction.
 type restoreFileEntry struct {
-	name    string
-	isDir   bool
-	mode    int64
-	content []byte
+	name        string
+	isDir       bool
+	mode        int64
+	content     []byte
+	contentPath string
 }
 
 // validateArchiveEntryName rejects tar entry names that are absolute, contain a
@@ -972,26 +1177,107 @@ func resolveRestoreTarget(root, entryName string) (string, error) {
 	return target, nil
 }
 
-// restoreArchive holds a fully-parsed, validated backup archive prior to extraction.
+// restoreArchive holds a parsed, validated backup archive prior to extraction.
 type restoreArchive struct {
 	manifest    BackupManifest
 	files       []restoreFileEntry
 	contentHash hash.Hash
 }
 
-// loadRestoreArchive decompresses and parses a decrypted backup archive fully into
-// memory, per AI.md PART 21's Phase 1 (validate before writing anything to disk).
-// It recomputes the same content-addressable hash used by BackupWithOptions
-// (name+NUL+content+NUL per regular file, in tar order) for checksum verification.
+type restoreEntryStore func(header *tar.Header, content io.Reader) (restoreFileEntry, error)
+
+// loadRestoreArchive reads archive contents into memory for unit tests and callers
+// that need the parsed entry data directly.
 func loadRestoreArchive(data []byte) (*restoreArchive, error) {
+	return loadRestoreArchiveWithStore(data, func(header *tar.Header, source io.Reader) (restoreFileEntry, error) {
+		content, err := io.ReadAll(source)
+		if err != nil {
+			return restoreFileEntry{}, err
+		}
+		return restoreFileEntry{name: header.Name, mode: header.Mode, content: content}, nil
+	})
+}
+
+// loadRestoreArchiveToTemp streams regular file contents to private files so
+// production restores do not retain expanded archive data in memory.
+func loadRestoreArchiveToTemp(data []byte, tempDir string, configured ...RestoreLimits) (archive *restoreArchive, retErr error) {
+	limits := DefaultRestoreLimits()
+	if len(configured) > 0 {
+		limits = configured[0]
+	}
+	var stagedFiles []string
+	defer func() {
+		if retErr == nil {
+			return
+		}
+		for _, stagedPath := range stagedFiles {
+			if err := os.Remove(stagedPath); err != nil && !os.IsNotExist(err) {
+				retErr = errors.Join(retErr, fmt.Errorf("remove partial restore entry: %w", err))
+			}
+		}
+	}()
+	return loadRestoreArchiveWithStore(data, func(header *tar.Header, source io.Reader) (restoreFileEntry, error) {
+		file, err := os.CreateTemp(tempDir, "entry-")
+		if err != nil {
+			return restoreFileEntry{}, fmt.Errorf("create temporary entry for %s: %w", header.Name, err)
+		}
+		path := file.Name()
+		stagedFiles = append(stagedFiles, path)
+		if _, err := io.Copy(file, source); err != nil {
+			return restoreFileEntry{}, errors.Join(fmt.Errorf("write temporary entry for %s: %w", header.Name, err), file.Close())
+		}
+		if err := file.Sync(); err != nil {
+			return restoreFileEntry{}, errors.Join(fmt.Errorf("sync temporary entry for %s: %w", header.Name, err), file.Close())
+		}
+		if err := file.Close(); err != nil {
+			return restoreFileEntry{}, fmt.Errorf("close temporary entry for %s: %w", header.Name, err)
+		}
+		return restoreFileEntry{name: header.Name, mode: header.Mode, contentPath: path}, nil
+	}, limits)
+}
+
+// loadRestoreArchiveWithStore validates a decrypted archive and recomputes the
+// content-addressable hash used by BackupWithOptions (name+NUL+content+NUL per
+// regular file, in tar order) before returning parsed manifest and file data.
+func loadRestoreArchiveWithStore(data []byte, store restoreEntryStore, configured ...RestoreLimits) (result *restoreArchive, retErr error) {
+	limits := DefaultRestoreLimits()
+	if len(configured) > 0 {
+		limits = configured[0]
+	}
+	if limits.MaxArchiveBytes == 0 || limits.MaxExpandedBytes == 0 || limits.MaxFileBytes == 0 || limits.MaxFiles < 1 || limits.MaxRatio < 1 {
+		return nil, fmt.Errorf("restore limits must all be positive")
+	}
+	if uint64(len(data)) > limits.MaxArchiveBytes {
+		return nil, fmt.Errorf("restore archive exceeds max_archive_size of %d bytes", limits.MaxArchiveBytes)
+	}
+	compressedSize := uint64(len(data))
+	ratioLimit := compressedSize * limits.MaxRatio
+	if compressedSize != 0 && ratioLimit/compressedSize != limits.MaxRatio {
+		ratioLimit = ^uint64(0)
+	}
+	expandedLimit := limits.MaxExpandedBytes
+	if ratioLimit < expandedLimit {
+		expandedLimit = ratioLimit
+	}
+	if expandedLimit >= uint64(^uint64(0)>>1) {
+		return nil, fmt.Errorf("configured restore expanded limit is too large")
+	}
 	gzReader, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read gzip: %w", err)
 	}
-	defer gzReader.Close()
+	defer func() {
+		if err := gzReader.Close(); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close restore gzip reader: %w", err))
+		}
+	}()
 
-	tarReader := tar.NewReader(gzReader)
+	limitedReader := &restoreExpandedLimitReader{reader: gzReader, limit: expandedLimit}
+	tarReader := tar.NewReader(limitedReader)
 	archive := &restoreArchive{contentHash: sha256.New()}
+	manifestSeen := false
+	fileCount := 0
+	advertisedExpanded := uint64(0)
 
 	for {
 		header, err := tarReader.Next()
@@ -1001,8 +1287,26 @@ func loadRestoreArchive(data []byte) (*restoreArchive, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read tar: %w", err)
 		}
+		fileCount++
+		if fileCount > limits.MaxFiles {
+			return nil, fmt.Errorf("restore archive exceeds max_files of %d", limits.MaxFiles)
+		}
+		if header.Typeflag == tar.TypeReg {
+			if header.Size < 0 || uint64(header.Size) > limits.MaxFileBytes {
+				return nil, fmt.Errorf("restore entry %q exceeds max_file_size of %d bytes", header.Name, limits.MaxFileBytes)
+			}
+			entrySize := uint64(header.Size)
+			if entrySize > limits.MaxExpandedBytes-advertisedExpanded || entrySize > ratioLimit-advertisedExpanded {
+				return nil, fmt.Errorf("restore archive exceeds expanded-size or compression-ratio limit")
+			}
+			advertisedExpanded += entrySize
+		}
 
 		if header.Name == "manifest.json" {
+			if manifestSeen {
+				return nil, fmt.Errorf("backup contains multiple manifest.json entries")
+			}
+			manifestSeen = true
 			manifestData, err := io.ReadAll(tarReader)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read manifest: %w", err)
@@ -1020,6 +1324,9 @@ func loadRestoreArchive(data []byte) (*restoreArchive, error) {
 		if !relevant {
 			continue
 		}
+		if header.Mode&0o6000 != 0 {
+			return nil, fmt.Errorf("backup entry %q has setuid or setgid permission bits", header.Name)
+		}
 
 		// Reject any entry whose name could escape its extraction root. A name
 		// like "config/../../etc/cron.d/x" passes the prefix test above but
@@ -1033,27 +1340,74 @@ func loadRestoreArchive(data []byte) (*restoreArchive, error) {
 			continue
 		}
 		if header.Typeflag != tar.TypeReg {
-			continue
+			return nil, fmt.Errorf("backup entry %q uses an unsupported special file type", header.Name)
 		}
 
-		content, err := io.ReadAll(tarReader)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read file %s: %w", header.Name, err)
-		}
 		archive.contentHash.Write([]byte(header.Name))
 		archive.contentHash.Write([]byte{0})
-		archive.contentHash.Write(content)
+		entry, err := store(header, io.TeeReader(tarReader, archive.contentHash))
+		if err != nil {
+			return nil, fmt.Errorf("read file %s: %w", header.Name, err)
+		}
 		archive.contentHash.Write([]byte{0})
-
-		archive.files = append(archive.files, restoreFileEntry{name: header.Name, mode: header.Mode, content: content})
+		archive.files = append(archive.files, entry)
+	}
+	if limitedReader.exceeded {
+		return nil, fmt.Errorf("restore archive exceeds max_expanded_size or max_ratio")
 	}
 
 	return archive, nil
 }
 
-// CheckUpdate checks for available updates from GitHub releases
-// Per AI.md PART 22: Respects update branch setting (stable, beta, daily)
+type restoreExpandedLimitReader struct {
+	reader   io.Reader
+	limit    uint64
+	read     uint64
+	exceeded bool
+}
+
+func (r *restoreExpandedLimitReader) Read(p []byte) (int, error) {
+	remaining := r.limit - r.read
+	if remaining == 0 {
+		var probe [1]byte
+		n, err := r.reader.Read(probe[:])
+		if n > 0 {
+			r.exceeded = true
+			return 0, fmt.Errorf("restore archive expansion limit exceeded")
+		}
+		return 0, err
+	}
+	if uint64(len(p)) > remaining {
+		p = p[:int(remaining)]
+	}
+	n, err := r.reader.Read(p)
+	r.read += uint64(n)
+	return n, err
+}
+
+const updateHTTPTimeout = 30 * time.Second
+
+func updateContext(parent context.Context) (context.Context, context.CancelFunc) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	return context.WithTimeout(parent, updateHTTPTimeout)
+}
+
+// CheckUpdate checks for available updates with a bounded request lifetime.
 func (m *MaintenanceManager) CheckUpdate() (*UpdateInfo, error) {
+	return m.CheckUpdateContext(context.Background())
+}
+
+// CheckUpdateContext checks the configured release channel using the caller's
+// cancellation signal and a bounded HTTP timeout.
+func (m *MaintenanceManager) CheckUpdateContext(parent context.Context) (*UpdateInfo, error) {
+	ctx, cancel := updateContext(parent)
+	defer cancel()
+	return m.checkUpdate(ctx)
+}
+
+func (m *MaintenanceManager) checkUpdate(ctx context.Context) (*UpdateInfo, error) {
 	branch := m.GetUpdateBranch()
 	currentVersion := strings.TrimPrefix(m.version, "v")
 
@@ -1063,20 +1417,23 @@ func (m *MaintenanceManager) CheckUpdate() (*UpdateInfo, error) {
 	switch branch {
 	case "stable":
 		// Stable: fetch latest release (non-prerelease)
-		release, err = m.fetchLatestRelease()
+		release, err = m.fetchLatestReleaseContext(ctx)
 	case "beta":
 		// Beta: fetch latest release containing "-beta" in tag
-		release, err = m.fetchLatestBetaRelease()
-	case "daily":
-		// Daily: newest of {stable, beta, daily}; daily tags are YYYYMMDDHHMMSS
-		release, err = m.fetchLatestDailyRelease()
+		release, err = m.fetchLatestBetaReleaseContext(ctx)
+	case "devel":
+		// Devel: newest rolling release from the devel channel.
+		release, err = m.fetchLatestDevelReleaseContext(ctx)
 	default:
 		// Default to stable
-		release, err = m.fetchLatestRelease()
+		release, err = m.fetchLatestReleaseContext(ctx)
 	}
 
 	if err != nil {
 		return nil, err
+	}
+	if release == nil {
+		return &UpdateInfo{CurrentVersion: currentVersion}, nil
 	}
 
 	latestVersion := strings.TrimPrefix(release.TagName, "v")
@@ -1088,6 +1445,9 @@ func (m *MaintenanceManager) CheckUpdate() (*UpdateInfo, error) {
 		ReleaseURL:      release.HTMLURL,
 		ReleaseNotes:    release.Body,
 		PublishedAt:     release.PublishedAt,
+	}
+	if branch == "devel" {
+		info.UpdateAvailable = release.PublishedAt.Unix() > m.buildEpoch
 	}
 
 	// Find download URL for current platform
@@ -1102,14 +1462,33 @@ func (m *MaintenanceManager) CheckUpdate() (*UpdateInfo, error) {
 	return info, nil
 }
 
+// SetBuildEpoch provides the current binary's embedded build time for devel
+// channel comparisons.
+func (m *MaintenanceManager) SetBuildEpoch(buildEpoch int64) {
+	m.buildEpoch = buildEpoch
+}
+
 // fetchLatestRelease fetches the latest stable release
 func (m *MaintenanceManager) fetchLatestRelease() (*GitHubRelease, error) {
-	resp, err := http.Get("https://api.github.com/repos/apimgr/vidveil/releases/latest")
+	ctx, cancel := updateContext(context.Background())
+	defer cancel()
+	return m.fetchLatestReleaseContext(ctx)
+}
+
+func (m *MaintenanceManager) fetchLatestReleaseContext(ctx context.Context) (*GitHubRelease, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/apimgr/vidveil/releases/latest", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create update request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check updates: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
@@ -1123,20 +1502,19 @@ func (m *MaintenanceManager) fetchLatestRelease() (*GitHubRelease, error) {
 }
 
 // matchesBranch implements cumulative update channels per AI.md PART 22: each
-// channel also accepts every release from all more-stable channels. stable
-// matches every channel; beta = {stable, beta}; daily = {stable, beta, daily}.
-// Daily builds are 14-digit timestamps (YYYYMMDDHHMMSS) with no dots.
+// channel also accepts every release from all more-stable channels. Stable
+// matches every channel; beta = {stable, beta}; devel = {stable, beta, devel}.
 func matchesBranch(r GitHubRelease, branch string) bool {
 	if !r.Prerelease {
 		return true
 	}
 	isBeta := strings.HasSuffix(r.TagName, "-beta")
-	isDaily := len(r.TagName) == 14 && !strings.Contains(r.TagName, ".")
+	isDevel := r.TagName == "devel"
 	switch branch {
 	case "beta":
 		return isBeta
-	case "daily":
-		return isBeta || isDaily
+	case "devel":
+		return isBeta || isDevel
 	default:
 		return false
 	}
@@ -1146,7 +1524,13 @@ func matchesBranch(r GitHubRelease, branch string) bool {
 // channel: the newest of {stable, beta}. Releases are returned newest-first,
 // so the first match wins.
 func (m *MaintenanceManager) fetchLatestBetaRelease() (*GitHubRelease, error) {
-	releases, err := m.fetchAllReleases()
+	ctx, cancel := updateContext(context.Background())
+	defer cancel()
+	return m.fetchLatestBetaReleaseContext(ctx)
+}
+
+func (m *MaintenanceManager) fetchLatestBetaReleaseContext(ctx context.Context) (*GitHubRelease, error) {
+	releases, err := m.fetchAllReleasesContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1157,35 +1541,54 @@ func (m *MaintenanceManager) fetchLatestBetaRelease() (*GitHubRelease, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no beta releases found")
+	return nil, nil
 }
 
-// fetchLatestDailyRelease returns the newest release eligible for the daily
-// channel: the newest of {stable, beta, daily}. Releases are returned
+// fetchLatestDevelRelease returns the newest release eligible for the devel
+// channel: the newest of {stable, beta, devel}. Releases are returned
 // newest-first, so the first match wins.
-func (m *MaintenanceManager) fetchLatestDailyRelease() (*GitHubRelease, error) {
-	releases, err := m.fetchAllReleases()
+func (m *MaintenanceManager) fetchLatestDevelRelease() (*GitHubRelease, error) {
+	ctx, cancel := updateContext(context.Background())
+	defer cancel()
+	return m.fetchLatestDevelReleaseContext(ctx)
+}
+
+func (m *MaintenanceManager) fetchLatestDevelReleaseContext(ctx context.Context) (*GitHubRelease, error) {
+	releases, err := m.fetchAllReleasesContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	for i := range releases {
-		if matchesBranch(releases[i], "daily") {
+		if matchesBranch(releases[i], "devel") {
 			return &releases[i], nil
 		}
 	}
 
-	return nil, fmt.Errorf("no daily releases found")
+	return nil, nil
 }
 
 // fetchAllReleases fetches all releases (sorted by date, newest first)
 func (m *MaintenanceManager) fetchAllReleases() ([]GitHubRelease, error) {
-	resp, err := http.Get("https://api.github.com/repos/apimgr/vidveil/releases?per_page=50")
+	ctx, cancel := updateContext(context.Background())
+	defer cancel()
+	return m.fetchAllReleasesContext(ctx)
+}
+
+func (m *MaintenanceManager) fetchAllReleasesContext(ctx context.Context) ([]GitHubRelease, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/apimgr/vidveil/releases?per_page=50", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create release-list request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch releases: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return []GitHubRelease{}, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
@@ -1206,6 +1609,12 @@ func (m *MaintenanceManager) fetchAllReleases() ([]GitHubRelease, error) {
 // refuse to install an unverified binary. The download URL must use HTTPS to
 // prevent MITM substitution.
 func verifyUpdateChecksum(downloadURL string, data []byte) error {
+	ctx, cancel := updateContext(context.Background())
+	defer cancel()
+	return verifyUpdateChecksumContext(ctx, downloadURL, data)
+}
+
+func verifyUpdateChecksumContext(ctx context.Context, downloadURL string, data []byte) error {
 	if !strings.HasPrefix(downloadURL, "https://") {
 		return fmt.Errorf("refusing update: download URL must use HTTPS, got %q", downloadURL)
 	}
@@ -1219,11 +1628,15 @@ func verifyUpdateChecksum(downloadURL string, data []byte) error {
 	assetName := downloadURL[slash+1:]
 	checksumsURL := downloadURL[:slash+1] + "checksums.txt"
 
-	resp, err := http.Get(checksumsURL) //nolint:noctx
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumsURL, nil)
+	if err != nil {
+		return fmt.Errorf("create checksum request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("checksum fetch failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return fmt.Errorf("checksums.txt not published at %s; refusing to install unverified binary", checksumsURL)
@@ -1261,12 +1674,24 @@ func verifyUpdateChecksum(downloadURL string, data []byte) error {
 // ApplyUpdate downloads and applies an update per AI.md PART 22.
 // Update flow: download → verify SHA-256 checksum → replace binary.
 func (m *MaintenanceManager) ApplyUpdate(downloadURL string) error {
+	return m.ApplyUpdateContext(context.Background(), downloadURL)
+}
+
+// ApplyUpdateContext downloads and verifies an update with caller cancellation
+// and a bounded timeout before replacing the running executable.
+func (m *MaintenanceManager) ApplyUpdateContext(parent context.Context, downloadURL string) error {
+	ctx, cancel := updateContext(parent)
+	defer cancel()
+	return m.applyUpdate(ctx, downloadURL)
+}
+
+func (m *MaintenanceManager) applyUpdate(ctx context.Context, downloadURL string) (retErr error) {
 	if downloadURL == "" {
-		info, err := m.CheckUpdate()
+		info, err := m.checkUpdate(ctx)
 		if err != nil {
 			return err
 		}
-		if !info.UpdateAvailable {
+		if info == nil || !info.UpdateAvailable {
 			fmt.Println(terminal.StatusIcon(true) + " Already up to date")
 			return nil
 		}
@@ -1277,11 +1702,15 @@ func (m *MaintenanceManager) ApplyUpdate(downloadURL string) error {
 	}
 
 	// Download new binary
-	resp, err := http.Get(downloadURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+	if err != nil {
+		return fmt.Errorf("create update download request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download update: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed with status %d", resp.StatusCode)
@@ -1294,7 +1723,7 @@ func (m *MaintenanceManager) ApplyUpdate(downloadURL string) error {
 	}
 
 	// Per AI.md PART 22 step 3: verify SHA-256 checksum before replacing binary
-	if err := verifyUpdateChecksum(downloadURL, binaryData); err != nil {
+	if err := verifyUpdateChecksumContext(ctx, downloadURL, binaryData); err != nil {
 		return fmt.Errorf("update checksum verification failed: %w", err)
 	}
 
@@ -1305,22 +1734,28 @@ func (m *MaintenanceManager) ApplyUpdate(downloadURL string) error {
 	}
 
 	// Create temp file for download
-	if err := os.MkdirAll("/tmp/apimgr", 0755); err != nil {
+	tempOrgDir := filepath.Join(os.TempDir(), projectpath.ProjectOrg)
+	if err := os.MkdirAll(tempOrgDir, 0755); err != nil {
 		return fmt.Errorf("failed to create temp base dir: %w", err)
 	}
-	tmpFile, err := os.CreateTemp("/tmp/apimgr", "vidveil-XXXXXX")
+	tmpFile, err := os.CreateTemp(tempOrgDir, projectpath.ProjectName+"-")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+	defer func() {
+		if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+			retErr = errors.Join(retErr, fmt.Errorf("remove temporary update file: %w", err))
+		}
+	}()
 
 	// Write verified binary to temp file
 	if _, err = tmpFile.Write(binaryData); err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("failed to write update: %w", err)
+		return errors.Join(fmt.Errorf("failed to write update: %w", err), tmpFile.Close())
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close downloaded update: %w", err)
+	}
 
 	// Make executable
 	if err := os.Chmod(tmpPath, 0755); err != nil {
@@ -1336,12 +1771,16 @@ func (m *MaintenanceManager) ApplyUpdate(downloadURL string) error {
 	// Move new binary — atomic replace
 	if err := os.Rename(tmpPath, execPath); err != nil {
 		// Try to restore backup
-		os.Rename(backupPath, execPath)
+		if restoreErr := os.Rename(backupPath, execPath); restoreErr != nil {
+			return errors.Join(fmt.Errorf("failed to install update: %w", err), fmt.Errorf("failed to restore backup: %w", restoreErr))
+		}
 		return fmt.Errorf("failed to install update: %w", err)
 	}
 
 	// Remove backup
-	os.Remove(backupPath)
+	if err := os.Remove(backupPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("update installed but failed to remove backup: %w", err)
+	}
 
 	fmt.Println(terminal.StatusIcon(true) + " Update applied successfully")
 	fmt.Println("   Please restart the service to use the new version")
@@ -1357,8 +1796,13 @@ func (m *MaintenanceManager) SetMaintenanceMode(enabled bool) error {
 		if err != nil {
 			return fmt.Errorf("failed to enable maintenance mode: %w", err)
 		}
-		file.WriteString(time.Now().Format(time.RFC3339))
-		file.Close()
+		if _, err := file.WriteString(time.Now().Format(time.RFC3339)); err != nil {
+			_ = file.Close()
+			return fmt.Errorf("failed to write maintenance flag: %w", err)
+		}
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("failed to close maintenance flag: %w", err)
+		}
 		fmt.Println(terminal.StatusIcon(true) + " Maintenance mode enabled")
 		fmt.Println("   Server will return 503 for all requests")
 	} else {
@@ -1378,13 +1822,12 @@ func (m *MaintenanceManager) IsMaintenanceMode() bool {
 	return err == nil
 }
 
-// SetUpdateBranch sets the update branch (stable, beta, daily) per AI.md PART 22.
+// SetUpdateBranch sets the canonical update branch per AI.md PART 22.
 // Writes update.branch to server.yml — the config is the single source of truth.
 func (m *MaintenanceManager) SetUpdateBranch(branch string) error {
-	// Validate branch
-	validBranches := map[string]bool{"stable": true, "beta": true, "daily": true}
-	if !validBranches[branch] {
-		return fmt.Errorf("invalid branch: %s (valid: stable, beta, daily)", branch)
+	canonical, valid := config.NormalizeUpdateChannel(branch)
+	if !valid {
+		return fmt.Errorf("invalid branch: %s (valid: stable, beta, devel)", branch)
 	}
 
 	// Load the current config, update branch, and save back to server.yml
@@ -1393,7 +1836,7 @@ func (m *MaintenanceManager) SetUpdateBranch(branch string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config to set update branch: %w", err)
 	}
-	cfg.Server.Update.Branch = branch
+	cfg.Server.Update.Branch = canonical
 
 	if err := config.SaveAppConfig(cfg, configPath); err != nil {
 		return fmt.Errorf("failed to save config with new update branch: %w", err)
@@ -1407,7 +1850,11 @@ func (m *MaintenanceManager) GetUpdateBranch() string {
 	if err != nil || cfg.Server.Update.Branch == "" {
 		return "stable"
 	}
-	return cfg.Server.Update.Branch
+	branch, valid := config.NormalizeUpdateChannel(cfg.Server.Update.Branch)
+	if !valid {
+		return "stable"
+	}
+	return branch
 }
 
 // Helper to add directory to tar. contentHash, if non-nil, is fed name+NUL+content+NUL
@@ -1442,8 +1889,6 @@ func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string, 
 			if err != nil {
 				return err
 			}
-			defer file.Close()
-
 			var writer io.Writer = tw
 			if contentHash != nil {
 				contentHash.Write([]byte(tarPath))
@@ -1451,6 +1896,9 @@ func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string, 
 				writer = io.MultiWriter(tw, contentHash)
 			}
 			if _, err := io.Copy(writer, file); err != nil {
+				return errors.Join(err, file.Close())
+			}
+			if err := file.Close(); err != nil {
 				return err
 			}
 			if contentHash != nil {
@@ -1498,10 +1946,14 @@ func compareVersions(a, b string) int {
 	for i := 0; i < 3; i++ {
 		var aNum, bNum int
 		if i < len(aParts) {
-			fmt.Sscanf(aParts[i], "%d", &aNum)
+			if parsed, err := strconv.Atoi(aParts[i]); err == nil {
+				aNum = parsed
+			}
 		}
 		if i < len(bParts) {
-			fmt.Sscanf(bParts[i], "%d", &bNum)
+			if parsed, err := strconv.Atoi(bParts[i]); err == nil {
+				bNum = parsed
+			}
 		}
 		if aNum > bNum {
 			return 1

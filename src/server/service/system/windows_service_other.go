@@ -4,10 +4,13 @@
 
 package system
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
-// RunAsWindowsService is a no-op on non-Windows platforms
-func RunAsWindowsService(runFunc func() error) error {
+// RunAsWindowsService reports that Windows services are unsupported here.
+func RunAsWindowsService(runFunc func(context.Context) error) error {
 	return errors.New("windows service not supported on this platform")
 }
 

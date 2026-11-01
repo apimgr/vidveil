@@ -46,6 +46,16 @@ func IsShuttingDown() bool {
 	return shuttingDown.Load()
 }
 
+// BeginShutdown marks the process as draining so health endpoints return 503.
+func BeginShutdown() {
+	shuttingDown.Store(true)
+}
+
+// ResetShutdown clears the draining state before a restored server restarts in-process.
+func ResetShutdown() {
+	shuttingDown.Store(false)
+}
+
 // setupSignalHandler configures graceful shutdown per AI.md PART 8
 // Windows only supports os.Interrupt (Ctrl+C, Ctrl+Break)
 func setupSignalHandler(server *http.Server, pidFile string) {

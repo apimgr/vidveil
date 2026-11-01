@@ -32,10 +32,11 @@ func TestExportablePreferenceQuery_ReflectsCookies(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/server/preferences/export", nil)
 	req.AddCookie(&http.Cookie{Name: "theme", Value: "light"})
 	req.AddCookie(&http.Cookie{Name: "lang", Value: "fr"})
+	req.AddCookie(&http.Cookie{Name: resultsPerPageCookieName, Value: "50"})
 
 	q := h.exportablePreferenceQuery(req)
-	if q != "lang=fr&theme=light" {
-		t.Errorf("exportablePreferenceQuery() = %q, want %q", q, "lang=fr&theme=light")
+	if q != "lang=fr&theme=light&vidveil_pref_results_per_page=50" {
+		t.Errorf("exportablePreferenceQuery() = %q, want canonical app preference included", q)
 	}
 }
 
@@ -70,9 +71,25 @@ func TestDecodePreferenceCode_EmptyString_ReturnsFalse(t *testing.T) {
 	}
 }
 
+func TestDecodePreferenceCode_PlainQueryAndPaddedCode(t *testing.T) {
+	if got, ok := decodePreferenceCode("theme=dark&lang=fr"); !ok || got != "theme=dark&lang=fr" {
+		t.Fatalf("plain query decode = %q, %v", got, ok)
+	}
+	code := base64.URLEncoding.EncodeToString([]byte("theme=dark&lang=fr"))
+	if got, ok := decodePreferenceCode(code); !ok || got != "theme=dark&lang=fr" {
+		t.Fatalf("padded code decode = %q, %v", got, ok)
+	}
+}
+
 func TestDecodePreferenceCode_InvalidBase64_ReturnsFalse(t *testing.T) {
 	if _, ok := decodePreferenceCode("not-valid-base64!!!"); ok {
 		t.Error("decodePreferenceCode(invalid) ok = true, want false")
+	}
+}
+
+func TestDecodePreferenceCode_OversizedCodeIsIgnored(t *testing.T) {
+	if _, ok := decodePreferenceCode(strings.Repeat("a", 2049)); ok {
+		t.Error("decodePreferenceCode(oversized) ok = true, want false")
 	}
 }
 
@@ -156,6 +173,51 @@ func TestPreferencesImport_ValidCode_SetsCookiesAndRedirects(t *testing.T) {
 	}
 }
 
+func TestPreferencesImport_IsAdditiveAndIgnoresExcludedCookies(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?theme=light&cookie_consent=all&vidveil_build=build&owner_token=secret&vidveil_pref_proxy_images=0", nil)
+	req.AddCookie(&http.Cookie{Name: "lang", Value: "fr"})
+	req.AddCookie(&http.Cookie{Name: resultsPerPageCookieName, Value: "50"})
+
+	h.PreferencesImport(rr, req)
+
+	got := map[string]string{}
+	for _, cookie := range rr.Result().Cookies() {
+		got[cookie.Name] = cookie.Value
+	}
+	if got["theme"] != "light" {
+		t.Errorf("theme cookie = %q, want light", got["theme"])
+	}
+	if _, exists := got["lang"]; exists {
+		t.Errorf("absent lang preference should not be rewritten: %#v", got)
+	}
+	if _, exists := got[resultsPerPageCookieName]; exists {
+		t.Errorf("absent app preference should not be rewritten: %#v", got)
+	}
+	for _, name := range []string{"cookie_consent", "vidveil_build", "owner_token", "vidveil_pref_proxy_images"} {
+		if _, exists := got[name]; exists {
+			t.Errorf("excluded cookie %q was applied", name)
+		}
+	}
+}
+
+func TestPreferencesImport_OversizedCodeDoesNotSetCookies(t *testing.T) {
+	h := newRenderTestHandler()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?code="+strings.Repeat("a", 2049), nil)
+	req.AddCookie(&http.Cookie{Name: "theme", Value: "dark"})
+
+	h.PreferencesImport(rr, req)
+
+	if rr.Code != http.StatusSeeOther || rr.Body.Len() != 0 || rr.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("oversized import response = %d, body %q, cache %q", rr.Code, rr.Body.String(), rr.Header().Get("Cache-Control"))
+	}
+	if cookies := rr.Result().Cookies(); len(cookies) != 0 {
+		t.Errorf("oversized code must be ignored without rewriting cookies, got %#v", cookies)
+	}
+}
+
 func TestPreferencesImport_InvalidTheme_DropsThemeSilently(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
@@ -199,8 +261,11 @@ func TestPreferencesImport_NoReferer_RedirectsToPreferences(t *testing.T) {
 
 	h.PreferencesImport(rr, req)
 
-	if loc := rr.Header().Get("Location"); loc != "/server/preferences" {
-		t.Errorf("PreferencesImport no referer: Location = %q, want /server/preferences", loc)
+	if loc := rr.Header().Get("Location"); loc != "/" {
+		t.Errorf("PreferencesImport no referer: Location = %q, want /", loc)
+	}
+	if rr.Body.Len() != 0 || rr.Header().Get("Cache-Control") != "no-store" {
+		t.Errorf("import response must be bodyless and no-store")
 	}
 }
 
@@ -228,8 +293,8 @@ func TestPreferencesImport_RefererIsImportPage_FallsBackToPreferences(t *testing
 
 	h.PreferencesImport(rr, req)
 
-	if loc := rr.Header().Get("Location"); loc != "/server/preferences" {
-		t.Errorf("PreferencesImport referer=self: Location = %q, want /server/preferences", loc)
+	if loc := rr.Header().Get("Location"); loc != "/" {
+		t.Errorf("PreferencesImport referer=self: Location = %q, want /", loc)
 	}
 }
 
@@ -241,8 +306,8 @@ func TestPreferencesImport_RefererIsExportPage_FallsBackToPreferences(t *testing
 
 	h.PreferencesImport(rr, req)
 
-	if loc := rr.Header().Get("Location"); loc != "/server/preferences" {
-		t.Errorf("PreferencesImport referer=export: Location = %q, want /server/preferences", loc)
+	if loc := rr.Header().Get("Location"); loc != "/" {
+		t.Errorf("PreferencesImport referer=export: Location = %q, want /", loc)
 	}
 }
 

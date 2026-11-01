@@ -5,7 +5,10 @@
 package system
 
 import (
+	"strings"
 	"testing"
+
+	appPath "github.com/apimgr/vidveil/src/path"
 )
 
 // newCovSM returns a ServiceManager with a unique test app name.
@@ -84,6 +87,30 @@ func TestInstallLinux_NoPanic(t *testing.T) {
 func TestInstallSystemd_NoPanic(t *testing.T) {
 	sm := newCovSM(t)
 	_ = sm.installSystemd()
+}
+
+func TestSystemdUnitAllowsPIDFileUnderStrictProtection(t *testing.T) {
+	sm := newCovSM(t)
+	unit := sm.systemdUnit()
+	if !strings.Contains(unit, "RuntimeDirectory=apimgr\n") {
+		t.Error("systemd unit does not create the PID runtime directory")
+	}
+	if !strings.Contains(unit, "RuntimeDirectoryMode=0755\n") {
+		t.Error("systemd unit does not set the runtime directory mode")
+	}
+	paths := appPath.GetAppPaths(sm.configDir, sm.dataDir)
+	for _, dir := range []string{paths.Config, paths.Data, paths.Cache, paths.Log, paths.Backup, appPath.GetMaintenanceLockDir(paths.Data)} {
+		if !strings.Contains(unit, "ReadWritePaths="+escapeSystemdPath(dir)+"\n") {
+			t.Errorf("systemd unit does not allow writes to %q", dir)
+		}
+	}
+}
+
+func TestEscapeSystemdPathProtectsWhitespaceAndSpecifiers(t *testing.T) {
+	got := escapeSystemdPath(`/var/lib/vid veil/100%ready`)
+	if want := `/var/lib/vid\x20veil/100%%ready`; got != want {
+		t.Fatalf("escapeSystemdPath() = %q, want %q", got, want)
+	}
 }
 
 // TestInstallRunit_NoPanic creates /etc/sv/{name}/ and writes a run script.

@@ -22,13 +22,8 @@ import (
 const (
 	ASNURL     = "https://cdn.jsdelivr.net/npm/@ip-location-db/asn-mmdb/asn.mmdb"
 	CountryURL = "https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb"
-	// Per spec (AI.md PART 19, line 9354): dbip city IPv4 and IPv6 are separate
-	// databases — there is no combined MMDB. geolite2-city is the fallback when
-	// dbip returns 403 on jsDelivr.
-	CityURL           = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv4.mmdb"
-	CityURLFallback   = "https://cdn.jsdelivr.net/npm/@ip-location-db/geolite2-city-mmdb/geolite2-city-ipv4.mmdb"
-	CityURLv6         = "https://cdn.jsdelivr.net/npm/@ip-location-db/dbip-city-mmdb/dbip-city-ipv6.mmdb"
-	CityURLv6Fallback = "https://cdn.jsdelivr.net/npm/@ip-location-db/geolite2-city-mmdb/geolite2-city-ipv6.mmdb"
+	CityURL    = "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv4.mmdb"
+	CityURLv6  = "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv6.mmdb"
 )
 
 // countryDBWarnOnce keeps the missing-country-database warning to a single log
@@ -59,8 +54,8 @@ type GeoIPService struct {
 	asnDB     *maxminddb.Reader
 	countryDB *maxminddb.Reader
 	// cityDB serves IPv4 lookups and cityDBv6 serves IPv6 lookups: per AI.md
-	// PART 19 the dbip/geolite2 city databases ship as separate v4/v6 files
-	// with no combined MMDB, so an IPv6 client needs its own reader.
+	// PART 19 the DB-IP city databases ship as separate v4/v6 files, so IPv6
+	// clients need a separate reader.
 	cityDB   *maxminddb.Reader
 	cityDBv6 *maxminddb.Reader
 
@@ -75,32 +70,36 @@ type asnRecord struct {
 
 // countryRecord for country database queries
 type countryRecord struct {
-	Country struct {
-		ISOCode string            `maxminddb:"iso_code"`
-		Names   map[string]string `maxminddb:"names"`
-	} `maxminddb:"country"`
+	CountryCode string `maxminddb:"country_code"`
 }
 
 // cityRecord for city database queries
 type cityRecord struct {
-	City struct {
-		Names map[string]string `maxminddb:"names"`
-	} `maxminddb:"city"`
-	Country struct {
-		ISOCode string            `maxminddb:"iso_code"`
-		Names   map[string]string `maxminddb:"names"`
-	} `maxminddb:"country"`
-	Subdivisions []struct {
-		Names map[string]string `maxminddb:"names"`
-	} `maxminddb:"subdivisions"`
-	Postal struct {
-		Code string `maxminddb:"code"`
-	} `maxminddb:"postal"`
-	Location struct {
-		Latitude  float64 `maxminddb:"latitude"`
-		Longitude float64 `maxminddb:"longitude"`
-		TimeZone  string  `maxminddb:"time_zone"`
-	} `maxminddb:"location"`
+	City        string  `maxminddb:"city"`
+	CountryCode string  `maxminddb:"country_code"`
+	State1      string  `maxminddb:"state1"`
+	State2      string  `maxminddb:"state2"`
+	Postcode    string  `maxminddb:"postcode"`
+	Latitude    float64 `maxminddb:"latitude"`
+	Longitude   float64 `maxminddb:"longitude"`
+	Timezone    string  `maxminddb:"timezone"`
+}
+
+func applyCountryRecord(result *GeoIPResult, record countryRecord) {
+	result.CountryCode = record.CountryCode
+}
+
+func applyCityRecord(result *GeoIPResult, record cityRecord) {
+	result.CountryCode = record.CountryCode
+	result.City = record.City
+	result.Region = record.State1
+	if result.Region == "" {
+		result.Region = record.State2
+	}
+	result.Postal = record.Postcode
+	result.Latitude = record.Latitude
+	result.Longitude = record.Longitude
+	result.Timezone = record.Timezone
 }
 
 // NewGeoIPService creates a new GeoIP service
@@ -162,20 +161,15 @@ func (s *GeoIPService) downloadIfMissing() error {
 	if dbs.City {
 		cityPath := filepath.Join(s.dataDir, "city.mmdb")
 		if _, err := os.Stat(cityPath); os.IsNotExist(err) {
-			// Try spec URL first, fall back to alternative if it fails
 			if err := s.downloadFile(CityURL, cityPath); err != nil {
-				if err := s.downloadFile(CityURLFallback, cityPath); err != nil {
-					return fmt.Errorf("failed to download city database: %w", err)
-				}
+				return fmt.Errorf("failed to download city database: %w", err)
 			}
 		}
 
 		cityPathV6 := filepath.Join(s.dataDir, "city-ipv6.mmdb")
 		if _, err := os.Stat(cityPathV6); os.IsNotExist(err) {
 			if err := s.downloadFile(CityURLv6, cityPathV6); err != nil {
-				if err := s.downloadFile(CityURLv6Fallback, cityPathV6); err != nil {
-					return fmt.Errorf("failed to download city IPv6 database: %w", err)
-				}
+				return fmt.Errorf("failed to download city IPv6 database: %w", err)
 			}
 		}
 	}
@@ -197,7 +191,7 @@ func (s *GeoIPService) downloadFile(url, path string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed with status %d", resp.StatusCode)
@@ -210,10 +204,14 @@ func (s *GeoIPService) downloadFile(url, path string) error {
 	}
 
 	_, err = io.Copy(out, resp.Body)
-	out.Close()
+	closeErr := out.Close()
 	if err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return err
+	}
+	if closeErr != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("close downloaded GeoIP database: %w", closeErr)
 	}
 
 	return os.Rename(tmpPath, path)
@@ -284,6 +282,9 @@ func (s *GeoIPService) Lookup(ipStr string) *GeoIPResult {
 	}
 
 	result := &GeoIPResult{IP: ipStr}
+	if isPrivateIP(ip) {
+		return result
+	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -311,30 +312,13 @@ func (s *GeoIPService) Lookup(ipStr string) *GeoIPResult {
 	if cityReader != nil {
 		var record cityRecord
 		if err := cityReader.Lookup(ip, &record); err == nil {
-			result.CountryCode = record.Country.ISOCode
-			if name, ok := record.Country.Names["en"]; ok {
-				result.Country = name
-			}
-			if name, ok := record.City.Names["en"]; ok {
-				result.City = name
-			}
-			if len(record.Subdivisions) > 0 {
-				if name, ok := record.Subdivisions[0].Names["en"]; ok {
-					result.Region = name
-				}
-			}
-			result.Postal = record.Postal.Code
-			result.Latitude = record.Location.Latitude
-			result.Longitude = record.Location.Longitude
-			result.Timezone = record.Location.TimeZone
+			applyCityRecord(result, record)
 		}
-	} else if s.countryDB != nil {
+	}
+	if result.CountryCode == "" && s.countryDB != nil {
 		var record countryRecord
 		if err := s.countryDB.Lookup(ip, &record); err == nil {
-			result.CountryCode = record.Country.ISOCode
-			if name, ok := record.Country.Names["en"]; ok {
-				result.Country = name
-			}
+			applyCountryRecord(result, record)
 		}
 	}
 
@@ -410,13 +394,12 @@ func (s *GeoIPService) IsBlocked(ipStr string) bool {
 		})
 	}
 
-	// Allowlist mode is default-deny: an unresolvable/unknown country is never
-	// explicitly allowed, so it is blocked. This is deliberate fail-closed
-	// behavior for an allowlist the operator opted into — distinct from the
-	// risk-signal fail-open rule, which governs denylist mode below.
+	// A missing database or failed lookup must never block a request. This
+	// fail-open rule applies to both country-list modes; a resolved country
+	// outside an allowlist is still blocked below.
 	if len(allowList) > 0 {
 		if countryCode == "" {
-			return true
+			return false
 		}
 		for _, code := range allowList {
 			if code == countryCode {
@@ -577,18 +560,13 @@ func (s *GeoIPService) Update() error {
 
 	if dbs.City {
 		cityPath := filepath.Join(s.dataDir, "city.mmdb")
-		// Try spec URL first, fall back to alternative if it fails
 		if err := s.downloadFile(CityURL, cityPath); err != nil {
-			if err := s.downloadFile(CityURLFallback, cityPath); err != nil {
-				return fmt.Errorf("failed to update city database: %w", err)
-			}
+			return fmt.Errorf("failed to update city database: %w", err)
 		}
 
 		cityPathV6 := filepath.Join(s.dataDir, "city-ipv6.mmdb")
 		if err := s.downloadFile(CityURLv6, cityPathV6); err != nil {
-			if err := s.downloadFile(CityURLv6Fallback, cityPathV6); err != nil {
-				return fmt.Errorf("failed to update city IPv6 database: %w", err)
-			}
+			return fmt.Errorf("failed to update city IPv6 database: %w", err)
 		}
 	}
 
@@ -613,19 +591,19 @@ func (s *GeoIPService) Close() {
 	defer s.mu.Unlock()
 
 	if s.asnDB != nil {
-		s.asnDB.Close()
+		_ = s.asnDB.Close()
 		s.asnDB = nil
 	}
 	if s.countryDB != nil {
-		s.countryDB.Close()
+		_ = s.countryDB.Close()
 		s.countryDB = nil
 	}
 	if s.cityDB != nil {
-		s.cityDB.Close()
+		_ = s.cityDB.Close()
 		s.cityDB = nil
 	}
 	if s.cityDBv6 != nil {
-		s.cityDBv6.Close()
+		_ = s.cityDBv6.Close()
 		s.cityDBv6 = nil
 	}
 }

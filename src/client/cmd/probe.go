@@ -297,8 +297,12 @@ func OutputProbeResultsAsTable(results []EngineProbeResult) error {
 	tableWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
 	// Header
-	fmt.Fprintf(tableWriter, "ENGINE\tTIER\tSTATUS\tRESULTS\tTIME\tPREVIEW\tDOWNLOAD\n")
-	fmt.Fprintf(tableWriter, "------\t----\t------\t-------\t----\t-------\t--------\n")
+	if _, err := fmt.Fprintf(tableWriter, "ENGINE\tTIER\tSTATUS\tRESULTS\tTIME\tPREVIEW\tDOWNLOAD\n"); err != nil {
+		return fmt.Errorf("write probe table header: %w", err)
+	}
+	if _, err := fmt.Fprintf(tableWriter, "------\t----\t------\t-------\t----\t-------\t--------\n"); err != nil {
+		return fmt.Errorf("write probe table separator: %w", err)
+	}
 
 	available := 0
 	for _, r := range results {
@@ -320,11 +324,15 @@ func OutputProbeResultsAsTable(results []EngineProbeResult) error {
 			}
 		}
 
-		fmt.Fprintf(tableWriter, "%s\t%d\t%s\t%d\t%dms\t%s\t%s\n",
-			r.DisplayName, r.Tier, status, r.ResultCount, r.ResponseTimeMS, preview, download)
+		if _, err := fmt.Fprintf(tableWriter, "%s\t%d\t%s\t%d\t%dms\t%s\t%s\n",
+			r.DisplayName, r.Tier, status, r.ResultCount, r.ResponseTimeMS, preview, download); err != nil {
+			return fmt.Errorf("write probe table row: %w", err)
+		}
 	}
 
-	tableWriter.Flush()
+	if err := tableWriter.Flush(); err != nil {
+		return fmt.Errorf("flush probe table: %w", err)
+	}
 
 	fmt.Printf("\nProbed %d engines: %d available, %d failed\n", len(results), available, len(results)-available)
 	if probeVerboseMode {

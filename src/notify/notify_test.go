@@ -206,7 +206,9 @@ func TestFormatDiscordContainsContent(t *testing.T) {
 		t.Errorf("content-type = %q", ct)
 	}
 	var out map[string]interface{}
-	json.Unmarshal(body, &out)
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode Discord payload: %v", err)
+	}
 	if _, ok := out["content"]; !ok {
 		t.Error("discord body missing 'content' key")
 	}
@@ -219,7 +221,9 @@ func TestFormatSlackContainsText(t *testing.T) {
 		t.Fatalf("formatSlack: %v", err)
 	}
 	var out map[string]interface{}
-	json.Unmarshal(body, &out)
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode Slack payload: %v", err)
+	}
 	if _, ok := out["text"]; !ok {
 		t.Error("slack body missing 'text' key")
 	}
@@ -232,7 +236,9 @@ func TestFormatMattermostContainsText(t *testing.T) {
 		t.Fatalf("formatMattermost: %v", err)
 	}
 	var out map[string]interface{}
-	json.Unmarshal(body, &out)
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode Mattermost payload: %v", err)
+	}
 	if _, ok := out["text"]; !ok {
 		t.Error("mattermost body missing 'text' key")
 	}
@@ -275,7 +281,9 @@ func TestFormatGotifyBuildsMessagePath(t *testing.T) {
 		t.Errorf("gotify URL missing token param: %q", targetURL)
 	}
 	var out map[string]interface{}
-	json.Unmarshal(body, &out)
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode Gotify payload: %v", err)
+	}
 	if _, ok := out["title"]; !ok {
 		t.Error("gotify body missing 'title' key")
 	}

@@ -91,6 +91,8 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-10-15
-- Current task: close PART 16 preference and progressive-enhancement gaps; verify PART 31 per-request Tor preference handling
-- Relevant PARTs: 16, 31
+- Last read AI.md: 2026-11-01
+- Current task: AI.md alignment is implemented and locally verified; provider-native CI checks remain as recorded in TODO.AI.md
+- Verified: Go lint passes with 0 issues; `make test` passes at 71% coverage; browser E2E passes; server and CLI cross-builds pass for all 8 OS/architecture targets; workflow YAML parses
+- Update audit: GitHub API 404 responses mean no CLI update; canonical and previously published rolling-release labels are supported; Jenkins scheduled runs use their scheduled timestamp
+- Relevant PARTs: 11, 14, 16, 22, 25, 27, 28, 31

@@ -2,8 +2,6 @@ module github.com/apimgr/vidveil
 
 go 1.26.0
 
-toolchain go1.26.6
-
 require (
 	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/PuerkitoBio/goquery v1.9.2

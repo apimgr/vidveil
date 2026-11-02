@@ -1,6 +1,7 @@
 stages:
   - build
   - test
+  - security
   - package
   - release
   - docker
@@ -194,11 +195,17 @@ build:freebsd-arm64:
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
 
-test:
+lint:
   image: ${BUILD_IMAGE}
   stage: test
   script:
     - go vet ./...
+    - staticcheck ./...
+
+test:
+  image: ${BUILD_IMAGE}
+  stage: test
+  script:
     - go test -buildvcs=false -cover -coverprofile=coverage.out ./...
     - |
       PCT="$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$3); print int($3)}')"
@@ -207,8 +214,82 @@ test:
         exit 1
       fi
   rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH
     - if: $CI_COMMIT_TAG
+
+secret-scan:
+  image:
+    name: docker.io/trufflesecurity/trufflehog@sha256:59b244249d1a1aef4baa24fe73d3c931616264482580d806d77f6c74d26b3e42
+    entrypoint: [""]
+  stage: security
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "push" ] && [ "$CI_COMMIT_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+        trufflehog git file://. --since-commit="$CI_COMMIT_BEFORE_SHA" --branch="$CI_COMMIT_SHA" --results=verified,unknown --fail
+      elif [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ] && [ -n "$CI_MERGE_REQUEST_DIFF_BASE_SHA" ]; then
+        trufflehog git file://. --since-commit="$CI_MERGE_REQUEST_DIFF_BASE_SHA" --branch="$CI_COMMIT_SHA" --results=verified,unknown --fail
+      else
+        trufflehog git file://. --results=verified,unknown --fail
+      fi
+
+workflow-policy:
+  image: ${BUILD_IMAGE}
+  stage: security
+  script:
+    - |
+      bad=$(grep -RnE '^[[:space:]]*uses:' .github/ .gitea/ .forgejo/ 2>/dev/null | grep -vE '@[0-9a-f]{40}([[:space:]]|$)' || true)
+      if [ -n "$bad" ]; then
+        echo "unpinned actions found:"
+        echo "$bad"
+        exit 1
+      fi
+
+vuln-scan:
+  image: ${BUILD_IMAGE}
+  stage: security
+  variables:
+    CGO_ENABLED: "0"
+    GOFLAGS: -buildvcs=false
+  script:
+    - govulncheck ./...
+  rules:
+    - exists:
+        - go.sum
+
+image-scan:
+  image: docker:latest
+  services:
+    - docker:dind
+  stage: security
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - |
+      TEMP_DIR=""
+      SCAN_CONTAINER=""
+      cleanup() {
+        if [ -n "$SCAN_CONTAINER" ]; then
+          docker rm -f "$SCAN_CONTAINER" >/dev/null 2>&1 || true
+        fi
+        if [ -n "$TEMP_DIR" ]; then
+          rm -rf "$TEMP_DIR"
+        fi
+      }
+      trap cleanup EXIT
+      mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
+      TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX")
+      docker build -t local/scan-target:ci -f docker/Dockerfile .
+      docker save local/scan-target:ci -o "$TEMP_DIR/scan-target.tar"
+      SCAN_CONTAINER=$(docker create docker.io/aquasec/trivy@sha256:152250a00485c128eacf57a3ecb4b0402440bf8d19dceeb2302dc5e95a26adab image --input /scan-target.tar --exit-code 1 --severity CRITICAL,HIGH)
+      docker cp "$TEMP_DIR/scan-target.tar" "$SCAN_CONTAINER:/scan-target.tar"
+      docker start --attach "$SCAN_CONTAINER"
+  rules:
+    - exists:
+        - docker/Dockerfile
 
 build:beta:
   <<: *go-build

@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - run: go vet ./...
-      - run: GOTOOLCHAIN=go1.26.4 staticcheck ./...
+      - run: staticcheck ./...
 
   secret-scan:
     runs-on: ubuntu-latest
@@ -105,7 +105,7 @@ jobs:
       CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-      - run: go build -buildvcs=false ./...
+      - run: go build -trimpath -buildvcs=false ./...
 
   vuln-scan:
     runs-on: ubuntu-latest

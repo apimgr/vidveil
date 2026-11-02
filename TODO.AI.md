@@ -2,6 +2,9 @@
 
 ## Provider-native workflow verification
 
+- [ ] GitLab: run `.gitlab-ci.yml` on a configured GitLab runner and verify
+  lint, test/coverage, security, release, and Docker jobs. This checkout has no
+  GitLab remote or runner credentials.
 - [ ] Gitea: run the CI workflow on a configured Gitea runner and verify each
   job's exit status. The local YAML parse passed, but Gitea-specific contexts
   cannot be validated by GitHub `act`.

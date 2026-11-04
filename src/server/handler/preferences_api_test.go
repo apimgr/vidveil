@@ -124,8 +124,25 @@ func TestPreferencesAPIGetAndSet(t *testing.T) {
 	if set.Code != http.StatusOK || !strings.Contains(set.Body.String(), `"applied"`) || !strings.Contains(set.Body.String(), `"ignored"`) || !strings.Contains(set.Body.String(), `"vidveil_pref_proxy_images"`) {
 		t.Fatalf("POST response = %d %s", set.Code, set.Body.String())
 	}
-	if len(set.Result().Cookies()) != 2 {
-		t.Fatalf("expected exactly two preference cookies, got %d", len(set.Result().Cookies()))
+	var response struct {
+		Data preferenceResult `json:"data"`
+	}
+	if err := json.Unmarshal(set.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode preference response: %v", err)
+	}
+	if len(response.Data.Applied) != 3 || len(response.Data.Ignored) != 1 || response.Data.Applied[1] != "vidveil_pref_proxy_images" || response.Data.Ignored[0] != "cookie_consent" {
+		t.Fatalf("preference result = applied %v, ignored %v", response.Data.Applied, response.Data.Ignored)
+	}
+	cookies := set.Result().Cookies()
+	if len(cookies) != 3 {
+		t.Fatalf("expected exactly three preference cookies, got %d", len(cookies))
+	}
+	cookieNames := map[string]bool{}
+	for _, cookie := range cookies {
+		cookieNames[cookie.Name] = true
+	}
+	if !cookieNames["vidveil_pref_proxy_images"] || !cookieNames["vidveil_pref_results_per_page"] {
+		t.Fatalf("generic preference cookies were not applied: %v", cookieNames)
 	}
 }
 

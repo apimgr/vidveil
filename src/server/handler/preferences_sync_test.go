@@ -173,7 +173,7 @@ func TestPreferencesImport_ValidCode_SetsCookiesAndRedirects(t *testing.T) {
 	}
 }
 
-func TestPreferencesImport_IsAdditiveAndIgnoresExcludedCookies(t *testing.T) {
+func TestPreferencesImport_IsAdditiveAndIgnoresNonPreferenceCookies(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/server/preferences/import?theme=light&cookie_consent=all&vidveil_build=build&owner_token=secret&vidveil_pref_proxy_images=0", nil)
@@ -195,7 +195,10 @@ func TestPreferencesImport_IsAdditiveAndIgnoresExcludedCookies(t *testing.T) {
 	if _, exists := got[resultsPerPageCookieName]; exists {
 		t.Errorf("absent app preference should not be rewritten: %#v", got)
 	}
-	for _, name := range []string{"cookie_consent", "vidveil_build", "owner_token", "vidveil_pref_proxy_images"} {
+	if got["vidveil_pref_proxy_images"] != "0" {
+		t.Errorf("undocumented app preference = %q, want 0", got["vidveil_pref_proxy_images"])
+	}
+	for _, name := range []string{"cookie_consent", "vidveil_build", "owner_token"} {
 		if _, exists := got[name]; exists {
 			t.Errorf("excluded cookie %q was applied", name)
 		}

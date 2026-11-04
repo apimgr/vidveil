@@ -54,8 +54,6 @@ func validatePreference(name, value string) (string, bool) {
 		return value, value == "dark" || value == "light" || value == "auto"
 	case "lang":
 		return canonicalPreferenceLang(value)
-	case "vidveil_pref_proxy_images":
-		return "", false
 	}
 	if !preferenceKeyPattern.MatchString(name) || !preferenceValuePattern.MatchString(value) {
 		return "", false

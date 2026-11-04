@@ -1590,11 +1590,10 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 	writePreferenceRedirect(w, r)
 }
 
-// exportablePreferenceQuery builds the "theme=X&lang=Y" query string for the
-// current request's effective theme/language, per AI.md's "Cross-device
-// preference sync" spec — only theme and lang are portable; cookie_consent
-// (a per-browser legal acknowledgment) and the build-stamp cookie are never
-// included.
+// exportablePreferenceQuery builds the canonical query string for the current
+// request's effective theme/language and valid app preferences, per AI.md's
+// "Cross-device preference sync" spec. Consent and build-stamp cookies are
+// never included.
 func (h *SearchHandler) exportablePreferenceQuery(r *http.Request) string {
 	v := url.Values{}
 	effective := h.effectivePreferences(r)
@@ -1610,10 +1609,9 @@ func (h *SearchHandler) exportablePreferenceQuery(r *http.Request) string {
 	return v.Encode()
 }
 
-// PreferencesExport renders the current theme/lang as a shareable full URL
-// and a short base64url code, so a guest can carry their preferences to a
-// new browser/device with no account and nothing stored server-side — the
-// code/URL IS the preference values, not a lookup key.
+// PreferencesExport renders the current theme, language, and app preferences
+// as a shareable full URL and short base64url code. The code/URL contains the
+// preference values; nothing is stored server-side.
 func (h *SearchHandler) PreferencesExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	query := h.exportablePreferenceQuery(r)
@@ -1639,9 +1637,9 @@ func (h *SearchHandler) PreferencesExport(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// decodePreferenceCode decodes a short sync code back into a "theme=X&lang=Y"
-// style query string. Tolerates a pasted full import URL (strips everything
-// up to and including the last "?") per AI.md's paste-a-code UX note.
+// decodePreferenceCode decodes a short sync code back into a preference query
+// string. It also tolerates a pasted full import URL per AI.md's paste-a-code
+// UX note.
 func decodePreferenceCode(code string) (string, bool) {
 	code = strings.TrimSpace(code)
 	if len(code) > 2048 {
@@ -1674,14 +1672,12 @@ func decodePreferenceCode(code string) (string, bool) {
 	return string(decoded), true
 }
 
-// PreferencesImport validates and applies a `theme`/`lang` pair — supplied
-// either directly as query params (the "Full URL" export form) or as a single
-// `code` param (the short base64url code, or a pasted full import URL) — then
-// 303-redirects so the imported values never linger in the visible URL or
-// browser history. Every value is still untrusted input: anything outside
-// the normal theme/locale allow-lists is silently dropped, never an error,
-// per AI.md's "Cross-device preference sync" spec. No account, no DB row,
-// nothing is written or looked up server-side.
+// PreferencesImport validates and applies guest preferences supplied either
+// directly as query params or as a short base64url code. It then redirects so
+// imported values do not linger in the visible URL or browser history. Values
+// outside the theme/language rules or app-preference key/value rules are
+// silently dropped per AI.md's "Cross-device preference sync" spec. Nothing
+// is written or looked up server-side.
 func (h *SearchHandler) PreferencesImport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	q := make(url.Values)

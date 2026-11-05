@@ -93,6 +93,6 @@ Purpose:
 [AI updates this section as work progresses]
 - Last read AI.md: 2026-11-05
 - Current task: Re-verify AI.md alignment and all available project checks
-- Verified: `make test` passes at 71% coverage; containerized `golangci-lint` reports 0 issues; server and CLI cross-builds pass for all 8 OS/architecture targets; latest GitHub CI and Docker Build pass
-- Pending: GitHub Devel Build failed while downloading modules from `proxy.golang.org`; full-history TruffleHog still reports a historical finding in `src/notify/notify_test.go`; GitLab project access returned HTTP 401, and no Gitea, Forgejo, or Jenkins runner endpoints are configured here
+- Verified: `make test` passes at 71% coverage; containerized `golangci-lint` reports 0 issues; server and CLI cross-builds pass for all 8 OS/architecture targets; GitHub CI, Devel Build, and both Docker image builds pass on commit `7b69cbffc5ff`
+- Pending: the latest scheduled full-history TruffleHog run reports a historical finding in `src/notify/notify_test.go`; GitLab project access returned HTTP 401, and no Gitea, Forgejo, or Jenkins runner endpoints are configured here
 - Relevant PARTs: 0, 1, 11, 14, 16, 22, 25, 27, 28, 31, 32

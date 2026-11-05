@@ -2,6 +2,10 @@
 
 ## Provider-native workflow verification
 
+- [ ] Resolve the historical full-history TruffleHog finding from
+  `src/notify/notify_test.go` without weakening secret scanning or rewriting
+  Git history. The current push-range scan passes; the scheduled full-history
+  scan failed on an older commit.
 - [ ] GitLab: run `.gitlab-ci.yml` on a configured GitLab runner and verify
   lint, test/coverage, security, release, and Docker jobs. This checkout has no
   GitLab remote or runner credentials.

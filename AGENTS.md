@@ -91,8 +91,8 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-11-01
-- Current task: AI.md alignment is implemented and locally verified; provider-native CI checks remain as recorded in TODO.AI.md
-- Verified: Go lint passes with 0 issues; `make test` passes at 71% coverage; `govulncheck` reports no reachable vulnerabilities; browser E2E passes; server and CLI cross-builds pass for all 8 OS/architecture targets; workflow YAML parses
-- Update audit: GitHub API 404 responses mean no CLI update; canonical and previously published rolling-release labels are supported; Jenkins scheduled runs use their scheduled timestamp
-- Relevant PARTs: 11, 14, 16, 22, 25, 27, 28, 31
+- Last read AI.md: 2026-11-05
+- Current task: Re-verify AI.md alignment and all available project checks
+- Verified: `make test` passes at 71% coverage; containerized `golangci-lint` reports 0 issues; server and CLI cross-builds pass for all 8 OS/architecture targets; latest GitHub CI and Docker Build pass
+- Pending: GitHub Devel Build failed while downloading modules from `proxy.golang.org`; full-history TruffleHog still reports a historical finding in `src/notify/notify_test.go`; GitLab project access returned HTTP 401, and no Gitea, Forgejo, or Jenkins runner endpoints are configured here
+- Relevant PARTs: 0, 1, 11, 14, 16, 22, 25, 27, 28, 31, 32

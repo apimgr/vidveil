@@ -86,6 +86,17 @@ func (m *Manager) GetInstallationSecret(ctx context.Context) ([]byte, error) {
 // Rotate rotates a secret, keeping the previous value for 7 days
 // Per PART 11: Previous secret kept for 7 days to validate in-flight operations
 func (m *Manager) Rotate(ctx context.Context, key SecretKey) error {
+	return m.rotate(ctx, key, 7*24*time.Hour)
+}
+
+// RotateImmediately replaces a secret without accepting its previous value.
+// This is used for CSRF token revocation, where key rotation must invalidate
+// all outstanding double-submit tokens immediately.
+func (m *Manager) RotateImmediately(ctx context.Context, key SecretKey) error {
+	return m.rotate(ctx, key, 0)
+}
+
+func (m *Manager) rotate(ctx context.Context, key SecretKey, grace time.Duration) error {
 	// Get current value
 	var currentValue string
 	err := m.db.QueryRowContext(ctx,
@@ -102,7 +113,7 @@ func (m *Manager) Rotate(ctx context.Context, key SecretKey) error {
 
 	// Update with new value, store previous
 	now := time.Now()
-	expiresAt := now.Add(7 * 24 * time.Hour)
+	expiresAt := now.Add(grace)
 
 	_, err = m.db.ExecContext(ctx, `
 		UPDATE app_secrets
@@ -121,6 +132,31 @@ func (m *Manager) Rotate(ctx context.Context, key SecretKey) error {
 	}
 
 	return nil
+}
+
+// RotateIfDue rotates a secret once its creation or most recent rotation is at
+// least maxAge old. It returns whether a rotation occurred.
+func (m *Manager) RotateIfDue(ctx context.Context, key SecretKey, maxAge time.Duration) (bool, error) {
+	if maxAge <= 0 {
+		return false, fmt.Errorf("secret rotation age must be positive")
+	}
+	var rotatedAt, createdAt sql.NullTime
+	if err := m.db.QueryRowContext(ctx, `
+		SELECT rotated_at, created_at FROM app_secrets WHERE key = ?`,
+		string(key)).Scan(&rotatedAt, &createdAt); err != nil {
+		return false, fmt.Errorf("get secret rotation time: %w", err)
+	}
+	lastChanged := createdAt
+	if rotatedAt.Valid {
+		lastChanged = rotatedAt
+	}
+	if !lastChanged.Valid || time.Since(lastChanged.Time) < maxAge {
+		return false, nil
+	}
+	if err := m.RotateImmediately(ctx, key); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // ValidateWithPrevious checks if a value matches current or previous (unexpired) secret

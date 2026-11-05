@@ -15,6 +15,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/ratelimit"
+	"github.com/apimgr/vidveil/src/server/service/secret"
 )
 
 func TestOwnerTokenExpiryFormAcceptsChosenDate(t *testing.T) {
@@ -45,6 +46,34 @@ func TestOwnerTokenRevealPageHasLocalizedCopyControl(t *testing.T) {
 		if !strings.Contains(body, marker) {
 			t.Errorf("reveal page omitted %q: %s", marker, body)
 		}
+	}
+}
+
+func TestAPITokenRegenerationRotatesCSRFSecret(t *testing.T) {
+	schema, err := database.NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = schema.Close() }()
+	if err := schema.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	manager := secret.NewManager(schema.GetDB())
+	if err := manager.EnsureSecrets(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	previous, err := manager.Get(context.Background(), secret.CSRFTokenSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{secretsMgr: manager}
+	s.rotateCSRFSecretAfterAPITokenRegeneration(httptest.NewRequest(http.MethodPost, "/", nil))
+	valid, err := manager.ValidateWithPrevious(context.Background(), secret.CSRFTokenSecret, previous)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if valid {
+		t.Fatal("API token regeneration left the previous CSRF secret valid")
 	}
 }
 

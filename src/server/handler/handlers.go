@@ -473,20 +473,9 @@ func (h *SearchHandler) SetScheduler(s SchedulerHealth) {
 	h.sched = s
 }
 
-// getProxyClient returns an HTTP client for proxy requests
-// Per PART 31: Routes through Tor when use_network is enabled
+// getProxyClient fetches caller-supplied proxy URLs directly. PART 31 prohibits
+// routing inbound-request destinations through the app's outbound Tor client.
 func (h *SearchHandler) getProxyClient(timeout time.Duration) *http.Client {
-	if h.torSvc != nil && h.torSvc.UseNetworkEnabled() && h.torSvc.OutboundEnabled() {
-		// Use Tor-routed client
-		client := h.torSvc.GetHTTPClient(true)
-		// Override timeout if needed (Tor client has 60s default)
-		if timeout > 0 && timeout != 60*time.Second {
-			client.Timeout = timeout
-		}
-		// Block redirects that would escape to a private/internal target even over Tor
-		client.CheckRedirect = ssrfCheckRedirect
-		return client
-	}
 	// Direct connection with dial-time SSRF protection to close the
 	// DNS-rebinding TOCTOU window left open by the pre-flight host check.
 	transport := &http.Transport{
@@ -508,13 +497,37 @@ func (h *SearchHandler) getProxyClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout:       timeout,
 		Transport:     transport,
-		CheckRedirect: ssrfCheckRedirect,
+		CheckRedirect: proxyCheckRedirect,
 	}
 }
 
-// ssrfCheckRedirect blocks proxy redirects that target a private/internal host
-// and caps the redirect chain length.
-func ssrfCheckRedirect(req *http.Request, via []*http.Request) error {
+// proxyHostSuffixes lists the engine source domains and CDN hosts used by the
+// built-in search engines. Proxy endpoints accept only these app-owned sources.
+var proxyHostSuffixes = []string{
+	"3movs.com", "4tube.com", "alphaporno.com", "anyporn.com", "c1.ttcache.com",
+	"dl.xnxx.com", "drtuber.com", "empflix.com", "eporner.com", "flyflv.com",
+	"fux.com", "gotporn.com", "hellporno.com", "hqporner.com", "lovehomeporn.com",
+	"motherless.com", "nonktube.com", "nubiles-porn.com", "nuvid.com", "pornbox.com",
+	"pornerbros.com", "pornflip.com", "pornhat.com", "pornhd.com", "pornhub.com",
+	"pornmd.com", "pornone.com", "porntop.com", "porntrex.com", "porntube.com",
+	"redtube.com", "sunporno.com", "tnaflix.com", "tube8.com", "tubegalore.com",
+	"txxx.com", "vjav.com", "xbabe.com", "xhamster.com", "xnxx.com", "xvideos.com",
+	"xxxymovies.com", "youjizz.com", "youporn.com",
+}
+
+func isAllowedProxyHost(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	for _, suffix := range proxyHostSuffixes {
+		if host == suffix || strings.HasSuffix(host, "."+suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// proxyCheckRedirect blocks redirects outside the app-owned source allowlist,
+// private/internal targets, and redirect chains longer than five hops.
+func proxyCheckRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 5 {
 		return fmt.Errorf("stopped after %d redirects", len(via))
 	}
@@ -523,6 +536,9 @@ func ssrfCheckRedirect(req *http.Request, via []*http.Request) error {
 	}
 	if isPrivateHost(req.URL.Hostname()) {
 		return fmt.Errorf("redirect to private host %q blocked", req.URL.Hostname())
+	}
+	if !isAllowedProxyHost(req.URL.Hostname()) {
+		return fmt.Errorf("redirect to unapproved host %q blocked", req.URL.Hostname())
 	}
 	return nil
 }
@@ -4834,6 +4850,10 @@ func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
 		SendError(w, CodeBadRequest, i18n.Translate(i18n.DetectLocale(r), "error.proxy_invalid_url"))
 		return
 	}
+	if !isAllowedProxyHost(parsedURL.Hostname()) {
+		SendError(w, CodeBadRequest, i18n.Translate(i18n.DetectLocale(r), "error.proxy_invalid_url"))
+		return
+	}
 
 	// Compute ETag from URL for conditional GET support
 	h256 := sha256.Sum256([]byte(thumbURL))
@@ -4891,7 +4911,7 @@ func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 	req.Header.Set("Referer", parsedURL.Scheme+"://"+parsedURL.Host+"/")
 
-	// Fetch thumbnail - Per PART 31: Route through Tor when use_network is enabled
+	// The URL came from the inbound request, so fetch it directly per PART 31.
 	client := h.getProxyClient(10 * time.Second)
 
 	resp, err := client.Do(req)
@@ -4993,6 +5013,10 @@ func (h *SearchHandler) ProxyVideo(w http.ResponseWriter, r *http.Request) {
 		SendError(w, CodeBadRequest, i18n.Translate(i18n.DetectLocale(r), "error.proxy_invalid_url"))
 		return
 	}
+	if !isAllowedProxyHost(parsedURL.Hostname()) {
+		SendError(w, CodeBadRequest, i18n.Translate(i18n.DetectLocale(r), "error.proxy_invalid_url"))
+		return
+	}
 
 	// Create request with range support
 	req, err := http.NewRequest("GET", videoURL, nil)
@@ -5012,7 +5036,7 @@ func (h *SearchHandler) ProxyVideo(w http.ResponseWriter, r *http.Request) {
 	// Set referer to the video host to avoid hotlink protection
 	req.Header.Set("Referer", parsedURL.Scheme+"://"+parsedURL.Host+"/")
 
-	// Fetch video - Per PART 31: Route through Tor when use_network is enabled
+	// The URL came from the inbound request, so fetch it directly per PART 31.
 	client := h.getProxyClient(30 * time.Second)
 
 	resp, err := client.Do(req)

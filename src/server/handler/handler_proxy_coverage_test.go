@@ -59,7 +59,7 @@ func TestProxyThumbnail_PrivateHost_10_Returns400(t *testing.T) {
 
 func TestProxyThumbnail_IfNoneMatch_304(t *testing.T) {
 	h := &SearchHandler{appConfig: createTestConfig()}
-	thumbURL := "https://example.com/thumb.jpg"
+	thumbURL := "https://eporner.com/thumb.jpg"
 	encodedURL := url.QueryEscape(thumbURL)
 
 	// First request to determine ETag
@@ -84,7 +84,7 @@ func TestProxyThumbnail_IfNoneMatch_304(t *testing.T) {
 
 func TestProxyThumbnail_EtagComputedForPublicURL(t *testing.T) {
 	h := &SearchHandler{appConfig: createTestConfig()}
-	thumbURL := url.QueryEscape("https://example.com/image.jpg")
+	thumbURL := url.QueryEscape("https://eporner.com/image.jpg")
 
 	// Send request with non-matching ETag to get ETag header set
 	req := httptest.NewRequest("GET", "/proxy/thumbnail?url="+thumbURL, nil)

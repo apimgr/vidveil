@@ -5,6 +5,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/database"
+	"github.com/apimgr/vidveil/src/server/service/secret"
 )
 
 type failingCSRFReader struct{}
@@ -62,6 +65,83 @@ func TestCsrfGenTokenFailsClosedWhenRandomSourceFails(t *testing.T) {
 	handler.ServeHTTP(blocked, post)
 	if called || blocked.Code != http.StatusForbidden {
 		t.Fatalf("protected request called=%v status=%d, want called=false status=%d", called, blocked.Code, http.StatusForbidden)
+	}
+}
+
+func TestCSRFSignedTokenValidatesOnlyWithSigningSecret(t *testing.T) {
+	key := []byte(strings.Repeat("k", 32))
+	token := csrfSignedTokenFrom(strings.NewReader(strings.Repeat("x", 32)), 16, key)
+	if token == "" || !csrfSignedTokenValid(token, key) {
+		t.Fatalf("signed CSRF token did not validate with its signing key")
+	}
+	if csrfSignedTokenValid(token, []byte(strings.Repeat("z", 32))) {
+		t.Fatal("signed CSRF token validated with a different key")
+	}
+	if csrfSignedTokenValid(token+"x", key) {
+		t.Fatal("tampered CSRF token validated")
+	}
+}
+
+func TestCSRFSignedTokenFailsClosed(t *testing.T) {
+	if token := csrfSignedTokenFrom(failingCSRFReader{}, 16, []byte("key")); token != "" {
+		t.Fatalf("signed token = %q, want empty token when randomness fails", token)
+	}
+	if token := csrfSignedTokenFrom(strings.NewReader(strings.Repeat("x", 32)), 16, nil); token != "" {
+		t.Fatalf("signed token = %q, want empty token without a key", token)
+	}
+}
+
+func TestCSRFMiddlewareSignsAndReissuesTokensAfterSecretRotation(t *testing.T) {
+	schema, err := database.NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = schema.Close() }()
+	if err := schema.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	manager := secret.NewManager(schema.GetDB())
+	if err := manager.EnsureSecrets(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	middleware := newCSRFMiddleware(csrfTestConfig(), nil, manager)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	get := httptest.NewRecorder()
+	middleware.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/", nil))
+	cookie := get.Result().Cookies()[0]
+	key, err := manager.Get(context.Background(), secret.CSRFTokenSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !csrfSignedTokenValid(cookie.Value, key) {
+		t.Fatal("middleware issued a CSRF token not signed by csrf_token_secret")
+	}
+
+	if err := manager.RotateImmediately(context.Background(), secret.CSRFTokenSecret); err != nil {
+		t.Fatal(err)
+	}
+	post := httptest.NewRequest(http.MethodPost, "/", nil)
+	post.AddCookie(cookie)
+	post.Header.Set("X-CSRF-Token", cookie.Value)
+	rejected := httptest.NewRecorder()
+	middleware.ServeHTTP(rejected, post)
+	if rejected.Code != http.StatusForbidden {
+		t.Fatalf("POST with a revoked CSRF token status = %d, want 403", rejected.Code)
+	}
+
+	refresh := httptest.NewRequest(http.MethodGet, "/", nil)
+	refresh.AddCookie(cookie)
+	refreshed := httptest.NewRecorder()
+	middleware.ServeHTTP(refreshed, refresh)
+	newCookie := refreshed.Result().Cookies()[0]
+	newKey, err := manager.Get(context.Background(), secret.CSRFTokenSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newCookie.Value == cookie.Value || !csrfSignedTokenValid(newCookie.Value, newKey) {
+		t.Fatal("GET did not replace the revoked CSRF cookie with a token signed by the current secret")
 	}
 }
 

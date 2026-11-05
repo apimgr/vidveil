@@ -652,16 +652,21 @@ func TestGetProxyClient_TorDisabled_ReturnsDirect(t *testing.T) {
 	}
 }
 
-func TestGetProxyClient_TorEnabled_ReturnsTorClient(t *testing.T) {
+func TestGetProxyClient_TorEnabled_StillReturnsDirectClient(t *testing.T) {
 	h := &SearchHandler{
 		appConfig: createTestConfig(),
 		torSvc:    &testTorChecker{enabled: true, useNetwork: true, outbound: true},
 	}
-	// testTorChecker.GetHTTPClient returns &http.Client{Timeout: 10*time.Second}
-	// With timeout=5s (not 60s), timeout override is applied
+	// Caller-supplied proxy URLs must never be routed through the app Tor client.
 	client := h.getProxyClient(5 * time.Second)
 	if client == nil {
 		t.Error("getProxyClient tor enabled: returned nil client")
+	}
+	if client.Timeout != 5*time.Second {
+		t.Errorf("getProxyClient timeout = %v, want 5s", client.Timeout)
+	}
+	if client.Transport == nil {
+		t.Error("getProxyClient tor enabled: expected direct SSRF-protected transport")
 	}
 }
 

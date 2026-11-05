@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
+	"github.com/apimgr/vidveil/src/server/service/secret"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 	"github.com/go-chi/chi/v5"
 )
@@ -133,6 +135,7 @@ func (s *Server) ownerTokenWebRotatePrimary(w http.ResponseWriter, r *http.Reque
 		s.ownerTokenOperationError(w, err)
 		return
 	}
+	s.rotateCSRFSecretAfterAPITokenRegeneration(r)
 	s.setOwnerTokenCookie(w, issued.Token)
 	s.auditOwnerToken("token.rotated", principal.OwnerID, issued.Prefix, r)
 	writeOwnerTokenReveal(w, r, issued.Token)
@@ -198,6 +201,7 @@ func (s *Server) ownerTokenWebRotateLinked(w http.ResponseWriter, r *http.Reques
 		s.ownerTokenOperationError(w, err)
 		return
 	}
+	s.rotateCSRFSecretAfterAPITokenRegeneration(r)
 	s.auditOwnerToken("token.rotated", principal.OwnerID, issued.Prefix, r)
 	writeOwnerTokenReveal(w, r, issued.Token)
 }
@@ -357,6 +361,7 @@ func (s *Server) ownerTokensAPIRotatePrimary(w http.ResponseWriter, r *http.Requ
 		s.ownerTokenOperationError(w, err)
 		return
 	}
+	s.rotateCSRFSecretAfterAPITokenRegeneration(r)
 	s.auditOwnerToken("token.rotated", principal.OwnerID, issued.Prefix, r)
 	handler.SendOK(w, map[string]string{"token": issued.Token, "prefix": issued.Prefix})
 }
@@ -385,6 +390,7 @@ func (s *Server) ownerTokensAPIRotateLinked(w http.ResponseWriter, r *http.Reque
 		s.ownerTokenOperationError(w, err)
 		return
 	}
+	s.rotateCSRFSecretAfterAPITokenRegeneration(r)
 	s.auditOwnerToken("token.rotated", principal.OwnerID, issued.Prefix, r)
 	handler.SendOK(w, map[string]string{"token": issued.Token, "prefix": issued.Prefix})
 }
@@ -459,6 +465,16 @@ func (s *Server) ownerTokenOperationError(w http.ResponseWriter, err error) {
 		handler.SendError(w, "VALIDATION_FAILED", err.Error())
 	default:
 		handler.SendError(w, "SERVER_ERROR", "Token operation failed")
+	}
+}
+
+func (s *Server) rotateCSRFSecretAfterAPITokenRegeneration(r *http.Request) {
+	if s.secretsMgr == nil {
+		log.Printf("CSRF token secret rotation after API token regeneration failed: secret manager unavailable")
+		return
+	}
+	if err := s.secretsMgr.RotateImmediately(r.Context(), secret.CSRFTokenSecret); err != nil {
+		log.Printf("CSRF token secret rotation after API token regeneration failed: %v", err)
 	}
 }
 

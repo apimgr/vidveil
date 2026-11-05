@@ -50,25 +50,41 @@ func TestSSRFCheckRedirect(t *testing.T) {
 		return req
 	}
 
-	// Public host, first hop: allowed.
-	if err := ssrfCheckRedirect(mkReq("https://example.com/a"), nil); err != nil {
-		t.Errorf("public redirect blocked: %v", err)
+	// Known engine host, first hop: allowed.
+	if err := proxyCheckRedirect(mkReq("https://pornhub.com/a"), nil); err != nil {
+		t.Errorf("approved redirect blocked: %v", err)
 	}
 
 	// Private host: blocked.
-	if err := ssrfCheckRedirect(mkReq("http://127.0.0.1/a"), nil); err == nil {
+	if err := proxyCheckRedirect(mkReq("http://127.0.0.1/a"), nil); err == nil {
 		t.Error("redirect to loopback should be blocked")
 	}
 
 	// Unsupported scheme: blocked.
-	if err := ssrfCheckRedirect(mkReq("file:///etc/passwd"), nil); err == nil {
+	if err := proxyCheckRedirect(mkReq("file:///etc/passwd"), nil); err == nil {
 		t.Error("redirect to file:// should be blocked")
+	}
+	if err := proxyCheckRedirect(mkReq("https://example.com/a"), nil); err == nil {
+		t.Error("redirect to unapproved host should be blocked")
 	}
 
 	// Too many redirects: blocked.
 	via := make([]*http.Request, 5)
-	if err := ssrfCheckRedirect(mkReq("https://example.com/a"), via); err == nil {
+	if err := proxyCheckRedirect(mkReq("https://eporner.com/a"), via); err == nil {
 		t.Error("redirect chain of 5 should be blocked")
+	}
+}
+
+func TestIsAllowedProxyHost(t *testing.T) {
+	for _, host := range []string{"pornhub.com", "www.pornhub.com", "cdn.eporner.com", "thumb.xhamster.com"} {
+		if !isAllowedProxyHost(host) {
+			t.Errorf("isAllowedProxyHost(%q) = false, want true", host)
+		}
+	}
+	for _, host := range []string{"example.com", "pornhub.com.attacker.example", ""} {
+		if isAllowedProxyHost(host) {
+			t.Errorf("isAllowedProxyHost(%q) = true, want false", host)
+		}
 	}
 }
 

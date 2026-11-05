@@ -56,7 +56,7 @@ func TestProxyThumbnail_CacheHit_JPEG_Returns200(t *testing.T) {
 	h := &SearchHandler{appConfig: cfg}
 	h.SetDataDir(dataDir)
 
-	thumbURL := "https://8.8.8.8/image.jpg"
+	thumbURL := "https://eporner.com/image.jpg"
 	seedThumbnailCache(t, dataDir, thumbURL, fakeJPEG)
 
 	req := httptest.NewRequest("GET", "/proxy/thumbnail?url="+url.QueryEscape(thumbURL), nil)
@@ -74,7 +74,7 @@ func TestProxyThumbnail_CacheHit_GIF_DetectedContentType(t *testing.T) {
 	h := &SearchHandler{appConfig: cfg}
 	h.SetDataDir(dataDir)
 
-	thumbURL := "https://8.8.8.8/anim.gif"
+	thumbURL := "https://eporner.com/anim.gif"
 	seedThumbnailCache(t, dataDir, thumbURL, fakeGIF89a)
 
 	req := httptest.NewRequest("GET", "/proxy/thumbnail?url="+url.QueryEscape(thumbURL), nil)
@@ -97,7 +97,7 @@ func TestProxyThumbnail_CacheHit_StaleFile_NotServedFromCache(t *testing.T) {
 	h := &SearchHandler{appConfig: cfg}
 	h.SetDataDir(dataDir)
 
-	thumbURL := "https://8.8.8.8/stale.jpg"
+	thumbURL := "https://eporner.com/stale.jpg"
 	cachePath := seedThumbnailCache(t, dataDir, thumbURL, fakeJPEG)
 
 	// Stamp the cache file as 2 minutes old (past the 1-minute TTL)
@@ -122,7 +122,7 @@ func TestProxyThumbnail_ETag_With304_CachePath(t *testing.T) {
 	h := &SearchHandler{appConfig: cfg}
 	h.SetDataDir(dataDir)
 
-	thumbURL := "https://8.8.8.8/etag.jpg"
+	thumbURL := "https://eporner.com/etag.jpg"
 	seedThumbnailCache(t, dataDir, thumbURL, fakeJPEG)
 
 	// Compute expected ETag

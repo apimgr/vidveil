@@ -19,6 +19,7 @@ package server
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -35,12 +36,17 @@ import (
 	"github.com/apimgr/vidveil/src/server/handler"
 	mcpserver "github.com/apimgr/vidveil/src/server/mcp"
 	"github.com/apimgr/vidveil/src/server/service/logging"
+	"github.com/apimgr/vidveil/src/server/service/secret"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 // newCSRFMiddleware returns a middleware that implements the double-submit cookie
 // pattern for CSRF protection per AI.md PART 16 → CSRF Protection.
-func newCSRFMiddleware(cfg config.CSRFConfig, logger *logging.AppLogger) func(http.Handler) http.Handler {
+func newCSRFMiddleware(cfg config.CSRFConfig, logger *logging.AppLogger, secretManagers ...*secret.Manager) func(http.Handler) http.Handler {
+	var secretManager *secret.Manager
+	if len(secretManagers) > 0 {
+		secretManager = secretManagers[0]
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isMCPPath(r.URL.Path) || isGuestPreferencesAPIPath(r.URL.Path) || mcpserver.IsInternalDispatch(r.Context()) {
@@ -57,10 +63,30 @@ func newCSRFMiddleware(cfg config.CSRFConfig, logger *logging.AppLogger) func(ht
 				existingToken = c.Value
 			}
 
+			var csrfSecret []byte
+			tokenValid := existingToken != ""
+			if secretManager != nil {
+				var err error
+				csrfSecret, err = secretManager.Get(r.Context(), secret.CSRFTokenSecret)
+				if err != nil {
+					http.Error(w, "CSRF protection is unavailable", http.StatusInternalServerError)
+					return
+				}
+				if tokenValid {
+					tokenValid, err = secretManager.ValidateDerivedWithPrevious(r.Context(), secret.CSRFTokenSecret, func(key []byte) bool {
+						return csrfSignedTokenValid(existingToken, key)
+					})
+					if err != nil {
+						http.Error(w, "CSRF protection is unavailable", http.StatusInternalServerError)
+						return
+					}
+				}
+			}
+
 			// Validate the token — only when all bypass conditions are absent.
 			if !csrfBypass(cfg, r) {
 				authStart := time.Now()
-				if existingToken == "" {
+				if !tokenValid {
 					authpad.Wait(authStart)
 					csrfDeny(w, r, "token_absent", r.URL.Path, logger)
 					return
@@ -91,10 +117,18 @@ func newCSRFMiddleware(cfg config.CSRFConfig, logger *logging.AppLogger) func(ht
 			}
 
 			// Ensure a CSRF cookie is always present on the response.
-			// Refresh only if missing — do not rotate on every request.
+			// Reissue when missing or revoked; otherwise keep the token stable.
 			token := existingToken
-			if token == "" {
-				token = csrfGenToken(cfg.TokenLength)
+			if !tokenValid {
+				if secretManager != nil {
+					token = csrfSignedTokenFrom(rand.Reader, cfg.TokenLength, csrfSecret)
+				} else {
+					token = csrfGenToken(cfg.TokenLength)
+				}
+				if token == "" {
+					http.Error(w, "CSRF protection is unavailable", http.StatusInternalServerError)
+					return
+				}
 				http.SetCookie(w, &http.Cookie{
 					Name:  cfg.CookieName,
 					Value: token,
@@ -252,6 +286,36 @@ func csrfGenTokenFrom(random io.Reader, tokenLength int) string {
 		return ""
 	}
 	return hex.EncodeToString(b)
+}
+
+func csrfSignedTokenFrom(random io.Reader, tokenLength int, key []byte) string {
+	nonce := csrfGenTokenFrom(random, tokenLength)
+	if nonce == "" || len(key) == 0 {
+		return ""
+	}
+	mac := hmac.New(sha256.New, key)
+	_, _ = io.WriteString(mac, nonce)
+	return nonce + "." + hex.EncodeToString(mac.Sum(nil))
+}
+
+func csrfSignedTokenValid(token string, key []byte) bool {
+	if len(key) == 0 {
+		return false
+	}
+	parts := strings.Split(token, ".")
+	if len(parts) != 2 {
+		return false
+	}
+	if _, err := hex.DecodeString(parts[0]); err != nil {
+		return false
+	}
+	submittedMAC, err := hex.DecodeString(parts[1])
+	if err != nil || len(submittedMAC) != sha256.Size {
+		return false
+	}
+	mac := hmac.New(sha256.New, key)
+	_, _ = io.WriteString(mac, parts[0])
+	return subtle.ConstantTimeCompare(submittedMAC, mac.Sum(nil)) == 1
 }
 
 // csrfSecureFlag resolves the CSRF cookie Secure flag from the "auto"|"true"|"false" config value.

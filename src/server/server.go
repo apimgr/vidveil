@@ -113,6 +113,7 @@ type Server struct {
 	operatorTokenHash   [sha256.Size]byte
 	operatorTokenSet    bool
 	tokenManager        *apitoken.Manager
+	secretsMgr          *secret.Manager
 }
 
 // MigrationManager interface for database migrations
@@ -148,6 +149,9 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 		router:             chi.NewRouter(),
 		rateLimiter:        limiter,
 		tokenActionLimiter: ratelimit.NewRateLimiter(true, 5, 15*60),
+	}
+	if migrationMgr != nil && migrationMgr.GetDB() != nil {
+		s.secretsMgr = secret.NewManager(migrationMgr.GetDB())
 	}
 	s.brandingImages = branding.NewImageCache(dataDir, branding.ImageSources{
 		Logo:    appConfig.Server.Branding.Logo,
@@ -195,6 +199,17 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 			return err
 		}); err != nil {
 			log.Printf("idle owner purge task registration failed: %v", err)
+		}
+		if s.secretsMgr != nil {
+			if err := sched.RegisterTask("csrf_secret_rotation", "CSRF Secret Rotation", "Rotate the CSRF token HMAC secret every 180 days", "@daily", func(ctx context.Context) error {
+				rotated, err := s.secretsMgr.RotateIfDue(ctx, secret.CSRFTokenSecret, 180*24*time.Hour)
+				if err == nil && rotated {
+					log.Printf("CSRF token secret rotated after reaching its 180-day age")
+				}
+				return err
+			}); err != nil {
+				log.Printf("CSRF secret rotation task registration failed: %v", err)
+			}
 		}
 	}
 	s.RefreshOperatorTokenHash()
@@ -461,7 +476,7 @@ func (s *Server) setupMiddleware() {
 	// Runs after Sec-Fetch-* (which blocks cross-site requests from modern browsers)
 	// as the second CSRF layer for legacy browsers without Sec-Fetch-* headers.
 	if s.appConfig.Web.CSRF.Enabled {
-		s.router.Use(newCSRFMiddleware(s.appConfig.Web.CSRF, s.logger))
+		s.router.Use(newCSRFMiddleware(s.appConfig.Web.CSRF, s.logger, s.secretsMgr))
 	}
 
 	// Rate limiting per AI.md PART 12 — allowlisted IPs bypass rate limiting
@@ -912,7 +927,14 @@ func (s *Server) setupRoutes() {
 	// Secrets manager backs the {security_id} rotating token (AI.md PART 11
 	// "Security Reports") for both the security.txt Contact: line and the
 	// /server/contact?security_id={id} mode switch.
-	secretsMgr := secret.NewManager(s.migrationMgr.GetDB())
+	secretsMgr := s.secretsMgr
+	if secretsMgr == nil {
+		db := s.migrationMgr.GetDB()
+		secretsMgr = secret.NewManager(db)
+		if db != nil {
+			s.secretsMgr = secretsMgr
+		}
+	}
 	h.SetSecretsManager(secretsMgr)
 	h.SetOwnerTokenAuditLogger(s.logger)
 	// Set config directory so the PGP public key (/.well-known/pgp-key.asc) can

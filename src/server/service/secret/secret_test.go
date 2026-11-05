@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -186,6 +187,51 @@ func TestRotate(t *testing.T) {
 	// Should be different
 	if bytes.Equal(original, rotated) {
 		t.Error("Rotate did not change secret")
+	}
+}
+
+func TestRotateImmediatelyInvalidatesPrevious(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+	m := NewManager(db)
+	ctx := context.Background()
+	if err := m.EnsureSecrets(ctx); err != nil {
+		t.Fatalf("EnsureSecrets: %v", err)
+	}
+	previous, err := m.Get(ctx, CSRFTokenSecret)
+	if err != nil {
+		t.Fatalf("Get CSRF secret: %v", err)
+	}
+	if err := m.RotateImmediately(ctx, CSRFTokenSecret); err != nil {
+		t.Fatalf("RotateImmediately: %v", err)
+	}
+	valid, err := m.ValidateWithPrevious(ctx, CSRFTokenSecret, previous)
+	if err != nil {
+		t.Fatalf("ValidateWithPrevious: %v", err)
+	}
+	if valid {
+		t.Fatal("previous CSRF secret remained valid after immediate rotation")
+	}
+}
+
+func TestRotateIfDue(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+	m := NewManager(db)
+	ctx := context.Background()
+	if err := m.EnsureSecrets(ctx); err != nil {
+		t.Fatalf("EnsureSecrets: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE app_secrets SET created_at = ? WHERE key = ?`, time.Now().Add(-181*24*time.Hour), string(CSRFTokenSecret)); err != nil {
+		t.Fatalf("age CSRF secret: %v", err)
+	}
+	rotated, err := m.RotateIfDue(ctx, CSRFTokenSecret, 180*24*time.Hour)
+	if err != nil || !rotated {
+		t.Fatalf("RotateIfDue() = %v, %v; want true, nil", rotated, err)
+	}
+	rotated, err = m.RotateIfDue(ctx, CSRFTokenSecret, 180*24*time.Hour)
+	if err != nil || rotated {
+		t.Fatalf("RotateIfDue() after rotation = %v, %v; want false, nil", rotated, err)
 	}
 }
 

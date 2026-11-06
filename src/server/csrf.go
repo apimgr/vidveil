@@ -8,7 +8,7 @@
 //     X-CSRF-Token header (or the csrf_token form field). Mismatch → 403 Forbidden.
 //   - Bypass conditions (any one bypasses validation):
 //   - Method is GET, HEAD, or OPTIONS
-//   - Authorization: Bearer … or X-API-Token header is present
+//   - Request targets an API route, or Authorization: Bearer … is present
 //   - Request is a WebSocket upgrade
 //   - Path matches an exempt_paths glob in config
 //
@@ -49,7 +49,7 @@ func newCSRFMiddleware(cfg config.CSRFConfig, logger *logging.AppLogger, secretM
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if isMCPPath(r.URL.Path) || isGuestPreferencesAPIPath(r.URL.Path) || mcpserver.IsInternalDispatch(r.Context()) {
+			if strings.HasPrefix(r.URL.Path, "/api/") || isMCPPath(r.URL.Path) || mcpserver.IsInternalDispatch(r.Context()) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -161,16 +161,15 @@ func csrfBypass(cfg config.CSRFConfig, r *http.Request) bool {
 	if isMCPPath(r.URL.Path) {
 		return true
 	}
-	if isGuestPreferencesAPIPath(r.URL.Path) {
+	if strings.HasPrefix(r.URL.Path, "/api/") {
 		return true
 	}
 	if mcpserver.IsInternalDispatch(r.Context()) {
 		return true
 	}
 
-	// Bearer / API token callers authenticate via credential, not cookie.
-	if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") ||
-		r.Header.Get("X-API-Token") != "" {
+	// Bearer callers authenticate via a credential, not ambient cookies.
+	if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
 		return true
 	}
 
@@ -187,19 +186,6 @@ func csrfBypass(cfg config.CSRFConfig, r *http.Request) bool {
 	}
 
 	return false
-}
-
-func isGuestPreferencesAPIPath(path string) bool {
-	parts := strings.Split(path, "/")
-	if len(parts) != 5 || parts[1] != "api" || len(parts[2]) < 2 || parts[2][0] != 'v' || parts[3] != "server" || parts[4] != "preferences" {
-		return false
-	}
-	for _, digit := range parts[2][1:] {
-		if digit < '0' || digit > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 func isMCPPath(path string) bool {

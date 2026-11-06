@@ -135,6 +135,8 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		templateFile = "template/page/server-contact.tmpl"
 	case "server-help":
 		templateFile = "template/page/server-help.tmpl"
+	case "server-help-mcp":
+		templateFile = "template/page/server-help-mcp.tmpl"
 	case "server-terms":
 		templateFile = "template/page/server-terms.tmpl"
 	case "server-security":
@@ -404,7 +406,7 @@ func (h *ServerHandler) ConsentSubmit(w http.ResponseWriter, r *http.Request) {
 // ccpa_opt_out cookie per AI.md PART 12 (no server-side visitor state).
 func hasCCPAOptOut(r *http.Request) bool {
 	c, err := r.Cookie("ccpa_opt_out")
-	return err == nil && c.Value == "1"
+	return err == nil && c.Value == "true"
 }
 
 // CCPASubmit handles POST /server/ccpa — the zero-JS CCPA opt-out toggle on
@@ -421,7 +423,7 @@ func (h *ServerHandler) CCPASubmit(w http.ResponseWriter, r *http.Request) {
 	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 	cookie := &http.Cookie{
 		Name:     "ccpa_opt_out",
-		Value:    "1",
+		Value:    "true",
 		Path:     "/",
 		MaxAge:   31536000,
 		Secure:   secure,
@@ -642,7 +644,9 @@ func (h *ServerHandler) renderContactError(w http.ResponseWriter, r *http.Reques
 
 // HelpPage renders /server/help web page
 func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
-	h.renderServerTemplate(w, r, "server-help", nil)
+	h.renderServerTemplate(w, r, "server-help", map[string]interface{}{
+		"MCPEnabled": h.appConfig.Server.MCP.Enabled,
+	})
 }
 
 // TermsPage renders the /server/terms web page per AI.md PART 16. A default

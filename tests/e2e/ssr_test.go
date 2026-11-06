@@ -130,8 +130,8 @@ func TestOwnerTokenFavoritesAPI(t *testing.T) {
 		t.Fatalf("owner bearer list = %d %s", ownedList.StatusCode, body)
 	}
 	unauthorized, body := get(t, client, "/api/v1/favorites", map[string]string{"Accept": "application/json"})
-	if unauthorized.StatusCode != http.StatusForbidden || strings.Contains(body, "Owner-scoped favorite") {
-		t.Fatalf("cookie-only API list = %d %s", unauthorized.StatusCode, body)
+	if unauthorized.StatusCode != http.StatusUnauthorized || strings.Contains(body, "Owner-scoped favorite") {
+		t.Fatalf("cookie-authenticated API list = %d %s", unauthorized.StatusCode, body)
 	}
 	callJSON := func(method, path, rawToken, payload string) (int, []byte) {
 		t.Helper()
@@ -179,8 +179,8 @@ func TestOwnerTokenFavoritesAPI(t *testing.T) {
 		t.Fatalf("primary-token rotation = %d %s", status, apiBody)
 	}
 	status, apiBody = callJSON(http.MethodGet, "/api/v1/server/preferences/tokens", created.Data.OwnerToken, "")
-	if status != http.StatusForbidden {
-		t.Fatalf("old primary token status = %d, want 403: %s", status, apiBody)
+	if status != http.StatusUnauthorized {
+		t.Fatalf("old primary token status = %d, want 401: %s", status, apiBody)
 	}
 	ownedList, body = get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + rotated.Data.Token, "Accept": "application/json"})
 	if ownedList.StatusCode != http.StatusOK || !strings.Contains(body, "Owner-scoped favorite") {
@@ -241,6 +241,29 @@ func TestSSRStandardServerPages(t *testing.T) {
 				t.Errorf("%s contains placeholder copy %q", path, placeholder)
 			}
 		}
+	}
+}
+
+func TestSSRMCPHelpAndOwnerTokenRestorePages(t *testing.T) {
+	client := httpClient(t)
+	resp, body := get(t, client, "/server/help/mcp", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /server/help/mcp: want 200, got %d", resp.StatusCode)
+	}
+	mustContain(t, "ssr-mcp-help", body, `id="overview"`, `id="endpoint"`, `id="authentication"`, `id="connect"`, `id="tools"`, `id="limits"`, `id="troubleshooting"`, `id="project"`, "searchVideos")
+
+	resp, body = get(t, client, "/api/v1/server/help/mcp", map[string]string{"Accept": "application/json"})
+	if resp.StatusCode != http.StatusOK || !json.Valid([]byte(body)) || !strings.Contains(body, `"scheme": "Bearer"`) {
+		t.Fatalf("GET /api/v1/server/help/mcp: status=%d body=%s", resp.StatusCode, body)
+	}
+
+	resp, body = get(t, client, "/server/preferences/tokens", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /server/preferences/tokens: want 200, got %d", resp.StatusCode)
+	}
+	mustContain(t, "ssr-owner-token-restore", body, `action="/server/preferences/token/restore"`, `name="token"`)
+	if strings.Contains(body, `action="/server/preferences/token/reveal"`) {
+		t.Error("owner-token page showed management actions without a primary cookie")
 	}
 }
 

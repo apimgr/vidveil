@@ -184,11 +184,16 @@ func TestCsrfBypass(t *testing.T) {
 		t.Error("bearer auth should bypass")
 	}
 
-	// X-API-Token bypasses.
+	// Backend API routes never use CSRF, including anonymous endpoints.
+	rAPI := httptest.NewRequest(http.MethodPost, "/api/v1/favorites", nil)
+	if !csrfBypass(cfg, rAPI) {
+		t.Error("API routes should bypass CSRF")
+	}
+	// A non-Bearer token header is not an authentication or CSRF bypass.
 	rA := httptest.NewRequest(http.MethodPost, "/x", nil)
 	rA.Header.Set("X-API-Token", "tok")
-	if !csrfBypass(cfg, rA) {
-		t.Error("X-API-Token should bypass")
+	if csrfBypass(cfg, rA) {
+		t.Error("X-API-Token should not bypass")
 	}
 
 	// WebSocket upgrade bypasses.

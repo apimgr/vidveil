@@ -101,10 +101,20 @@ func (h *SearchHandler) isOperatorToken(raw string) bool {
 }
 
 func ownerIdentityFailureCode(r *http.Request) string {
-	if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
-		return "FORBIDDEN"
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(r.Header.Get("Authorization"))), "bearer ") {
+		return "UNAUTHORIZED"
 	}
 	return "SERVER_ERROR"
+}
+
+func sendFavoriteBearerFailure(w http.ResponseWriter, r *http.Request) {
+	header := strings.TrimSpace(r.Header.Get("Authorization"))
+	if strings.HasPrefix(strings.ToLower(header), "bearer ") && strings.TrimSpace(header[len("Bearer "):]) != "" {
+		SetBearerChallenge(w, "invalid_token")
+	} else {
+		SetBearerChallenge(w, "")
+	}
+	SendError(w, "UNAUTHORIZED", "Authentication required")
 }
 
 func (h *SearchHandler) issuePrimaryOwner(w http.ResponseWriter, r *http.Request, apiOnly bool) (string, string) {
@@ -465,7 +475,7 @@ func (h *SearchHandler) FavoritesImport(w http.ResponseWriter, r *http.Request) 
 func (h *SearchHandler) FavoritesAPIList(w http.ResponseWriter, r *http.Request) {
 	ownerID, _ := h.ownerID(w, r, false, true)
 	if ownerID == "" {
-		SendError(w, "FORBIDDEN", "A valid owner token is required")
+		sendFavoriteBearerFailure(w, r)
 		return
 	}
 	favs, err := h.listFavorites(ownerID)
@@ -489,6 +499,10 @@ func (h *SearchHandler) FavoritesAPIAdd(w http.ResponseWriter, r *http.Request) 
 	}
 	ownerID, raw := h.ownerID(w, r, true, true)
 	if ownerID == "" {
+		if ownerIdentityFailureCode(r) == "UNAUTHORIZED" {
+			sendFavoriteBearerFailure(w, r)
+			return
+		}
 		SendError(w, ownerIdentityFailureCode(r), "failed to establish owner identity")
 		return
 	}
@@ -512,7 +526,7 @@ func (h *SearchHandler) FavoritesAPIRemove(w http.ResponseWriter, r *http.Reques
 	}
 	ownerID, _ := h.ownerID(w, r, false, true)
 	if ownerID == "" {
-		SendError(w, "FORBIDDEN", "A valid owner token is required")
+		sendFavoriteBearerFailure(w, r)
 		return
 	}
 	if err := h.removeFavorite(ownerID, id); err != nil {
@@ -526,7 +540,7 @@ func (h *SearchHandler) FavoritesAPIRemove(w http.ResponseWriter, r *http.Reques
 func (h *SearchHandler) FavoritesAPIClear(w http.ResponseWriter, r *http.Request) {
 	ownerID, _ := h.ownerID(w, r, false, true)
 	if ownerID == "" {
-		SendError(w, "FORBIDDEN", "A valid owner token is required")
+		sendFavoriteBearerFailure(w, r)
 		return
 	}
 	if err := h.clearFavorites(ownerID); err != nil {

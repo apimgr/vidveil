@@ -17,6 +17,19 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
+// SetBearerChallenge advertises the native Bearer authentication failure
+// details required by AI.md PART 8 without echoing the supplied credential.
+func SetBearerChallenge(w http.ResponseWriter, errorCode string) {
+	challenge := `Bearer realm="vidveil"`
+	switch errorCode {
+	case "invalid_token":
+		challenge += `, error="invalid_token"`
+	case "insufficient_scope":
+		challenge = `Bearer error="insufficient_scope"`
+	}
+	w.Header().Set("WWW-Authenticate", challenge)
+}
+
 // injectLocaleData populates Lang and Dir on template data per AI.md PART 30
 // (<html lang="{{.Lang}}" dir="{{.Dir}}">). Locale resolution: ?lang= query,
 // "lang" cookie, then the first acceptable Accept-Language tag, otherwise
@@ -420,6 +433,21 @@ func consentPreferencesEnabled(r *http.Request, defaultValue bool) bool {
 	return consent.Preferences
 }
 
+func consentAnalyticsEnabled(r *http.Request) bool {
+	cookie, err := r.Cookie("cookie_consent")
+	if err != nil || cookie.Value == "" {
+		return false
+	}
+	value, err := url.QueryUnescape(cookie.Value)
+	if err != nil {
+		return false
+	}
+	var consent struct {
+		Analytics bool `json:"analytics"`
+	}
+	return json.Unmarshal([]byte(value), &consent) == nil && consent.Analytics
+}
+
 // BannerAnnouncement is the per-request template view of an active,
 // undismissed site-wide announcement (AI.md PART 16 "Site Banner").
 type BannerAnnouncement struct {
@@ -590,6 +618,9 @@ func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{
 		html += "<li>Results per page</li>"
 		html += "<li>Safe search</li>"
 		html += "</ul>"
+	case "owner-tokens":
+		html += "<h1>Owner tokens</h1>"
+		html += "<p>View, rotate, restore, and manage linked tokens for your owner identity.</p>"
 	case "search":
 		html += "<h1>Search Results</h1>"
 		if query, ok := data["query"].(string); ok {

@@ -152,10 +152,7 @@ func TestAppDatabase_QueryContext_Rows(t *testing.T) {
 func TestAppDatabase_QueryRow(t *testing.T) {
 	db := newSQLiteDB(t)
 	var n int
-	row, err := db.QueryRow("SELECT 42")
-	if err != nil {
-		t.Fatalf("QueryRow SELECT 42 = %v, want nil", err)
-	}
+	row := db.QueryRow("SELECT 42")
 	if err := row.Scan(&n); err != nil {
 		t.Fatalf("QueryRow SELECT 42 Scan = %v", err)
 	}
@@ -167,10 +164,7 @@ func TestAppDatabase_QueryRow(t *testing.T) {
 // TestAppDatabase_QueryRowContext verifies QueryRowContext scans a value.
 func TestAppDatabase_QueryRowContext(t *testing.T) {
 	db := newSQLiteDB(t)
-	row, err := db.QueryRowContext(context.Background(), "SELECT 7")
-	if err != nil {
-		t.Fatalf("QueryRowContext SELECT 7 = %v, want nil", err)
-	}
+	row := db.QueryRowContext(context.Background(), "SELECT 7")
 	var n int
 	if err := row.Scan(&n); err != nil {
 		t.Fatalf("QueryRowContext SELECT 7 Scan = %v", err)
@@ -180,16 +174,17 @@ func TestAppDatabase_QueryRowContext(t *testing.T) {
 	}
 }
 
-// TestAppDatabase_QueryRowContextReturnsIssueError verifies errors available
-// before Scan are returned and can be counted by database query metrics.
+// TestAppDatabase_QueryRowContextDefersIssueError verifies query failures are
+// surfaced by Scan so the metrics wrapper can record them with the row result.
 func TestAppDatabase_QueryRowContextReturnsIssueError(t *testing.T) {
 	db := newSQLiteDB(t)
-	row, err := db.QueryRowContext(context.Background(), "SELECT * FROM missing_table")
-	if err == nil {
-		t.Fatal("QueryRowContext invalid query error = nil, want query issue error")
+	row := db.QueryRowContext(context.Background(), "SELECT * FROM missing_table")
+	if row == nil {
+		t.Fatal("QueryRowContext invalid query row = nil, want deferred MetricsRow")
 	}
-	if row != nil {
-		t.Errorf("QueryRowContext invalid query row = %v, want nil", row)
+	var value int
+	if err := row.Scan(&value); err == nil {
+		t.Fatal("QueryRowContext invalid query Scan error = nil, want query issue error")
 	}
 }
 
@@ -197,10 +192,7 @@ func TestAppDatabase_QueryRowContextReturnsIssueError(t *testing.T) {
 // query reported by Scan as sql.ErrNoRows, not as a pre-Scan error.
 func TestAppDatabase_QueryRow_NoRows(t *testing.T) {
 	db := newSQLiteDB(t)
-	row, err := db.QueryRow("SELECT 7 WHERE 0")
-	if err != nil {
-		t.Fatalf("QueryRow empty result = %v, want nil", err)
-	}
+	row := db.QueryRow("SELECT 7 WHERE 0")
 	var n int
 	if err := row.Scan(&n); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("QueryRow empty result Scan = %v, want sql.ErrNoRows", err)

@@ -156,7 +156,7 @@ const defaultPrefs = {
     // vidveil_pref_results_per_page cookie on save; 0 = infinite scroll (the default)
     resultsPerPage: 0,
     openNewTab: true,
-    defaultPreviewOnly: true,
+    previewFirst: true,
     showAIContent: false,  // AI content hidden by default
     defaultDuration: '',
     minQuality: '360',  // Default to 360p+ quality
@@ -378,8 +378,8 @@ function setupPreferencesForm() {
     const openNewTabCheckbox = document.getElementById('open-new-tab');
     if (openNewTabCheckbox) openNewTabCheckbox.checked = prefs.openNewTab !== false;
 
-    const defaultPreviewOnlyCheckbox = document.getElementById('default-preview-only');
-    if (defaultPreviewOnlyCheckbox) defaultPreviewOnlyCheckbox.checked = prefs.defaultPreviewOnly !== false;
+    const previewFirstCheckbox = document.getElementById('preview-first');
+    if (previewFirstCheckbox) previewFirstCheckbox.checked = prefs.previewFirst !== false;
 
     const defaultDurationSelect = document.getElementById('default-duration');
     if (defaultDurationSelect) defaultDurationSelect.value = prefs.defaultDuration || '';
@@ -417,7 +417,7 @@ function setupPreferencesForm() {
             previewDelay: parseInt(document.getElementById('preview-delay')?.value ?? 0),
             resultsPerPage: parseInt(document.getElementById('results-per-page')?.value ?? 0),
             openNewTab: document.getElementById('open-new-tab')?.checked ?? true,
-            defaultPreviewOnly: document.getElementById('default-preview-only')?.checked ?? true,
+            previewFirst: document.getElementById('preview-first')?.checked ?? true,
             defaultDuration: document.getElementById('default-duration')?.value || '',
             defaultSort: document.getElementById('default-sort')?.value || '',
             minDuration: parseInt(document.getElementById('min-duration')?.value ?? 600),
@@ -1557,7 +1557,7 @@ function handleDownloadClick(event, downloadUrl) {
 
         searchQuery = searchMeta.dataset.query || new URLSearchParams(window.location.search).get('q') || '';
 
-        // Load preferences merged with defaults so defaultPreviewOnly:true and
+        // Load preferences merged with defaults so previewFirst:true and
         // other defaults take effect even when user has only partially saved prefs.
         userPrefs = getPreferences();
         var minDuration = parseInt(userPrefs.minDuration) || 0;
@@ -3667,7 +3667,7 @@ document.addEventListener('error', function(e) {
             previewDelay: '0',
             resultsPerPage: '0',
             openNewTab: true,
-            defaultPreviewOnly: true,
+            previewFirst: true,
             showAIContent: false,
             defaultDuration: '',
             minQuality: '360',
@@ -3694,7 +3694,7 @@ document.addEventListener('error', function(e) {
             document.getElementById('results-per-page').value = getServerResultsPerPage(prefs.resultsPerPage);
             document.getElementById('open-new-tab').checked = prefs.openNewTab;
 
-            document.getElementById('default-preview-only').checked = prefs.defaultPreviewOnly;
+            document.getElementById('preview-first').checked = prefs.previewFirst;
             document.getElementById('show-ai-content').checked = prefs.showAIContent;
             document.getElementById('default-duration').value = prefs.defaultDuration;
             document.getElementById('min-quality').value = prefs.minQuality;
@@ -3744,7 +3744,7 @@ document.addEventListener('error', function(e) {
                 previewDelay: document.getElementById('preview-delay').value,
                 resultsPerPage: document.getElementById('results-per-page').value,
                 openNewTab: document.getElementById('open-new-tab').checked,
-                defaultPreviewOnly: document.getElementById('default-preview-only').checked,
+                previewFirst: document.getElementById('preview-first').checked,
                 showAIContent: document.getElementById('show-ai-content').checked,
                 defaultDuration: document.getElementById('default-duration').value,
                 minQuality: document.getElementById('min-quality').value,
@@ -3865,27 +3865,30 @@ document.addEventListener('error', function(e) {
                 var tierEngines = tiers[tier];
                 var tierName = tierNames[tier] || 'Tier ' + tier;
 
-                var group = document.createElement('div');
+                var group = document.createElement('details');
                 group.className = 'tier-group';
                 group.dataset.tier = tier;
 
-                var header = document.createElement('div');
+                var header = document.createElement('summary');
                 header.className = 'tier-header';
-                header.innerHTML =
-                    '<label class="toggle tier-toggle">' +
-                        '<input type="checkbox" data-tier="' + tier + '" checked>' +
-                        '<span class="slider"></span>' +
-                        '<span class="toggle-label">' + tierName + ' (' + tierEngines.length + ' ' + i18n.tierEngines + ')</span>' +
-                    '</label>' +
-                    '<button type="button" class="tier-expand" aria-expanded="false" aria-label="' + i18n.expandTier + '">' +
-                        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-                            '<polyline points="6 9 12 15 18 9"></polyline>' +
-                        '</svg>' +
-                    '</button>';
+                var toggleLabel = document.createElement('label');
+                toggleLabel.className = 'toggle tier-toggle';
+                var tierToggle = document.createElement('input');
+                tierToggle.type = 'checkbox';
+                tierToggle.dataset.tier = tier;
+                var slider = document.createElement('span');
+                slider.className = 'slider';
+                var title = document.createElement('span');
+                title.className = 'toggle-label';
+                title.textContent = tierName + ' (' + tierEngines.length + ' ' + i18n.tierEngines + ')';
+                toggleLabel.appendChild(tierToggle);
+                toggleLabel.appendChild(slider);
+                toggleLabel.appendChild(title);
+                header.appendChild(toggleLabel);
                 group.appendChild(header);
 
                 var list = document.createElement('div');
-                list.className = 'tier-engines collapsed';
+                list.className = 'tier-engines';
                 tierEngines.forEach(function(eng) {
                     eng.hidden = false;
                     list.appendChild(eng);
@@ -3894,7 +3897,6 @@ document.addEventListener('error', function(e) {
 
                 container.appendChild(group);
 
-                var tierToggle = header.querySelector('input[data-tier]');
                 tierToggle.addEventListener('change', function() {
                     var checked = this.checked;
                     tierEngines.forEach(function(eng) {
@@ -3911,19 +3913,16 @@ document.addEventListener('error', function(e) {
                     });
                 });
 
-                var expandBtn = header.querySelector('.tier-expand');
-                expandBtn.addEventListener('click', function() {
-                    var expanded = list.classList.toggle('collapsed');
-                    this.setAttribute('aria-expanded', !expanded);
-                });
+                var allChecked = tierEngines.every(function(eng) { return eng.querySelector('input').checked; });
+                var someChecked = tierEngines.some(function(eng) { return eng.querySelector('input').checked; });
+                tierToggle.checked = allChecked;
+                tierToggle.indeterminate = someChecked && !allChecked;
             });
         }
 
-        initEngineTiers();
-
-        form.addEventListener('submit', savePreferences);
         form.dataset.managed = 'true';
         loadPreferences();
+        initEngineTiers();
     });
 })();
 

@@ -144,6 +144,7 @@ func TestGenerateSpecContainsRequiredPaths(t *testing.T) {
 		"/api/v1/server/preferences/tokens",
 		"/api/v1/server/preferences/tokens/primary/reveal",
 		"/api/v1/server/preferences/tokens/{id}",
+		"/api/v1/server/help/mcp",
 	}
 
 	for _, cfg := range []*config.AppConfig{nil, config.DefaultAppConfig()} {
@@ -169,6 +170,7 @@ func TestGenerateSpecDocumentsImplementedAPIOperations(t *testing.T) {
 		t.Fatalf("unmarshal OpenAPI document: %v", err)
 	}
 	operations := map[string]string{
+		"get /api/v1/server/help/mcp":           "getServerHelpMCP",
 		"get /api/v1/bangs":                     "listBangs",
 		"get /api/v1/bangs/autocomplete":        "autocompleteBangs",
 		"get /api/v1/engines/{name}":            "getEngineDetails",

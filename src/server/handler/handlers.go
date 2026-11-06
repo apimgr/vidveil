@@ -156,7 +156,7 @@ const engineSelectionCookieName = "vidveil_pref_engines_selected"
 // unlike duration/quality/sort, which are pure per-request URL state, this
 // preference needs to survive navigating away from the query string it was
 // set on (e.g. clicking through to a fresh search from the homepage).
-const previewFirstCookieName = "preview_first"
+const previewFirstCookieName = "vidveil_pref_preview_first"
 
 // getRequestTheme returns the user's theme preference from their cookie, falling
 // back to the server-configured default. Valid values: "dark", "light", "auto".
@@ -1266,7 +1266,11 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 		})
 
 	default:
-		h.renderResponse(w, r, "preferences", h.preferencePageData(w, r))
+		data := h.preferencePageData(w, r)
+		query := h.exportablePreferenceQuery(r)
+		data["PreferenceExportURL"] = urlvar.BuildURL(r, "/server/preferences/import") + "?" + query
+		data["PreferenceExportCode"] = base64.RawURLEncoding.EncodeToString([]byte(query))
+		h.renderResponse(w, r, "preferences", data)
 	}
 }
 
@@ -1285,51 +1289,6 @@ func (h *SearchHandler) preferencePageData(w http.ResponseWriter, r *http.Reques
 	if err == nil {
 		favCount = len(favs)
 	}
-	ownerTokenEnabled := false
-	primaryToken := map[string]interface{}{}
-	linkedTokens := make([]map[string]interface{}, 0)
-	if h.tokenManager != nil {
-		if cookie, cookieErr := r.Cookie(apitoken.OwnerCookieName); cookieErr == nil {
-			if principal, authErr := h.tokenManager.Authenticate(r.Context(), cookie.Value); authErr == nil && principal.Kind == "primary" {
-				if primary, metaErr := h.tokenManager.PrimaryMetadata(r.Context(), principal); metaErr == nil {
-					ownerTokenEnabled = true
-					primaryLastUsed := ""
-					if primary.LastUsed.Valid {
-						primaryLastUsed = time.Unix(primary.LastUsed.Int64, 0).UTC().Format(time.RFC3339)
-					}
-					primaryToken = map[string]interface{}{
-						"Prefix": primary.Prefix, "Suffix": primary.Suffix,
-						"Created":  time.Unix(primary.CreatedAt, 0).UTC().Format(time.RFC3339),
-						"LastUsed": primaryLastUsed,
-					}
-					if tokens, listErr := h.tokenManager.ListLinked(r.Context(), principal); listErr == nil {
-						for _, token := range tokens {
-							status := "active"
-							expires := "never"
-							if token.RevokedAt.Valid {
-								status = "revoked"
-							} else if token.ExpiresAt.Valid {
-								expires = time.Unix(token.ExpiresAt.Int64, 0).UTC().Format("2006-01-02")
-								if token.ExpiresAt.Int64 <= time.Now().Unix() {
-									status = "expired"
-								}
-							}
-							lastUsed := ""
-							if token.LastUsed.Valid {
-								lastUsed = time.Unix(token.LastUsed.Int64, 0).UTC().Format(time.RFC3339)
-							}
-							linkedTokens = append(linkedTokens, map[string]interface{}{
-								"ID": token.ID, "Name": token.Name, "Prefix": token.Prefix, "Suffix": token.Suffix,
-								"Status": status, "Expires": expires,
-								"Created": time.Unix(token.CreatedAt, 0).UTC().Format(time.RFC3339), "LastUsed": lastUsed,
-							})
-						}
-					}
-				}
-			}
-		}
-	}
-
 	// HTML/text response — renderResponse() applies full content negotiation
 	// per AI.md PART 14: text/plain → HTML2TextConverter, browser → HTML+JS
 	return map[string]interface{}{
@@ -1340,22 +1299,20 @@ func (h *SearchHandler) preferencePageData(w http.ResponseWriter, r *http.Reques
 		"CCPAOptedOut":       hasCCPAOptOut(r),
 		"ConsentGiven":       hasConsentCookie(r),
 		"ConsentPreferences": consentPreferencesEnabled(r, h.appConfig.Server.Privacy.Cookies.Preferences.Enabled),
-		"AnalyticsConsent":   false,
+		"AnalyticsConsent":   consentAnalyticsEnabled(r),
 		"DataSold":           h.appConfig.Server.Privacy.Data.Sold,
 		"Engines":            engines,
 		"ResultsPerPage":     h.getRequestResultsPerPage(r),
 		"OpenNewTab":         h.getRequestOpenNewTab(r),
 		"FavoritesCount":     favCount,
-		"OwnerTokenEnabled":  ownerTokenEnabled,
-		"PrimaryToken":       primaryToken,
-		"LinkedTokens":       linkedTokens,
 		"CSRFToken":          cSRFTokenFromRequest(r),
 		"BuildDateTime":      BuildDateTime(),
 		// ReturnTo is the page the user arrived from (Referer), threaded
 		// through the form (hidden field for no-JS, data attribute for
 		// JS) so saving/closing preferences sends them back there instead
 		// of always landing on /server/preferences. See safeReturnPath.
-		"ReturnTo": safeReturnPath(r.Referer(), r),
+		"ReturnTo":  safeReturnPath(r.Referer(), r),
+		"CancelURL": preferenceRedirect(r),
 	}
 }
 
@@ -1454,7 +1411,7 @@ func requestPreviewFirst(r *http.Request) bool {
 			return c.Value == "1"
 		}
 	}
-	return preferenceCookieValue(r, "vidveil_pref_default_preview_only", "1") == "1"
+	return preferenceCookieValue(r, previewFirstCookieName, "1") == "1"
 }
 
 func withRequestTorPreference(ctx context.Context, r *http.Request) context.Context {
@@ -1573,13 +1530,19 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 	if err := r.ParseForm(); err != nil {
 		r.PostForm = url.Values{}
 	}
+	if r.PostForm.Get("action") == "reset" {
+		resetPreferenceCookies(w, r)
+		writePreferenceRedirect(w, r)
+		return
+	}
 	values := url.Values{}
-	for name, v := range r.PostForm {
+	for name, v := range preferencesWithCode(r.PostForm) {
 		if name == "theme" || name == "lang" || strings.HasPrefix(name, "vidveil_pref_") {
 			values[name] = v
 		}
 	}
 	result := h.applyPreferences(w, r, values)
+	h.applyWebConsent(w, r)
 	if r.PostForm.Get("engines_selection_set") == "1" {
 		selected := make(map[string]struct{}, len(r.PostForm["engines"]))
 		for _, name := range r.PostForm["engines"] {
@@ -4379,6 +4342,9 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 	case "preferences":
 		templateFile = "template/page/preferences.tmpl"
 		templateName = "preferences"
+	case "owner-tokens":
+		templateFile = "template/page/owner-tokens.tmpl"
+		templateName = "owner-tokens"
 	case "favorites":
 		templateFile = "template/page/favorites.tmpl"
 		templateName = "favorites"
@@ -4407,6 +4373,9 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 	case "nojs/preferences":
 		templateFile = "template/nojs/preferences.tmpl"
 		templateName = "nojs/preferences"
+	case "nojs/owner-tokens":
+		templateFile = "template/nojs/owner-tokens.tmpl"
+		templateName = "nojs/owner-tokens"
 	case "nojs/about":
 		templateFile = "template/nojs/about.tmpl"
 		templateName = "nojs/about"

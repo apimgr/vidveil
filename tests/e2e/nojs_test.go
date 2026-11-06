@@ -66,7 +66,7 @@ func TestNoJSSearchFormSubmits(t *testing.T) {
 
 func TestNoJSNavigationLinksWork(t *testing.T) {
 	tb := noJSTab(t)
-	for _, path := range []string{"/favorites", "/server/preferences", "/server/about", "/server/help", "/server/privacy"} {
+	for _, path := range []string{"/favorites", "/server/preferences", "/server/preferences/tokens", "/server/about", "/server/help", "/server/help/mcp", "/server/privacy"} {
 		var body string
 		err := chromedp.Run(tb.ctx,
 			chromedp.Navigate(s.browserBase+path),

@@ -19,7 +19,7 @@ import (
 )
 
 func TestOwnerTokenExpiryFormAcceptsChosenDate(t *testing.T) {
-	form := url.Values{"expires_preset": {"never"}, "expires_date": {time.Now().UTC().Add(48 * time.Hour).Format("2006-01-02")}}
+	form := url.Values{"expires_preset": {"custom"}, "expires_date": {time.Now().UTC().Add(48 * time.Hour).Format("2006-01-02")}}
 	request := httptest.NewRequest(http.MethodPost, "/server/preferences/tokens", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if err := request.ParseForm(); err != nil {
@@ -31,6 +31,22 @@ func TestOwnerTokenExpiryFormAcceptsChosenDate(t *testing.T) {
 	}
 	if expires == nil || *expires <= time.Now().Unix() {
 		t.Fatalf("chosen date expiry = %v, want future timestamp", expires)
+	}
+}
+
+func TestOwnerTokenExpiryPresetIgnoresStaleCustomDate(t *testing.T) {
+	form := url.Values{"expires_preset": {"30d"}, "expires_date": {time.Now().UTC().Add(90 * 24 * time.Hour).Format("2006-01-02")}}
+	request := httptest.NewRequest(http.MethodPost, "/server/preferences/tokens", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := request.ParseForm(); err != nil {
+		t.Fatal(err)
+	}
+	expires, err := ownerTokenExpiryFromForm(request)
+	if err != nil {
+		t.Fatalf("preset expiry rejected: %v", err)
+	}
+	if expires == nil || time.Until(time.Unix(*expires, 0)) < 29*24*time.Hour || time.Until(time.Unix(*expires, 0)) > 31*24*time.Hour {
+		t.Fatalf("preset expiry = %v, want about 30 days", expires)
 	}
 }
 
@@ -97,12 +113,15 @@ func TestOwnerTokensAPIRequiresPrimaryBearerAndMasksList(t *testing.T) {
 	s := &Server{appConfig: config.DefaultAppConfig(), tokenManager: manager}
 	s.tokenActionLimiter = ratelimit.NewRateLimiter(true, 1, 900)
 	defer s.tokenActionLimiter.Stop()
-	for attempt, want := range []int{http.StatusForbidden, http.StatusTooManyRequests} {
+	for attempt, want := range []int{http.StatusUnauthorized, http.StatusTooManyRequests} {
 		request := httptest.NewRequest(http.MethodPost, "/api/v1/server/preferences/tokens/primary/rotate", nil)
 		response := httptest.NewRecorder()
 		s.ownerTokenPrincipal(response, request)
 		if response.Code != want {
 			t.Fatalf("sensitive token attempt %d status = %d, want %d", attempt+1, response.Code, want)
+		}
+		if attempt == 0 && response.Header().Get("WWW-Authenticate") != `Bearer realm="vidveil"` {
+			t.Fatalf("missing token challenge = %q", response.Header().Get("WWW-Authenticate"))
 		}
 	}
 
@@ -110,8 +129,15 @@ func TestOwnerTokensAPIRequiresPrimaryBearerAndMasksList(t *testing.T) {
 	withoutBearer.AddCookie(&http.Cookie{Name: "vidveil_owner_token_example", Value: issued.Token})
 	denied := httptest.NewRecorder()
 	s.ownerTokensAPIList(denied, withoutBearer)
-	if denied.Code != http.StatusForbidden || strings.Contains(denied.Body.String(), issued.Token) {
+	if denied.Code != http.StatusUnauthorized || denied.Header().Get("WWW-Authenticate") != `Bearer realm="vidveil"` || strings.Contains(denied.Body.String(), issued.Token) {
 		t.Fatalf("cookie-only API response = %d %q", denied.Code, denied.Body.String())
+	}
+	invalidRequest := httptest.NewRequest(http.MethodGet, "/api/v1/server/preferences/tokens", nil)
+	invalidRequest.Header.Set("Authorization", "Bearer invalid-token")
+	invalidResponse := httptest.NewRecorder()
+	s.ownerTokensAPIList(invalidResponse, invalidRequest)
+	if invalidResponse.Code != http.StatusUnauthorized || invalidResponse.Header().Get("WWW-Authenticate") != `Bearer realm="vidveil", error="invalid_token"` {
+		t.Fatalf("invalid token response = %d %q", invalidResponse.Code, invalidResponse.Header().Get("WWW-Authenticate"))
 	}
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/server/preferences/tokens", nil)
@@ -148,7 +174,7 @@ func TestOwnerTokensAPIRequiresPrimaryBearerAndMasksList(t *testing.T) {
 	linkedRequest.Header.Set("Authorization", "Bearer "+result.Data.Token)
 	linkedDenied := httptest.NewRecorder()
 	s.ownerTokensAPIList(linkedDenied, linkedRequest)
-	if linkedDenied.Code != http.StatusForbidden {
+	if linkedDenied.Code != http.StatusForbidden || linkedDenied.Header().Get("WWW-Authenticate") != `Bearer error="insufficient_scope"` {
 		t.Fatalf("linked-token management status = %d, want forbidden", linkedDenied.Code)
 	}
 	primaryList := httptest.NewRequest(http.MethodGet, "/api/v1/server/preferences/tokens", nil)

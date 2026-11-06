@@ -40,7 +40,7 @@ func TestWithRequestTorPreferenceUsesAppCookie(t *testing.T) {
 func TestRequestSearchPreferencesHonorCookiesAndExplicitQueryValues(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test", nil)
 	r.AddCookie(&http.Cookie{Name: "vidveil_pref_show_ai_content", Value: "1"})
-	r.AddCookie(&http.Cookie{Name: "vidveil_pref_default_preview_only", Value: "0"})
+	r.AddCookie(&http.Cookie{Name: previewFirstCookieName, Value: "0"})
 	r.AddCookie(&http.Cookie{Name: "vidveil_pref_default_duration", Value: "short"})
 	r.AddCookie(&http.Cookie{Name: "vidveil_pref_default_sort", Value: "views"})
 	r.AddCookie(&http.Cookie{Name: "vidveil_pref_min_quality", Value: "720"})
@@ -56,7 +56,7 @@ func TestRequestSearchPreferencesHonorCookiesAndExplicitQueryValues(t *testing.T
 
 	query := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test&show_ai=0&preview_first=1&duration=&sort=&min_quality=0&min_duration=0", nil)
 	query.AddCookie(&http.Cookie{Name: "vidveil_pref_show_ai_content", Value: "1"})
-	query.AddCookie(&http.Cookie{Name: "vidveil_pref_default_preview_only", Value: "0"})
+	query.AddCookie(&http.Cookie{Name: previewFirstCookieName, Value: "0"})
 	query.AddCookie(&http.Cookie{Name: "vidveil_pref_default_duration", Value: "short"})
 	query.AddCookie(&http.Cookie{Name: "vidveil_pref_default_sort", Value: "views"})
 	query.AddCookie(&http.Cookie{Name: "vidveil_pref_min_quality", Value: "720"})

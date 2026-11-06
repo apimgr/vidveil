@@ -24,6 +24,9 @@ func TestDefaultAppConfig(t *testing.T) {
 	if !cfg.Server.MCP.Enabled {
 		t.Error("MCP should be enabled by default per AI.md PART 11")
 	}
+	if cfg.Server.Pages.Help.MCP == "" {
+		t.Error("VidVeil MCP project help should be populated from IDEA.md")
+	}
 	if cfg.Server.Tokens.MaxLinked != 25 || cfg.Server.Tokens.CookieMaxAge != "1y" || cfg.Server.Tokens.IdlePurgeDays != 0 {
 		t.Errorf("owner-token defaults = %+v, want max-linked 25, cookie age 1y, and no idle purge", cfg.Server.Tokens)
 	}
@@ -84,12 +87,15 @@ func TestNormalizeUpdateChannel(t *testing.T) {
 
 func TestMCPAndLLMSConfigKeys(t *testing.T) {
 	cfg := DefaultAppConfig()
-	contents := []byte("server:\n  mcp:\n    enabled: false\nweb:\n  api_contact: api@example.test\n  llms:\n    enabled: false\n    include_endpoints: false\n    include_schemas: true\n    custom_sections:\n      - '## More\\nDetails'\n")
+	contents := []byte("server:\n  mcp:\n    enabled: false\n  pages:\n    help:\n      mcp: 'Project MCP help from config'\nweb:\n  api_contact: api@example.test\n  llms:\n    enabled: false\n    include_endpoints: false\n    include_schemas: true\n    custom_sections:\n      - '## More\\nDetails'\n")
 	if err := yaml.Unmarshal(contents, cfg); err != nil {
 		t.Fatalf("unmarshal config: %v", err)
 	}
 	if cfg.Server.MCP.Enabled {
 		t.Fatal("server.mcp.enabled was not read")
+	}
+	if cfg.Server.Pages.Help.MCP != "Project MCP help from config" {
+		t.Fatalf("server.pages.help.mcp = %q", cfg.Server.Pages.Help.MCP)
 	}
 	if cfg.Web.LLMS.Enabled || cfg.Web.LLMS.IncludeEndpoints || !cfg.Web.LLMS.IncludeSchemas {
 		t.Fatalf("web.llms config = %+v", cfg.Web.LLMS)

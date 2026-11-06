@@ -582,9 +582,7 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 			AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 			AllowedHeaders: []string{
 				"Content-Type", "Accept", "X-Requested-With", "Authorization",
-				"X-API-Key", "X-Api-Key", "API-Key", "ApiKey", "X-Auth-Token",
-				"X-Access-Token", "X-Token", "Token", "X-CSRF-Token",
-				"X-XSRF-Token", "X-Session-ID", "X-Service-Token", "X-Internal-Token",
+				"X-CSRF-Token", "X-XSRF-Token",
 			},
 			ExposedHeaders:   []string{"Link"},
 			AllowCredentials: cfg.AllowCredentials && !wildcard,
@@ -1130,6 +1128,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/search.rss", h.SearchRSSFeed)
 		r.Get("/search.atom", h.SearchAtomFeed)
 		r.Get("/server/preferences", h.PreferencesPage)
+		r.Get("/server/preferences/tokens", h.OwnerTokensPage)
 		r.Post("/server/preferences", h.PreferencesSave)
 		r.Post("/server/preferences/token/restore", s.ownerTokenRestore)
 		r.Post("/server/preferences/token/reveal", s.ownerTokenWebRevealPrimary)
@@ -1186,6 +1185,7 @@ func (s *Server) setupRoutes() {
 		// CCPA "Do Not Sell" opt-out toggle on /server/privacy (AI.md PART 12)
 		r.Post("/ccpa", server.CCPASubmit)
 		r.Get("/help", server.HelpPage)
+		r.Get("/help/mcp", server.HelpMCPPage)
 		r.Get("/terms", server.TermsPage)
 		r.Get("/security", server.SecurityPage)
 		r.Get("/security/policy", server.SecurityPolicyPage)
@@ -1243,6 +1243,7 @@ func (s *Server) setupRoutes() {
 			r.Post("/contact", server.APIContact)
 			r.With(s.requireOperatorToken).Post("/restore", server.APIRestore)
 			r.Get("/help", server.APIHelp)
+			r.Get("/help/mcp", server.APIHelpMCP)
 			r.Get("/terms", server.APITerms)
 
 			// Browser-emitted report ingestion per AI.md PART 11 "Reporting API
@@ -1378,23 +1379,25 @@ func (s *Server) registerDebugAPIRoutes(r chi.Router, path string, h *handler.Se
 func (s *Server) requireOperatorToken(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		deny := func() {
+		deny := func(invalid bool) {
+			if invalid {
+				handler.SetBearerChallenge(w, "invalid_token")
+			} else {
+				handler.SetBearerChallenge(w, "")
+			}
 			authpad.Wait(start)
 			handler.SendNegotiatedError(w, r, handler.CodeUnauthorized, handler.MsgUnauthorized)
 		}
-		if !s.isOperatorToken(r) {
-			deny()
+		if !s.isBearerOperatorToken(r) {
+			header := strings.TrimSpace(r.Header.Get("Authorization"))
+			invalid := strings.HasPrefix(strings.ToLower(header), "bearer ") && strings.TrimSpace(header[len("Bearer "):]) != ""
+			deny(invalid)
 			return
 		}
 		response := authpad.WrapResponse(w, start)
 		next.ServeHTTP(response, r)
 		response.Finish()
 	})
-}
-
-func (s *Server) isOperatorToken(r *http.Request) bool {
-	providedToken, ok := extractRequestToken(r)
-	return ok && s.matchesOperatorToken(providedToken)
 }
 
 func (s *Server) isBearerOperatorToken(r *http.Request) bool {
@@ -1414,65 +1417,12 @@ func (s *Server) matchesOperatorToken(providedToken string) bool {
 	return configured && subtle.ConstantTimeCompare(providedHash[:], configuredHash[:]) == 1
 }
 
-// extractRequestToken follows AI.md PART 8's token source priority and PART 14's
-// first-found-wins rule. A malformed higher-priority credential fails closed.
+// extractRequestToken accepts only the native Bearer credential form.
 func extractRequestToken(r *http.Request) (string, bool) {
 	if value := strings.TrimSpace(r.Header.Get("Authorization")); value != "" {
-		return authorizationToken(r, value)
-	}
-	for _, name := range []string{"X-API-Key", "API-Key", "ApiKey"} {
-		if value := strings.TrimSpace(r.Header.Get(name)); value != "" {
-			return value, true
-		}
-	}
-	for _, name := range []string{"X-Auth-Token", "X-Access-Token"} {
-		if value := strings.TrimSpace(r.Header.Get(name)); value != "" {
-			return value, true
-		}
-	}
-	for _, name := range []string{"X-Token", "Token"} {
-		if value := strings.TrimSpace(r.Header.Get(name)); value != "" {
-			return value, true
-		}
-	}
-	for _, name := range []string{"X-CSRF-Token", "X-XSRF-Token", "X-Session-ID"} {
-		if value := strings.TrimSpace(r.Header.Get(name)); value != "" {
-			return value, true
-		}
-	}
-	for _, name := range []string{"X-Service-Token", "X-Internal-Token"} {
-		if value := strings.TrimSpace(r.Header.Get(name)); value != "" {
-			return value, true
-		}
-	}
-	if values, present := r.URL.Query()["token"]; present {
-		if len(values) == 0 {
-			return "", false
-		}
-		return strings.TrimSpace(values[0]), strings.TrimSpace(values[0]) != ""
+		return bearerToken(value)
 	}
 	return "", false
-}
-
-// authorizationToken extracts a token from the documented Authorization
-// schemes. Basic uses its password field; Digest carries the supplied opaque
-// credential, which is then verified against the configured operator token.
-func authorizationToken(r *http.Request, value string) (string, bool) {
-	scheme, credential, ok := strings.Cut(value, " ")
-	if !ok || credential == "" || strings.HasPrefix(credential, " ") {
-		return "", false
-	}
-	switch {
-	case strings.EqualFold(scheme, "Bearer"):
-		return bearerToken(value)
-	case strings.EqualFold(scheme, "Basic"):
-		_, password, valid := r.BasicAuth()
-		return password, valid && password != ""
-	case strings.EqualFold(scheme, "Digest"):
-		return credential, true
-	default:
-		return "", false
-	}
 }
 
 // RefreshOperatorTokenHash updates the digest after a config reload without
@@ -1886,24 +1836,26 @@ func extractClientIP(r *http.Request) string {
 	return urlvar.ResolveClientIP(r)
 }
 
-// secFetchValidationMiddleware validates Sec-Fetch-* request headers per AI.md PART 11.
-// This is a defense-in-depth layer against CSRF and clickjacking — it runs BEFORE
-// the CSRF token check. Validation is "present-and-bad reject only": absent headers
-// are treated as a legacy-browser pass-through and fall through to the CSRF token check.
+// secFetchValidationMiddleware validates Sec-Fetch-* request headers on frontend
+// routes per AI.md PART 11. Validation is "present-and-bad reject only": absent
+// headers are treated as a legacy-browser pass-through.
 //
 // Rules per PART 11:
-//   - Sec-Fetch-Site: reject cross-site on POST/PUT/PATCH/DELETE without Bearer token
-//     and path not in CSRF exempt path.
-//   - Sec-Fetch-Mode: reject navigate on /api/* endpoints (unintended top-level nav).
+//   - Sec-Fetch-Site: reject cross-site on frontend POST/PUT/PATCH/DELETE without Bearer token.
+//   - Sec-Fetch-Mode: backend API requests bypass frontend Sec-Fetch validation.
 //   - Sec-Fetch-Dest: reject iframe on endpoints not in frame-ancestors allow-list.
 func secFetchValidationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") || isMCPPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		// Sec-Fetch-Site: block cross-site state-changing requests without Bearer auth
 		site := r.Header.Get("Sec-Fetch-Site")
 		if site == "cross-site" {
 			switch r.Method {
 			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-				// Allow if Bearer token present — Bearer-authenticated APIs are CORS-protected
+				// Allow Bearer requests — they are not authenticated by ambient cookies.
 				if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
 					handler.SendNegotiatedError(w, r, handler.CodeForbidden, i18n.Translate(i18n.DetectLocale(r), "error.cross_site_blocked"))
 					return

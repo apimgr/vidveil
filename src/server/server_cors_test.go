@@ -55,7 +55,7 @@ func TestCORSMiddlewareOriginPolicies(t *testing.T) {
 			req.Header.Set("Origin", "https://app.example.com")
 			if tt.wantPreflight {
 				req.Header.Set("Access-Control-Request-Method", "POST")
-				req.Header.Set("Access-Control-Request-Headers", "authorization,x-api-key")
+				req.Header.Set("Access-Control-Request-Headers", "authorization,x-csrf-token")
 			}
 			res := httptest.NewRecorder()
 			handler.ServeHTTP(res, req)
@@ -70,8 +70,8 @@ func TestCORSMiddlewareOriginPolicies(t *testing.T) {
 				if res.Code != http.StatusNoContent {
 					t.Errorf("preflight status = %d, want %d", res.Code, http.StatusNoContent)
 				}
-				if got := res.Header().Get("Access-Control-Allow-Headers"); got == "" {
-					t.Error("preflight omitted allowed authentication headers")
+				if got := strings.ToLower(res.Header().Get("Access-Control-Allow-Headers")); !strings.Contains(got, "authorization") || !strings.Contains(got, "x-csrf-token") || strings.Contains(got, "x-api-key") {
+					t.Errorf("preflight allowed headers = %q, want Authorization and X-CSRF-Token without alternate credentials", got)
 				}
 			} else if tt.wantOrigin == "" && !called {
 				t.Error("disabled CORS should pass through to the route")

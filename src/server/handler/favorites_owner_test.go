@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/database"
@@ -54,16 +53,6 @@ func TestFavoritesIssueOwnerTokenAndScopeFavorites(t *testing.T) {
 	if _, err := manager.Authenticate(context.Background(), ownerCookie.Value); err != nil {
 		t.Fatalf("issued cookie token is invalid: %v", err)
 	}
-	preferencesRequest := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
-	preferencesRequest.AddCookie(ownerCookie)
-	preferences := h.preferencePageData(httptest.NewRecorder(), preferencesRequest)
-	if preferences["OwnerTokenEnabled"] != true {
-		t.Fatalf("preferences did not recognize the owner token: %#v", preferences["OwnerTokenEnabled"])
-	}
-	linkedExpiry := time.Now().Add(30 * 24 * time.Hour).Unix()
-	if _, err := manager.CreateLinked(context.Background(), mustAuthenticateOwner(t, manager, ownerCookie.Value), "automation", &linkedExpiry, 25); err != nil {
-		t.Fatalf("create linked token for preferences: %v", err)
-	}
 	setRealTemplatesFS(t)
 	preferencesPage := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
 	preferencesPage.Header.Set("Accept", "text/html")
@@ -74,11 +63,8 @@ func TestFavoritesIssueOwnerTokenAndScopeFavorites(t *testing.T) {
 	if preferencesResponse.Code != http.StatusOK {
 		t.Fatalf("preferences page status = %d: %s", preferencesResponse.Code, preferencesHTML)
 	}
-	if !strings.Contains(preferencesHTML, "tok_••••••••••••"+ownerCookie.Value[len(ownerCookie.Value)-4:]) || strings.Contains(preferencesHTML, ownerCookie.Value[:12]) {
-		t.Fatalf("preferences page does not mask token to final four characters: %s", preferencesHTML)
-	}
-	if !strings.Contains(preferencesHTML, "automation") || !strings.Contains(preferencesHTML, "Created") || !strings.Contains(preferencesHTML, "Expires") {
-		t.Fatalf("preferences page omitted linked-token metadata: %s", preferencesHTML)
+	if !strings.Contains(preferencesHTML, `href="/server/preferences/tokens"`) || strings.Contains(preferencesHTML, ownerCookie.Value[:12]) || strings.Contains(preferencesHTML, `action="/server/preferences/token/reveal"`) {
+		t.Fatalf("preferences page should link to separate token management without exposing tokens: %s", preferencesHTML)
 	}
 
 	list := httptest.NewRequest(http.MethodGet, "/favorites", nil)
@@ -113,13 +99,4 @@ func TestFavoritesIssueOwnerTokenAndScopeFavorites(t *testing.T) {
 	if global.Code != http.StatusOK || !strings.Contains(global.Body.String(), "Saved video") {
 		t.Fatalf("operator favorite list = %d %q", global.Code, global.Body.String())
 	}
-}
-
-func mustAuthenticateOwner(t *testing.T, manager *apitoken.Manager, token string) apitoken.Principal {
-	t.Helper()
-	principal, err := manager.Authenticate(context.Background(), token)
-	if err != nil {
-		t.Fatalf("authenticate owner token: %v", err)
-	}
-	return principal
 }

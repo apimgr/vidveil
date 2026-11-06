@@ -289,17 +289,16 @@ func TestSecFetchValidation_CrossSitePostBlocked(t *testing.T) {
 	}
 }
 
-// TestSecFetchValidation_CrossSitePostWithBearerAllowed verifies Bearer auth bypasses cross-site check.
-func TestSecFetchValidation_CrossSitePostWithBearerAllowed(t *testing.T) {
+// TestSecFetchValidation_CrossSitePostToAPIAllowed keeps Sec-Fetch checks on frontend routes only.
+func TestSecFetchValidation_CrossSitePostToAPIAllowed(t *testing.T) {
 	called := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	})
 	handler := secFetchValidationMiddleware(next)
-	req := httptest.NewRequest("POST", "/api/v1/search", nil)
+	req := httptest.NewRequest("POST", "/api/v1/favorites", nil)
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
-	req.Header.Set("Authorization", "Bearer my-token")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -308,8 +307,8 @@ func TestSecFetchValidation_CrossSitePostWithBearerAllowed(t *testing.T) {
 	}
 }
 
-// TestSecFetchValidation_NavigateToAPIBlocked verifies navigate fetch to /api/* is blocked.
-func TestSecFetchValidation_NavigateToAPIBlocked(t *testing.T) {
+// TestSecFetchValidation_NavigateToAPIAllowed verifies Sec-Fetch checks apply to frontend only.
+func TestSecFetchValidation_NavigateToAPIAllowed(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -319,8 +318,8 @@ func TestSecFetchValidation_NavigateToAPIBlocked(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("secFetchValidationMiddleware navigate to /api/*: status = %d, want 403", rr.Code)
+	if rr.Code != http.StatusOK {
+		t.Errorf("secFetchValidationMiddleware navigate to /api/*: status = %d, want 200", rr.Code)
 	}
 }
 

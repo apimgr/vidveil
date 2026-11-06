@@ -224,6 +224,29 @@ func TestBrowserDocsPagesLoad(t *testing.T) {
 	}
 }
 
+func TestBrowserMCPHelpAndOwnerTokenRestorePages(t *testing.T) {
+	for _, path := range []string{"/server/help/mcp", "/server/preferences/tokens"} {
+		tb := newTab(t)
+		var body string
+		err := chromedp.Run(tb.ctx,
+			chromedp.Navigate(s.browserBase+path),
+			chromedp.WaitReady("body", chromedp.ByQuery),
+			chromedp.OuterHTML("html", &body, chromedp.ByQuery),
+		)
+		if err != nil {
+			t.Errorf("page %s: %v", path, err)
+			continue
+		}
+		if path == "/server/help/mcp" && !strings.Contains(body, `id="project"`) {
+			t.Errorf("MCP help page omitted the project section")
+		}
+		if path == "/server/preferences/tokens" && (!strings.Contains(body, `action="/server/preferences/token/restore"`) || strings.Contains(body, `action="/server/preferences/token/reveal"`)) {
+			t.Errorf("token page should show only restore controls without an owner cookie")
+		}
+		assertNoConsoleErrors(t, tb, path)
+	}
+}
+
 func TestBrowserStaticAssetsAllLoad(t *testing.T) {
 	tb := newTab(t)
 	var failures []string

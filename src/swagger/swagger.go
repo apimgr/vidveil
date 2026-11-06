@@ -363,6 +363,7 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 	addOperation("/server/about", "get", "getServerAbout", "Get server information", "Return the public server name, version, and description.", nil, nil)
 	addOperation("/server/privacy", "get", "getServerPrivacy", "Get privacy information", "Return the server privacy policy and privacy signals.", nil, nil)
 	addOperation("/server/help", "get", "getServerHelp", "Get server help", "Return usage and help information for this server.", nil, nil)
+	addOperation("/server/help/mcp", "get", "getServerHelpMCP", "Get MCP connection help", "Return MCP endpoint metadata, connection guidance, and anonymous tools.", nil, nil)
 	addOperation("/server/terms", "get", "getServerTerms", "Get server terms", "Return the server terms of service.", nil, nil)
 	addOperation("/server/contact", "post", "submitServerContact", "Submit a contact message", "Submit a message to the server contact form.", nil,
 		objectBody(map[string]interface{}{

@@ -93,6 +93,24 @@ func instrumentQuery(query string, fn func() error) error {
 	return err
 }
 
+type MetricsRow struct {
+	row       *sql.Row
+	operation string
+	table     string
+	start     time.Time
+}
+
+func (r *MetricsRow) Scan(dest ...any) error {
+	err := r.row.Scan(dest...)
+	operation, table := r.operation, r.table
+	metric.DBQueriesTotal.WithLabelValues(operation, table).Inc()
+	metric.DBQueryDuration.WithLabelValues(operation, table).Observe(time.Since(r.start).Seconds())
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		metric.DBErrorsTotal.WithLabelValues(operation, classifyDBError(err)).Inc()
+	}
+	return err
+}
+
 // classifyDBError maps a database error to a low-cardinality error_type label.
 func classifyDBError(err error) string {
 	switch {
@@ -337,40 +355,17 @@ func (d *AppDatabase) QueryContext(ctx context.Context, query string, args ...in
 	return rows, err
 }
 
-// QueryRow executes a query that returns at most one row.
-// Per AI.md PART 10: All queries MUST have timeouts (5s for reads).
-// The returned *sql.Row is scanned by the caller after this function
-// returns, so cancel is fired by the timeout timer rather than deferred
-// (a deferred cancel would cancel the context before the caller scans).
-//
-// As with database/sql, the statement's error is reported by row.Scan: a
-// non-nil error here means the query produced no row at all and the caller must
-// not call Scan on it.
-func (d *AppDatabase) QueryRow(query string, args ...interface{}) (*sql.Row, error) {
+// QueryRow executes a query that returns at most one row with a five-second timeout.
+func (d *AppDatabase) QueryRow(query string, args ...interface{}) *MetricsRow {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	time.AfterFunc(5*time.Second, cancel)
 	return d.QueryRowContext(ctx, query, args...)
 }
 
-// QueryRowContext executes a query that returns at most one row with context.
-// The error is non-nil when the underlying query could not be issued; an empty
-// result is a successful query that row.Scan reports as sql.ErrNoRows.
-func (d *AppDatabase) QueryRowContext(ctx context.Context, query string, args ...interface{}) (*sql.Row, error) {
-	var row *sql.Row
-	err := instrumentQuery(query, func() error {
-		row = d.db.QueryRowContext(ctx, query, args...)
-		if row == nil {
-			return sql.ErrNoRows
-		}
-		// Row.Err exposes failures that occurred while issuing the query even
-		// though database/sql reports them from Scan. Recording it here keeps
-		// QueryRow failures in the same metrics path as Query and Exec.
-		return row.Err()
-	})
-	if err != nil {
-		return nil, err
-	}
-	return row, nil
+// QueryRowContext defers query metrics and errors until database/sql reports them from Scan.
+func (d *AppDatabase) QueryRowContext(ctx context.Context, query string, args ...interface{}) *MetricsRow {
+	operation, table := queryLabels(query)
+	return &MetricsRow{row: d.db.QueryRowContext(ctx, query, args...), operation: operation, table: table, start: time.Now()}
 }
 
 // Begin starts a new transaction.
@@ -426,22 +421,16 @@ func (d *AppDatabase) TableExists(tableName string) (bool, error) {
 	query := "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?"
 
 	var exists int
-	row, err := d.QueryRow(query, tableName)
-	if err != nil {
-		return false, err
-	}
-	err = row.Scan(&exists)
+	row := d.QueryRow(query, tableName)
+	err := row.Scan(&exists)
 	return exists > 0, err
 }
 
 // Version returns the database server version
 func (d *AppDatabase) Version() (string, error) {
 	var version string
-	row, err := d.QueryRow("SELECT sqlite_version()")
-	if err != nil {
-		return "", err
-	}
-	err = row.Scan(&version)
+	row := d.QueryRow("SELECT sqlite_version()")
+	err := row.Scan(&version)
 	return version, err
 }
 

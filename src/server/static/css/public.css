@@ -172,6 +172,21 @@
   margin: 0 auto;
 }
 
+.preference-export-value {
+  max-width: 100%;
+  user-select: all;
+  word-break: break-all;
+}
+
+.preferences-reset-popover {
+  max-width: min(28rem, calc(100vw - 2rem));
+  padding: 1.25rem;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
 .form-group {
   margin-bottom: 1.5rem;
 }

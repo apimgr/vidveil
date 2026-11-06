@@ -98,6 +98,9 @@ type ServerConfig struct {
 	// MCP controls the Streamable HTTP MCP endpoint per AI.md PART 11.
 	MCP MCPConfig `yaml:"mcp"`
 
+	// Pages holds configurable Markdown appended to server help pages per AI.md PART 16.
+	Pages ServerPagesConfig `yaml:"pages"`
+
 	// Tokens controls anonymous owner-token lifecycle per AI.md PART 11.
 	Tokens TokensConfig `yaml:"tokens"`
 
@@ -205,6 +208,16 @@ type ServerConfig struct {
 type MCPConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
+
+type ServerPagesConfig struct {
+	Help ServerHelpPagesConfig `yaml:"help"`
+}
+
+type ServerHelpPagesConfig struct {
+	MCP string `yaml:"mcp"`
+}
+
+const vidveilMCPHelp = "VidVeil searches across 33 video engines and streams results as they respond. Use `searchVideos` for a phrase, optionally with a bang such as `!ph` to target Pornhub; use `listEngines` to inspect engine availability, `listBangs` to discover shortcuts, and `autocompleteBangs` to find matching shortcuts or suggestions. For example: search for ocean sunsets with `!ph`, then compare the returned titles and source engines. Favorites are private owner resources; use a linked token for automation and never share a primary or operator token."
 
 // TokensConfig contains limits and retention for anonymous owner tokens.
 type TokensConfig struct {
@@ -1526,6 +1539,7 @@ func DefaultAppConfig() *AppConfig {
 			APIVersion: defaultAPIVersion,
 			Mode:       "production",
 			MCP:        MCPConfig{Enabled: true},
+			Pages:      ServerPagesConfig{Help: ServerHelpPagesConfig{MCP: vidveilMCPHelp}},
 			Tokens:     TokensConfig{MaxLinked: 25, CookieMaxAge: "1y", IdlePurgeDays: 0},
 			Token:      generateToken(32),
 			Security: SecurityConfig{

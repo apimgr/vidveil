@@ -37,16 +37,20 @@ func (s *Server) ownerTokenPrincipal(w http.ResponseWriter, r *http.Request) (ap
 		return apitoken.Principal{}, false
 	}
 	header := r.Header.Get("Authorization")
-	if !strings.HasPrefix(header, "Bearer ") || strings.TrimSpace(strings.TrimPrefix(header, "Bearer ")) == "" {
-		handler.SendError(w, "FORBIDDEN", "A primary bearer token is required")
+	token, bearer := bearerToken(strings.TrimSpace(header))
+	if !bearer {
+		handler.SetBearerChallenge(w, "")
+		handler.SendError(w, "UNAUTHORIZED", "Authentication required")
 		return apitoken.Principal{}, false
 	}
-	principal, err := s.tokenManager.Authenticate(r.Context(), strings.TrimSpace(strings.TrimPrefix(header, "Bearer ")))
+	principal, err := s.tokenManager.Authenticate(r.Context(), token)
 	if err != nil {
-		handler.SendError(w, "FORBIDDEN", "A primary bearer token is required")
+		handler.SetBearerChallenge(w, "invalid_token")
+		handler.SendError(w, "UNAUTHORIZED", "Invalid token")
 		return apitoken.Principal{}, false
 	}
 	if principal.Kind != "primary" {
+		handler.SetBearerChallenge(w, "insufficient_scope")
 		handler.SendError(w, "FORBIDDEN", "Token management requires the primary token")
 		return apitoken.Principal{}, false
 	}
@@ -104,7 +108,7 @@ func writeOwnerTokenReveal(w http.ResponseWriter, r *http.Request, token string)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	locale := i18n.DetectLocale(r)
-	_, _ = fmt.Fprintf(w, `<!doctype html><html lang="%s" dir="%s"><meta charset="utf-8"><title>%s</title><main><h1>%s</h1><p>%s</p><code class="owner-token-value" data-owner-token-value>%s</code><p><button type="button" data-copy-owner-token data-copy-success="%s" data-copy-failed="%s">%s</button> <span role="status" aria-live="polite"></span></p><p><a href="/server/preferences">%s</a></p></main><script src="/static/js/app.js"></script></html>`, html.EscapeString(locale), i18n.Direction(locale), html.EscapeString(i18n.Translate(locale, "owner_tokens.title")), html.EscapeString(i18n.Translate(locale, "owner_tokens.title")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_store")), html.EscapeString(token), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_success")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_failed")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy")), html.EscapeString(i18n.Translate(locale, "owner_tokens.return_preferences")))
+	_, _ = fmt.Fprintf(w, `<!doctype html><html lang="%s" dir="%s"><meta charset="utf-8"><title>%s</title><main><h1>%s</h1><p>%s</p><code class="owner-token-value" data-owner-token-value>%s</code><p><button type="button" data-copy-owner-token data-copy-success="%s" data-copy-failed="%s">%s</button> <span role="status" aria-live="polite"></span></p><p><a href="/server/preferences/tokens">%s</a></p></main><script src="/static/js/app.js"></script></html>`, html.EscapeString(locale), i18n.Direction(locale), html.EscapeString(i18n.Translate(locale, "owner_tokens.title")), html.EscapeString(i18n.Translate(locale, "owner_tokens.title")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_store")), html.EscapeString(token), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_success")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_failed")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy")), html.EscapeString(i18n.Translate(locale, "owner_tokens.return_preferences")))
 }
 
 func (s *Server) ownerTokenWebRevealPrimary(w http.ResponseWriter, r *http.Request) {
@@ -215,7 +219,7 @@ func (s *Server) ownerTokenWebUpdateLinked(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Invalid token form", http.StatusBadRequest)
 		return
 	}
-	expires, err := parseOwnerTokenExpiry(r.FormValue("expires"))
+	expires, err := ownerTokenExpiryFromForm(r)
 	if err != nil {
 		http.Error(w, "Invalid token expiry", http.StatusBadRequest)
 		return
@@ -224,7 +228,7 @@ func (s *Server) ownerTokenWebUpdateLinked(w http.ResponseWriter, r *http.Reques
 		s.ownerTokenOperationError(w, err)
 		return
 	}
-	http.Redirect(w, r, "/server/preferences", http.StatusSeeOther)
+	http.Redirect(w, r, "/server/preferences/tokens", http.StatusSeeOther)
 }
 
 func (s *Server) ownerTokenWebRevokeLinked(w http.ResponseWriter, r *http.Request) {
@@ -246,7 +250,7 @@ func (s *Server) ownerTokenWebRevokeLinked(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	s.auditOwnerToken("token.revoked", principal.OwnerID, prefix, r)
-	http.Redirect(w, r, "/server/preferences", http.StatusSeeOther)
+	http.Redirect(w, r, "/server/preferences/tokens", http.StatusSeeOther)
 }
 
 func (s *Server) ownerTokenRestore(w http.ResponseWriter, r *http.Request) {
@@ -271,7 +275,7 @@ func (s *Server) ownerTokenRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setOwnerTokenCookie(w, strings.TrimSpace(r.FormValue("token")))
 	s.auditOwnerToken("token.restored", principal.OwnerID, principal.Prefix, r)
-	http.Redirect(w, r, "/server/preferences", http.StatusSeeOther)
+	http.Redirect(w, r, "/server/preferences/tokens", http.StatusSeeOther)
 }
 
 func (s *Server) ownerTokensAPIList(w http.ResponseWriter, r *http.Request) {
@@ -508,11 +512,18 @@ func parseOwnerTokenExpiry(value string) (*int64, error) {
 }
 
 func ownerTokenExpiryFromForm(r *http.Request) (*int64, error) {
+	if preset := r.FormValue("expires_preset"); preset != "" {
+		if preset == "custom" {
+			date := strings.TrimSpace(r.FormValue("expires_date"))
+			if date == "" {
+				return nil, errors.New("custom expiry date is required")
+			}
+			return parseOwnerTokenExpiry(date)
+		}
+		return parseOwnerTokenExpiry(preset)
+	}
 	if date := strings.TrimSpace(r.FormValue("expires_date")); date != "" {
 		return parseOwnerTokenExpiry(date)
-	}
-	if preset := r.FormValue("expires_preset"); preset != "" {
-		return parseOwnerTokenExpiry(preset)
 	}
 	return parseOwnerTokenExpiry(r.FormValue("expires"))
 }

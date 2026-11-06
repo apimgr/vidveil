@@ -1,0 +1,80 @@
+{{define "nojs/owner-tokens"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>
+    {{template "public/head" .}}
+    <link rel="stylesheet" href="{{asset "/static/css/owner-tokens.css"}}">
+</head>
+<body>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    {{template "public/site-banner" .}}
+    {{template "public/header" .}}
+    <main class="owner-tokens-page" id="main-content" role="main">
+        <header class="owner-tokens-heading">
+            <h1>{{ t "owner_tokens.title" }}</h1>
+            <a href="/server/preferences">{{ t "owner_tokens.return_preferences" }}</a>
+        </header>
+        {{if .TokensEnabled}}
+        <section>
+            <h2>{{ t "owner_tokens.primary_token" }}</h2>
+            <p><code>tok_••••••••••••••••••••••••{{.PrimaryToken.Suffix}}</code></p>
+            <form method="post" action="/server/preferences/token/reveal">
+                {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                <button type="submit">{{ t "owner_tokens.reveal_primary" }}</button>
+            </form>
+            <form method="post" action="/server/preferences/token/rotate">
+                {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                <label><input type="checkbox" name="confirm" value="rotate" required> {{ t "owner_tokens.rotate_warning" }}</label>
+                <button type="submit">{{ t "owner_tokens.rotate_primary" }}</button>
+            </form>
+        </section>
+        <section>
+            <h2>{{ t "owner_tokens.linked_tokens" }}</h2>
+            {{range .LinkedTokens}}
+            <article class="owner-token-card">
+                <h3>{{.Name}}</h3>
+                <p><code>tok_••••••••••••••••••••••••{{.Suffix}}</code> — {{if eq .Status "active"}}{{ t "owner_tokens.status_active" }}{{else if eq .Status "expired"}}{{ t "owner_tokens.status_expired" }}{{else}}{{ t "owner_tokens.status_revoked" }}{{end}}</p>
+                <p>{{ t "owner_tokens.created_at" }}: <time>{{.Created}}</time> · {{ t "owner_tokens.last_used" }}: {{if .LastUsed}}<time>{{.LastUsed}}</time>{{else}}{{ t "owner_tokens.never_used" }}{{end}} · {{ t "owner_tokens.expires" }}: {{if eq .Expires "never"}}{{ t "owner_tokens.never" }}{{else}}{{.Expires}}{{end}}</p>
+                {{if ne .Status "revoked"}}
+                <form method="post" action="/server/preferences/tokens/{{.ID}}/reveal">{{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}<button type="submit">{{ t "owner_tokens.reveal" }}</button></form>
+                <form method="post" action="/server/preferences/tokens/{{.ID}}/rotate">{{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}<button type="submit">{{ t "owner_tokens.rotate" }}</button></form>
+                <form method="post" action="/server/preferences/tokens/{{.ID}}/update">
+                    {{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}
+                    <label>{{ t "owner_tokens.name" }} <input name="name" value="{{.Name}}" required minlength="1" maxlength="64"></label>
+                    <label>{{ t "owner_tokens.expiry_format" }} <input name="expires" value="{{.Expires}}" required></label>
+                    <button type="submit">{{ t "owner_tokens.update" }}</button>
+                </form>
+                {{if eq .Status "active"}}<form method="post" action="/server/preferences/tokens/{{.ID}}/revoke">{{if $.CSRFToken}}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{end}}<button type="submit">{{ t "owner_tokens.revoke" }}</button></form>{{end}}
+                {{end}}
+            </article>
+            {{else}}
+            <p>{{ t "owner_tokens.no_linked_tokens" }}</p>
+            {{end}}
+        </section>
+        <section>
+            <h2>{{ t "owner_tokens.create_linked" }}</h2>
+            <form method="post" action="/server/preferences/tokens">
+                {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                <label>{{ t "owner_tokens.name" }} <input name="name" required minlength="1" maxlength="64"></label>
+                <label>{{ t "owner_tokens.expiry_format" }} <input name="expires" value="never" required></label>
+                <button type="submit">{{ t "owner_tokens.create_linked" }}</button>
+            </form>
+        </section>
+        {{else}}
+        <section>
+            <h2>{{ t "owner_tokens.restore" }}</h2>
+            <p>{{ t "owner_tokens.restore_description" }}</p>
+            <form method="post" action="/server/preferences/token/restore">
+                {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                <label for="owner-token-restore">{{ t "owner_tokens.primary_token" }}</label>
+                <input id="owner-token-restore" name="token" type="password" autocomplete="off" required>
+                <button type="submit">{{ t "owner_tokens.restore" }}</button>
+            </form>
+        </section>
+        {{end}}
+    </main>
+    {{template "public/footer" .}}
+    {{template "public/scripts" .}}
+</body>
+</html>
+{{end}}

@@ -208,7 +208,7 @@ func TestSecFetchValidation_CrossSiteGet_Passes(t *testing.T) {
 	}
 }
 
-func TestSecFetchValidation_NavigateToAPI_Returns403(t *testing.T) {
+func TestSecFetchValidation_NavigateToAPI_PassesThrough(t *testing.T) {
 	h := secFetchValidationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -217,8 +217,8 @@ func TestSecFetchValidation_NavigateToAPI_Returns403(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("secFetch navigate to /api/: status = %d, want 403", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Errorf("secFetch navigate to /api/: status = %d, want 200", rec.Code)
 	}
 }
 

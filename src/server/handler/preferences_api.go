@@ -2,12 +2,14 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
@@ -59,21 +61,21 @@ func validatePreference(name, value string) (string, bool) {
 		return "", false
 	}
 	enums := map[string]map[string]struct{}{
-		"vidveil_pref_grid_density":         setOf("comfortable", "default", "compact"),
-		"vidveil_pref_thumbnail_size":       setOf("small", "medium", "large"),
-		"vidveil_pref_autoplay_preview":     setOf("0", "1"),
-		"vidveil_pref_preview_delay":        setOf("0", "200", "500", "1000"),
-		resultsPerPageCookieName:            setOf("0", "20", "50", "100"),
-		openNewTabCookieName:                setOf("0", "1"),
-		"vidveil_pref_default_preview_only": setOf("0", "1"),
-		"vidveil_pref_show_ai_content":      setOf("0", "1"),
-		"vidveil_pref_default_duration":     setOf("any", "short", "medium", "long"),
-		"vidveil_pref_min_quality":          setOf("0", "240", "360", "480", "720", "1080", "2160"),
-		"vidveil_pref_default_sort":         setOf("any", "duration-desc", "duration-asc", "views", "quality"),
-		"vidveil_pref_min_duration":         setOf("0", "60", "180", "300", "600", "1200", "1800"),
-		"vidveil_pref_max_history":          setOf("0", "10", "25", "50", "100"),
-		"vidveil_pref_auto_clear_history":   setOf("0", "1", "7", "30"),
-		"vidveil_pref_use_tor":              setOf("0", "1"),
+		"vidveil_pref_grid_density":       setOf("comfortable", "default", "compact"),
+		"vidveil_pref_thumbnail_size":     setOf("small", "medium", "large"),
+		"vidveil_pref_preview_first":      setOf("0", "1"),
+		"vidveil_pref_autoplay_preview":   setOf("0", "1"),
+		"vidveil_pref_preview_delay":      setOf("0", "200", "500", "1000"),
+		resultsPerPageCookieName:          setOf("0", "20", "50", "100"),
+		openNewTabCookieName:              setOf("0", "1"),
+		"vidveil_pref_show_ai_content":    setOf("0", "1"),
+		"vidveil_pref_default_duration":   setOf("any", "short", "medium", "long"),
+		"vidveil_pref_min_quality":        setOf("0", "240", "360", "480", "720", "1080", "2160"),
+		"vidveil_pref_default_sort":       setOf("any", "duration-desc", "duration-asc", "views", "quality"),
+		"vidveil_pref_min_duration":       setOf("0", "60", "180", "300", "600", "1200", "1800"),
+		"vidveil_pref_max_history":        setOf("0", "10", "25", "50", "100"),
+		"vidveil_pref_auto_clear_history": setOf("0", "1", "7", "30"),
+		"vidveil_pref_use_tor":            setOf("0", "1"),
 	}
 	if allowed, documented := enums[name]; documented {
 		_, ok := allowed[value]
@@ -121,18 +123,29 @@ func (h *SearchHandler) applyPreferences(w http.ResponseWriter, r *http.Request,
 	result := h.effectivePreferences(r)
 	result.Applied, result.Ignored = []string{}, []string{}
 	secure := strings.HasPrefix(urlSchemeForRequest(r), "https")
-	seen := 0
+	controlFields := map[string]struct{}{
+		"csrf_token": {}, "code": {}, "redirect": {}, "action": {},
+		"consent_form": {}, "consent_preferences": {}, "consent_analytics": {}, "ccpa_opt_out": {},
+	}
+	considered := 0
 	for _, name := range preferenceNames(values) {
+		if _, control := controlFields[name]; control {
+			continue
+		}
+		if considered >= 32 {
+			result.Ignored = append(result.Ignored, name)
+			continue
+		}
+		considered++
 		valueSet := values[name]
 		if len(valueSet) > 1 {
 			valueSet = valueSet[len(valueSet)-1:]
 		}
 		for _, raw := range valueSet {
-			if seen >= 32 || len(raw) > 64 {
+			if len(raw) > 64 {
 				result.Ignored = append(result.Ignored, name)
 				continue
 			}
-			seen++
 			value, ok := validatePreference(name, raw)
 			if !ok {
 				result.Ignored = append(result.Ignored, name)
@@ -156,6 +169,57 @@ func (h *SearchHandler) applyPreferences(w http.ResponseWriter, r *http.Request,
 	return result
 }
 
+func preferenceConsentCookie(r *http.Request) *http.Cookie {
+	preferences := r.PostForm.Get("consent_preferences") == "1" || r.PostForm.Get("consent_preferences") == "on"
+	analytics := r.PostForm.Get("consent_analytics") == "1" || r.PostForm.Get("consent_analytics") == "on"
+	value := fmt.Sprintf(`{"essential":true,"preferences":%t,"analytics":%t,"timestamp":%d}`, preferences, analytics, time.Now().Unix())
+	return &http.Cookie{Name: "cookie_consent", Value: url.QueryEscape(value), Path: "/", MaxAge: 31536000, Secure: strings.HasPrefix(urlSchemeForRequest(r), "https"), SameSite: http.SameSiteLaxMode}
+}
+
+func (h *SearchHandler) applyWebConsent(w http.ResponseWriter, r *http.Request) {
+	if r.PostForm.Get("consent_form") != "1" {
+		return
+	}
+	http.SetCookie(w, preferenceConsentCookie(r))
+	if r.PostForm.Get("ccpa_opt_out") == "1" || r.PostForm.Get("ccpa_opt_out") == "on" {
+		http.SetCookie(w, &http.Cookie{Name: "ccpa_opt_out", Value: "true", Path: "/", MaxAge: 31536000, Secure: strings.HasPrefix(urlSchemeForRequest(r), "https"), SameSite: http.SameSiteLaxMode})
+	} else {
+		http.SetCookie(w, &http.Cookie{Name: "ccpa_opt_out", Value: "", Path: "/", MaxAge: -1, Secure: strings.HasPrefix(urlSchemeForRequest(r), "https"), SameSite: http.SameSiteLaxMode})
+	}
+}
+
+func resetPreferenceCookies(w http.ResponseWriter, r *http.Request) {
+	secure := strings.HasPrefix(urlSchemeForRequest(r), "https")
+	delete := func(name string) {
+		http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, Secure: secure, SameSite: http.SameSiteLaxMode})
+	}
+	for _, name := range []string{"theme", "lang", "cookie_consent", "ccpa_opt_out", "vidveil_build", "age_verified", "content_ack", "dismissed_announcements", "forward_ip", "preview_first"} {
+		delete(name)
+	}
+	for _, cookie := range r.Cookies() {
+		if strings.HasPrefix(cookie.Name, "vidveil_pref_") {
+			delete(cookie.Name)
+		}
+	}
+	w.Header().Set("Clear-Site-Data", `"storage"`)
+}
+
+func preferencesWithCode(form url.Values) url.Values {
+	values := make(url.Values, len(form))
+	for key, items := range form {
+		values[key] = append([]string(nil), items...)
+	}
+	if code, ok := decodePreferenceCode(form.Get("code")); ok {
+		if imported, err := url.ParseQuery(code); err == nil {
+			for key, items := range imported {
+				values[key] = items
+			}
+		}
+	}
+	delete(values, "code")
+	return values
+}
+
 func urlSchemeForRequest(r *http.Request) string {
 	proto, _, _ := urlvar.GetURLVars(r)
 	return proto
@@ -163,7 +227,8 @@ func urlSchemeForRequest(r *http.Request) string {
 
 func (h *SearchHandler) PreferencesAPIGet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	SendOK(w, h.effectivePreferences(r))
+	preferences := h.effectivePreferences(r)
+	SendOK(w, map[string]interface{}{"theme": preferences.Theme, "lang": preferences.Lang, "prefs": preferences.Prefs})
 }
 
 func (h *SearchHandler) PreferencesAPISet(w http.ResponseWriter, r *http.Request) {

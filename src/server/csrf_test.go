@@ -4,6 +4,7 @@ package server
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -40,7 +41,7 @@ func TestCsrfBypassMCPAliases(t *testing.T) {
 			t.Errorf("CSRF should be bypassed for anonymous MCP POST %s", path)
 		}
 	}
-	for _, path := range []string{"/not-api/server/mcp", "/api/custom/server/mcp"} {
+	for _, path := range []string{"/not-api/server/mcp", "/custom/server/mcp"} {
 		req := httptest.NewRequest("POST", path, nil)
 		if csrfBypass(config.CSRFConfig{}, req) {
 			t.Errorf("CSRF unexpectedly bypassed for non-MCP route %s", path)
@@ -48,18 +49,33 @@ func TestCsrfBypassMCPAliases(t *testing.T) {
 	}
 }
 
-func TestCsrfBypassGuestPreferencesAPIOnly(t *testing.T) {
-	for _, path := range []string{"/api/v1/server/preferences", "/api/v2/server/preferences"} {
+func TestCsrfBypassBackendAPI(t *testing.T) {
+	for _, path := range []string{"/api/v1/server/preferences", "/api/v2/server/preferences", "/api/v1/server/preferences/import", "/api/custom/server/preferences", "/api/v1/anything"} {
 		req := httptest.NewRequest("POST", path, nil)
 		if !csrfBypass(config.CSRFConfig{}, req) {
-			t.Errorf("CSRF should be bypassed for guest preference API %s", path)
+			t.Errorf("CSRF should be bypassed for API route %s", path)
 		}
 	}
-	for _, path := range []string{"/server/preferences", "/api/v1/server/preferences/import", "/api/custom/server/preferences", "/api/v1/server/preferences/extra"} {
+	for _, path := range []string{"/server/preferences", "/server/preferences/import"} {
 		req := httptest.NewRequest("POST", path, nil)
 		if csrfBypass(config.CSRFConfig{}, req) {
 			t.Errorf("CSRF unexpectedly bypassed for %s", path)
 		}
+	}
+}
+
+func TestCSRFMiddlewareLeavesAPIOutsideCSRF(t *testing.T) {
+	h := newCSRFMiddleware(config.CSRFConfig{Enabled: true, CookieName: "csrf_token", HeaderName: "X-CSRF-Token"}, nil)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest("POST", "/api/v1/server/preferences", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("API POST status = %d, want 204", rec.Code)
+	}
+	if len(rec.Result().Cookies()) != 0 {
+		t.Fatalf("API POST received CSRF cookies: %#v", rec.Result().Cookies())
 	}
 }
 

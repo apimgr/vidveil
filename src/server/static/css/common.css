@@ -1849,6 +1849,15 @@ header .search-form {
     gap: 0.5rem;
 }
 
+.mcp-endpoint {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin-block: 0.5rem 1rem;
+    user-select: all;
+    overflow-wrap: anywhere;
+}
+
 .form-actions {
     display: flex;
     gap: 1rem;

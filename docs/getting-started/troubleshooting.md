@@ -256,7 +256,8 @@ troubleshooting, see the [configuration guide](../configuration.md) and
 
 **Symptoms:** Container exits immediately
 
-**Check logs:**
+**Check logs** (use the name assigned to the container; the compose service
+uses `vidveil-app`):
 
 ```bash
 docker logs vidveil
@@ -266,8 +267,8 @@ docker logs vidveil
 
 1. **Volume permissions:**
    ```bash
-   # Fix ownership
-   sudo chown -R 1000:1000 ./rootfs
+   # The server prepares volume ownership at startup. Check the host
+   # directories are writable by Docker and review the container logs.
    ```
 
 2. **Port conflicts:**
@@ -286,8 +287,8 @@ docker logs vidveil
 docker run -d \
   --name vidveil \
   -p 64580:80 \
-  -v ./rootfs/config:/config:z \
-  -v ./rootfs/data:/data:z \
+  -v ./volumes/config:/config:z \
+  -v ./volumes/data:/data:z \
   ghcr.io/apimgr/vidveil:latest
 ```
 

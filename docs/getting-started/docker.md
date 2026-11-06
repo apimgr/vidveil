@@ -6,8 +6,8 @@
 docker run -d \
   --name vidveil \
   -p 64580:80 \
-  -v ./rootfs/config:/config:z \
-  -v ./rootfs/data:/data:z \
+  -v ./volumes/config:/config:z \
+  -v ./volumes/data:/data:z \
   ghcr.io/apimgr/vidveil:latest
 ```
 
@@ -24,8 +24,8 @@ Vidveil uses two runtime volume roots in compose-based deployments:
 
 | Host Path | Container Path | Purpose |
 |---|---|---|
-| `./rootfs/config` | `/config` | Configuration root |
-| `./rootfs/data` | `/data` | Data and logs root |
+| `./volumes/config` | `/config` | Configuration root |
+| `./volumes/data` | `/data` | Data and logs root |
 
 The Vidveil config file inside the container is `/config/vidveil/server.yml`.
 

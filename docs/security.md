@@ -30,10 +30,12 @@ internal IPs, query strings, or stack traces.
 | `GET https://x.scour.li/.well-known/security.txt`     | Machine-readable security contact metadata.   |
 | `GET https://x.scour.li/server/contact`               | Public contact page.                          |
 
-`/metrics` is **internal only** — it is not exposed to the public internet
-unless the operator deliberately opens it, and even then it is gated by an
-optional bearer token. Detailed performance telemetry never appears on the
-public health endpoints.
+Metrics routes are **internal only** and require a per-service bearer token
+by default. An operator can disable token checks with
+`server.metrics.auth.allow_unauthenticated: true`; this is intended only for a
+firewalled deployment. The root `/metrics` alias is controlled by
+`server.metrics.root.enabled`. Detailed performance telemetry never appears on
+the public health endpoints.
 
 ## Reporting a Vulnerability
 

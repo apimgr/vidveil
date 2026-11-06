@@ -81,6 +81,23 @@ curl -q -LSsf -H "Accept: text/plain" \
 POST https://x.scour.li/api/v1/search/batch
 ```
 
+### Supporting search endpoints
+
+```http
+GET https://x.scour.li/api/v1/bangs
+GET https://x.scour.li/api/v1/bangs/autocomplete?q={partial}
+GET https://x.scour.li/api/v1/engines
+GET https://x.scour.li/api/v1/engines/health
+GET https://x.scour.li/api/v1/engines/{name}
+GET https://x.scour.li/api/v1/stats
+GET https://x.scour.li/api/v1/proxy/thumbnails?url={url}
+GET https://x.scour.li/api/v1/proxy/videos?url={url}
+```
+
+The proxy endpoints validate upstream destinations and return proxied media.
+Use the thumbnail endpoint for result images; video proxy availability depends
+on the source engine and its supported preview data.
+
 ## Bangs
 
 ```http
@@ -161,6 +178,55 @@ require the primary token in `Authorization: Bearer …`; linked tokens cannot
 manage tokens. The first anonymous favorite created through the API returns a
 new primary token once in `data.owner_token`. Save it securely and use the
 token page to create client-specific linked tokens.
+
+## Favorites
+
+Favorites are private to an anonymous owner. API requests use a Bearer owner
+token; the browser owner cookie is not accepted by API routes.
+
+```http
+GET    https://x.scour.li/api/v1/favorites
+POST   https://x.scour.li/api/v1/favorites
+DELETE https://x.scour.li/api/v1/favorites/{id}
+DELETE https://x.scour.li/api/v1/favorites
+POST   https://x.scour.li/api/v1/favorites/import
+```
+
+The first favorite created without an existing owner token issues a primary
+token in the response. Store it securely. Use a linked token for automation;
+only the primary token can manage linked tokens.
+
+## Server information and operator endpoints
+
+```http
+GET  https://x.scour.li/api/v1/server/about
+GET  https://x.scour.li/api/v1/server/privacy
+GET  https://x.scour.li/api/v1/server/help
+GET  https://x.scour.li/api/v1/server/help/mcp
+GET  https://x.scour.li/api/v1/server/terms
+POST https://x.scour.li/api/v1/server/contact
+POST https://x.scour.li/api/v1/server/reports/default
+POST https://x.scour.li/api/v1/server/reports/nel
+POST https://x.scour.li/api/v1/server/reports/csp
+GET  https://x.scour.li/api/v1/version
+GET  https://x.scour.li/api/autodiscover
+GET  https://x.scour.li/cli/binaries/{filename}
+POST https://x.scour.li/api/v1/server/restore
+```
+
+Restore requires the operator token. CLI binary downloads are public unless
+`cli.binary_download.require_auth` is enabled. Browser security-report
+ingestion routes return `204` after recording a sanitized summary; they do not
+return submitted report bodies.
+
+## Metrics
+
+When metrics are enabled, the server exposes `/server/metrics/{service}` and
+`/api/v1/server/metrics/{service}` for `prometheus`, `grafana`, and `loki`.
+`/metrics/{service}` and `/api/metrics/{service}` are aliases; the root alias
+is controlled by `server.metrics.root.enabled`. Every metrics service requires
+its own bearer token by default. Only enable
+`server.metrics.auth.allow_unauthenticated: true` on a firewalled deployment.
 
 ## Agent discovery
 

@@ -34,13 +34,14 @@ not features left pending implementation from the current `AI.md`.
 | Outbound  | The 33 upstream video search sites            | Fan-out search at request time. Results stream back via SSE.            | Per-engine timeout; partial results returned. |
 | Outbound  | Let's Encrypt ACME (`acme-v02.api.letsencrypt.org`) | TLS certificate issuance and renewal when ACME is enabled.              | Falls back to existing cert; alerts admin. |
 | Outbound  | GeoIP / blocklist / CVE feeds (configurable)  | Periodic refresh by the internal scheduler.                             | Last good DB stays in place; next refresh retries. |
+| Outbound  | GitHub Releases for `apimgr/vidveil`            | Scheduled update checks and CLI release metadata; CLI downloads are proxied on request. | Existing version remains installed; failed checks/downloads report an error. |
 | Outbound  | SMTP server (configurable)                    | Admin notifications only.                                               | Notifications drop; server keeps running.  |
 | Inbound   | Tor hidden service (when `tor` is present)    | Same routes as the public surface.                                      | Hidden service disabled; clearnet unaffected. |
 
-VidVeil does **not** phone home, send telemetry, or contact a vendor
-license server. Outbound requests are limited to searches initiated by
-visitors, configured ACME issuance/renewal, configured scheduled data feeds,
-and configured SMTP notifications.
+VidVeil sends no analytics or telemetry and does not contact a vendor license
+server. Outbound requests are limited to searches initiated by visitors,
+configured ACME issuance/renewal, scheduled data and release checks, CLI
+release downloads requested by an operator, and configured SMTP notifications.
 
 ## Integration Surfaces VidVeil Exposes
 
@@ -85,14 +86,23 @@ These are the well-defined entry points clients can integrate against.
 
 - `GET /server/healthz` — content-negotiated public status.
 - `GET /api/v1/server/healthz` — JSON-only equivalent.
-- `GET /metrics` — Prometheus exposition. **Internal only.** Optionally
-  bearer-token-gated.
+- `GET /metrics` — Prometheus exposition when the root alias is enabled.
+  Metrics are internal-only and require a per-service bearer token by default.
+  Operators can disable authentication only for a firewalled deployment with
+  `server.metrics.auth.allow_unauthenticated: true`.
 
 ### Well-Known
 
 - `GET /.well-known/security.txt` — security contact metadata.
+- `GET /.well-known/pgp-key.asc` — the configured public security-reporting key,
+  when one is available.
+- `GET /.well-known/llms.txt` (also `/llms.txt`) — configurable agent
+  discovery, generated from the current API description.
+- `GET /humans.txt` — project and attribution information.
 
-Other `/.well-known/*` paths return 404 unless explicitly defined.
+Other `/.well-known/*` paths return 404 unless explicitly defined. The server
+also publishes `/robots.txt`, `/sitemap.xml`, `/manifest.json`, and `/sw.js`;
+the sitemap omits visitor-specific pages.
 
 ## Tor Hidden Service
 

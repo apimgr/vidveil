@@ -180,6 +180,19 @@ func TestAppDatabase_QueryRowContext(t *testing.T) {
 	}
 }
 
+// TestAppDatabase_QueryRowContextReturnsIssueError verifies errors available
+// before Scan are returned and can be counted by database query metrics.
+func TestAppDatabase_QueryRowContextReturnsIssueError(t *testing.T) {
+	db := newSQLiteDB(t)
+	row, err := db.QueryRowContext(context.Background(), "SELECT * FROM missing_table")
+	if err == nil {
+		t.Fatal("QueryRowContext invalid query error = nil, want query issue error")
+	}
+	if row != nil {
+		t.Errorf("QueryRowContext invalid query row = %v, want nil", row)
+	}
+}
+
 // TestAppDatabase_QueryRow_NoRows verifies an empty result is a successful
 // query reported by Scan as sql.ErrNoRows, not as a pre-Scan error.
 func TestAppDatabase_QueryRow_NoRows(t *testing.T) {

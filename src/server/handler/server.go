@@ -926,11 +926,11 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 		"version":     version.GetVersion(),
 		"features": []string{
 			"Privacy-first search: no tracking, logging, or analytics",
-			"Meta-search across 42 adult video engines with bang shortcuts",
+			"Meta-search across 33 adult video engines with bang shortcuts",
 			"Real-time SSE streaming as each engine responds",
 			"Thumbnail proxy so source sites never see your IP",
 			"Video preview on hover (desktop) and swipe (mobile)",
-			"Cookie-based preferences with browser-local search history and favorites mirror",
+			"Cookie-based preferences, browser-local search history, and server-side favorites",
 			"Built-in Tor hidden service support",
 			"Admin-configurable geographic content restriction",
 			"Single static binary with all assets embedded",
@@ -957,7 +957,7 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 	privacy := h.appConfig.Server.Privacy
 	if getAPIResponseFormat(r) == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = fmt.Fprintf(w, "policy_version: 1.0\nlast_updated: %s\nuser_accounts: false\nsearch_queries_logged: false\nip_addresses_stored: false\ntracking_cookies: false\nthird_party_sharing: %t\ndata_stored_on_server: %t\ndata_sold: %t\nfavorites_storage: server_side_anonymous_visitor_id\n",
+		_, _ = fmt.Fprintf(w, "policy_version: 1.0\nlast_updated: %s\nuser_accounts: false\nsearch_queries_logged: false\nip_addresses_stored: false\ntracking_cookies: false\nthird_party_sharing: %t\ndata_stored_on_server: %t\ndata_sold: %t\nfavorites_storage: server_side_owner_token\n",
 			time.Now().Format("2006-01-02"), len(privacy.ThirdParty.Services) > 0, privacy.Data.StoredOnServer, privacy.Data.Sold)
 		return
 	}
@@ -1009,10 +1009,9 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 			},
 			"client_side_storage": []string{
 				"vidveil_history",
-				"vidveil_favorites_mirror",
 			},
 			"server_side_storage": []string{
-				"favorites (identified by an anonymous visitor_id cookie, no personal data)",
+				"favorites (private to the owner identified by an HttpOnly owner-token cookie; no personal data or account profile)",
 			},
 			"cookies_used": []string{
 				"theme and lang (rendering preferences)",
@@ -1021,7 +1020,7 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 				"age_verification (required by law)",
 				"content_restriction_acknowledgment (soft-block regions only)",
 				"forward_ip (opt-in only, when operator enables geo-forwarding)",
-				"visitor_id (anonymous, identifies your favorites list only)",
+				"vidveil_owner_token_ab5213f6 (HttpOnly credential that identifies your private favorites; not an account or personal identifier)",
 			},
 			"thumbnail_proxy":  true,
 			"tor_supported":    true,
@@ -1146,7 +1145,7 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 				"endpoint":    apiBase + "/search",
 				"method":      "GET",
 				"parameters":  []string{"q (query; bang shortcuts like !ph !xv supported)", "page", "engines"},
-				"description": "Search across 42 video engines; supports JSON, SSE (text/event-stream), and text/plain",
+				"description": "Search across 33 video engines; supports JSON, SSE (text/event-stream), and text/plain",
 			},
 			"bangs": map[string]interface{}{
 				"endpoint":    apiBase + "/bangs",

@@ -181,9 +181,8 @@ func RequestHost(req *http.Request) string {
 	return GlobalResolver().RequestHost(req)
 }
 
-// sameSubnetAsListen reports whether ip shares the /24 network of the configured
-// listen address. IPv6 listen addresses are matched on their /64 prefix instead,
-// since a /24 equivalent is far too narrow for a container network.
+// sameSubnetAsListen reports whether an IPv4 peer shares the /24 network of the
+// configured IPv4 listen address, per AI.md PART 12.
 // An unset or unparseable listen address trusts nothing extra.
 func sameSubnetAsListen(ip net.IP, listenAddr string) bool {
 	// Configured IPv6 addresses may be written in bracketed form ("[::1]"),
@@ -197,24 +196,12 @@ func sameSubnetAsListen(ip net.IP, listenAddr string) bool {
 	if listenIP.IsUnspecified() {
 		return false
 	}
-	// Compare in a single address family; a v4-mapped peer must not match a v6
-	// listen address (and vice versa).
-	if (listenIP.To4() != nil) != (ip.To4() != nil) {
+	// The listen-address convenience rule is specified only for IPv4. IPv6
+	// peers can still be trusted through the explicit ranges or additional list.
+	if listenIP.To4() == nil || ip.To4() == nil {
 		return false
 	}
-	// net.CIDRMask takes (prefix length, total address bits) — (24, 32) for IPv4
-	// and (64, 128) for IPv6. Deriving the first argument from the second (e.g.
-	// CIDRMask(32, 32*8)) returns a nil mask, and Mask(nil) is nil for every
-	// address, which would make every same-family peer compare equal.
-	var mask net.IPMask
-	if listenIP.To4() != nil {
-		mask = net.CIDRMask(24, 32)
-	} else {
-		if listenIP.To16() == nil || ip.To16() == nil {
-			return false
-		}
-		mask = net.CIDRMask(64, 128)
-	}
+	mask := net.CIDRMask(24, 32)
 	return listenIP.Mask(mask).Equal(ip.Mask(mask))
 }
 

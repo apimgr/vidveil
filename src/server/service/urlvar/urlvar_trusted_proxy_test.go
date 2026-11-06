@@ -28,8 +28,8 @@ func TestSameSubnetAsListen(t *testing.T) {
 		{"empty listen address", "10.0.0.7", "", false},
 		{"unparseable listen address", "10.0.0.7", "not-an-ip", false},
 		{"v4 peer vs v6 listen", "10.0.0.7", "fd00::1", false},
-		{"same v6 /64", "fd00::9", "fd00::1", true},
-		{"bracketed v6 listen address", "fd00::9", "[fd00::1]", true},
+		{"same v6 /64 is not implicitly trusted", "fd00::9", "fd00::1", false},
+		{"bracketed v6 listen address is not implicitly trusted", "fd00::9", "[fd00::1]", false},
 		{"different v6 /64", "fd00:1::9", "fd00::1", false},
 	}
 	for _, tt := range tests {

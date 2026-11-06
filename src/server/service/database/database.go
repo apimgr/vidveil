@@ -353,19 +353,22 @@ func (d *AppDatabase) QueryRow(query string, args ...interface{}) (*sql.Row, err
 }
 
 // QueryRowContext executes a query that returns at most one row with context.
-// The error is non-nil only when the underlying query could not be issued; an
-// empty result is a successful query that row.Scan reports as sql.ErrNoRows.
+// The error is non-nil when the underlying query could not be issued; an empty
+// result is a successful query that row.Scan reports as sql.ErrNoRows.
 func (d *AppDatabase) QueryRowContext(ctx context.Context, query string, args ...interface{}) (*sql.Row, error) {
 	var row *sql.Row
 	err := instrumentQuery(query, func() error {
 		row = d.db.QueryRowContext(ctx, query, args...)
-		return nil
+		if row == nil {
+			return sql.ErrNoRows
+		}
+		// Row.Err exposes failures that occurred while issuing the query even
+		// though database/sql reports them from Scan. Recording it here keeps
+		// QueryRow failures in the same metrics path as Query and Exec.
+		return row.Err()
 	})
 	if err != nil {
 		return nil, err
-	}
-	if row == nil {
-		return nil, sql.ErrNoRows
 	}
 	return row, nil
 }

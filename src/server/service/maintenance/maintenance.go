@@ -1143,6 +1143,9 @@ func validateArchiveEntryName(name string) error {
 	if strings.ContainsRune(name, '\x00') {
 		return errors.New("entry name contains a null byte")
 	}
+	if len(name) >= 2 && ((name[0] >= 'a' && name[0] <= 'z') || (name[0] >= 'A' && name[0] <= 'Z')) && name[1] == ':' {
+		return errors.New("entry name contains a drive-letter path")
+	}
 	if strings.Contains(name, `\`) {
 		return errors.New("entry name contains a backslash separator")
 	}
@@ -1287,6 +1290,15 @@ func loadRestoreArchiveWithStore(data []byte, store restoreEntryStore, configure
 		if err != nil {
 			return nil, fmt.Errorf("failed to read tar: %w", err)
 		}
+		if err := validateArchiveEntryName(header.Name); err != nil {
+			return nil, fmt.Errorf("invalid backup entry %q: %w", header.Name, err)
+		}
+		if header.Mode&0o6000 != 0 {
+			return nil, fmt.Errorf("backup entry %q has setuid or setgid permission bits", header.Name)
+		}
+		if header.Typeflag != tar.TypeDir && header.Typeflag != tar.TypeReg {
+			return nil, fmt.Errorf("backup entry %q uses an unsupported special file type", header.Name)
+		}
 		fileCount++
 		if fileCount > limits.MaxFiles {
 			return nil, fmt.Errorf("restore archive exceeds max_files of %d", limits.MaxFiles)
@@ -1324,23 +1336,10 @@ func loadRestoreArchiveWithStore(data []byte, store restoreEntryStore, configure
 		if !relevant {
 			continue
 		}
-		if header.Mode&0o6000 != 0 {
-			return nil, fmt.Errorf("backup entry %q has setuid or setgid permission bits", header.Name)
-		}
-
-		// Reject any entry whose name could escape its extraction root. A name
-		// like "config/../../etc/cron.d/x" passes the prefix test above but
-		// resolves outside {config_dir} once joined, so validate the whole name.
-		if err := validateArchiveEntryName(header.Name); err != nil {
-			return nil, fmt.Errorf("invalid backup entry %q: %w", header.Name, err)
-		}
 
 		if header.Typeflag == tar.TypeDir {
 			archive.files = append(archive.files, restoreFileEntry{name: header.Name, isDir: true, mode: header.Mode})
 			continue
-		}
-		if header.Typeflag != tar.TypeReg {
-			return nil, fmt.Errorf("backup entry %q uses an unsupported special file type", header.Name)
 		}
 
 		archive.contentHash.Write([]byte(header.Name))

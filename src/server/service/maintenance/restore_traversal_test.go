@@ -53,6 +53,24 @@ func buildArchive(t *testing.T, entries [][2]string) []byte {
 	return buf.Bytes()
 }
 
+func buildSpecialArchive(t *testing.T, header *tar.Header) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	gzWriter := gzip.NewWriter(&buf)
+	tarWriter := tar.NewWriter(gzWriter)
+	if err := tarWriter.WriteHeader(header); err != nil {
+		t.Fatalf("write special header %q: %v", header.Name, err)
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatalf("close tar: %v", err)
+	}
+	if err := gzWriter.Close(); err != nil {
+		t.Fatalf("close gzip: %v", err)
+	}
+	return buf.Bytes()
+}
+
 func TestValidateArchiveEntryName(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -68,6 +86,7 @@ func TestValidateArchiveEntryName(t *testing.T) {
 		{"trailing parent", "config/subdir/..", true},
 		{"absolute path", "/etc/shadow", true},
 		{"windows absolute", `C:\Windows\System32\evil.dll`, true},
+		{"windows drive with slash separators", "C:/Windows/System32/evil.dll", true},
 		{"backslash separator", `config\..\..\evil`, true},
 		{"empty name", "", true},
 	}
@@ -141,6 +160,14 @@ func TestLoadRestoreArchiveRejectsTraversal(t *testing.T) {
 			name:    "directory with parent traversal",
 			entries: [][2]string{{"config/../../evil/", ""}},
 		},
+		{
+			name:    "ignored prefix with parent traversal",
+			entries: [][2]string{{"other/../../evil.txt", "pwned"}},
+		},
+		{
+			name:    "drive-letter path with slash separators",
+			entries: [][2]string{{"C:/Windows/evil.txt", "pwned"}},
+		},
 	}
 
 	for _, tc := range tests {
@@ -153,6 +180,18 @@ func TestLoadRestoreArchiveRejectsTraversal(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestLoadRestoreArchiveRejectsSpecialIgnoredEntries(t *testing.T) {
+	payload := buildSpecialArchive(t, &tar.Header{
+		Name:     "other/link",
+		Typeflag: tar.TypeSymlink,
+		Linkname: "../../outside",
+		Mode:     0o777,
+	})
+	if _, err := loadRestoreArchive(payload); err == nil || !strings.Contains(err.Error(), "unsupported special file type") {
+		t.Fatalf("loadRestoreArchive error = %v, want unsupported special file type", err)
 	}
 }
 

@@ -1268,7 +1268,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/proxy/thumbnails", h.ProxyThumbnail)
 		r.Get("/proxy/videos", h.ProxyVideo)
 
-		// Favorites (public, anonymous visitor_id cookie — no account) per
+		// Favorites (public, owner-token cookie — no account) per
 		// AI.md PART 16 progressive enhancement; server-side storage in
 		// server.db, see favorites.go.
 		r.Route("/favorites", func(r chi.Router) {

@@ -15,7 +15,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/client/api"
 	"github.com/apimgr/vidveil/src/client/gui"
-	"github.com/apimgr/vidveil/src/client/path"
+	paths "github.com/apimgr/vidveil/src/client/paths"
 	"github.com/apimgr/vidveil/src/common/display"
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
@@ -245,7 +245,7 @@ func ExecuteCLI() error {
 	args = ParseCLIGlobalFlags(args)
 
 	// Per AI.md PART 32: After parsing flags, ensure the standard client directories exist.
-	if err := path.EnsureClientDirs(); err != nil {
+	if err := paths.EnsureClientDirs(); err != nil {
 		return fmt.Errorf("creating client directories: %w", err)
 	}
 
@@ -370,7 +370,7 @@ func ExecuteCLI() error {
 	}
 }
 
-// resolveCLILogFilePath returns the configured CLI log file path or the default path.
+// resolveCLILogFilePath returns the configured CLI log file path or the default paths.
 func resolveCLILogFilePath() string {
 	if cliConfig != nil {
 		configuredLogFilePath := strings.TrimSpace(cliConfig.Logging.File)
@@ -379,7 +379,7 @@ func resolveCLILogFilePath() string {
 		}
 	}
 
-	return path.LogFile()
+	return paths.LogFile()
 }
 
 // initializeCLILogging creates and opens the CLI log file, then binds the standard logger to it.
@@ -396,7 +396,7 @@ func initializeCLILogging() error {
 	if err := os.Chmod(logDirPath, 0700); err != nil {
 		return fmt.Errorf("setting CLI log directory permissions: %w", err)
 	}
-	if err := path.EnsurePathOwnership(logDirPath); err != nil {
+	if err := paths.EnsurePathOwnership(logDirPath); err != nil {
 		return fmt.Errorf("verifying CLI log directory ownership: %w", err)
 	}
 
@@ -408,7 +408,7 @@ func initializeCLILogging() error {
 		_ = logFile.Close()
 		return fmt.Errorf("setting CLI log file permissions: %w", err)
 	}
-	if err := path.EnsurePathOwnership(logFilePath); err != nil {
+	if err := paths.EnsurePathOwnership(logFilePath); err != nil {
 		_ = logFile.Close()
 		return fmt.Errorf("verifying CLI log file ownership: %w", err)
 	}
@@ -490,7 +490,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 		case "--config":
 			flagValue, nextIndex, hasFlagValue := readCLILongFlagValue(args, i)
 			if hasFlagValue {
-				cliConfigFilePath = path.ResolveConfigFilePath(flagValue)
+				cliConfigFilePath = paths.ResolveConfigFilePath(flagValue)
 				i = nextIndex + 1
 			} else {
 				i++
@@ -659,7 +659,7 @@ func LoadCLIConfigFromFile() error {
 
 	// Default token file location
 	if cliConfig.Server.Token == "" {
-		defaultTokenFilePath := path.TokenFile()
+		defaultTokenFilePath := paths.TokenFile()
 		if err := EnsureCLIDefaultTokenFilePermissions(defaultTokenFilePath); err != nil {
 			return err
 		}
@@ -734,7 +734,7 @@ func EnsureCLIConfigFilePermissions(configFilePath string) error {
 		return fmt.Errorf("config file %s has insecure permissions; run: chmod 0600 %s",
 			configFilePath, configFilePath)
 	}
-	if err := path.EnsurePathOwnership(configFilePath); err != nil {
+	if err := paths.EnsurePathOwnership(configFilePath); err != nil {
 		return fmt.Errorf("verifying CLI config file ownership: %w", err)
 	}
 
@@ -758,7 +758,7 @@ func EnsureCLIDefaultTokenFilePermissions(tokenFilePath string) error {
 		return fmt.Errorf("token file %s has insecure permissions; run: chmod 0600 %s",
 			tokenFilePath, tokenFilePath)
 	}
-	if err := path.EnsurePathOwnership(tokenFilePath); err != nil {
+	if err := paths.EnsurePathOwnership(tokenFilePath); err != nil {
 		return fmt.Errorf("verifying CLI token file ownership: %w", err)
 	}
 
@@ -767,7 +767,7 @@ func EnsureCLIDefaultTokenFilePermissions(tokenFilePath string) error {
 
 // writeCLIDefaultTokenFile writes the default CLI token file with user-only access.
 func writeCLIDefaultTokenFile(tokenValue string) error {
-	tokenFilePath := path.TokenFile()
+	tokenFilePath := paths.TokenFile()
 	tokenDirPath := filepath.Dir(tokenFilePath)
 	if err := os.MkdirAll(tokenDirPath, 0700); err != nil {
 		return fmt.Errorf("creating token directory: %w", err)
@@ -775,7 +775,7 @@ func writeCLIDefaultTokenFile(tokenValue string) error {
 	if err := os.Chmod(tokenDirPath, 0700); err != nil {
 		return fmt.Errorf("setting token directory permissions: %w", err)
 	}
-	if err := path.EnsurePathOwnership(tokenDirPath); err != nil {
+	if err := paths.EnsurePathOwnership(tokenDirPath); err != nil {
 		return fmt.Errorf("verifying token directory ownership: %w", err)
 	}
 	if err := os.WriteFile(tokenFilePath, []byte(tokenValue), 0600); err != nil {
@@ -798,10 +798,10 @@ func readCLIAuthTokenFile(tokenFilePath string) (string, error) {
 	return strings.TrimSpace(string(tokenData)), nil
 }
 
-// getCLIConfigFilePath returns the resolved CLI config file path.
+// getCLIConfigFilePath returns the resolved CLI config file paths.
 func getCLIConfigFilePath() string {
 	if cliConfigFilePath == "" {
-		cliConfigFilePath = path.ResolveConfigFilePath("")
+		cliConfigFilePath = paths.ResolveConfigFilePath("")
 	}
 
 	return cliConfigFilePath
@@ -940,7 +940,7 @@ func writeCLIConfigFile(fileCLIConfig CLIConfig, configFilePath string) error {
 	if err := os.Chmod(configDirPath, 0700); err != nil {
 		return fmt.Errorf("setting config directory permissions: %w", err)
 	}
-	if err := path.EnsurePathOwnership(configDirPath); err != nil {
+	if err := paths.EnsurePathOwnership(configDirPath); err != nil {
 		return fmt.Errorf("verifying config directory ownership: %w", err)
 	}
 

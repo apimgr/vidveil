@@ -30,7 +30,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
-	projectpath "github.com/apimgr/vidveil/src/path"
+	projectpath "github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"golang.org/x/crypto/argon2"
 )

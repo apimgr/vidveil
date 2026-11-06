@@ -17,7 +17,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/authpad"
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/version"
-	"github.com/apimgr/vidveil/src/path"
+	paths "github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 )
 
@@ -160,11 +160,11 @@ func (h *ServerHandler) restoreUploadedBackup(r *http.Request) (retErr error) {
 		return fmt.Errorf("backup must be a .tar.gz or .tar.gz.enc archive")
 	}
 
-	tempBase := filepath.Join(os.TempDir(), path.ProjectOrg)
+	tempBase := filepath.Join(os.TempDir(), paths.ProjectOrg)
 	if err := os.MkdirAll(tempBase, 0755); err != nil {
 		return fmt.Errorf("prepare restore temporary directory: %w", err)
 	}
-	tempDir, err := os.MkdirTemp(tempBase, path.ProjectName+"-restore-")
+	tempDir, err := os.MkdirTemp(tempBase, paths.ProjectName+"-restore-")
 	if err != nil {
 		return fmt.Errorf("create restore temporary directory: %w", err)
 	}

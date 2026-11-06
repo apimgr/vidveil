@@ -91,7 +91,7 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-11-05
-- Current task: AI.md alignment pass; local verification complete, provider CI follows the gitcommit push
-- Verified: `make test` passes at 71% coverage; containerized `golangci-lint` reports 0 issues; `govulncheck ./...` finds 0 reachable vulnerabilities; server and CLI cross-builds pass for all 8 OS/architecture targets
-- Relevant PARTs: 0, 1, 10, 11, 12, 14, 16, 20, 21, 25, 27, 28, 31, 32
+- Last read AI.md: 2026-11-06
+- Current task: AI.md alignment pass complete; local tests, lint, and documentation build pass; provider CI follows the gitcommit push
+- Verified: `make test` passes at 71% coverage; containerized `golangci-lint` reports 0 issues; `mkdocs build --strict` succeeds
+- Relevant PARTs: 0, 1, 3, 10, 11, 12, 14, 16, 20, 21, 25, 27, 28, 31, 32

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/apimgr/vidveil/src/client/api"
-	"github.com/apimgr/vidveil/src/client/path"
+	paths "github.com/apimgr/vidveil/src/client/paths"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"gopkg.in/yaml.v3"
@@ -254,7 +254,7 @@ func (m SetupWizardModel) View() string {
 		fmt.Fprintf(&viewBuilder, "    Server: %s\n", m.serverURL)
 		fmt.Fprintf(&viewBuilder, "    Config: %s\n", getCLIConfigFilePath())
 		if m.apiToken != "" {
-			fmt.Fprintf(&viewBuilder, "    Token:  %s\n", path.TokenFile())
+			fmt.Fprintf(&viewBuilder, "    Token:  %s\n", paths.TokenFile())
 		}
 
 	case SetupStateFailed:
@@ -316,7 +316,7 @@ func SaveSetupWizardConfig(serverURL, token string, saveToFile bool) error {
 	}
 
 	// Ensure directories exist
-	if err := path.EnsureClientDirs(); err != nil {
+	if err := paths.EnsureClientDirs(); err != nil {
 		return fmt.Errorf("creating directories: %w", err)
 	}
 

@@ -2,7 +2,7 @@
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
-<!-- Rule summary checked against AI.md on 2026-10-31; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-06; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -34,7 +34,7 @@
 - Always give project-specific API features a matching frontend route (CRUD parity); admin/system-only APIs stay file/API-only, no web route
 - Always keep Swagger and GraphQL specs auto-generated, build-time regenerated, and in sync with each other and the live API
 - Always use the canonical error envelope for every error response: `{ "ok": false, "error": "CODE", "message": "...", "details": {} }`
-- Always use the canonical success envelope for actions: `{ "ok": true, "data": {...} }`; single-item GET returns the item directly, no wrapper
+- Always use the canonical success envelope `{ "ok": true, "data": ... }` for every success response; single-item GET returns its object inside `data` (health and compatibility routes are the documented exceptions)
 - Always support `.txt` extension + `Accept: text/plain` + non-interactive client detection on every `/api/**` route
 - Always research the target service's actual API docs before implementing external compatibility — never guess
 - Always implement built-in Let's Encrypt support (HTTP-01, TLS-ALPN-01, DNS-01) in every project
@@ -95,7 +95,7 @@ OS/Arch: {GOOS}/{GOARCH}
 **Path vs query params:** identity (IDs, slugs, categories) → path; modifiers (pagination, sorting, filtering) → query.
 
 **Response envelopes:**
-- Single item: raw object, no wrapper
+- Single item: `{ "ok": true, "data": { ... } }` (health and compatibility routes are the documented exceptions)
 - Action (create/update/delete): `{ "ok": true, "data": { "id": "...", "message": "..." } }`
 - Error: `{ "ok": false, "error": "CODE", "message": "...", "details": {} }` — forbidden shapes: bare status code, `{error:"msg"}`, `{success:false}`, HTML error pages for API routes
 - Pagination (default 250/page): `{ "data": [], "pagination": { "page", "limit", "total", "pages" } }`

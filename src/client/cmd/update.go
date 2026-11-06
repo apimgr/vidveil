@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/client/api"
-	"github.com/apimgr/vidveil/src/client/path"
+	paths "github.com/apimgr/vidveil/src/client/paths"
 	"github.com/apimgr/vidveil/src/config"
 )
 
@@ -437,7 +437,7 @@ func fetchLatestCLIStableRelease() (*CLIGitHubRelease, error) {
 }
 
 func fetchLatestCLIStableReleaseContext(ctx context.Context) (*CLIGitHubRelease, error) {
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", path.GitHubOrg(), path.GitHubRepo())
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", paths.GitHubOrg(), paths.GitHubRepo())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating latest release request: %w", err)
@@ -467,7 +467,7 @@ func fetchAllCLIReleases() ([]CLIGitHubRelease, error) {
 }
 
 func fetchAllCLIReleasesContext(ctx context.Context) ([]CLIGitHubRelease, error) {
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=50", path.GitHubOrg(), path.GitHubRepo())
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=50", paths.GitHubOrg(), paths.GitHubRepo())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating release list request: %w", err)
@@ -576,11 +576,11 @@ func downloadCLIBinaryContext(ctx context.Context, downloadURL string, tokenValu
 		return "", fmt.Errorf("download status %d", resp.StatusCode)
 	}
 
-	tmpBase := filepath.Join(os.TempDir(), path.GitHubOrg())
+	tmpBase := filepath.Join(os.TempDir(), paths.GitHubOrg())
 	if err := os.MkdirAll(tmpBase, 0700); err != nil {
 		return "", fmt.Errorf("creating temp base dir: %w", err)
 	}
-	tmpDir, err := os.MkdirTemp(tmpBase, path.InternalName()+"-")
+	tmpDir, err := os.MkdirTemp(tmpBase, paths.InternalName()+"-")
 	if err != nil {
 		return "", fmt.Errorf("creating temp dir: %w", err)
 	}

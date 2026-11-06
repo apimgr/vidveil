@@ -55,7 +55,6 @@
 
         <h2>{{ t "help.thumbnail_proxy" }}</h2>
         <p>{{ t "help.thumbnail_proxy_body" }}</p>
-        <pre><code>curl "{{.BaseURL}}{{.APIBase}}/proxy/thumbnails?url=https://example.com/thumb.jpg"</code></pre>
 
         <h2>{{ t "help.tor_hidden_service" }}</h2>
         <p>{{if .TorOnionAddr}}{{ tf "help.tor_reachable" "onion_address" .TorOnionAddr }}{{else}}{{ t "help.tor_auto" }}{{end}}</p>

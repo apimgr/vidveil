@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 8: Directory creation and validation
 
-package path
+package paths
 
 import (
 	"fmt"

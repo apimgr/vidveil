@@ -2,7 +2,7 @@
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
-<!-- Rule summary checked against AI.md on 2026-10-17; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-06; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -114,7 +114,7 @@ Keyboard navigation, visible focus indicators, ARIA labels/roles, 4.5:1 contrast
 
 ### CORS
 
-Default policy: `allowed_origins: ["*"]`. `Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS`; `Access-Control-Allow-Headers` lists every supported auth header by name (never `*` — invalid with credentials and doesn't cover `Authorization`); `Access-Control-Allow-Credentials: true` only when the resolved origin list is explicit, never with `*`. Resolution order: explicit `server.cors.allowed_origins` (a single `""` entry disables CORS entirely) → `DOMAIN` env hostnames → reverse-proxy-learned `X-Forwarded-Host` (trusted proxies only) → fallback `*`. Same resolved list feeds CSP `connect-src {learned_origins}`. `?token=` query-param auth bypasses CORS preflight entirely (no header, no preflight trigger).
+Default policy: `allowed_origins: ["*"]`. `Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS`; `Access-Control-Allow-Headers` lists every supported auth header by name (never `*` — invalid with credentials and doesn't cover `Authorization`); `Access-Control-Allow-Credentials: true` only when the resolved origin list is explicit, never with `*`. Resolution order: explicit `server.cors.allowed_origins` (a single `""` entry disables CORS entirely) → `DOMAIN` env hostnames → reverse-proxy-learned `X-Forwarded-Host` (trusted proxies only) → fallback `*`. Same resolved list feeds CSP `connect-src {learned_origins}`. Native API credentials use `Authorization: Bearer` only; `?token=` is ignored and never treated as authentication.
 
 ### CSRF Protection (stateless double-submit cookie)
 

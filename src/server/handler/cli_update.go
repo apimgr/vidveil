@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
-	"github.com/apimgr/vidveil/src/path"
+	paths "github.com/apimgr/vidveil/src/paths"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -129,7 +129,7 @@ func cliPlatformFromRouteName(filename string) (string, bool) {
 		"linux-amd64", "linux-arm64", "darwin-amd64", "darwin-arm64",
 		"windows-amd64", "windows-arm64", "freebsd-amd64", "freebsd-arm64",
 	} {
-		if filename == path.ProjectName+"-cli-"+platform {
+		if filename == paths.ProjectName+"-cli-"+platform {
 			return platform, true
 		}
 	}
@@ -156,9 +156,9 @@ func getCLIReleaseMetadata(ctx context.Context, channel string) (cliReleaseMetad
 }
 
 func fetchCLIReleaseMetadata(ctx context.Context, channel string) (cliReleaseMetadata, error) {
-	endpoint := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", path.ProjectOrg, path.ProjectName)
+	endpoint := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", paths.ProjectOrg, paths.ProjectName)
 	if channel != "stable" {
-		endpoint = fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=100", path.ProjectOrg, path.ProjectName)
+		endpoint = fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=100", paths.ProjectOrg, paths.ProjectName)
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -281,7 +281,7 @@ func cliReleaseMatchesChannel(release cliRelease, channel string) bool {
 }
 
 func cliAssetName(platform string) string {
-	name := path.ProjectName + "-cli-" + platform
+	name := paths.ProjectName + "-cli-" + platform
 	if strings.HasPrefix(platform, "windows-") {
 		name += ".exe"
 	}

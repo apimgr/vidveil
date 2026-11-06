@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	appPath "github.com/apimgr/vidveil/src/path"
+	appPath "github.com/apimgr/vidveil/src/paths"
 )
 
 // newCovSM returns a ServiceManager with a unique test app name.

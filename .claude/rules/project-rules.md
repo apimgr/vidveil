@@ -1,7 +1,7 @@
 # Project Rules (PART 2, 3, 4)
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
-<!-- Rule summary checked against AI.md on 2026-10-17; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-06; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -34,7 +34,7 @@
 
 **License:** MIT only. `LICENSE.md` required. Docker license metadata via `--annotation "org.opencontainers.image.licenses=MIT"` at buildx time (no Dockerfile LABEL). README badge: `[![License](https://img.shields.io/github/license/{project_org}/{project_name})](LICENSE.md)`. Compatibility matrix: MIT project may depend on MIT/Apache-2.0/BSD/ISC/Public-Domain; never GPL/AGPL/LGPL.
 
-**Variable placeholders:** `{project_name}` (lowercase, may change on rename), `{PROJECT_NAME}` (env/Makefile uppercase), `{project_org}` (lowercase), `{internal_name}` (lowercase, stable across ordinary renames; explicit rename/fork reset only), `{plist_name}` = `io.github.{project_org}.{internal_name}`. This project: `project_name=vidveil`, `project_org=apimgr`, `internal_name=vidveil`, `internal_org=apimgr`, `official_site=https://x.scour.li`.
+**Variable placeholders:** `{project_name}` (lowercase, may change on rename), `{PROJECT_NAME}` (env/Makefile uppercase), `{project_org}` (lowercase), `{internal_name}` and `{internal_org}` (lowercase, both frozen after the project ships; ordinary project/org renames change only `project_name`/`project_org`), `{plist_name}` = `io.github.{internal_org}.{internal_name}`. This project: `project_name=vidveil`, `project_org=apimgr`, `internal_name=vidveil`, `internal_org=apimgr`, `official_site=https://x.scour.li`.
 
 **Directory structure (required top-level):**
 ```

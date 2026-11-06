@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 5: Path Security Functions
-package path
+package paths
 
 import (
 	"errors"

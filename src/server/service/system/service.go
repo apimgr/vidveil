@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	appPath "github.com/apimgr/vidveil/src/path"
+	appPath "github.com/apimgr/vidveil/src/paths"
 )
 
 // frozenInternalName is {internal_name} per AI.md PART 2 — frozen forever and

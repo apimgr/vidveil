@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	projectpath "github.com/apimgr/vidveil/src/path"
+	projectpath "github.com/apimgr/vidveil/src/paths"
 )
 
 func TestEnsureRestorePathHasNoSymlinksRejectsSymlinkParent(t *testing.T) {

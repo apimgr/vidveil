@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 //go:build !windows
 
-package path
+package paths
 
 import (
 	"fmt"

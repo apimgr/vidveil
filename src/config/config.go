@@ -17,12 +17,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/apimgr/vidveil/src/path"
+	paths "github.com/apimgr/vidveil/src/paths"
 	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
 )
 
-// path.ProjectOrg and path.ProjectName are defined in paths package
+// paths.ProjectOrg and paths.ProjectName are defined in paths package
 
 // Version is set at build time via ldflags
 var Version = "dev"
@@ -1511,7 +1511,7 @@ type AgeVerificationConfig struct {
 
 // AppPaths holds resolved directory paths
 // AppPaths is now defined in paths package
-type AppPaths = path.AppPaths
+type AppPaths = paths.AppPaths
 
 // envDefault returns the value of env var key when set and non-empty, else def
 func envDefault(key, def string) string {
@@ -1978,12 +1978,12 @@ func DefaultAppConfig() *AppConfig {
 
 // GetAppPaths returns OS-appropriate paths (delegated to paths package)
 func GetAppPaths(configDir, dataDir string) *AppPaths {
-	return path.GetAppPaths(configDir, dataDir)
+	return paths.GetAppPaths(configDir, dataDir)
 }
 
 // GetDatabaseDir returns the SQLite database directory.
 func GetDatabaseDir(dataDir string) string {
-	return path.GetDatabaseDir(dataDir)
+	return paths.GetDatabaseDir(dataDir)
 }
 
 // LoadAppConfig loads configuration from file or creates default
@@ -2600,7 +2600,7 @@ func IsValidHost(host string, devMode bool, projectName string) bool {
 // IsValidSSLHost validates host for SSL/Let's Encrypt per AI.md
 // SSL always requires production-valid host (devMode=false)
 func IsValidSSLHost(host string) bool {
-	return IsValidHost(host, false, path.ProjectName)
+	return IsValidHost(host, false, paths.ProjectName)
 }
 
 // LiveReload per AI.md PART 8 NON-NEGOTIABLE
@@ -2873,7 +2873,7 @@ func isDevTLD(fqdn string) bool {
 		".local", ".test", ".example", ".invalid",
 		".localhost", ".lan", ".internal", ".home", ".localdomain",
 		".home.arpa", ".intranet", ".corp", ".private",
-		"." + path.ProjectName,
+		"." + paths.ProjectName,
 	}
 	for _, suffix := range devSuffixes {
 		if strings.HasSuffix(lower, suffix) {

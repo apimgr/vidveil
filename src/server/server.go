@@ -33,7 +33,7 @@ import (
 	"github.com/apimgr/vidveil/src/graphql"
 	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/notify"
-	"github.com/apimgr/vidveil/src/path"
+	paths "github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server/handler"
 	mcpserver "github.com/apimgr/vidveil/src/server/mcp"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
@@ -335,7 +335,7 @@ func (s *Server) setupMiddleware() {
 	s.router.Use(middleware.RequestID)
 
 	// 3. Path Security per AI.md PART 5 — validate paths, block traversal
-	s.router.Use(path.PathSecurityMiddleware)
+	s.router.Use(paths.PathSecurityMiddleware)
 
 	// Recoverer — recover panics in any downstream middleware or handler.
 	// guaranteedRecoverer replaces chi's stock middleware.Recoverer (which
@@ -1159,7 +1159,7 @@ func (s *Server) setupRoutes() {
 	server.SetLogger(s.logger)
 	s.emailService = email.NewEmailService(s.appConfig)
 	server.SetEmailService(s.emailService)
-	s.notifyDispatcher = notify.New(&s.appConfig.Server.Contact, path.ProjectName, version.GetVersion(), s.appConfig.GetPublicURL())
+	s.notifyDispatcher = notify.New(&s.appConfig.Server.Contact, paths.ProjectName, version.GetVersion(), s.appConfig.GetPublicURL())
 	if s.logger != nil {
 		s.notifyDispatcher.SetFailureLogger(func(event string, fields map[string]any) {
 			s.logger.Warn(event, fields)

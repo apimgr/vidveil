@@ -11,7 +11,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/notify"
-	"github.com/apimgr/vidveil/src/path"
+	paths "github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 )
 
@@ -34,7 +34,7 @@ func TestScheduledBackupFailureUsesDedicatedAdminNotification(t *testing.T) {
 	cfg.Server.Contact.Admin.Webhooks = map[string]string{"generic": webhook.URL}
 	s := &Server{
 		appConfig:        cfg,
-		notifyDispatcher: notify.New(&cfg.Server.Contact, path.ProjectName, version.GetVersion(), cfg.GetPublicURL()),
+		notifyDispatcher: notify.New(&cfg.Server.Contact, paths.ProjectName, version.GetVersion(), cfg.GetPublicURL()),
 	}
 	task := scheduler.ScheduledTask{ID: "backup_daily", Name: "Daily Backup", NextRun: time.Now().Add(time.Hour)}
 	history := scheduler.TaskHistory{Result: "failure", Error: "disk full"}

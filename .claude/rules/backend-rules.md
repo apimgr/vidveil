@@ -2,7 +2,7 @@
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
-<!-- Rule summary checked against AI.md on 2026-10-17; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-06; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -152,7 +152,6 @@ All log FILES: raw ASCII, no ANSI/emoji/color/control chars, one event per line.
 - Directories are NOT configurable: `{config_dir}/tor/` (torrc, regenerated every startup, 0700), `{data_dir}/tor/` (runtime data, 0700), `{data_dir}/tor/site/` (hidden service keys, 0700), log to `{log_dir}/tor.log`.
 - Tor detection is priority 0 in FQDN resolution (PART 12) — evaluated before reverse-proxy headers, always trusted.
 - If Tor binary not found: log INFO, disable Tor features, continue without Tor (no hard failure).
-- Admin panel: `/server/{admin_path}/config/network/tor` shows read-only status (connected/not-installed/error, binary path/version, .onion address, uptime, active circuits) plus validated settings for outbound network, performance, security, and bandwidth — no enable/disable toggle exists.
 - `--status` includes Tor hidden-service state (Connected + .onion address) alongside node/cluster status.
 
 **PART 31.2 — I2P Eepsite (OPTIONAL, opt-in, default OFF):**

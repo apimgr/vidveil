@@ -4,7 +4,7 @@ package maintenance
 import (
 	"testing"
 
-	projectpath "github.com/apimgr/vidveil/src/path"
+	projectpath "github.com/apimgr/vidveil/src/paths"
 	"github.com/gofrs/flock"
 )
 

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	projectpath "github.com/apimgr/vidveil/src/path"
+	projectpath "github.com/apimgr/vidveil/src/paths"
 )
 
 type restoreRootStage struct {

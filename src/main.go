@@ -32,7 +32,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/mode"
-	pathpkg "github.com/apimgr/vidveil/src/path"
+	pathpkg "github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server"
 	daemonpkg "github.com/apimgr/vidveil/src/server/daemon"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"

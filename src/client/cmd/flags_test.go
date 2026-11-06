@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/apimgr/vidveil/src/client/api"
-	"github.com/apimgr/vidveil/src/client/path"
+	paths "github.com/apimgr/vidveil/src/client/paths"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -219,7 +219,7 @@ func TestParseCLIGlobalFlagsResolvesNamedConfigFiles(t *testing.T) {
 	debugFlagProvided = false
 
 	remainingArgs := ParseCLIGlobalFlags([]string{"--config", "test", "search", "demo"})
-	wantConfigFilePath := filepath.Join(path.ConfigDir(), "test.yml")
+	wantConfigFilePath := filepath.Join(paths.ConfigDir(), "test.yml")
 
 	if cliConfigFilePath != wantConfigFilePath {
 		t.Fatalf("config file = %q, want %q", cliConfigFilePath, wantConfigFilePath)
@@ -277,7 +277,7 @@ func TestLoadCLIConfigFromFileWritesServerPrimaryWhenConfigEmpty(t *testing.T) {
 	t.Setenv("VIDVEIL_TOKEN", "")
 	t.Setenv("VIDVEIL_CLI_TOKEN", "")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = "https://saved.example.com"
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -318,7 +318,7 @@ func TestLoadCLIConfigFromFilePreservesExistingServerPrimary(t *testing.T) {
 	t.Setenv("VIDVEIL_TOKEN", "")
 	t.Setenv("VIDVEIL_CLI_TOKEN", "")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = "https://session-only.example.com"
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -369,7 +369,7 @@ func TestLoadCLIConfigFromFileRejectsInsecureConfigPermissions(t *testing.T) {
 	t.Setenv("VIDVEIL_SERVER_TIMEOUT", "")
 	t.Setenv("VIDVEIL_DEBUG", "")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -412,7 +412,7 @@ func TestLoadCLIConfigFromFileReadsTopLevelToken(t *testing.T) {
 	t.Setenv("VIDVEIL_TOKEN", "")
 	t.Setenv("VIDVEIL_CLI_TOKEN", "")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -458,7 +458,7 @@ func TestLoadCLIConfigFromFileAutoCreatesMissingConfig(t *testing.T) {
 	})
 	OfficialSite = ""
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -557,7 +557,7 @@ func TestWriteCLIConfigFilePromotesLegacyServerTokenToAuthSection(t *testing.T) 
 	t.Setenv("APPDATA", filepath.Join(homeDir, "AppData", "Roaming"))
 	t.Setenv("LOCALAPPDATA", filepath.Join(homeDir, "AppData", "Local"))
 
-	configFilePath := filepath.Join(path.ConfigDir(), "cli.yml")
+	configFilePath := filepath.Join(paths.ConfigDir(), "cli.yml")
 	fileCLIConfig := CLIConfig{}
 	fileCLIConfig.Server.Address = "https://configured.example.com"
 	fileCLIConfig.Server.Token = "cfg-token"
@@ -596,7 +596,7 @@ func TestLoadCLIConfigFromFileEnvironmentOverridesConfig(t *testing.T) {
 	t.Setenv("VIDVEIL_SERVER_TIMEOUT", "45")
 	t.Setenv("VIDVEIL_DEBUG", "enabled")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -657,7 +657,7 @@ func TestLoadCLIConfigFromFileTokenFileFlagOverridesEnvironment(t *testing.T) {
 		t.Fatalf("writing token file: %v", err)
 	}
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	outputFormatFlag = ""
@@ -692,7 +692,7 @@ func TestLoadCLIConfigFromFileRejectsInsecureTokenFilePermissions(t *testing.T) 
 	t.Setenv("VIDVEIL_SERVER_TIMEOUT", "")
 	t.Setenv("VIDVEIL_DEBUG", "")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -702,7 +702,7 @@ func TestLoadCLIConfigFromFileRejectsInsecureTokenFilePermissions(t *testing.T) 
 	debugModeEnabled = false
 	debugFlagProvided = false
 
-	defaultTokenFilePath := path.TokenFile()
+	defaultTokenFilePath := paths.TokenFile()
 	if err := os.MkdirAll(filepath.Dir(defaultTokenFilePath), 0700); err != nil {
 		t.Fatalf("creating token dir: %v", err)
 	}
@@ -736,7 +736,7 @@ func TestWriteCLIDefaultTokenFileUsesRestrictedPermissions(t *testing.T) {
 		t.Fatalf("writing default token file: %v", err)
 	}
 
-	defaultTokenFilePath := path.TokenFile()
+	defaultTokenFilePath := paths.TokenFile()
 	tokenData, err := os.ReadFile(defaultTokenFilePath)
 	if err != nil {
 		t.Fatalf("reading token file: %v", err)
@@ -752,7 +752,7 @@ func TestWriteCLIDefaultTokenFileUsesRestrictedPermissions(t *testing.T) {
 	if fileInfo.Mode().Perm() != 0600 {
 		t.Fatalf("token file permissions = %v, want %v", fileInfo.Mode().Perm(), os.FileMode(0600))
 	}
-	if err := path.EnsurePathOwnership(defaultTokenFilePath); err != nil {
+	if err := paths.EnsurePathOwnership(defaultTokenFilePath); err != nil {
 		t.Fatalf("verifying token ownership: %v", err)
 	}
 }
@@ -771,7 +771,7 @@ func TestLoadCLIConfigFromFileReadsAuthTokenFromConfig(t *testing.T) {
 	t.Setenv("VIDVEIL_SERVER_TIMEOUT", "")
 	t.Setenv("VIDVEIL_DEBUG", "")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -817,7 +817,7 @@ func TestLoadCLIConfigFromFileReadsAuthTokenFileFromConfig(t *testing.T) {
 		t.Fatalf("writing config token file: %v", err)
 	}
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -858,7 +858,7 @@ func TestLoadCLIConfigFromFileReadsOutputVerboseFromConfig(t *testing.T) {
 	t.Setenv("VIDVEIL_SERVER_TIMEOUT", "")
 	t.Setenv("VIDVEIL_DEBUG", "")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -899,7 +899,7 @@ func TestLoadCLIConfigFromFileReadsLoggingAndCacheFromConfig(t *testing.T) {
 	t.Setenv("VIDVEIL_SERVER_TIMEOUT", "")
 	t.Setenv("VIDVEIL_DEBUG", "")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -997,7 +997,7 @@ func TestInitializeCLILoggingUsesDefaultLogFile(t *testing.T) {
 		t.Fatalf("initializing cli logging: %v", err)
 	}
 
-	defaultLogFilePath := path.LogFile()
+	defaultLogFilePath := paths.LogFile()
 	fileInfo, err := os.Stat(defaultLogFilePath)
 	if err != nil {
 		t.Fatalf("stating default log file: %v", err)
@@ -1005,7 +1005,7 @@ func TestInitializeCLILoggingUsesDefaultLogFile(t *testing.T) {
 	if fileInfo.Mode().Perm() != 0600 {
 		t.Fatalf("default log file permissions = %v, want %v", fileInfo.Mode().Perm(), os.FileMode(0600))
 	}
-	if err := path.EnsurePathOwnership(defaultLogFilePath); err != nil {
+	if err := paths.EnsurePathOwnership(defaultLogFilePath); err != nil {
 		t.Fatalf("verifying default log ownership: %v", err)
 	}
 }
@@ -1067,10 +1067,10 @@ func TestExecuteCLICreatesClientDirsAfterParsingFlags(t *testing.T) {
 	}
 
 	expectedDirs := []string{
-		path.ConfigDir(),
-		path.DataDir(),
-		path.CacheDir(),
-		path.LogDir(),
+		paths.ConfigDir(),
+		paths.DataDir(),
+		paths.CacheDir(),
+		paths.LogDir(),
 	}
 	for _, expectedDir := range expectedDirs {
 		fileInfo, err := os.Stat(expectedDir)
@@ -1080,7 +1080,7 @@ func TestExecuteCLICreatesClientDirsAfterParsingFlags(t *testing.T) {
 		if !fileInfo.IsDir() {
 			t.Fatalf("path %q is not a directory", expectedDir)
 		}
-		if err := path.EnsurePathOwnership(expectedDir); err != nil {
+		if err := paths.EnsurePathOwnership(expectedDir); err != nil {
 			t.Fatalf("verifying ownership for %q: %v", expectedDir, err)
 		}
 	}
@@ -1125,7 +1125,7 @@ func TestLoadCLIConfigFromFileUsesOfficialSiteDefault(t *testing.T) {
 	})
 	OfficialSite = "https://x.scour.li"
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -1237,7 +1237,7 @@ func TestLoadCLIConfigFromFileReadsTUIEnabledFalse(t *testing.T) {
 	t.Setenv("VIDVEIL_SERVER_TIMEOUT", "")
 	t.Setenv("VIDVEIL_DEBUG", "")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -1278,7 +1278,7 @@ func TestLoadCLIConfigFromFileIgnoresLegacyTUIShowHintsKey(t *testing.T) {
 	t.Setenv("VIDVEIL_SERVER_TIMEOUT", "")
 	t.Setenv("VIDVEIL_DEBUG", "")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -1322,7 +1322,7 @@ func TestLoadCLIConfigFromFileReadsDurationTimeoutString(t *testing.T) {
 	t.Setenv("VIDVEIL_SERVER_TIMEOUT", "")
 	t.Setenv("VIDVEIL_DEBUG", "")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -1363,7 +1363,7 @@ func TestLoadCLIConfigFromFileReadsDebugFromConfig(t *testing.T) {
 	t.Setenv("VIDVEIL_SERVER_TIMEOUT", "")
 	t.Setenv("VIDVEIL_DEBUG", "")
 
-	cliConfigFilePath = filepath.Join(path.ConfigDir(), "cli.yml")
+	cliConfigFilePath = filepath.Join(paths.ConfigDir(), "cli.yml")
 	serverAddressFlag = ""
 	apiTokenFlag = ""
 	tokenFilePath = ""
@@ -1458,7 +1458,7 @@ func TestWriteCLIConfigFileWritesDurationTimeoutString(t *testing.T) {
 	t.Setenv("APPDATA", filepath.Join(homeDir, "AppData", "Roaming"))
 	t.Setenv("LOCALAPPDATA", filepath.Join(homeDir, "AppData", "Local"))
 
-	configFilePath := filepath.Join(path.ConfigDir(), "cli.yml")
+	configFilePath := filepath.Join(paths.ConfigDir(), "cli.yml")
 	fileCLIConfig := CLIConfig{}
 	fileCLIConfig.Server.Address = "https://configured.example.com"
 	fileCLIConfig.Server.Timeout = 45

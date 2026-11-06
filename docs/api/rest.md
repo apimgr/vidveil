@@ -127,15 +127,18 @@ preference state plus `applied` and `ignored` parameter names.
 
 ## MCP
 
-MCP is enabled by default and uses the same API handlers and Bearer token as
-REST. The canonical route and both direct aliases accept Streamable HTTP
+MCP is enabled by default and uses the same API handlers and Bearer
+authentication as REST. For owner-scoped tools, use a linked owner token
+created for that MCP client; never use the primary owner token or the operator
+token (`server.token`). Public tools work anonymously. The canonical route and
+both direct aliases accept Streamable HTTP
 JSON-RPC POST requests; GET and DELETE return 405.
 
 ```http
 POST https://x.scour.li/api/v1/server/mcp
 POST https://x.scour.li/api/mcp
 POST https://x.scour.li/mcp
-Authorization: Bearer {server.token}
+Authorization: Bearer {linked-owner-token}
 Content-Type: application/json
 Accept: application/json, text/event-stream
 ```
@@ -148,6 +151,16 @@ Connection instructions are available at `GET /server/help/mcp`; the JSON
 equivalent is `GET /api/{api_version}/server/help/mcp`. Both return `404` when
 MCP is disabled. The VidVeil-specific examples are configured by
 `server.pages.help.mcp`.
+
+## Owner token management
+
+The browser token page is `/server/preferences/tokens`. It supports restoring
+an existing primary token when opened in a new browser; management actions are
+available only when the primary owner cookie is valid. API management routes
+require the primary token in `Authorization: Bearer …`; linked tokens cannot
+manage tokens. The first anonymous favorite created through the API returns a
+new primary token once in `data.owner_token`. Save it securely and use the
+token page to create client-specific linked tokens.
 
 ## Agent discovery
 

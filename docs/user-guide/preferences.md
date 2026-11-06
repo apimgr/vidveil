@@ -47,4 +47,22 @@ Access preferences at `https://x.scour.li/server/preferences`.
 
 ## Storage
 
-Preferences are stored locally in your browser using `localStorage`, with a small theme cookie used so the server can render the correct theme on first load. No account is required.
+Preferences are stored in browser cookies so the server can render the selected
+theme, language, and search settings without JavaScript or an account. Some
+JavaScript features may keep optional convenience state in `localStorage`, but
+it is not required for preferences to work.
+
+## Owner tokens
+
+Manage private favorites and automation credentials separately from display
+preferences at [`/server/preferences/tokens`](https://x.scour.li/server/preferences/tokens).
+Restore a primary token there when moving to another browser. Create a linked
+token for each automation or MCP client so it can be revoked independently.
+The primary token is required for token management; do not use it as an
+automation credential. The token page works without JavaScript.
+
+## Reset
+
+Use **Reset preferences** to clear the site's non-credential preferences and
+consent cookies. Your owner token is preserved. The reset also clears
+browser-managed site storage.

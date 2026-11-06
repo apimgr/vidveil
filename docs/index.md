@@ -48,6 +48,11 @@ See [Configuration](configuration.md) for details.
 - [REST API](api/rest.md)
 - [GraphQL](api/graphql.md)
 - [CLI Reference](cli.md)
+- [Configuration](configuration.md)
+- [Security](security.md)
+- [Integrations](integrations.md)
+- [Administration](admin.md)
+- [Development](development.md)
 
 ## License
 

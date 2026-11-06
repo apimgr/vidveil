@@ -144,8 +144,11 @@ Configuration file location (created on first run):
 
 Search and browsing are public. Favorites are private to an anonymous owner; the
 first saved favorite creates an owner token. Save the primary token securely to
-restore access on another browser at `/server/preferences`. API clients send
-owner tokens as Bearer credentials. See the [authentication guide](docs/api/authentication.md).
+restore access on another browser at `/server/preferences/tokens`. Create a
+separate linked token for each API or MCP client; do not use the primary or
+operator token for automation. API clients send owner tokens as Bearer
+credentials. See the [authentication guide](docs/api/authentication.md) and
+[token management guide](docs/user-guide/preferences.md#owner-tokens).
 
 ### Search
 
@@ -218,6 +221,8 @@ The root `/healthz` alias is disabled by default.
 | `https://x.scour.li/api/v1/server/swagger` | OpenAPI JSON (`/api/swagger` alias) |
 | `https://x.scour.li/api/v1/server/graphql` | GraphQL endpoint (`/api/graphql` alias) |
 | `https://x.scour.li/server/docs/graphql` | GraphiQL playground |
+| `https://x.scour.li/server/help/mcp` | MCP connection guide (when MCP is enabled) |
+| `https://x.scour.li/server/preferences/tokens` | Restore and manage owner tokens |
 | `https://x.scour.li/.well-known/llms.txt` | AI-agent discovery (`/llms.txt` alias) |
 | `https://x.scour.li/mcp` | MCP Streamable HTTP endpoint |
 

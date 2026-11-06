@@ -15,13 +15,13 @@ only and ignore cookies. Raw owner tokens are encrypted for explicit reveal;
 their SHA-256 digests are used for authentication.
 
 Favorites are private owner resources. The first API favorite creation without
-a token issues a primary token and returns it in `data.owner_token`;
+a token issues a primary token and returns it once in `data.owner_token`;
 save it securely. Later favorite API requests must send that token or a linked
 token as a Bearer credential. API routes ignore the browser owner cookie. Web
 forms use the HttpOnly, Secure, SameSite=Strict cookie named
-`vidveil_owner_token_ab5213f6`, which is also the optional JavaScript
-localStorage convenience key. The configured `server.token` has operator
-access to every owner's favorites.
+`vidveil_owner_token_ab5213f6`; the optional localStorage copy only enhances
+JavaScript clients. The configured `server.token` has operator access to every
+owner's favorites and must not be used by MCP clients.
 
 ### Token Authentication
 
@@ -40,12 +40,18 @@ secret operations; see the [CLI reference](../cli.md).
 
 ### Owner Token Management
 
-The owner-token management API is available under
+The browser token page is `/server/preferences/tokens`. It allows restoring an
+existing primary token on another browser and managing tokens when the primary
+owner cookie is valid. The owner-token management API is available under
 `/api/{api_version}/server/preferences/tokens`. Send the primary owner token
 as `Authorization: Bearer …` for list, create, reveal, rotate, update, and
 revoke operations. Linked tokens receive `403` on token-management routes.
 List responses contain masked values only. Reveal and rotation responses use
 `Cache-Control: no-store` and return a raw token only for that explicit action.
+Use a separately named linked token for each automation or MCP client; linked
+tokens can access their owner's resources but cannot manage tokens. Native API
+credentials are accepted only through `Authorization: Bearer …`; alternate
+credential headers, cookies, and `?token=` are ignored.
 
 ## Rate Limiting
 

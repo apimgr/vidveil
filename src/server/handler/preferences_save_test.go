@@ -132,6 +132,29 @@ func TestPreferencesPage_NoJSRestoresSavedEngineSelection(t *testing.T) {
 	}
 }
 
+func TestPreferencesPage_EngineSelectionsDefaultToAllEnabled(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := newRenderTestHandler()
+	h.engineMgr.InitializeEngines()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/server/preferences", nil)
+	req.Header.Set("User-Agent", "Lynx/2.9.0")
+
+	h.PreferencesPage(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("preferences page status = %d, want 200", rr.Code)
+	}
+	if len(h.engineMgr.ListEngines()) == 0 {
+		t.Fatal("preferences page rendered no engine checkboxes")
+	}
+	for _, info := range h.engineMgr.ListEngines() {
+		if !strings.Contains(rr.Body.String(), `name="engines" value="`+info.Name+`" checked>`) {
+			t.Errorf("default engine checkbox %q was not checked", info.Name)
+		}
+	}
+}
+
 // ── PreferencesSave ──────────────────────────────────────────────────────────
 
 func TestPreferencesSave_GetMethod_IsNotFound(t *testing.T) {
@@ -204,11 +227,11 @@ func TestPreferencesSave_PersistsEngineSelectionIncludingUncheckedEngines(t *tes
 	if cookies[engineSelectionCookieName] != "1" {
 		t.Errorf("engine selection marker = %q, want 1", cookies[engineSelectionCookieName])
 	}
-	if cookies["vidveil_pref_engine_pornhub"] != "1" {
-		t.Errorf("PornHub selection = %q, want 1", cookies["vidveil_pref_engine_pornhub"])
+	if cookies[engineSelectionValueCookieName] != "pornhub" {
+		t.Errorf("packed engine selection = %q, want pornhub", cookies[engineSelectionValueCookieName])
 	}
-	if cookies["vidveil_pref_engine_xvideos"] != "0" {
-		t.Errorf("XVideos selection = %q, want 0", cookies["vidveil_pref_engine_xvideos"])
+	if len(rr.Result().Cookies()) > 30 {
+		t.Errorf("preferences save emitted %d cookies; want a compact response", len(rr.Result().Cookies()))
 	}
 }
 

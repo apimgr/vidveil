@@ -150,6 +150,7 @@ const iPForwardCookieName = "forward_ip"
 const resultsPerPageCookieName = "vidveil_pref_results_per_page"
 const openNewTabCookieName = "vidveil_pref_open_new_tab"
 const engineSelectionCookieName = "vidveil_pref_engines_selected"
+const engineSelectionValueCookieName = "vidveil_pref_engines"
 
 // previewFirstCookieName persists the filters-panel "preview first" result
 // ordering across searches for no-JS clients (see getRequestPreviewFirst) —
@@ -1280,6 +1281,10 @@ func (h *SearchHandler) preferencePageData(w http.ResponseWriter, r *http.Reques
 		for i := range engines {
 			_, engines[i].Enabled = selected[engines[i].Name]
 		}
+	} else {
+		for i := range engines {
+			engines[i].Enabled = true
+		}
 	}
 	// Favorites count is server-authoritative (server.db, see favorites.go)
 	// per AI.md PART 16/32 — never derived from client-side localStorage.
@@ -1322,6 +1327,23 @@ func requestEngineSelection(r *http.Request, engines []model.EngineInfo) (map[st
 		return nil, false
 	}
 	selected := make(map[string]bool, len(engines))
+	if packed, err := r.Cookie(engineSelectionValueCookieName); err == nil {
+		if packed.Value == "none" {
+			return selected, true
+		}
+		allowed := make(map[string]struct{}, len(engines))
+		for _, info := range engines {
+			allowed[info.Name] = struct{}{}
+		}
+		for _, name := range strings.Split(packed.Value, ".") {
+			if _, ok := allowed[name]; ok {
+				selected[name] = true
+			}
+		}
+		return selected, true
+	}
+	// Read the per-engine cookies written by earlier versions until the
+	// browser next saves preferences in the compact format.
 	for _, info := range engines {
 		if preferenceCookieValue(r, "vidveil_pref_engine_"+info.Name, "0") == "1" {
 			selected[info.Name] = true
@@ -1545,18 +1567,37 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 	h.applyWebConsent(w, r)
 	if r.PostForm.Get("engines_selection_set") == "1" {
 		selected := make(map[string]struct{}, len(r.PostForm["engines"]))
-		for _, name := range r.PostForm["engines"] {
-			selected[name] = struct{}{}
+		allowed := make(map[string]struct{})
+		for _, info := range h.engineMgr.ListEngines() {
+			allowed[info.Name] = struct{}{}
+		}
+		engineNames := r.PostForm["engines"]
+		if packed := values.Get(engineSelectionValueCookieName); packed != "" {
+			if value, ok := validatePreference(engineSelectionValueCookieName, packed); ok {
+				if value == "none" {
+					engineNames = nil
+				} else {
+					engineNames = strings.Split(value, ".")
+				}
+			}
+		}
+		for _, name := range engineNames {
+			if _, ok := allowed[name]; ok {
+				selected[name] = struct{}{}
+			}
 		}
 		secure := strings.HasPrefix(urlSchemeForRequest(r), "https")
 		http.SetCookie(w, &http.Cookie{Name: engineSelectionCookieName, Value: "1", Path: "/", MaxAge: 31536000, Secure: secure, SameSite: http.SameSiteLaxMode})
-		for _, info := range h.engineMgr.ListEngines() {
-			value := "0"
-			if _, ok := selected[info.Name]; ok {
-				value = "1"
-			}
-			http.SetCookie(w, &http.Cookie{Name: "vidveil_pref_engine_" + info.Name, Value: value, Path: "/", MaxAge: 31536000, Secure: secure, SameSite: http.SameSiteLaxMode})
+		selectedNames := make([]string, 0, len(selected))
+		for name := range selected {
+			selectedNames = append(selectedNames, name)
 		}
+		sort.Strings(selectedNames)
+		packed := strings.Join(selectedNames, ".")
+		if packed == "" {
+			packed = "none"
+		}
+		http.SetCookie(w, &http.Cookie{Name: engineSelectionValueCookieName, Value: packed, Path: "/", MaxAge: 31536000, Secure: secure, SameSite: http.SameSiteLaxMode})
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/") {
 		if len(result.Applied) == 0 {

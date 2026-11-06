@@ -102,6 +102,34 @@ func TestSearchWithOperators_AIFilterHonorsRequestPreference(t *testing.T) {
 	}
 }
 
+func TestSearchWithOperators_PreviewFirstOutranksSelectedSort(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Search.MinRelevanceScore = 0
+	m := NewEngineManager(cfg)
+	withPreview := validResult("amateur teen xxx preview", "https://example.com/preview")
+	withPreview.PreviewURL = "https://example.com/preview.mp4"
+	withPreview.ViewsCount = 1
+	withoutPreview := validResult("amateur teen xxx", "https://example.com/no-preview")
+	withoutPreview.ViewsCount = 1000
+	m.engines["mock-preview"] = &mockSearchEngine{
+		name:  "mock-preview",
+		avail: true,
+		tier:  1,
+		results: []model.VideoResult{
+			withPreview,
+			withoutPreview,
+		},
+	}
+
+	resp := m.SearchWithOperators(context.Background(), "amateur teen", 1, nil, nil, nil, nil, true, "", 20, ResultFilterOptions{SortBy: "views"})
+	if resp == nil || len(resp.Data.Results) != 2 {
+		t.Fatalf("SearchWithOperators returned %v results; want 2", resp)
+	}
+	if resp.Data.Results[0].PreviewURL == "" {
+		t.Fatalf("preview-first result came after selected views sort: %#v", resp.Data.Results)
+	}
+}
+
 func TestSearch_WithMockEngineError_RecordsFailure(t *testing.T) {
 	m := newMgrWithMock("mock-err", nil, errors.New("engine failed"), true)
 

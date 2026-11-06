@@ -209,6 +209,11 @@ function readPreferenceCookies(defaults) {
             prefs.engineSelectionSet = raw === '1';
             return;
         }
+        if (key === 'engines') {
+            prefs.engineSelectionSet = true;
+            prefs.enabledEngines = raw === 'none' || raw === '' ? [] : raw.split('.');
+            return;
+        }
         if (!(key in defaults)) return;
         var fallback = defaults[key];
         if (typeof fallback === 'boolean') prefs[key] = raw === '1' || raw === 'true';
@@ -453,10 +458,10 @@ function mirrorPreferencesToCookies(prefs) {
                 document.cookie = name + '=; path=/; max-age=0; SameSite=Lax' + secure;
             }
         });
-        prefs.enabledEngines.forEach(function(engine) {
-            if (!/^[a-z0-9_]{1,48}$/.test(engine)) return;
-            document.cookie = 'vidveil_pref_engine_' + engine + '=1; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
-        });
+        var engines = prefs.enabledEngines.filter(function(engine) {
+            return /^[a-z0-9_]{1,48}$/.test(engine);
+        }).sort();
+        document.cookie = 'vidveil_pref_engines=' + (engines.length ? engines.join('.') : 'none') + '; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
         document.cookie = 'vidveil_pref_engines_selected=1; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
     }
     Object.keys(prefs).forEach(function(key) {
@@ -3682,6 +3687,13 @@ document.addEventListener('error', function(e) {
         function loadPreferences() {
             var prefs = readPreferenceCookies(defaults);
 
+            document.cookie.split(';').forEach(function(cookie) {
+                var name = cookie.split('=')[0].trim();
+                if (/^vidveil_pref_engine_[a-z0-9_]+$/.test(name)) {
+                    document.cookie = name + '=; path=/; max-age=0; SameSite=Lax' + (window.location.protocol === 'https:' ? '; Secure' : '');
+                }
+            });
+
             document.getElementById('theme').value = prefs.theme;
             document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
             document.documentElement.classList.add('theme-' + prefs.theme);
@@ -3707,7 +3719,7 @@ document.addEventListener('error', function(e) {
             document.getElementById('use-tor').checked = prefs.useTor;
 
             var savedEngines = prefs.enabledEngines || prefs.engines || [];
-            if (savedEngines.length > 0) {
+            if (prefs.engineSelectionSet) {
                 document.querySelectorAll('input[name="engines"]').forEach(function(cb) {
                     cb.checked = savedEngines.includes(cb.value);
                 });
@@ -3720,8 +3732,8 @@ document.addEventListener('error', function(e) {
         // call, so the redirect fires once per click instead of once total.
         var saving = false;
 
-        function savePreferences(e) {
-            e.preventDefault();
+        function preparePreferencesSubmit(e) {
+            if (e.submitter && e.submitter.name === 'action' && e.submitter.value === 'reset') return;
             if (saving) return;
             saving = true;
 
@@ -3731,41 +3743,6 @@ document.addEventListener('error', function(e) {
                 saveBtn.textContent = i18n.saving;
             }
 
-            var engines = [];
-            document.querySelectorAll('input[name="engines"]:checked').forEach(function(cb) {
-                engines.push(cb.value);
-            });
-
-            var prefs = {
-                theme: document.getElementById('theme').value,
-                gridDensity: document.getElementById('grid-density').value,
-                thumbnailSize: document.getElementById('thumbnail-size').value,
-                autoplayPreview: document.getElementById('autoplay-preview').checked,
-                previewDelay: document.getElementById('preview-delay').value,
-                resultsPerPage: document.getElementById('results-per-page').value,
-                openNewTab: document.getElementById('open-new-tab').checked,
-                previewFirst: document.getElementById('preview-first').checked,
-                showAIContent: document.getElementById('show-ai-content').checked,
-                defaultDuration: document.getElementById('default-duration').value,
-                minQuality: document.getElementById('min-quality').value,
-                defaultSort: document.getElementById('default-sort').value,
-                minDuration: document.getElementById('min-duration').value,
-                maxHistory: document.getElementById('max-history').value,
-                autoClearHistory: document.getElementById('auto-clear-history').value,
-                useTor: document.getElementById('use-tor').checked,
-                enabledEngines: engines,
-                engineSelectionSet: true
-            };
-
-            document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-auto');
-            document.documentElement.classList.add('theme-' + prefs.theme);
-            setTheme(prefs.theme);
-            mirrorPreferencesToCookies(prefs);
-
-            showToast(i18n.saved, 'success');
-            setTimeout(function() {
-                window.location.href = preferencesReturnTo();
-            }, 800);
         }
 
         window.resetPreferences = function() {
@@ -3923,6 +3900,7 @@ document.addEventListener('error', function(e) {
         form.dataset.managed = 'true';
         loadPreferences();
         initEngineTiers();
+        form.addEventListener('submit', preparePreferencesSubmit);
     });
 })();
 

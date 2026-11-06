@@ -42,6 +42,7 @@ Access preferences at `https://x.scour.li/server/preferences`.
 
 ### Search Engines
 
+- All configured engines are selected by default until you save a selection.
 - Enable or disable engines individually
 - Use **Select All** or **Select None** for quick changes
 

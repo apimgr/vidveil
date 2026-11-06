@@ -484,14 +484,15 @@ collect:
 	// resultsPerPage was resolved before the collection loop (it doubles as
 	// the early-return fill target).
 	allResults = sortAndFilterByRelevanceWithOperators(allResults, query, minScore, exactPhrases, exclusions, requiredTerms, nil)
+	// Server-authoritative sort override from the filter panel (filters.tmpl
+	// "sort" field) — applied to the full deduplicated set before pagination.
+	allResults = sortResultsByFilterOption(allResults, filterOpts.SortBy)
+	// Preview-first is the primary ordering preference. Apply it last so the
+	// selected secondary sort is retained within the preview and non-preview
+	// groups instead of moving non-preview results ahead of previews.
 	if previewFirst {
 		allResults = sortResultsPreviewFirst(allResults)
 	}
-	// Server-authoritative sort override from the filter panel (filters.tmpl
-	// "sort" field) — applied to the full deduplicated set before pagination,
-	// same field-value contract the JS enhancement layer used to compute
-	// client-side; the server is now the sole source of ordering.
-	allResults = sortResultsByFilterOption(allResults, filterOpts.SortBy)
 
 	// Slice to the requested page window so the returned data array never
 	// exceeds resultsPerPage, per AI.md PART 14 pagination contract ("data"

@@ -21,6 +21,30 @@ func TestRequestEngineNamesUsesSavedSelection(t *testing.T) {
 	}
 }
 
+func TestRequestEngineSelectionUsesPackedCookie(t *testing.T) {
+	engines := []model.EngineInfo{{Name: "alpha"}, {Name: "beta"}, {Name: "gamma"}}
+	req := httptest.NewRequest("GET", "/api/v1/search?q=test", nil)
+	req.AddCookie(&http.Cookie{Name: engineSelectionCookieName, Value: "1"})
+	req.AddCookie(&http.Cookie{Name: engineSelectionValueCookieName, Value: "alpha.gamma"})
+
+	selected, configured := requestEngineSelection(req, engines)
+	if !configured || !selected["alpha"] || selected["beta"] || !selected["gamma"] {
+		t.Fatalf("packed engine selection = (%v, %v), want alpha and gamma", selected, configured)
+	}
+}
+
+func TestRequestEngineSelectionPackedNone(t *testing.T) {
+	engines := []model.EngineInfo{{Name: "alpha"}, {Name: "beta"}}
+	req := httptest.NewRequest("GET", "/api/v1/search?q=test", nil)
+	req.AddCookie(&http.Cookie{Name: engineSelectionCookieName, Value: "1"})
+	req.AddCookie(&http.Cookie{Name: engineSelectionValueCookieName, Value: "none"})
+
+	selected, configured := requestEngineSelection(req, engines)
+	if !configured || len(selected) != 0 {
+		t.Fatalf("packed empty selection = (%v, %v), want empty configured selection", selected, configured)
+	}
+}
+
 func TestRequestEngineNamesDefaultsToAll(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/v1/search?q=test", nil)
 	if got := requestEngineNames(req, nil, []model.EngineInfo{{Name: "alpha"}}); got != nil {

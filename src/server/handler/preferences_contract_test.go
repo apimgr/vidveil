@@ -74,6 +74,31 @@ func TestPreferencesSaveCodeOverridesFormAndAppliesConsent(t *testing.T) {
 	}
 }
 
+func TestPreferencesSaveCodeOverridesEngineSelection(t *testing.T) {
+	h := newRenderTestHandler()
+	h.engineMgr.InitializeEngines()
+	code := base64.RawURLEncoding.EncodeToString([]byte(engineSelectionValueCookieName + "=none&" + engineSelectionCookieName + "=1"))
+	form := url.Values{
+		"code":                  {code},
+		"engines_selection_set": {"1"},
+		"engines":               {"pornhub"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+	h.PreferencesSave(response, req)
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("PreferencesSave status = %d, want 303", response.Code)
+	}
+	cookies := map[string]string{}
+	for _, cookie := range response.Result().Cookies() {
+		cookies[cookie.Name] = cookie.Value
+	}
+	if cookies[engineSelectionValueCookieName] != "none" {
+		t.Fatalf("imported engine selection = %q, want none", cookies[engineSelectionValueCookieName])
+	}
+}
+
 func TestPreferencesResetDeletesAppCookiesAndPreservesCredentials(t *testing.T) {
 	h := newRenderTestHandler()
 	form := url.Values{"action": {"reset"}, "redirect": {"/search?q=hello"}}

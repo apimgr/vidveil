@@ -69,6 +69,8 @@ These are the well-defined entry points clients can integrate against.
 - MCP Streamable HTTP is exposed at `/api/{api_version}/server/mcp`, `/api/mcp`,
   and `/mcp`; it uses the API Bearer token and can be disabled with
   `server.mcp.enabled: false`.
+- `/server/help/mcp` explains how to connect and lists the live anonymous tool
+  set; `/api/{api_version}/server/help/mcp` returns its JSON metadata.
 - The generated endpoint guide is available at `/.well-known/llms.txt` and
   `/llms.txt`. See [configuration](configuration.md) for settings.
 

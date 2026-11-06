@@ -144,6 +144,11 @@ Set `server.mcp.enabled: false` to disable all three routes. MCP ignores
 cookies and validates any supplied `Origin` against the request origin or an
 explicitly configured CORS origin.
 
+Connection instructions are available at `GET /server/help/mcp`; the JSON
+equivalent is `GET /api/{api_version}/server/help/mcp`. Both return `404` when
+MCP is disabled. The VidVeil-specific examples are configured by
+`server.pages.help.mcp`.
+
 ## Agent discovery
 
 The generated discovery document is served at both locations:

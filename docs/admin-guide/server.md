@@ -11,3 +11,5 @@ to disable it. AI-agent discovery is served at `/.well-known/llms.txt` and
 `/llms.txt`; its endpoint list is generated from OpenAPI and can be adjusted
 with `web.llms` settings. See the [REST API guide](../api/rest.md) for routes
 and the [configuration guide](../configuration.md) for YAML options.
+The MCP connection guide is at `/server/help/mcp`; its VidVeil-specific
+instructions come from `server.pages.help.mcp`.

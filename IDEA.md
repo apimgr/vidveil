@@ -41,6 +41,8 @@ owner_token:       vidveil_owner_token_ab5213f6
 - Geographic Content Restriction: Admin-configurable warnings/blocks for regions with adult content laws
 - Static Binary: Single static binary with all assets embedded
 
+**MCP project help (`server.pages.help.mcp`):** VidVeil searches across 33 video engines and streams results as they respond. Use `searchVideos` for a phrase, optionally with a bang such as `!ph` to target Pornhub; use `listEngines` to inspect engine availability, `listBangs` to discover shortcuts, and `autocompleteBangs` to find matching shortcuts or suggestions. For example: search for ocean sunsets with `!ph`, then compare the returned titles and source engines. Favorites are private owner resources; use a linked token for automation and never share a primary or operator token.
+
 **Non-goals:**
 - VidVeil has NO user accounts - privacy-first, stateless design.
 - Search results use a short-lived API-response cache (configurable memory/valkey/redis driver, 30s TTL) per AI.md PART 12; bypass per-request with `?nocache=1`. Thumbnail proxy may cache images temporarily to reduce repeated fetches.

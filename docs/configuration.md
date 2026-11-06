@@ -25,6 +25,10 @@ from OpenAPI and omits metrics and operator-only actions.
 server:
   mcp:
     enabled: true
+  pages:
+    help:
+      mcp: >-
+        VidVeil searches across 33 video engines and streams results as they respond. Use searchVideos for a phrase, optionally with a bang such as !ph to target Pornhub; use listEngines to inspect engine availability, listBangs to discover shortcuts, and autocompleteBangs to find matching shortcuts or suggestions. For example: search for ocean sunsets with !ph, then compare the returned titles and source engines. Favorites are private owner resources; use a linked token for automation and never share a primary or operator token.
   tokens:
     max_linked: 25
     cookie_max_age: 1y
@@ -46,6 +50,9 @@ lifetime, and optional idle-owner purge. When `idle_purge_days` is greater
 than zero, the built-in daily scheduler removes tokens for owners with no
 favorites and no token use during that period. Owners with favorites are
 retained. The default value `0` disables purging.
+`server.pages.help.mcp` is VidVeil-specific Markdown appended to the base guide
+at `/server/help/mcp`; it defaults to the project guidance above and can be
+edited in `server.yml`.
 
 ## Minimal Example
 

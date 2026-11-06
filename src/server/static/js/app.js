@@ -193,6 +193,7 @@ function preferenceCookieName(key) {
 
 function readPreferenceCookies(defaults) {
     var prefs = Object.assign({}, defaults);
+    var packedEngineSelectionSeen = false;
     var cookies = document.cookie ? document.cookie.split(';') : [];
     cookies.forEach(function(cookie) {
         var parts = cookie.trim().split('=');
@@ -202,7 +203,10 @@ function readPreferenceCookies(defaults) {
         var key = name.slice('vidveil_pref_'.length).replace(/_([a-z])/g, function(_, letter) { return letter.toUpperCase(); });
         if (key.indexOf('engine_') === 0) {
             if (!Array.isArray(prefs.enabledEngines)) prefs.enabledEngines = [];
-            if (raw === '1') prefs.enabledEngines.push(key.slice('engine_'.length));
+            if (raw === '1') {
+                prefs.enabledEngines.push(key.slice('engine_'.length));
+                prefs.engineSelectionSet = true;
+            }
             return;
         }
         if (key === 'enginesSelected') {
@@ -210,6 +214,7 @@ function readPreferenceCookies(defaults) {
             return;
         }
         if (key === 'engines') {
+            packedEngineSelectionSeen = true;
             prefs.engineSelectionSet = true;
             prefs.enabledEngines = raw === 'none' || raw === '' ? [] : raw.split('.');
             return;
@@ -221,6 +226,9 @@ function readPreferenceCookies(defaults) {
         else if (key === 'defaultDuration' || key === 'defaultSort') prefs[key] = raw === 'any' ? '' : raw;
         else prefs[key] = raw;
     });
+    if (!packedEngineSelectionSeen && (!prefs.enabledEngines || prefs.enabledEngines.length === 0)) {
+        prefs.engineSelectionSet = false;
+    }
     var themeCookie = document.cookie.match(/(?:^|;\s*)theme=([^;]*)/);
     if (themeCookie) prefs.theme = decodeURIComponent(themeCookie[1]);
     return prefs;

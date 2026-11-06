@@ -45,6 +45,18 @@ func TestRequestEngineSelectionPackedNone(t *testing.T) {
 	}
 }
 
+func TestRequestEngineSelectionLegacyEmptyFallsBackToDefault(t *testing.T) {
+	engines := []model.EngineInfo{{Name: "alpha"}, {Name: "beta"}}
+	req := httptest.NewRequest("GET", "/api/v1/search?q=test", nil)
+	req.AddCookie(&http.Cookie{Name: engineSelectionCookieName, Value: "1"})
+	req.AddCookie(&http.Cookie{Name: "vidveil_pref_engine_alpha", Value: "0"})
+	req.AddCookie(&http.Cookie{Name: "vidveil_pref_engine_beta", Value: "0"})
+
+	if selected, configured := requestEngineSelection(req, engines); configured || selected != nil {
+		t.Fatalf("legacy empty selection = (%v, %v), want default engine selection", selected, configured)
+	}
+}
+
 func TestRequestEngineNamesDefaultsToAll(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/v1/search?q=test", nil)
 	if got := requestEngineNames(req, nil, []model.EngineInfo{{Name: "alpha"}}); got != nil {
@@ -56,6 +68,7 @@ func TestRequestEngineNamesSavedEmptySelectionDoesNotSelectAll(t *testing.T) {
 	engines := []model.EngineInfo{{Name: "alpha"}, {Name: "beta"}}
 	req := httptest.NewRequest("GET", "/api/v1/search?q=test", nil)
 	req.AddCookie(&http.Cookie{Name: engineSelectionCookieName, Value: "1"})
+	req.AddCookie(&http.Cookie{Name: engineSelectionValueCookieName, Value: "none"})
 
 	if got := requestEngineNames(req, nil, engines); !reflect.DeepEqual(got, []string{"__none__"}) {
 		t.Fatalf("requestEngineNames() = %v, want [__none__]", got)

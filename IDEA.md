@@ -440,7 +440,7 @@ authoritative for pagination, see "Search behavior" above):
 - Checkbox for each individual engine within tiers.
 - Indeterminate state when some engines in tier are disabled.
 - Select All / Select None buttons.
-- Engine selection defaults to all configured engines when no saved selection exists. Persist explicit selection in `vidveil_pref_engines_selected=1` and `vidveil_pref_engines`, whose value is a dot-separated sorted list of engine IDs or `none` for an explicit empty selection. Both cookies participate in preference export/import. Older per-engine cookies are read for compatibility and removed client-side after loading the compact selection.
+- Engine selection defaults to all configured engines when no saved selection exists. Persist explicit selection in `vidveil_pref_engines_selected=1` and `vidveil_pref_engines`, whose value is a dot-separated sorted list of engine IDs or `none` for an explicit empty selection. Both cookies participate in preference export/import. Older per-engine cookies with enabled engines are read for compatibility; an empty legacy selection falls back to all enabled. Legacy cookies are removed client-side after loading the compact selection.
 
 ### UI components, accessibility, SSE, error handling
 

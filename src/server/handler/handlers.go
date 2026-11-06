@@ -1349,6 +1349,9 @@ func requestEngineSelection(r *http.Request, engines []model.EngineInfo) (map[st
 			selected[info.Name] = true
 		}
 	}
+	if len(selected) == 0 {
+		return nil, false
+	}
 	return selected, true
 }
 

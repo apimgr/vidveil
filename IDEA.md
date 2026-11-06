@@ -406,6 +406,7 @@ authoritative for pagination, see "Search behavior" above):
 
 **Default Filters (auto-applied to new searches):**
 - Show videos with preview first (toggle) - default: Yes (sort priority, not exclusive filter).
+  Cookie: `vidveil_pref_preview_first`; values `0` or `1`; default `1`; included in preference export/import.
 - Default duration filter: Any, Under 10min, 10-30min, Over 30min - default: Any.
 - Default quality filter: Any, 4K, 1080p HD, 720p - default: Any.
 - Minimum quality filter (server-side): Any, 240p+, 360p+, 480p+, 720p+, 1080p+, 4K only - default: 360p+.

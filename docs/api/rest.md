@@ -218,11 +218,12 @@ GET  https://x.scour.li/cli/binaries/{filename}
 POST https://x.scour.li/api/v1/server/restore
 ```
 
-The DPO endpoint always returns `200` with `name`, `email`, and
-`privacy_url: "/server/privacy"`. An empty DPO email falls back to
-`server.contact.general.email`; if neither is configured, `email` is an empty
-string. The HTML page is available at `/server/dpo` and always links to the
-privacy page and contact form.
+The DPO endpoint always returns `200` with `name`, `email`, and an absolute
+`privacy_url` built from the request's resolved base URL and `/server/privacy`.
+An empty DPO email falls back to `server.contact.general.email`; if neither is
+configured, `email` is an empty string. The HTML page is available at
+`/server/dpo` and always links to the root-relative privacy page and contact
+form.
 
 The three public security JSON endpoints mirror the overview, disclosure policy,
 and researcher acknowledgments. The token-bearing

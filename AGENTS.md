@@ -91,7 +91,7 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-11-06
-- Current task: AI.md alignment pass complete; local tests, lint, and documentation build pass; provider CI follows the gitcommit push
-- Verified: `make test` passes at 71% coverage; containerized `golangci-lint` reports 0 issues; `mkdocs build --strict` succeeds
+- Last read AI.md: 2026-11-07
+- Current task: AI.md alignment pass and server page/documentation update complete; provider CI follows the gitcommit push
+- Verified: `make test` passes at 71% coverage; `go vet ./...` and `staticcheck ./...` pass; `mkdocs build --strict` succeeds; selected Chromium E2E checks pass
 - Relevant PARTs: 0, 1, 3, 10, 11, 12, 14, 16, 20, 21, 25, 27, 28, 31, 32

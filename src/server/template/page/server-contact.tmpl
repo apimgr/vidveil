@@ -103,6 +103,19 @@
             <div class="form-group">
                 <label class="form-label"><input type="checkbox" name="disclosure_agreement" value="1" required> {{ t "contact.label_disclosure_agreement" }}</label>
             </div>
+            {{ if eq .CaptchaType "simple" }}
+            <div class="form-group">
+                <label class="form-label" for="captcha_answer">{{ t "contact.captcha_question" }}: {{ .CaptchaQuestion }}</label>
+                <input class="form-input" type="hidden" name="captcha_id" value="{{ .CaptchaID }}">
+                <input class="form-input" type="number" id="captcha_answer" name="captcha_answer" required inputmode="numeric">
+            </div>
+            {{ else if eq .CaptchaType "recaptcha" }}
+            <div class="g-recaptcha" data-sitekey="{{ .CaptchaSiteKey }}"></div>
+            <script async defer src="https://www.google.com/recaptcha/api.js"></script>
+            {{ else if eq .CaptchaType "hcaptcha" }}
+            <div class="h-captcha" data-sitekey="{{ .CaptchaSiteKey }}"></div>
+            <script async defer src="https://js.hcaptcha.com/1/api.js"></script>
+            {{ end }}
             <button type="submit" class="search-button" data-loading-text="{{ t "action.submitting" }}">{{ t "contact.submit_security_report" }}</button>
         </form>
         {{else}}
@@ -115,8 +128,12 @@
                 <input class="form-input" type="text" id="contact_hp" name="contact_hp" tabindex="-1" autocomplete="off">
             </div>
             <div class="form-group">
-                <label class="form-label" for="email">{{ t "contact.label_email_optional" }}</label>
-                <input class="form-input" type="email" id="email" name="email" placeholder="{{ t "contact.placeholder_email" }}">
+                <label class="form-label" for="name">{{ t "contact.label_name" }}</label>
+                <input class="form-input" type="text" id="name" name="name" required maxlength="254">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="email">{{ t "contact.label_email" }}</label>
+                <input class="form-input" type="email" id="email" name="email" required maxlength="254" placeholder="{{ t "contact.placeholder_email" }}">
             </div>
             <div class="form-group">
                 <label class="form-label" for="subject">{{ t "contact.label_subject" }}</label>
@@ -128,6 +145,19 @@
                 <textarea class="form-input" aria-describedby="message-error" aria-invalid="false" id="message" name="message" required rows="5" placeholder="{{ t "contact.placeholder_message" }}"></textarea>
                 <p id="message-error" class="field-error" role="alert" hidden></p>
             </div>
+            {{ if eq .CaptchaType "simple" }}
+            <div class="form-group">
+                <label class="form-label" for="captcha_answer">{{ t "contact.captcha_question" }}: {{ .CaptchaQuestion }}</label>
+                <input class="form-input" type="hidden" name="captcha_id" value="{{ .CaptchaID }}">
+                <input class="form-input" type="number" id="captcha_answer" name="captcha_answer" required inputmode="numeric">
+            </div>
+            {{ else if eq .CaptchaType "recaptcha" }}
+            <div class="g-recaptcha" data-sitekey="{{ .CaptchaSiteKey }}"></div>
+            <script async defer src="https://www.google.com/recaptcha/api.js"></script>
+            {{ else if eq .CaptchaType "hcaptcha" }}
+            <div class="h-captcha" data-sitekey="{{ .CaptchaSiteKey }}"></div>
+            <script async defer src="https://js.hcaptcha.com/1/api.js"></script>
+            {{ end }}
             <button type="submit" class="search-button" data-loading-text="{{ t "action.sending" }}">{{ t "contact.submit_message" }}</button>
         </form>
         {{end}}

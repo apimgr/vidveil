@@ -87,6 +87,7 @@ func TestValidSecurityIDRejectsExpiredPreviousInstallationSecret(t *testing.T) {
 func TestServerHandler_ContactPage_SecurityMode_ShowsComponentDropdown(t *testing.T) {
 	h, securityID := newSecurityTestHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/server/contact?security_id="+securityID, nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	rr := httptest.NewRecorder()
 	h.ContactPage(rr, req)
 	if rr.Code != http.StatusOK {
@@ -124,6 +125,7 @@ func securityFormValues(component, componentOther string) url.Values {
 func TestHandleSecurityReportSubmit_DropdownComponent_Succeeds(t *testing.T) {
 	h, securityID := newSecurityTestHandler(t)
 	form := securityFormValues("API", "")
+	addSimpleCaptcha(t, h, form)
 	req := httptest.NewRequest(http.MethodPost, "/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
@@ -140,6 +142,7 @@ func TestHandleSecurityReportSubmit_DropdownComponent_Succeeds(t *testing.T) {
 func TestHandleSecurityReportSubmit_OtherComponent_UsesFreeTextFallback(t *testing.T) {
 	h, securityID := newSecurityTestHandler(t)
 	form := securityFormValues("other", "Custom Engine Plugin")
+	addSimpleCaptcha(t, h, form)
 	req := httptest.NewRequest(http.MethodPost, "/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
@@ -162,6 +165,7 @@ func TestHandleSecurityReportSubmit_OtherComponent_UsesFreeTextFallback(t *testi
 func TestHandleSecurityReportSubmit_OtherComponentEmpty_Rejected(t *testing.T) {
 	h, securityID := newSecurityTestHandler(t)
 	form := securityFormValues("other", "")
+	addSimpleCaptcha(t, h, form)
 	req := httptest.NewRequest(http.MethodPost, "/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
@@ -178,6 +182,7 @@ func TestHandleSecurityReportSubmit_OtherComponentEmpty_Rejected(t *testing.T) {
 func TestAPIContact_SecurityMode_OtherComponent_UsesFreeTextFallback(t *testing.T) {
 	h, securityID := newSecurityTestHandler(t)
 	form := securityFormValues("other", "Bespoke Backend Service")
+	addSimpleCaptcha(t, h, form)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()

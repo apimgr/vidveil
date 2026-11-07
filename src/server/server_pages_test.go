@@ -13,6 +13,7 @@ import (
 func TestServerPage_About_Returns200(t *testing.T) {
 	s := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/server/about", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	rr := httptest.NewRecorder()
 	s.router.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {

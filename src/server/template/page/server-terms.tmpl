@@ -7,6 +7,9 @@
     <div class="prose">
         <h1>{{ t "terms.title" }}</h1>
         <p class="last-updated">{{ tf "terms.last_updated" "date" .BuildDateTime }}</p>
+        {{ if .PageContent }}
+        {{ .PageContent | markdownToHTML }}
+        {{ else }}
 
         <h2>{{ t "terms.acceptance" }}</h2>
         <p>{{ tf "terms.acceptance_body" "app_name" .AppName }}</p>
@@ -41,6 +44,7 @@
 
         <h2>{{ t "terms.questions" }}</h2>
         <p>{{ t "terms.questions_prefix" }} <a href="/server/contact">{{ t "terms.contact_link" }}</a>.</p>
+        {{ end }}
     </div>
 </div>
 {{end}}

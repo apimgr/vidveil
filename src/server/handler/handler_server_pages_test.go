@@ -7,7 +7,9 @@ import (
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +17,35 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/notify"
 )
+
+func simpleCaptchaFormValues(t *testing.T, h *ServerHandler, r *http.Request) string {
+	t.Helper()
+	id, question := h.newSimpleCaptcha(r)
+	parts := strings.Fields(question)
+	if len(parts) < 3 {
+		t.Fatalf("invalid captcha question %q", question)
+	}
+	left, err := strconv.Atoi(parts[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, err := strconv.Atoi(parts[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return "captcha_id=" + url.QueryEscape(id) + "&captcha_answer=" + strconv.Itoa(left+right)
+}
+
+func addSimpleCaptcha(t *testing.T, h *ServerHandler, form url.Values) {
+	t.Helper()
+	values, err := url.ParseQuery(simpleCaptchaFormValues(t, h, httptest.NewRequest(http.MethodGet, "/server/contact", nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range values {
+		form.Set(key, value[0])
+	}
+}
 
 // setRealTemplatesFS installs the on-disk template filesystem for tests that exercise
 // server page rendering. The handler package resides at src/server/handler/ so the
@@ -35,6 +66,7 @@ func TestServerHandler_AboutPage_Returns200(t *testing.T) {
 	setRealTemplatesFS(t)
 	h := newServerHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/server/about", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	rr := httptest.NewRecorder()
 	h.AboutPage(rr, req)
 	if rr.Code != http.StatusOK {
@@ -46,6 +78,86 @@ func TestServerHandler_AboutPage_Returns200(t *testing.T) {
 	}
 }
 
+func TestServerHandler_AboutPage_TextBrowserUsesNoJSTemplate(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := newServerHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/server/about", nil)
+	req.Header.Set("User-Agent", "Lynx/2.9.0")
+	response := httptest.NewRecorder()
+	h.AboutPage(response, req)
+	if response.Code != http.StatusOK {
+		t.Fatalf("AboutPage text browser: status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `href="/server/privacy"`) || strings.Contains(response.Body.String(), "/static/js/app.js") {
+		t.Errorf("text-browser server page must retain navigation without JavaScript: %s", response.Body.String())
+	}
+}
+
+func TestServerHandler_AboutPage_HTTPToolGetsFormattedText(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := newServerHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/server/about", nil)
+	req.Header.Set("User-Agent", "curl/8.0")
+	response := httptest.NewRecorder()
+	h.AboutPage(response, req)
+	if response.Code != http.StatusOK || !strings.HasPrefix(response.Header().Get("Content-Type"), "text/plain") {
+		t.Fatalf("AboutPage HTTP tool: status=%d type=%q", response.Code, response.Header().Get("Content-Type"))
+	}
+	if strings.Contains(response.Body.String(), "<html") || !strings.Contains(response.Body.String(), "About") {
+		t.Errorf("HTTP tool response should be formatted plain text: %s", response.Body.String())
+	}
+}
+
+func TestHealthz_TextBrowserGetsNoJSTemplate(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := &SearchHandler{appConfig: config.DefaultAppConfig()}
+	req := httptest.NewRequest(http.MethodGet, "/server/healthz", nil)
+	req.Header.Set("User-Agent", "Lynx/2.9.0")
+	response := httptest.NewRecorder()
+	h.renderHealthzHTML(response, req, "healthy", http.StatusOK, "development", "1h", "localhost", time.Now().Format(time.RFC3339), map[string]string{
+		"database": "ok", "cache": "ok", "disk": "ok", "scheduler": "ok",
+	})
+	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "<script") || !strings.Contains(response.Body.String(), "System Health") {
+		t.Fatalf("healthz text-browser response: status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestServerHandler_DPOPage_FallsBackToGeneralContact(t *testing.T) {
+	setRealTemplatesFS(t)
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Contact.Admin.Email = "admin@example.invalid"
+	cfg.Server.Contact.General.Email = "privacy@example.invalid"
+	h := NewServerHandler(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/server/dpo", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	rr := httptest.NewRecorder()
+	h.DPOPage(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("DPOPage: status=%d want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "privacy@example.invalid") || strings.Contains(rr.Body.String(), "admin@example.invalid") {
+		t.Errorf("DPOPage did not apply the configured fallback safely: %s", rr.Body.String())
+	}
+}
+
+func TestServerHandler_DPOPageWithoutContactShowsOnlyContactForm(t *testing.T) {
+	setRealTemplatesFS(t)
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Contact.Admin.Email = "admin@example.invalid"
+	cfg.Server.Contact.General.Email = ""
+	h := NewServerHandler(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/server/dpo", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	rr := httptest.NewRecorder()
+	h.DPOPage(rr, req)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "/server/contact") {
+		t.Errorf("DPOPage without contact: status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), "admin@example.invalid") {
+		t.Errorf("DPOPage exposed the admin address: %s", rr.Body.String())
+	}
+}
+
 func TestServerHandler_PrivacyPage_Returns200(t *testing.T) {
 	setRealTemplatesFS(t)
 	h := newServerHandler(t)
@@ -54,6 +166,56 @@ func TestServerHandler_PrivacyPage_Returns200(t *testing.T) {
 	h.PrivacyPage(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Errorf("PrivacyPage: status=%d want 200; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestTrackingJavaScriptRequiresConsent(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Tracking = config.TrackingConfig{Type: "google", ID: "G-ABC123"}
+	h := NewServerHandler(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/server/tracking.js", nil)
+	blocked := httptest.NewRecorder()
+	h.TrackingJavaScript(blocked, req)
+	if blocked.Code != http.StatusNotFound || blocked.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("tracking without consent: status=%d cache=%q", blocked.Code, blocked.Header().Get("Cache-Control"))
+	}
+
+	req.AddCookie(&http.Cookie{Name: "cookie_consent", Value: url.QueryEscape(`{"analytics":true}`)})
+	allowed := httptest.NewRecorder()
+	h.TrackingJavaScript(allowed, req)
+	if allowed.Code != http.StatusOK || !strings.Contains(allowed.Header().Get("Content-Type"), "application/javascript") || !strings.Contains(allowed.Body.String(), "G-ABC123") {
+		t.Fatalf("tracking with consent: status=%d type=%q body=%q", allowed.Code, allowed.Header().Get("Content-Type"), allowed.Body.String())
+	}
+}
+
+func TestSimpleCaptchaIsSingleUse(t *testing.T) {
+	h := newServerHandler(t)
+	request := httptest.NewRequest(http.MethodGet, "/server/contact", nil)
+	id, question := h.newSimpleCaptcha(request)
+	if id == "" || question == "" {
+		t.Fatal("newSimpleCaptcha returned an empty challenge")
+	}
+	parts := strings.Split(question, " ")
+	if len(parts) != 5 {
+		t.Fatalf("unexpected challenge question %q", question)
+	}
+	answer := ""
+	left, leftErr := strconv.Atoi(parts[0])
+	right, rightErr := strconv.Atoi(parts[2])
+	if leftErr != nil || rightErr != nil {
+		t.Fatalf("invalid arithmetic challenge %q", question)
+	}
+	answer = strconv.Itoa(left + right)
+	form := url.Values{"captcha_id": {id}, "captcha_answer": {answer}}
+	first := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form.Encode()))
+	first.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if !h.verifyCaptcha(first) {
+		t.Fatal("valid captcha answer was rejected")
+	}
+	second := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form.Encode()))
+	second.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if h.verifyCaptcha(second) {
+		t.Fatal("captcha challenge was accepted more than once")
 	}
 }
 
@@ -113,8 +275,8 @@ func TestServerHandler_ContactSubmit_DispatchesGeneral(t *testing.T) {
 	}
 	h.SetNotifyDispatcher(notify.New(contact, "vidveil", "1.0.0", ts.URL))
 
-	req := httptest.NewRequest(http.MethodPost, "/server/contact",
-		strings.NewReader("email=a@b.com&subject=hello&message=world"))
+	form := simpleCaptchaFormValues(t, h, httptest.NewRequest(http.MethodGet, "/server/contact", nil)) + "&name=Alice&email=a%40b.com&subject=hello&message=world"
+	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ContactPage(rr, req)
@@ -151,15 +313,15 @@ func TestServerHandler_ContactSubmit_MissingFieldsError(t *testing.T) {
 	}
 	h.SetNotifyDispatcher(notify.New(contact, "vidveil", "1.0.0", ts.URL))
 
-	req := httptest.NewRequest(http.MethodPost, "/server/contact",
-		strings.NewReader("subject=hello"))
+	form := simpleCaptchaFormValues(t, h, httptest.NewRequest(http.MethodGet, "/server/contact", nil)) + "&subject=hello"
+	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ContactPage(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("ContactSubmit invalid: status=%d want 200; body=%s", rr.Code, rr.Body.String())
 	}
-	if !strings.Contains(rr.Body.String(), "subject and a message") {
+	if !strings.Contains(rr.Body.String(), "name, a valid email address, a subject, and a message") {
 		t.Errorf("ContactSubmit invalid: expected validation error; body=%s", rr.Body.String())
 	}
 	select {
@@ -221,6 +383,7 @@ func TestServerHandler_TermsPage_Returns200(t *testing.T) {
 	setRealTemplatesFS(t)
 	h := newServerHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/server/terms", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	rr := httptest.NewRecorder()
 	h.TermsPage(rr, req)
 	if rr.Code != http.StatusOK {
@@ -282,6 +445,19 @@ func TestAPIAbout_TextPlain_ReturnsText(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "name:") {
 		t.Errorf("APIAbout text: body missing 'name:': %s", rr.Body.String())
+	}
+}
+
+func TestAPIDPO_ReturnsConfiguredContactAndPrivacyURL(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Contact.DPO = config.DPOContactConfig{Name: "Privacy Officer", Email: "dpo@example.invalid"}
+	h := NewServerHandler(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/dpo", nil)
+	req.Header.Set("Accept", "application/json")
+	rr := httptest.NewRecorder()
+	h.APIDPO(rr, req)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"name": "Privacy Officer"`) || !strings.Contains(rr.Body.String(), `"email": "dpo@example.invalid"`) || !strings.Contains(rr.Body.String(), `"privacy_url":`) {
+		t.Errorf("APIDPO response: status=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

@@ -126,25 +126,44 @@ func convertList(buf *strings.Builder, n *html.Node, width, indent int, ordered 
 // convertTable converts HTML table to ASCII table
 func convertTable(buf *strings.Builder, n *html.Node, width int) {
 	var rows [][]string
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		if c.Type == html.ElementNode && (c.Data == "tr" || c.Data == "thead" || c.Data == "tbody") {
-			row := extractTableRow(c)
+	var collectRows func(*html.Node)
+	collectRows = func(node *html.Node) {
+		if node.Type == html.ElementNode && node.Data == "tr" {
+			var row []string
+			for cell := node.FirstChild; cell != nil; cell = cell.NextSibling {
+				if cell.Type == html.ElementNode && (cell.Data == "th" || cell.Data == "td") {
+					row = append(row, getTextContent(cell))
+				}
+			}
 			if len(row) > 0 {
 				rows = append(rows, row)
 			}
+			return
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			collectRows(child)
 		}
 	}
+	collectRows(n)
 
 	if len(rows) == 0 {
 		return
 	}
 
 	// Calculate column widths
-	cols := len(rows[0])
+	cols := 0
+	for _, row := range rows {
+		if len(row) > cols {
+			cols = len(row)
+		}
+	}
+	if cols == 0 {
+		return
+	}
 	colWidths := make([]int, cols)
 	for _, row := range rows {
 		for i, cell := range row {
-			if i < cols && len(cell) > colWidths[i] {
+			if len(cell) > colWidths[i] {
 				colWidths[i] = len(cell)
 			}
 		}
@@ -152,6 +171,7 @@ func convertTable(buf *strings.Builder, n *html.Node, width int) {
 
 	// Draw table
 	for i, row := range rows {
+		cells := append(append([]string(nil), row...), make([]string, cols-len(row))...)
 		// Top border for first row
 		if i == 0 {
 			buf.WriteString("┌")
@@ -166,7 +186,7 @@ func convertTable(buf *strings.Builder, n *html.Node, width int) {
 
 		// Row content
 		buf.WriteString("│")
-		for j, cell := range row {
+		for j, cell := range cells {
 			buf.WriteString(" " + cell + strings.Repeat(" ", colWidths[j]-len(cell)+1) + "│")
 		}
 		buf.WriteString("\n")
@@ -193,22 +213,6 @@ func convertTable(buf *strings.Builder, n *html.Node, width int) {
 		}
 	}
 	buf.WriteString("┘\n\n")
-}
-
-// extractTableRow extracts text from table row
-func extractTableRow(n *html.Node) []string {
-	var cells []string
-	var extractCells func(*html.Node)
-	extractCells = func(node *html.Node) {
-		if node.Type == html.ElementNode && (node.Data == "td" || node.Data == "th") {
-			cells = append(cells, getTextContent(node))
-		}
-		for c := node.FirstChild; c != nil; c = c.NextSibling {
-			extractCells(c)
-		}
-	}
-	extractCells(n)
-	return cells
 }
 
 // getTextContent recursively gets text content from node

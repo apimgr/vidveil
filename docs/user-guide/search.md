@@ -14,7 +14,7 @@ Select specific engines from the dropdown, use the `engines` parameter, or add b
 
 ### By Duration
 
-Use duration filters: short, medium, long
+Use duration filters: any, under 10 minutes, 10–30 minutes, or over 30 minutes.
 
 ### By Quality
 

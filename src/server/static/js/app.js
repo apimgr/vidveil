@@ -3575,9 +3575,10 @@ document.addEventListener('error', function(e) {
             saveAndApplyConsent({
                 essential: true,
                 preferences: accepted,
-                analytics: false,
+                analytics: accepted,
                 timestamp: Math.floor(Date.now() / 1000)
             });
+            window.location.reload();
         });
     });
 })();

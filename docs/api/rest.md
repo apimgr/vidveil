@@ -201,9 +201,13 @@ only the primary token can manage linked tokens.
 ```http
 GET  https://x.scour.li/api/v1/server/about
 GET  https://x.scour.li/api/v1/server/privacy
+GET  https://x.scour.li/api/v1/server/dpo
 GET  https://x.scour.li/api/v1/server/help
 GET  https://x.scour.li/api/v1/server/help/mcp
 GET  https://x.scour.li/api/v1/server/terms
+GET  https://x.scour.li/api/v1/server/security
+GET  https://x.scour.li/api/v1/server/security/policy
+GET  https://x.scour.li/api/v1/server/security/thanks
 POST https://x.scour.li/api/v1/server/contact
 POST https://x.scour.li/api/v1/server/reports/default
 POST https://x.scour.li/api/v1/server/reports/nel
@@ -214,8 +218,21 @@ GET  https://x.scour.li/cli/binaries/{filename}
 POST https://x.scour.li/api/v1/server/restore
 ```
 
-Restore requires the operator token. CLI binary downloads are public unless
-`cli.binary_download.require_auth` is enabled. Browser security-report
+The DPO endpoint returns the configured name and email plus the privacy-policy
+URL; an empty DPO email falls back to `server.contact.general.email`. The HTML
+page is available at `/server/dpo`.
+
+The three public security JSON endpoints mirror the overview, disclosure policy,
+and researcher acknowledgments. The token-bearing
+`/server/security/report/{tracking_id}` page has no API mirror.
+
+`POST /api/v1/server/contact` accepts `name`, `email`, `subject`, `message`,
+and a CAPTCHA response. With `simple` (default), send the one-use `captcha_id`
+and `captcha_answer` shown by `/server/contact`; with `recaptcha` or `hcaptcha`,
+send the corresponding `g-recaptcha-response` or `h-captcha-response` from the
+provider widget. The CAPTCHA is required for browser and API submissions. Tor
+and I2P always use the built-in challenge. Restore requires the operator token. CLI
+binary downloads are public unless `cli.binary_download.require_auth` is enabled. Browser security-report
 ingestion routes return `204` after recording a sanitized summary; they do not
 return submitted report bodies.
 

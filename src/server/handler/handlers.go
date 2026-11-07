@@ -2776,8 +2776,15 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		"asset": func(path string) string {
 			return path + "?v=" + version.AssetStamp()
 		},
+		"trackingScript": func() template.HTML {
+			return trackingScriptMarkup(h.appConfig.Server.Tracking, r)
+		},
+		"trackingNoScript": func() template.HTML {
+			return trackingNoScriptMarkup(h.appConfig.Server.Tracking, r)
+		},
 	}).ParseFS(templatesFS,
 		"template/page/healthz.tmpl",
+		"template/nojs/healthz.tmpl",
 		"template/partial/public/head.tmpl",
 		"template/partial/public/header.tmpl",
 		"template/partial/public/nav.tmpl",
@@ -2793,7 +2800,11 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 
 	// Buffer template output to prevent proxy truncation issues
 	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, "healthz", data); err != nil {
+	healthTemplate := "healthz"
+	if isTextBrowser(r) {
+		healthTemplate = "healthz-nojs"
+	}
+	if err := tmpl.ExecuteTemplate(&buf, healthTemplate, data); err != nil {
 		log.Printf("healthz template execute: %v", err)
 		writeGuaranteedErrorPage(w, r, http.StatusInternalServerError)
 		return
@@ -2802,6 +2813,16 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	// Set headers and write buffered response
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "text/plain") && !strings.Contains(accept, "text/html") ||
+		isHttpTool(r) && !strings.Contains(accept, "text/html") {
+		text := convertHTMLToText(buf.String(), 80) + "\n"
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Length", strconv.Itoa(len(text)))
+		w.WriteHeader(httpStatus)
+		_, _ = w.Write([]byte(text))
+		return
+	}
 	w.WriteHeader(httpStatus)
 	_, _ = w.Write(buf.Bytes())
 }
@@ -2818,6 +2839,7 @@ var publicIndexablePaths = map[string]bool{
 	"/server/about":           true,
 	"/server/help":            true,
 	"/server/privacy":         true,
+	"/server/dpo":             true,
 	"/server/terms":           true,
 	"/server/contact":         true,
 	"/server/security":        true,
@@ -3158,6 +3180,7 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 		{path: "/", changefreq: "daily", priority: "1.0"},
 		{path: "/server/about", changefreq: "weekly", priority: "0.8"},
 		{path: "/server/privacy", changefreq: "weekly", priority: "0.8"},
+		{path: "/server/dpo", changefreq: "weekly", priority: "0.8"},
 		{path: "/server/contact", changefreq: "weekly", priority: "0.8"},
 		{path: "/server/help", changefreq: "weekly", priority: "0.8"},
 		{path: "/server/terms", changefreq: "weekly", priority: "0.8"},
@@ -4576,6 +4599,12 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 				return "", err
 			}
 			return template.JS(b), nil
+		},
+		"trackingScript": func() template.HTML {
+			return trackingScriptMarkup(h.appConfig.Server.Tracking, r)
+		},
+		"trackingNoScript": func() template.HTML {
+			return trackingNoScriptMarkup(h.appConfig.Server.Tracking, r)
 		},
 	})
 

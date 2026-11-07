@@ -23,8 +23,8 @@ Access preferences at `https://x.scour.li/server/preferences`.
 ### Default Filters
 
 - **Preview First**: Prefer results with video previews
-- **Show AI Content**: Include or hide AI-generated content
-- **Default Duration**: Any, short, medium, or long
+- **Show AI-Generated Content**: Include or hide AI-generated content; hidden by default
+- **Default Duration**: Any, under 10 minutes, 10–30 minutes, or over 30 minutes
 - **Minimum Quality**: Any quality up to 4K-only
 - **Default Sort**: Relevance, longest, shortest, most viewed, or best quality
 - **Minimum Duration**: No minimum up to 30 minutes
@@ -38,7 +38,7 @@ Access preferences at `https://x.scour.li/server/preferences`.
 ### Privacy
 
 - **Use Tor**: Route searches through Tor when available
-- **Proxy Images**: Load thumbnails through VidVeil instead of the source site
+- **Thumbnail Proxy**: Always on; thumbnails are served through VidVeil to prevent direct browser requests to source sites
 
 ### Search Engines
 

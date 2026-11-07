@@ -10,9 +10,11 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -46,6 +48,9 @@ type ServerHandler struct {
 	// PART 12 webhook transports. Nil until wired via SetNotifyDispatcher.
 	notifyDispatcher *notify.Dispatcher
 	restoreRestart   func()
+	captchaMu        sync.Mutex
+	captchaAnswers   map[string]captchaChallenge
+	captchaAttempts  map[string]captchaRateWindow
 }
 
 // NewServerHandler creates a new server handler
@@ -131,6 +136,8 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		templateFile = "template/page/server-about.tmpl"
 	case "server-privacy":
 		templateFile = "template/page/server-privacy.tmpl"
+	case "server-dpo":
+		templateFile = "template/page/server-dpo.tmpl"
 	case "server-contact":
 		templateFile = "template/page/server-contact.tmpl"
 	case "server-help":
@@ -187,6 +194,12 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		"asset": func(path string) string {
 			return path + "?v=" + version.AssetStamp()
 		},
+		"trackingScript": func() template.HTML {
+			return trackingScriptMarkup(h.appConfig.Server.Tracking, r)
+		},
+		"trackingNoScript": func() template.HTML {
+			return trackingNoScriptMarkup(h.appConfig.Server.Tracking, r)
+		},
 		// markdownToHTML renders the operator-supplied Markdown bodies in
 		// server.privacy.content.* per AI.md PART 12; output is sanitized
 		// through the strict bluemonday allowlist before reaching the page.
@@ -195,6 +208,7 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 
 	// Load layout and partials first
 	partialFiles := []string{
+		"template/layout/nojs-server.tmpl",
 		"template/layout/public.tmpl",
 		"template/partial/public/head.tmpl",
 		"template/partial/public/header.tmpl",
@@ -254,11 +268,18 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		theme = "dark"
 	}
 
+	dpoEmail := strings.TrimSpace(h.appConfig.Server.Contact.DPO.Email)
+	if dpoEmail == "" {
+		dpoEmail = strings.TrimSpace(h.appConfig.Server.Contact.General.Email)
+	}
 	data := map[string]interface{}{
 		"Title":          appName,
 		"AppName":        appName,
+		"PageContent":    h.pageContent(templateName),
 		"AppTagline":     h.appConfig.Server.Branding.Tagline,
 		"AppDescription": h.appConfig.Server.Branding.Description,
+		"DPOName":        h.appConfig.Server.Contact.DPO.Name,
+		"DPOEmail":       dpoEmail,
 		"BaseURL":        urlvar.BuildURL(r, ""),
 		// Versioned API prefix ("/api/{api_version}") so pages never hardcode
 		// "v1" in documented routes or curl examples (AI.md PART 14)
@@ -290,7 +311,7 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		"CurrentPath": r.URL.RequestURI(),
 		// Whole privacy config for the config-driven /server/privacy page
 		// (AI.md PART 12 / PART 16 "/server/privacy")
-		"Privacy": h.appConfig.Server.Privacy,
+		"Privacy": h.privacyConfigForDisplay(),
 		// CCPA opt-out state backing the "Do Not Sell" toggle; only ever
 		// rendered when server.privacy.data.sold is true.
 		"CCPAOptedOut": hasCCPAOptOut(r),
@@ -325,17 +346,28 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	for k, v := range extraData {
 		data[k] = v
 	}
+	contactEnabled, _ := data["ContactEnabled"].(bool)
+	securityMode, _ := data["SecurityMode"].(bool)
+	if templateName == "server-contact" && (contactEnabled || securityMode) {
+		for key, value := range h.captchaTemplateData(r) {
+			data[key] = value
+		}
+	}
 
 	// Per AI.md PART 30 inject locale + direction for <html lang="" dir="">.
 	injectLocaleData(r, data)
 
 	// Buffer template output
 	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, templateName, data); err != nil {
+	renderTemplateName := templateName
+	if isTextBrowser(r) {
+		renderTemplateName = "server-nojs"
+	}
+	if err := tmpl.ExecuteTemplate(&buf, renderTemplateName, data); err != nil {
 		// Full detail server-side only (AI.md PART 11 Tier 1); the client
 		// gets a minimal, content-negotiated, hardcoded fallback per PART 16
 		// "Error Pages" — never a bare plain-text body.
-		log.Printf("server template: execute %s: %v", templateName, err)
+		log.Printf("server template: execute %s: %v", renderTemplateName, err)
 		writeGuaranteedErrorPage(w, r, http.StatusInternalServerError)
 		return
 	}
@@ -347,8 +379,31 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	if configuredStatus, ok := data["HTTPStatus"].(int); ok && configuredStatus >= 400 && configuredStatus <= 599 {
 		status = configuredStatus
 	}
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "text/plain") && !strings.Contains(accept, "text/html") ||
+		isHttpTool(r) && !strings.Contains(accept, "text/html") {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(convertHTMLToText(buf.String(), 80) + "\n"))
+		return
+	}
 	w.WriteHeader(status)
 	_, _ = w.Write(buf.Bytes())
+}
+
+func (h *ServerHandler) pageContent(templateName string) string {
+	switch templateName {
+	case "server-about":
+		return h.appConfig.Server.Pages.About.Content
+	case "server-privacy":
+		return h.appConfig.Server.Pages.Privacy.Content
+	case "server-help":
+		return h.appConfig.Server.Pages.Help.Content
+	case "server-terms":
+		return h.appConfig.Server.Pages.Terms.Content
+	default:
+		return ""
+	}
 }
 
 // AboutPage renders /server/about web page
@@ -359,6 +414,20 @@ func (h *ServerHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 // PrivacyPage renders /server/privacy web page
 func (h *ServerHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	h.renderServerTemplate(w, r, "server-privacy", nil)
+}
+
+// DPOPage renders /server/dpo using the configured DPO/general contact fallback.
+func (h *ServerHandler) DPOPage(w http.ResponseWriter, r *http.Request) {
+	dpo := h.appConfig.Server.Contact.DPO
+	if strings.TrimSpace(dpo.Email) == "" {
+		dpo.Email = h.appConfig.Server.Contact.General.Email
+	}
+	h.renderServerTemplate(w, r, "server-dpo", map[string]interface{}{
+		"DPOName":    dpo.Name,
+		"DPOEmail":   dpo.Email,
+		"PrivacyURL": urlvar.BuildURL(r, "/server/privacy"),
+		"ContactURL": urlvar.BuildURL(r, "/server/contact"),
+	})
 }
 
 // ConsentSubmit handles POST /server/consent per AI.md PART 12 — the zero-JS
@@ -375,7 +444,8 @@ func (h *ServerHandler) ConsentSubmit(w http.ResponseWriter, r *http.Request) {
 	// and save persists the explicit preferences-page category toggle.
 	choice := r.PostFormValue("choice")
 	prefs := choice == "accept" || (choice == "save" && (r.PostFormValue("preferences") == "1" || r.PostFormValue("preferences") == "on"))
-	value := fmt.Sprintf(`{"essential":true,"preferences":%t,"analytics":false,"timestamp":%d}`, prefs, time.Now().Unix())
+	analytics := choice == "accept" || (choice == "save" && (r.PostFormValue("analytics") == "1" || r.PostFormValue("analytics") == "on"))
+	value := fmt.Sprintf(`{"essential":true,"preferences":%t,"analytics":%t,"timestamp":%d}`, prefs, analytics, time.Now().Unix())
 
 	// Secure flag when the request arrived over HTTPS (directly or via proxy)
 	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
@@ -456,6 +526,10 @@ func (h *ServerHandler) ContactPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
+		if !securityMode && !h.appConfig.Server.Pages.Contact.Enabled {
+			http.NotFound(w, r)
+			return
+		}
 		if securityMode {
 			h.handleSecurityReportSubmit(w, r, securityID)
 			return
@@ -476,7 +550,7 @@ func (h *ServerHandler) ContactPage(w http.ResponseWriter, r *http.Request) {
 
 	// Show contact form - contact form always available
 	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
-		"ContactEnabled": true,
+		"ContactEnabled": h.appConfig.Server.Pages.Contact.Enabled,
 		"AbuseEmail":     h.publicAbuseEmail(),
 	})
 }
@@ -591,26 +665,31 @@ func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Reque
 		h.renderContactSuccess(w, r)
 		return
 	}
+	if !h.verifyCaptcha(r) {
+		h.renderContactError(w, r, "Please complete the captcha and try again.")
+		return
+	}
 
+	name := strings.TrimSpace(r.FormValue("name"))
 	email := strings.TrimSpace(r.FormValue("email"))
 	subject := strings.TrimSpace(r.FormValue("subject"))
 	message := strings.TrimSpace(r.FormValue("message"))
 
-	if subject == "" || message == "" {
-		h.renderContactError(w, r, "Please provide a subject and a message.")
+	if name == "" || email == "" || subject == "" || message == "" || strings.ContainsAny(name+subject, "\r\n") {
+		h.renderContactError(w, r, "Please provide your name, a valid email address, a subject, and a message.")
 		return
 	}
-	if len(email) > maxContactFieldLen || len(subject) > maxContactFieldLen || len(message) > maxContactFieldLen {
+	if _, err := mail.ParseAddress(email); err != nil {
+		h.renderContactError(w, r, "Please provide a valid email address.")
+		return
+	}
+	if len(name) > maxContactFieldLen || len(email) > maxContactFieldLen || len(subject) > maxContactFieldLen || len(message) > maxContactFieldLen {
 		h.renderContactError(w, r, "Your message is too long. Please shorten it and try again.")
 		return
 	}
 
 	if h.notifyDispatcher != nil {
-		from := "anonymous"
-		if email != "" {
-			from = email
-		}
-		body := fmt.Sprintf("From: %s\n\n%s", from, message)
+		body := fmt.Sprintf("Name: %s\nEmail: %s\n\n%s", name, email, message)
 		h.notifyDispatcher.Send(r.Context(), notify.RoleGeneral, notify.Payload{
 			Event:    "contact.general",
 			Subject:  subject,
@@ -627,7 +706,7 @@ func (h *ServerHandler) renderContactSuccess(w http.ResponseWriter, r *http.Requ
 	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 		"ContactEnabled": true,
 		"AbuseEmail":     h.publicAbuseEmail(),
-		"Message":        "Thank you for your message. We will get back to you if needed.",
+		"Message":        h.appConfig.Server.Pages.Contact.SuccessMessage,
 		"MessageType":    "success",
 	})
 }
@@ -667,6 +746,16 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 			"Components":            h.securityComponentOptions(),
 			"Message":               "Invalid form submission.",
 			"MessageType":           "error",
+		})
+		return
+	}
+	if !h.verifyCaptcha(r) {
+		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
+			"SecurityMode": true,
+			"SecurityID":   securityID,
+			"Components":   h.securityComponentOptions(),
+			"Message":      "Please complete the captcha and try again.",
+			"MessageType":  "error",
 		})
 		return
 	}
@@ -929,7 +1018,7 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 		"description": h.appConfig.Server.Branding.Description,
 		"version":     version.GetVersion(),
 		"features": []string{
-			"Privacy-first search: no tracking, logging, or analytics",
+			"Search history is not retained; optional analytics require configuration and consent",
 			"Meta-search across 33 adult video engines with bang shortcuts",
 			"Real-time SSE streaming as each engine responds",
 			"Thumbnail proxy so source sites never see your IP",
@@ -953,15 +1042,32 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "data": data})
 }
 
+// APIDPO mirrors the public DPO contact page as JSON or plain text.
+func (h *ServerHandler) APIDPO(w http.ResponseWriter, r *http.Request) {
+	dpo := h.appConfig.Server.Contact.DPO
+	if strings.TrimSpace(dpo.Email) == "" {
+		dpo.Email = h.appConfig.Server.Contact.General.Email
+	}
+	privacyURL := urlvar.BuildURL(r, "/server/privacy")
+	if getAPIResponseFormat(r) == "text" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = fmt.Fprintf(w, "name: %s\nemail: %s\nprivacy_url: %s\n", dpo.Name, dpo.Email, privacyURL)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "data": map[string]string{
+		"name": dpo.Name, "email": dpo.Email, "privacy_url": privacyURL,
+	}})
+}
+
 // APIPrivacy handles GET {api_version}/server/privacy
 // Per AI.md PART 14: content negotiation required on every API route.
 func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 	// The sold/stored/sharing flags are operator policy, so they come from
 	// server.privacy rather than compiled-in constants (AI.md PART 12)
-	privacy := h.appConfig.Server.Privacy
+	privacy := h.privacyConfigForDisplay()
 	if getAPIResponseFormat(r) == "text" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = fmt.Fprintf(w, "policy_version: 1.0\nlast_updated: %s\nuser_accounts: false\nsearch_queries_logged: false\nip_addresses_stored: false\ntracking_cookies: false\nthird_party_sharing: %t\ndata_stored_on_server: %t\ndata_sold: %t\nfavorites_storage: server_side_owner_token\n",
+		_, _ = fmt.Fprintf(w, "policy_version: 1.0\nlast_updated: %s\nuser_accounts: false\nthird_party_sharing: %t\ndata_stored_on_server: %t\ndata_sold: %t\nfavorites_storage: server_side_owner_token\n",
 			time.Now().Format("2006-01-02"), len(privacy.ThirdParty.Services) > 0, privacy.Data.StoredOnServer, privacy.Data.Sold)
 		return
 	}
@@ -986,7 +1092,7 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 					"description": privacy.Cookies.Preferences.Description,
 				},
 				"analytics": map[string]interface{}{
-					"enabled":     privacy.Cookies.Analytics.Enabled,
+					"enabled":     trackingConfigured(h.appConfig.Server.Tracking),
 					"description": privacy.GetAnalyticsDescription(),
 				},
 			},
@@ -1001,15 +1107,27 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 				"deletion_available": privacy.Retention.DeletionAvailable,
 			},
 			"third_party_services": privacy.ThirdParty.Services,
+			"tracking": map[string]interface{}{
+				"enabled":   trackingConfigured(h.appConfig.Server.Tracking),
+				"type":      h.appConfig.Server.Tracking.Type,
+				"type_name": trackingTypeName(h.appConfig.Server.Tracking.Type),
+			},
+			"third_party": map[string]interface{}{"services": privacy.ThirdParty.Services},
+			"ccpa": map[string]interface{}{
+				"applicable":     privacy.Data.Sold,
+				"opt_out_url":    "/server/privacy#ccpa-opt-out",
+				"user_opted_out": hasCCPAOptOut(r),
+			},
+			"content": map[string]interface{}{
+				"consent_message": privacy.GetConsentMessage(),
+				"data_usage":      privacy.GetDataUsageContent(),
+			},
 			"data_collection": map[string]interface{}{
-				"user_accounts":         false,
-				"search_queries_logged": false,
-				"ip_addresses_stored":   false,
-				"tracking_cookies":      false,
-				"browser_fingerprint":   false,
-				"user_profiles":         false,
-				"third_party_sharing":   len(privacy.ThirdParty.Services) > 0,
-				"data_sold":             privacy.Data.Sold,
+				"user_accounts":       false,
+				"browser_fingerprint": false,
+				"user_profiles":       false,
+				"third_party_sharing": len(privacy.ThirdParty.Services) > 0,
+				"data_sold":           privacy.Data.Sold,
 			},
 			"client_side_storage": []string{
 				"vidveil_history",
@@ -1045,6 +1163,10 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 		SendError(w, CodeBadRequest, "Invalid form data")
 		return
 	}
+	if !h.verifyCaptcha(r) {
+		SendError(w, CodeValidation, "Captcha is invalid or expired")
+		return
+	}
 
 	securityID := h.securityIDFromRequest(r)
 	if securityID != "" {
@@ -1054,13 +1176,33 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 		}
 		h.logSecurityEvent("security.security_id_invalid", r, map[string]interface{}{"supplied_id": securityID})
 	}
-
-	subject := r.FormValue("subject")
-	message := r.FormValue("message")
-
-	if subject == "" || message == "" {
-		SendError(w, CodeValidation, "Subject and message are required")
+	if !h.appConfig.Server.Pages.Contact.Enabled {
+		SendError(w, CodeNotFound, MsgNotFound)
 		return
+	}
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	email := strings.TrimSpace(r.FormValue("email"))
+	subject := strings.TrimSpace(r.FormValue("subject"))
+	message := strings.TrimSpace(r.FormValue("message"))
+	if name == "" || subject == "" || message == "" || strings.ContainsAny(name+subject, "\r\n") {
+		SendError(w, CodeValidation, "Name, subject, and message are required")
+		return
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		SendError(w, CodeValidation, "A valid email address is required")
+		return
+	}
+	if len(name) > maxContactFieldLen || len(email) > maxContactFieldLen || len(subject) > maxContactFieldLen || len(message) > maxContactFieldLen {
+		SendError(w, CodeValidation, "Contact fields are too long")
+		return
+	}
+	if h.notifyDispatcher != nil {
+		h.notifyDispatcher.Send(r.Context(), notify.RoleGeneral, notify.Payload{
+			Event: "contact.general", Subject: subject,
+			Body:     fmt.Sprintf("Name: %s\nEmail: %s\n\n%s", name, email, message),
+			Severity: notify.SeverityInfo,
+		})
 	}
 
 	SendOK(w, map[string]interface{}{"message": "Message received successfully"})
@@ -1079,6 +1221,10 @@ func (h *ServerHandler) apiSecurityReportSubmit(w http.ResponseWriter, r *http.R
 	if email == "" || component == "" || severity == "" || summary == "" ||
 		steps == "" || impact == "" || creditPref == "" || r.FormValue("disclosure_agreement") == "" {
 		SendError(w, CodeValidation, "email, component, severity, summary, steps, impact, credit_preference, and disclosure_agreement are required")
+		return
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		SendError(w, CodeValidation, "A valid email address is required")
 		return
 	}
 

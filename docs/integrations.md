@@ -35,13 +35,15 @@ not features left pending implementation from the current `AI.md`.
 | Outbound  | Let's Encrypt ACME (`acme-v02.api.letsencrypt.org`) | TLS certificate issuance and renewal when ACME is enabled.              | Falls back to existing cert; alerts admin. |
 | Outbound  | GeoIP / blocklist / CVE feeds (configurable)  | Periodic refresh by the internal scheduler.                             | Last good DB stays in place; next refresh retries. |
 | Outbound  | GitHub Releases for `apimgr/vidveil`            | Scheduled update checks and CLI release metadata; CLI downloads are proxied on request. | Existing version remains installed; failed checks/downloads report an error. |
-| Outbound  | SMTP server (configurable)                    | Admin notifications only.                                               | Notifications drop; server keeps running.  |
+| Outbound  | SMTP server (configurable)                    | Security-report notifications and researcher acknowledgements.         | Email delivery reports an error; the server keeps running. |
 | Inbound   | Tor hidden service (when `tor` is present)    | Same routes as the public surface.                                      | Hidden service disabled; clearnet unaffected. |
 
-VidVeil sends no analytics or telemetry and does not contact a vendor license
-server. Outbound requests are limited to searches initiated by visitors,
+Analytics are disabled unless configured by the operator, and analytics
+scripts are served only after visitor consent. VidVeil does not contact a
+vendor license server. Outbound requests are limited to searches initiated by visitors,
 configured ACME issuance/renewal, scheduled data and release checks, CLI
-release downloads requested by an operator, and configured SMTP notifications.
+release downloads requested by an operator, configured SMTP notifications,
+and analytics requests enabled by the operator and visitor consent.
 
 ## Integration Surfaces VidVeil Exposes
 

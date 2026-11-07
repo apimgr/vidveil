@@ -226,6 +226,7 @@ func TestSSRStandardServerPages(t *testing.T) {
 		"/server/about",
 		"/server/help",
 		"/server/privacy",
+		"/server/dpo",
 		"/server/terms",
 		"/server/contact",
 		"/server/healthz",

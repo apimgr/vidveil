@@ -86,7 +86,7 @@ _GO_OPTS = docker run --rm \
 # Standard Go Docker command (per AI.md PART 25 — includes image for simple go commands)
 GO_DOCKER = $(_GO_OPTS) casjaysdev/go:latest
 
-.PHONY: build local release docker test dev
+.PHONY: build local release docker test lint dev
 
 # =============================================================================
 # BUILD — Compile all 8 platform binaries via Docker (AI.md PART 25)
@@ -246,6 +246,15 @@ test:
 		echo "ERROR: Coverage $${PCT}% < 60% required"; exit 1; \
 	fi && \
 	echo "Tests complete: $${PCT}% (>= 60% required) ✓"
+
+# =============================================================================
+# LINT — Match CI's Go static analysis in the Docker toolchain
+# =============================================================================
+lint:
+	@mkdir -p $(GO_CACHE) $(GO_BUILD)
+	@echo "Running go vet and staticcheck..."
+	@$(GO_DOCKER) go vet ./...
+	@$(GO_DOCKER) staticcheck ./...
 
 # =============================================================================
 # DEV — Quick build to a temp dir for rapid iteration (AI.md PART 25)

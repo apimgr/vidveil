@@ -8,8 +8,10 @@ vulnerabilities.
 
 VidVeil is internet-facing by default and assumes hostile traffic.
 
-- The server **does not** track, log, or analyze user search queries beyond
-  what is required to serve a single in-flight request.
+- Search queries are processed in-flight and are not retained as search
+  history. Access logs can include request paths, client IP addresses, and
+  other metadata; custom formats can include query strings. Optional analytics
+  require operator configuration and visitor consent.
 - The server **does not** store user accounts. There is no registration,
   no profiles, and no server-side search history.
 - Operators manage configuration through `server.yml`, the CLI, and
@@ -50,6 +52,19 @@ Use the **private** reporting flow:
 Please **do not** file a public issue for security problems. Public bug
 reports for vulnerabilities are explicitly discouraged in
 `.github/SECURITY.md` and `/server/contact`.
+
+The public security overview is `/server/security`; it mirrors the current
+`/.well-known/security.txt` contacts and links to `/server/security/policy`,
+`/server/security/thanks`, the public key, and the machine-readable file.
+Researchers can submit a coordinated-disclosure report through
+`/server/contact?security_id=...`. A one-shot emailed link opens
+`/server/security/report/{tracking_id}` to show report status without exposing
+the report body.
+
+Unauthenticated JSON mirrors are available at
+`/api/{api_version}/server/security`, `/api/{api_version}/server/security/policy`,
+and `/api/{api_version}/server/security/thanks`. The token-bearing report
+status page has no API mirror.
 
 What to include:
 

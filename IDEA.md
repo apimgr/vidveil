@@ -2,10 +2,10 @@
 
 ## Project description
 
-Privacy-respecting meta search engine for adult video content that aggregates results from 33 video sites without tracking, logging, or analytics. Results stream in real-time via SSE as each engine responds.
+Privacy-respecting meta search engine for adult video content that aggregates results from 33 video sites without retaining search history; access logs may contain request metadata, and optional analytics require operator configuration and consent. Results stream in real-time via SSE as each engine responds.
 
 **Target Users:**
-- Privacy-conscious users seeking adult content without tracking
+- Privacy-conscious users seeking adult content with clear controls over optional analytics
 - Self-hosters wanting their own private search instance
 - Developers needing a unified API across multiple adult video platforms
 - Tor users requiring anonymous access to adult content
@@ -30,7 +30,7 @@ owner_token:       vidveil_owner_token_ab5213f6
 ### Product scope & non-goals
 
 **In scope (the WHAT):**
-- Privacy-First Search: No tracking, logging, or analytics - complete privacy
+- Privacy-conscious search: no retained search history; access logs may include request metadata; optional analytics require operator configuration and consent
 - Multi-Engine Aggregation: 33 engines with bang shortcuts for targeted searches
 - Real-Time Streaming: SSE streaming delivers results as each engine responds
 - Thumbnail Proxy: All thumbnails proxied through server to prevent tracking
@@ -179,7 +179,7 @@ type CombinedSuggestion struct {
 | Boundary | Service / Source | Trust assumption | Failure mode |
 |----------|------------------|------------------|--------------|
 | Outbound search | 33 third-party adult video sites (HTML/JSON parsing) | UNTRUSTED - response bodies may be malicious or change shape; never executed, only parsed | Engine drops out of `engines_used`, listed in `engines_failed`; search continues with remaining engines |
-| Outbound thumbnails | Same 41 sites + CDN hosts (e.g., `ttcache.com`) | UNTRUSTED - byte stream is rewritten through proxy, never linked directly into HTML | Thumbnail falls back to `placeholder.svg` |
+| Outbound thumbnails | The 33 configured engines and their CDN hosts (e.g., `ttcache.com`) | UNTRUSTED - byte stream is rewritten through proxy, never linked directly into HTML | Thumbnail falls back to `placeholder.svg` |
 | Outbound preview videos | Same engines (where supported) | UNTRUSTED - URL only, never inlined as HTML | Preview not shown |
 | Outbound Tor | Local Tor binary if present | TRUSTED inside container/host; auto-detected per AI.md PART 31 | Tor disabled if binary absent; clearnet still works |
 | Outbound GeoIP DB feed | Public GeoIP DB endpoint (per scheduler `geoip_update`) | TRUSTED dataset (publicly published) | Stale GeoIP data continues to be used until next successful refresh |
@@ -191,7 +191,7 @@ External integrations and failure modes are NOT to be extended at code time with
 ### Threat model & abuse cases
 
 **Primary assets:**
-1. User privacy - the absence of any record that a particular IP queried a particular term (this is the product itself).
+1. User privacy - minimizing retained search history while clearly disclosing that access logs may contain IP addresses and request paths, and custom formats may include query strings (this is the product itself).
 2. Server availability - the app must keep working even when individual engines fail.
 3. `server.yml` integrity - protect config file from unauthorized edits and rogue restore/setup.
 4. The host - VidVeil must never let untrusted engine HTML pivot into XSS, SSRF, or RCE.
@@ -209,11 +209,11 @@ External integrations and failure modes are NOT to be extended at code time with
 
 | Attacker goal | Defense |
 |---------------|---------|
-| Correlate IPs to search queries | No request logging of query content; structured logs redact query bodies; rate-limit responses do not echo the query |
+| Correlate IPs to search queries | Search requests are processed without retaining search history; configurable access log formats may include query strings; rate-limit responses do not echo the query |
 | Inject XSS via crafted engine titles / tags / performer names | All result fields are HTML-escaped server-side before render; CSP + escape-on-render templates; no inline JS or CSS |
 | SSRF via thumbnail/preview URL | Thumbnail proxy validates scheme + host against an allowlist of known engine CDN hosts; rejects file://, gopher://, and RFC1918 targets |
 | Path traversal via static asset paths | `PathSecurityMiddleware` (PART 5) blocks `..`, `%2e%2e`, normalizes // -> / |
-| Scraping / abusing the search endpoint as a free unlogged proxy | Configurable rate limiting (`rate_limit.requests`/`window`) + GeoIP allow/deny + IP/domain blocklist (PART 12); a `searchSem` concurrency semaphore additionally bounds simultaneous engine fan-outs (`search.concurrent_requests`), queuing briefly then returning a RATE_LIMITED overload response (HTTP 429 for JSON/HTML/feeds, an `event: error` SSE frame for streaming search) rather than degrading the server under a burst |
+| Scraping or abusing the search endpoint as an open proxy | Configurable rate limiting (`rate_limit.requests`/`window`) + GeoIP allow/deny + IP/domain blocklist (PART 12); a `searchSem` concurrency semaphore additionally bounds simultaneous engine fan-outs (`search.concurrent_requests`), queuing briefly then returning a RATE_LIMITED overload response (HTTP 429 for JSON/HTML/feeds, an `event: error` SSE frame for streaming search) rather than degrading the server under a burst |
 | Abuse via Tor exit nodes | Tor traffic is allowed by default (privacy goal), but operator can blocklist exit nodes in `server.yml` if abuse is observed |
 | Geographic compliance bypass | Operator-configurable restriction modes (off, warn, soft_block, hard_block) via `server.yml`; dismissable acknowledgement cookie (30 days) for soft_block |
 | Restore-to-takeover via `--maintenance restore` | PART 0 / PART 5 authorization flow: empty DB OR root OS user (service user must prompt for credentials) |
@@ -336,7 +336,7 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Search history display (up to 8 recent with timestamps).
 - Per-item remove button and clear all button.
 - Timestamps: "just now", "5m ago", "1h ago", "2d ago".
-- Engine statistics (33 engines, no tracking, Tor support).
+- Engine statistics (33 engines, no retained search history, Tor support).
 - Collapsible filters panel.
 
 **Search Results Page (`/search?q={query}`):**
@@ -435,7 +435,7 @@ authoritative for pagination, see "Search behavior" above):
 - Tier-based toggle switches (all tiers enabled by default):
   - Tier 1 - Major Sites (5 engines).
   - Tier 2 - Popular Sites (2 engines).
-  - Tier 3-6 - Additional Sites (35 engines).
+  - Tier 3-6 - Additional Sites (26 engines).
 - Expand/collapse each tier to see individual engines.
 - Checkbox for each individual engine within tiers.
 - Indeterminate state when some engines in tier are disabled.

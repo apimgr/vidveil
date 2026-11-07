@@ -7,6 +7,9 @@
     <div class="prose">
         <h1>{{ t "privacy.title" }}</h1>
         <p class="last-updated">{{ tf "privacy.last_updated" "date" .BuildDateTime }}</p>
+        {{ if .PageContent }}
+        {{ .PageContent | markdownToHTML }}
+        {{ else }}
 
         <h2>{{ t "privacy.summary" }}</h2>
         <p>{{ tf "privacy.summary_body" "app_name" .AppName }}</p>
@@ -26,10 +29,8 @@
         <ul>
             <li>{{ t "privacy.not_collect_accounts" }}</li>
             <li>{{ t "privacy.not_collect_track" }}</li>
-            <li>{{ t "privacy.not_collect_ip" }}</li>
             <li>{{ t "privacy.not_collect_cookies" }}</li>
             <li>{{ t "privacy.not_collect_fingerprint" }}</li>
-            <li>{{ t "privacy.not_collect_sell" }}</li>
             <li>{{ t "privacy.not_collect_profiles" }}</li>
         </ul>
 
@@ -141,7 +142,7 @@
                     <td>{{ .Name }}</td>
                     <td>{{ .Purpose }}</td>
                     <td>{{ .DataSent }}</td>
-                    <td><a href="{{ .PolicyURL }}" rel="noopener noreferrer">{{ t "privacy.tp_policy" }}</a></td>
+                    <td>{{ if .PolicyURL }}<a href="{{ .PolicyURL }}" rel="noopener noreferrer">{{ t "privacy.tp_policy" }}</a>{{ else }}—{{ end }}</td>
                 </tr>
                 {{ end }}
             </tbody>
@@ -171,8 +172,17 @@
         </section>
         {{ end }}
 
+        <h2>{{ t "privacy.dpo" }}</h2>
+        {{ if .DPOEmail }}
+        <p>{{ if .DPOName }}{{ .DPOName }} — {{ end }}<a href="mailto:{{ .DPOEmail }}">{{ .DPOEmail }}</a></p>
+        {{ else }}
+        <p>{{ t "dpo.no_email" }} <a href="/server/contact">{{ t "dpo.contact_form" }}</a>.</p>
+        {{ end }}
+        <p><a href="/server/dpo">{{ t "dpo.title" }}</a></p>
+
         <h2>{{ t "privacy.questions" }}</h2>
         <p>{{ t "privacy.questions_prefix" }} <a href="/server/contact">{{ t "privacy.contact_link" }}</a>.</p>
+        {{ end }}
     </div>
 </div>
 {{end}}

@@ -4,7 +4,8 @@
 
 - Docker
 - Make
-- Incus or Docker for test execution
+- Docker for builds and unit tests
+- Incus or Docker for integration test execution
 
 VidVeil uses containerized Go builds. Do **not** run `go build` directly on the host machine.
 
@@ -40,10 +41,10 @@ make docker
 runs the full systemd integration suite, and `docker.sh` is the Alpine
 fallback.
 
-`e2e.sh` is the headless-browser suite. It runs on demand only — never
-as part of `make test` and never as a commit gate — and covers three
-tiers: server-rendered HTML, a browser with JavaScript disabled, and a
-full browser with JavaScript enabled.
+`e2e.sh` is the headless-browser suite. Run it on demand after major frontend
+work, before a release, or for beta testing. It is not part of `make test` or
+the commit gate. It covers three tiers: server-rendered HTML, a browser with
+JavaScript disabled, and a full browser with JavaScript enabled.
 
 ## Output Locations
 

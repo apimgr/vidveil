@@ -414,8 +414,8 @@ func TestConvertHTMLToText_H1(t *testing.T) {
 	if strings.Contains(result, "<h1>") || strings.Contains(result, "</h1>") {
 		t.Error("convertHTMLToText should remove <h1> tags")
 	}
-	if !strings.Contains(result, "My Title") {
-		t.Error("convertHTMLToText should preserve title text")
+	if !strings.Contains(result, "MY TITLE") {
+		t.Error("convertHTMLToText should render heading text uppercase")
 	}
 }
 
@@ -733,8 +733,10 @@ func TestAPIContact_PostMissingFields(t *testing.T) {
 // TestAPIContact_PostValid verifies a valid POST returns 200.
 func TestAPIContact_PostValid(t *testing.T) {
 	cfg := createTestConfig()
+	cfg.Server.Pages.Contact.Enabled = true
 	h := NewServerHandler(cfg)
-	body := strings.NewReader("subject=hello&message=world")
+	form := simpleCaptchaFormValues(t, h, httptest.NewRequest("GET", "/api/v1/server/contact", nil)) + "&name=Alice&email=a%40b.com&subject=hello&message=world"
+	body := strings.NewReader(form)
 	req := httptest.NewRequest("POST", "/api/v1/server/contact", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()

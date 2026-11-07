@@ -1,0 +1,44 @@
+{{define "server-nojs"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+</head>
+<body>
+    {{if not .HasConsentCookie}}
+    <aside aria-label="Cookie consent">
+        <p>{{.ConsentMessage}} <a href="{{.ConsentPolicyURL}}">{{.ConsentPolicyText}}</a></p>
+        <form method="post" action="/server/consent">
+            {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+            <input type="hidden" name="choice" value="decline">
+            <button type="submit">{{.ConsentDeclineText}}</button>
+        </form>
+        <form method="post" action="/server/consent">
+            {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+            <input type="hidden" name="choice" value="accept">
+            <button type="submit">{{.ConsentAcceptText}}</button>
+        </form>
+    </aside>
+    {{end}}
+    <nav aria-label="Site navigation">
+        <a href="/">{{ t "nav.home" }}</a>
+        <a href="/search">{{ t "nav.search" }}</a>
+        <a href="/server/about">{{ t "nav.about" }}</a>
+        <a href="/server/privacy">{{ t "nav.privacy" }}</a>
+        <a href="/server/contact">{{ t "nav.contact" }}</a>
+        <a href="/server/help">{{ t "nav.help" }}</a>
+    </nav>
+    <main id="main-content">
+        {{template "content" .}}
+    </main>
+    <footer>
+        <p>{{.AppName}} {{.Version}}</p>
+        <a href="/server/terms">{{ t "terms.title" }}</a>
+        <a href="/server/security">{{ t "security.title" }}</a>
+        <a href="/server/dpo">{{ t "dpo.title" }}</a>
+    </footer>
+</body>
+</html>
+{{end}}

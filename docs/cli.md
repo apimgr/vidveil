@@ -4,10 +4,18 @@ The `vidveil-cli` command-line client provides a powerful interface for searchin
 
 ## Installation
 
-The CLI client is built alongside the server. Download the appropriate binary for your platform:
+The CLI client is built alongside the server. Download the artifact for your OS and architecture from [Releases](https://github.com/apimgr/vidveil/releases/latest):
 
-- `vidveil-cli` (Linux/macOS)
-- `vidveil-cli.exe` (Windows)
+| Platform | CLI artifact |
+|---|---|
+| Linux amd64 | `vidveil-cli-linux-amd64` |
+| Linux arm64 | `vidveil-cli-linux-arm64` |
+| macOS amd64 | `vidveil-cli-darwin-amd64` |
+| macOS arm64 | `vidveil-cli-darwin-arm64` |
+| Windows amd64 | `vidveil-cli-windows-amd64.exe` |
+| Windows arm64 | `vidveil-cli-windows-arm64.exe` |
+| FreeBSD amd64 | `vidveil-cli-freebsd-amd64` |
+| FreeBSD arm64 | `vidveil-cli-freebsd-arm64` |
 
 Or build from source:
 

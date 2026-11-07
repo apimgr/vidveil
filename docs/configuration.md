@@ -26,6 +26,16 @@ server:
   mcp:
     enabled: true
   pages:
+    about:
+      content: ""
+    privacy:
+      content: ""
+    contact:
+      enabled: true
+      captcha: simple
+      captcha_site_key: ""
+      captcha_secret_key: ""
+      success_message: Thank you for your message. We'll respond soon.
     help:
       mcp: >-
         VidVeil searches across 33 video engines and streams results as they respond. Use searchVideos for a phrase, optionally with a bang such as !ph to target Pornhub; use listEngines to inspect engine availability, listBangs to discover shortcuts, and autocompleteBangs to find matching shortcuts or suggestions. For example: search for ocean sunsets with !ph, then compare the returned titles and source engines. Favorites are private owner resources; use a linked token for automation and never share a primary or operator token.
@@ -181,6 +191,20 @@ server:
     bootstrap_timeout: 5m
 ```
 
+Optional analytics is disabled when `server.tracking.type` is empty or `none`.
+Supported types are `google`, `matomo`, `piwik`, `owa`, `fathom`, `plausible`,
+`umami`, `simple`, and `cloudflare`; provider-specific `id` and `url` formats
+are validated at startup. Tracking runs only after visitor consent, uses a
+same-origin `/server/tracking.js` initializer, and is suppressed for Tor and
+I2P requests. The CSP adds the configured provider origins without enabling
+inline scripts.
+
+The public contact form is enabled by default and uses the built-in, single-use
+arithmetic challenge. `server.pages.contact.captcha` may select `recaptcha` or
+`hcaptcha` when both provider keys are configured. The provider secret remains
+server-side; Tor, I2P, and text-browser requests always use the built-in
+challenge.
+
 ## Environment Variables
 
 | Variable | Description |
@@ -250,7 +274,10 @@ server:
     enabled: true
   pages:
     help:
+      content: 'VidVeil searches across configured video engines. Search with a phrase, use bang shortcuts such as `!ph`, and manage saved engines and display options under `/server/preferences`.'
       mcp: 'VidVeil searches across 33 video engines and streams results as they respond. Use `searchVideos` for a phrase, optionally with a bang such as `!ph` to target Pornhub; use `listEngines` to inspect engine availability, `listBangs` to discover shortcuts, and `autocompleteBangs` to find matching shortcuts or suggestions. For example: search for ocean sunsets with `!ph`, then compare the returned titles and source engines. Favorites are private owner resources; use a linked token for automation and never share a primary or operator token.'
+    terms:
+      content: ""
   tokens:
     max_linked: 25
     cookie_max_age: 1y
@@ -272,6 +299,9 @@ server:
     security:
       email: security@<detected host>
     abuse:
+      email: ""
+    dpo:
+      name: ""
       email: ""
     general:
       email: ""
@@ -621,9 +651,13 @@ server:
     auto_install: false
     defer_days: 0
     cli_min_version: ""
+  tracking:
+    type: ""
+    id: ""
+    url: ""
   privacy:
     consent:
-      message: This site uses cookies for age verification and to improve your experience.
+      message: This site uses essential cookies and, with your consent, preference and analytics cookies. You can change your choice at any time.
       message_if_sold: ""
       policy:
         url: /server/privacy
@@ -635,10 +669,19 @@ server:
     data:
       sold: false
       stored_on_server: true
-      sharing: []
+      sharing:
+        - condition: analytics
+          when: Tracking configured and user consents
+          data: Anonymized page views, browser type, and country
+        - condition: email
+          when: SMTP configured for sending emails
+          data: Email address and message content
+        - condition: user_initiated
+          when: User explicitly shares content
+          data: The content the user chooses to share
     retention:
-      period: Not retained — preferences live in your browser only
-      export_available: false
+      period: Favorites remain until you delete them with your owner token. Preferences are stored in browser cookies. Operational logs are kept for up to 30 days. Anonymized analytics data may be retained for up to 12 months when tracking is configured.
+      export_available: true
       deletion_available: true
     cookies:
       essential:

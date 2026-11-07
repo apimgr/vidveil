@@ -1,0 +1,18 @@
+{{define "server-dpo"}}
+{{template "public" .}}
+{{end}}
+
+{{define "content"}}
+<div class="content">
+    <div class="prose">
+        <h1>{{ t "dpo.title" }}</h1>
+        {{ if .DPOName }}<p>{{ .DPOName }}</p>{{ end }}
+        {{ if .DPOEmail }}
+        <p><a href="mailto:{{ .DPOEmail }}">{{ .DPOEmail }}</a></p>
+        {{ else }}
+        <p>{{ t "dpo.no_email" }} <a href="{{ .ContactURL }}">{{ t "dpo.contact_form" }}</a>.</p>
+        {{ end }}
+        <p><a href="{{ .PrivacyURL }}">{{ t "dpo.privacy_policy" }}</a></p>
+    </div>
+</div>
+{{end}}

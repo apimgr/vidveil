@@ -171,6 +171,7 @@ func TestGenerateSpecDocumentsImplementedAPIOperations(t *testing.T) {
 	}
 	operations := map[string]string{
 		"get /api/v1/server/help/mcp":           "getServerHelpMCP",
+		"get /api/v1/server/dpo":                "getServerDPO",
 		"get /api/v1/bangs":                     "listBangs",
 		"get /api/v1/bangs/autocomplete":        "autocompleteBangs",
 		"get /api/v1/engines/{name}":            "getEngineDetails",

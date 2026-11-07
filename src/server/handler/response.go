@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	commonhttputil "github.com/apimgr/vidveil/src/common/httputil"
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/outsan"
 	"github.com/apimgr/vidveil/src/config"
@@ -570,13 +571,13 @@ func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{
 	switch name {
 	case "home":
 		html += "<h1>VidVeil - Privacy-Respecting Video Search</h1>"
-		html += "<p>Search across 51 adult video sites without tracking.</p>"
+		html += "<p>Search across 33 adult video sites. Search history is not retained.</p>"
 		html += "<p>Enter a search query or use bang shortcuts like !ph for PornHub.</p>"
 		html += "<hr>"
 		html += "<h2>Features</h2>"
 		html += "<ul>"
 		html += "<li>33 video search engines</li>"
-		html += "<li>No tracking or logging</li>"
+		html += "<li>Search history is not retained</li>"
 		html += "<li>SSE streaming results</li>"
 		html += "<li>Thumbnail proxy</li>"
 		html += "<li>Bang shortcuts (!ph, !rt, !xv, etc.)</li>"
@@ -586,7 +587,7 @@ func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{
 		html += "<p>VidVeil is a privacy-respecting meta search engine for adult video content.</p>"
 		html += "<h2>Key Features</h2>"
 		html += "<ul>"
-		html += "<li>No tracking or logging</li>"
+		html += "<li>Search history is not retained</li>"
 		html += "<li>33 search engines</li>"
 		html += "<li>SSE streaming results</li>"
 		html += "<li>Thumbnail proxy</li>"
@@ -595,14 +596,14 @@ func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{
 		html += "</ul>"
 	case "privacy":
 		html += "<h1>Privacy Policy</h1>"
-		html += "<p>VidVeil does not track or log search queries. Favorites are stored privately on the server under an owner token.</p>"
-		html += "<h2>What We Don't Collect</h2>"
+		html += "<p>Search history is not retained. Operational and security logs may contain request details, including IP addresses. Favorites are stored privately on the server under an owner token.</p>"
+		html += "<h2>Data Handling</h2>"
 		html += "<ul>"
 		html += "<li>No search history</li>"
-		html += "<li>No IP addresses</li>"
-		html += "<li>No tracking cookies</li>"
-		html += "<li>No analytics</li>"
-		html += "<li>No third-party tracking</li>"
+		html += "<li>Operational and security logs may contain request details, including IP addresses.</li>"
+		html += "<li>No advertising cookies</li>"
+		html += "<li>Optional analytics require configuration and consent.</li>"
+		html += "<li>No advertising trackers</li>"
 		html += "</ul>"
 	case "favorites":
 		html += "<h1>Favorites</h1>"
@@ -659,37 +660,7 @@ func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{
 
 // convertHTMLToText uses the full HTML2TextConverter
 func convertHTMLToText(html string, width int) string {
-	// Simple conversion for now
-	text := html
-
-	// H1 with box drawing
-	text = replaceAll(text, "<h1>", "\n"+repeatStr("═", width)+"\n")
-	text = replaceAll(text, "</h1>", "\n"+repeatStr("═", width)+"\n\n")
-
-	// H2 with line
-	text = replaceAll(text, "<h2>", "\n─── ")
-	text = replaceAll(text, "</h2>", " ───\n\n")
-
-	// Paragraphs
-	text = replaceAll(text, "<p>", "")
-	text = replaceAll(text, "</p>", "\n\n")
-
-	// Lists
-	text = replaceAll(text, "<ul>", "\n")
-	text = replaceAll(text, "</ul>", "\n")
-	text = replaceAll(text, "<li>", "  • ")
-	text = replaceAll(text, "</li>", "\n")
-
-	// HR
-	text = replaceAll(text, "<hr>", "\n"+repeatStr("─", width)+"\n\n")
-
-	// Strip remaining tags
-	text = replaceAll(text, "<html>", "")
-	text = replaceAll(text, "</html>", "")
-	text = replaceAll(text, "<body>", "")
-	text = replaceAll(text, "</body>", "")
-
-	return text
+	return commonhttputil.HTML2TextConverter(html, width)
 }
 
 // Helper functions

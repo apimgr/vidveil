@@ -693,7 +693,12 @@ func (s *Server) buildCSPHeader(r *http.Request) string {
 		learnedSuffix += " " + o
 	}
 
+	trackingScripts, trackingConnections := handler.TrackingCSPOrigins(s.appConfig.Server.Tracking)
+	captchaScripts, captchaFrames, captchaConnections := handler.CaptchaCSPOrigins(s.appConfig.Server.Pages.Contact, r)
 	connectSrc := "'self'" + learnedSuffix
+	for _, origin := range append(trackingConnections, captchaConnections...) {
+		connectSrc += " " + origin
+	}
 	if cfg.ConnectSrcExtra != "" {
 		connectSrc += " " + cfg.ConnectSrcExtra
 	}
@@ -714,8 +719,16 @@ func (s *Server) buildCSPHeader(r *http.Request) string {
 		return name + " " + val + "; "
 	}
 
+	scriptDefaults := "'self'"
+	for _, origin := range append(trackingScripts, captchaScripts...) {
+		scriptDefaults += " " + origin
+	}
+	frameSrc := "'self'"
+	for _, origin := range captchaFrames {
+		frameSrc += " " + origin
+	}
 	policy := directive("default-src", "'self'", "", "") +
-		directive("script-src", "'self'", cfg.ScriptSrcExtra, cfg.ScriptSrcOverride) +
+		directive("script-src", scriptDefaults, cfg.ScriptSrcExtra, cfg.ScriptSrcOverride) +
 		directive("style-src", "'self' 'unsafe-inline'", cfg.StyleSrcExtra, cfg.StyleSrcOverride) +
 		directive("img-src", "'self' data: blob: https:", cfg.ImgSrcExtra, "") +
 		directive("font-src", "'self' https:", cfg.FontSrcExtra, "") +
@@ -723,7 +736,7 @@ func (s *Server) buildCSPHeader(r *http.Request) string {
 		directive("media-src", "'self' blob:", "", "") +
 		directive("worker-src", "'self' blob:", "", "") +
 		directive("manifest-src", "'self'", "", "") +
-		directive("frame-src", "'self'", cfg.FrameSrcExtra, "") +
+		directive("frame-src", frameSrc, cfg.FrameSrcExtra, "") +
 		"frame-ancestors " + frameAncestors + "; " +
 		directive("base-uri", "'self'", "", "") +
 		"form-action " + formAction + "; " +
@@ -1178,6 +1191,8 @@ func (s *Server) setupRoutes() {
 		})
 		r.Get("/about", server.AboutPage)
 		r.Get("/privacy", server.PrivacyPage)
+		r.Get("/dpo", server.DPOPage)
+		r.Get("/tracking.js", server.TrackingJavaScript)
 		r.Get("/contact", server.ContactPage)
 		r.Post("/contact", server.ContactPage)
 		// Zero-JS cookie-consent flow per AI.md PART 12 — banner forms POST here
@@ -1240,6 +1255,7 @@ func (s *Server) setupRoutes() {
 			r.Get("/healthz", h.APIHealthCheck)
 			r.Get("/about", server.APIAbout)
 			r.Get("/privacy", server.APIPrivacy)
+			r.Get("/dpo", server.APIDPO)
 			r.Post("/contact", server.APIContact)
 			r.With(s.requireOperatorToken).Post("/restore", server.APIRestore)
 			r.Get("/help", server.APIHelp)

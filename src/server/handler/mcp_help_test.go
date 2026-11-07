@@ -14,6 +14,7 @@ func TestHelpMCPPageRendersResolvedConnectionGuide(t *testing.T) {
 	setRealTemplatesFS(t)
 	h := newServerHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "https://vidveil.example/server/help/mcp", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	rr := httptest.NewRecorder()
 	h.HelpMCPPage(rr, req)
 	if rr.Code != http.StatusOK {
@@ -39,7 +40,9 @@ func TestHelpMCPPageAndAPIHideWhenDisabled(t *testing.T) {
 	h.appConfig.Server.MCP.Enabled = false
 
 	page := httptest.NewRecorder()
-	h.HelpMCPPage(page, httptest.NewRequest(http.MethodGet, "/server/help/mcp", nil))
+	pageRequest := httptest.NewRequest(http.MethodGet, "/server/help/mcp", nil)
+	pageRequest.Header.Set("User-Agent", "Mozilla/5.0")
+	h.HelpMCPPage(page, pageRequest)
 	if page.Code != http.StatusNotFound {
 		t.Errorf("HelpMCPPage status = %d, want %d", page.Code, http.StatusNotFound)
 	}
@@ -51,7 +54,9 @@ func TestHelpMCPPageAndAPIHideWhenDisabled(t *testing.T) {
 	}
 
 	help := httptest.NewRecorder()
-	h.HelpPage(help, httptest.NewRequest(http.MethodGet, "/server/help", nil))
+	helpRequest := httptest.NewRequest(http.MethodGet, "/server/help", nil)
+	helpRequest.Header.Set("User-Agent", "Mozilla/5.0")
+	h.HelpPage(help, helpRequest)
 	if help.Code != http.StatusOK {
 		t.Fatalf("HelpPage status = %d, want %d", help.Code, http.StatusOK)
 	}

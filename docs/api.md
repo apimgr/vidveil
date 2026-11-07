@@ -11,4 +11,4 @@ When using the public deployment, the base URL is `https://x.scour.li`.
 
 - [REST API](api/rest.md) — endpoints, request/response formats, status codes
 - [GraphQL](api/graphql.md) — schema and query examples
-- [Authentication](api/authentication.md) — tokens and admin authorization
+- [Authentication](api/authentication.md) — public access, owner tokens, and operator authorization

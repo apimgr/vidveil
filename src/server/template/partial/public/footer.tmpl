@@ -1,5 +1,6 @@
 {{define "public/footer"}}
 {{/* AI.md PART 16: Footer contains About, Privacy, Contact, Help, GitHub, version */}}
+{{ trackingNoScript }}
 <footer class="footer" role="contentinfo">
     {{/* Onion address - shown only if Tor is enabled, running, and published (AI.md PART 16) */}}
     {{ if and .TorEnabled .TorRunning .OnionAddress }}

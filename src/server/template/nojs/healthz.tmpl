@@ -1,0 +1,50 @@
+{{define "healthz-nojs"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+</head>
+<body>
+    <nav aria-label="Site navigation">
+        <a href="/">{{ t "nav.home" }}</a>
+        <a href="/server/about">{{ t "nav.about" }}</a>
+        <a href="/server/privacy">{{ t "nav.privacy" }}</a>
+        <a href="/server/help">{{ t "nav.help" }}</a>
+    </nav>
+    <main>
+        <h1>{{.ProjectName}} — {{ t "healthz.system_health" }}</h1>
+        <p>{{.StatusText}}</p>
+        <dl>
+            <dt>{{ t "healthz.version_label" }}</dt><dd>{{.Version}}</dd>
+            <dt>{{ t "healthz.go_version_label" }}</dt><dd>{{.GoVersion}}</dd>
+            <dt>{{ t "healthz.build_label" }}</dt><dd>{{.BuildCommit}} ({{.BuildDate}})</dd>
+            <dt>{{ t "healthz.uptime_label" }}</dt><dd>{{.Uptime}}</dd>
+            <dt>{{ t "healthz.mode_label" }}</dt><dd>{{.ModeDisplay}}</dd>
+        </dl>
+        <h2>{{ t "healthz.features_title" }}</h2>
+        <ul>
+            <li>{{ t "healthz.tor_label" }}: {{.Features.TorStatus}}{{if .Features.TorOnionAddr}} — <code>{{.Features.TorOnionAddr}}</code>{{end}}</li>
+            {{if .Features.I2PEnabled}}<li>I2P: {{.Features.I2PStatus}}{{if .Features.I2PAddress}} — <code>{{.Features.I2PAddress}}</code>{{end}}</li>{{end}}
+            <li>{{ t "healthz.geoip_label" }}: {{if .Features.GeoIP}}{{ t "healthz.enabled" }}{{else}}{{ t "healthz.disabled" }}{{end}}</li>
+        </ul>
+        <h2>{{ t "healthz.component_status_title" }}</h2>
+        <dl>
+            <dt>{{ t "healthz.database_label" }}</dt><dd>{{.Checks.Database}}</dd>
+            <dt>{{ t "healthz.cache_label" }}</dt><dd>{{.Checks.Cache}}</dd>
+            <dt>{{ t "healthz.disk_label" }}</dt><dd>{{.Checks.Disk}}</dd>
+            <dt>{{ t "healthz.scheduler_label" }}</dt><dd>{{.Checks.Scheduler}}</dd>
+            {{if .Checks.I2P}}<dt>I2P</dt><dd>{{.Checks.I2P}}</dd>{{end}}
+        </dl>
+        <h2>{{ t "healthz.statistics_title" }}</h2>
+        <dl>
+            <dt>{{ t "healthz.requests_total_label" }}</dt><dd>{{.Stats.RequestsTotal}}</dd>
+            <dt>{{ t "healthz.requests_24h_label" }}</dt><dd>{{.Stats.Requests24h}}</dd>
+            <dt>{{ t "healthz.active_connections_label" }}</dt><dd>{{.Stats.ActiveConnections}}</dd>
+        </dl>
+    </main>
+    <footer><a href="/server/healthz">{{ t "healthz.last_checked" }} {{.TimestampDisplay}}</a></footer>
+</body>
+</html>
+{{end}}

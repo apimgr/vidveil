@@ -28,6 +28,23 @@ chmod +x vidveil-linux-amd64
 ./vidveil-linux-amd64
 ```
 
+#### Release Artifacts
+
+Both the `vidveil` server and `vidveil-cli` client are published for all supported platforms:
+
+| Platform | Server artifact | CLI artifact |
+|---|---|---|
+| Linux amd64 | `vidveil-linux-amd64` | `vidveil-cli-linux-amd64` |
+| Linux arm64 | `vidveil-linux-arm64` | `vidveil-cli-linux-arm64` |
+| macOS amd64 | `vidveil-darwin-amd64` | `vidveil-cli-darwin-amd64` |
+| macOS arm64 | `vidveil-darwin-arm64` | `vidveil-cli-darwin-arm64` |
+| Windows amd64 | `vidveil-windows-amd64.exe` | `vidveil-cli-windows-amd64.exe` |
+| Windows arm64 | `vidveil-windows-arm64.exe` | `vidveil-cli-windows-arm64.exe` |
+| FreeBSD amd64 | `vidveil-freebsd-amd64` | `vidveil-cli-freebsd-amd64` |
+| FreeBSD arm64 | `vidveil-freebsd-arm64` | `vidveil-cli-freebsd-arm64` |
+
+Download the matching artifact from the [latest release](https://github.com/apimgr/vidveil/releases/latest).
+
 ## Build From Source
 
 Local builds use the repository Makefile and Docker-backed Go toolchain:
@@ -47,7 +64,6 @@ Built binaries are written to `binaries/`.
 ```bash
 sudo cp vidveil-linux-amd64 /usr/local/bin/vidveil
 sudo vidveil --service --install
-sudo systemctl enable --now vidveil
 ```
 
 ### macOS (launchd)
@@ -55,7 +71,6 @@ sudo systemctl enable --now vidveil
 ```bash
 sudo cp vidveil-darwin-amd64 /usr/local/bin/vidveil
 sudo vidveil --service --install
-sudo launchctl load /Library/LaunchDaemons/apimgr.vidveil.plist
 ```
 
 ### BSD (rc.d)
@@ -63,8 +78,6 @@ sudo launchctl load /Library/LaunchDaemons/apimgr.vidveil.plist
 ```bash
 sudo cp vidveil-freebsd-amd64 /usr/local/bin/vidveil
 sudo vidveil --service --install
-echo 'vidveil_enable="YES"' | sudo tee -a /etc/rc.conf
-sudo service vidveil start
 ```
 
 ## First Run

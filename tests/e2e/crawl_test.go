@@ -25,6 +25,8 @@ var crawlSeeds = []string{
 	"/favorites",
 	"/server/preferences",
 	"/server/about",
+	"/server/privacy",
+	"/server/dpo",
 	"/server/help",
 }
 

@@ -7,7 +7,7 @@
 
 ## About
 
-Privacy-respecting meta search for adult video content. No tracking, no logging, no analytics. Aggregates results from 33 video sites with bang shortcuts for targeted searches.
+Privacy-respecting meta search for adult video content. Search queries are processed in-flight and are not retained as search history. Configured access logs may include request paths, IP addresses, and other request metadata; custom formats can include query strings. Optional analytics run only when configured by the operator and after visitor consent. Aggregates results from 33 video sites with bang shortcuts for targeted searches.
 
 ## Official Site
 
@@ -21,7 +21,7 @@ https://x.scour.li
 
 | Feature | Description |
 |---------|-------------|
-| **Privacy First** | No tracking, no logging, no analytics |
+| **Privacy First** | Search history is not retained; configured access logs may include request metadata and custom formats can include query strings; optional analytics require operator configuration and visitor consent |
 | **33 Engines** | Aggregates results from 33 adult video sites |
 | **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
 | **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |
@@ -64,6 +64,8 @@ docker compose up -d
 ### Binary Download
 
 Download the latest binary for your platform from [Releases](https://github.com/apimgr/vidveil/releases).
+Release artifacts cover Linux, macOS, Windows, and FreeBSD on amd64 and arm64;
+see the [complete server and CLI artifact names](docs/installation.md#release-artifacts).
 
 ```bash
 # Linux (amd64)
@@ -77,6 +79,7 @@ chmod +x vidveil-linux-amd64
 ## Client
 
 A companion CLI client (`vidveil-cli`) is available for interacting with the server API from the terminal.
+The same eight OS/architecture combinations are published; see the [artifact table](docs/installation.md#release-artifacts).
 
 ### Install
 
@@ -213,10 +216,19 @@ GET https://x.scour.li/api/v1/server/healthz
 The canonical frontend health route is `https://x.scour.li/server/healthz`.
 The root `/healthz` alias is disabled by default.
 
-### Documentation
+### Server Pages and API Documentation
 
 | Endpoint | Description |
 |----------|-------------|
+| `https://x.scour.li/server/about` | Application description and version |
+| `https://x.scour.li/server/privacy` | Configured privacy policy |
+| `https://x.scour.li/server/dpo` | DPO contact and privacy-policy link |
+| `https://x.scour.li/server/contact` | Public contact form |
+| `https://x.scour.li/server/help` | Application help |
+| `https://x.scour.li/server/terms` | Terms of service |
+| `https://x.scour.li/server/security` | Security contacts and reporting guidance |
+| `https://x.scour.li/server/security/policy` | Coordinated disclosure policy |
+| `https://x.scour.li/server/security/thanks` | Security researcher acknowledgments |
 | `https://x.scour.li/server/docs/swagger` | Swagger UI |
 | `https://x.scour.li/api/v1/server/swagger` | OpenAPI JSON (`/api/swagger` alias) |
 | `https://x.scour.li/api/v1/server/graphql` | GraphQL endpoint (`/api/graphql` alias) |

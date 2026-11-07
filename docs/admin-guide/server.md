@@ -17,8 +17,10 @@ The MCP connection guide is at `/server/help/mcp`; its VidVeil-specific
 instructions come from `server.pages.help.mcp`.
 
 The standard server pages are server-rendered at `/server/about`,
-`/server/privacy`, `/server/contact`, `/server/help`, `/server/help/mcp`,
-`/server/terms`, and `/server/healthz`. Interactive API references are at
+`/server/privacy`, `/server/dpo`, `/server/contact`, `/server/help`, `/server/help/mcp`,
+`/server/terms`, `/server/security`, `/server/security/policy`,
+`/server/security/thanks`, `/server/security/report/{tracking_id}`, and
+`/server/healthz`. Interactive API references are at
 `/server/docs/swagger` and `/server/docs/graphql`. Their API routes and
 configuration are documented in the [REST API guide](../api/rest.md),
 [integrations guide](../integrations.md), and [configuration guide](../configuration.md).

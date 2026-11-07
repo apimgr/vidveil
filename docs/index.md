@@ -2,7 +2,7 @@
 
 **Privacy-respecting adult video meta search engine**
 
-Vidveil aggregates results from adult video sites without requiring user accounts or adding tracking, analytics, or server-side history.
+Vidveil aggregates results from adult video sites without user accounts or server-side search history. Search history is not retained. Configured access logs may include request paths, IP addresses, and other request metadata; custom formats can include query strings. Optional analytics require operator configuration and visitor consent.
 
 ## Quick Start
 
@@ -26,6 +26,8 @@ curl -q -LSsfO https://github.com/apimgr/vidveil/releases/latest/download/vidvei
 chmod +x vidveil-linux-amd64
 ./vidveil-linux-amd64
 ```
+
+The server and CLI releases support Linux, macOS, Windows, and FreeBSD on amd64 and arm64. See the [complete artifact list](installation.md#release-artifacts).
 
 ## Configuration
 

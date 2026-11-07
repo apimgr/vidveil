@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -198,6 +199,9 @@ type ServerConfig struct {
 	// Update holds release-channel and auto-install settings per AI.md PART 22
 	Update UpdateConfig `yaml:"update"`
 
+	// Tracking configures the optional analytics provider per AI.md PART 12.
+	Tracking TrackingConfig `yaml:"tracking"`
+
 	// Privacy holds the cookie-consent banner text and data-sale disclosure
 	// per AI.md PART 12 "Cookie Consent Banner" (server.privacy.consent.*,
 	// server.privacy.data.sold)
@@ -210,11 +214,28 @@ type MCPConfig struct {
 }
 
 type ServerPagesConfig struct {
-	Help ServerHelpPagesConfig `yaml:"help"`
+	About   ServerPageContentConfig  `yaml:"about"`
+	Privacy ServerPageContentConfig  `yaml:"privacy"`
+	Contact ServerContactPagesConfig `yaml:"contact"`
+	Help    ServerHelpPagesConfig    `yaml:"help"`
+	Terms   ServerPageContentConfig  `yaml:"terms"`
+}
+
+type ServerPageContentConfig struct {
+	Content string `yaml:"content"`
+}
+
+type ServerContactPagesConfig struct {
+	Enabled          bool   `yaml:"enabled"`
+	Captcha          string `yaml:"captcha"`
+	CaptchaSiteKey   string `yaml:"captcha_site_key"`
+	CaptchaSecretKey string `yaml:"captcha_secret_key"`
+	SuccessMessage   string `yaml:"success_message"`
 }
 
 type ServerHelpPagesConfig struct {
-	MCP string `yaml:"mcp"`
+	Content string `yaml:"content"`
+	MCP     string `yaml:"mcp"`
 }
 
 const vidveilMCPHelp = "VidVeil searches across 33 video engines and streams results as they respond. Use `searchVideos` for a phrase, optionally with a bang such as `!ph` to target Pornhub; use `listEngines` to inspect engine availability, `listBangs` to discover shortcuts, and `autocompleteBangs` to find matching shortcuts or suggestions. For example: search for ocean sunsets with `!ph`, then compare the returned titles and source engines. Favorites are private owner resources; use a linked token for automation and never share a primary or operator token."
@@ -224,6 +245,13 @@ type TokensConfig struct {
 	MaxLinked     int    `yaml:"max_linked"`
 	CookieMaxAge  string `yaml:"cookie_max_age"`
 	IdlePurgeDays int    `yaml:"idle_purge_days"`
+}
+
+// TrackingConfig controls the optional analytics provider per AI.md PART 12.
+type TrackingConfig struct {
+	Type string `yaml:"type"`
+	ID   string `yaml:"id"`
+	URL  string `yaml:"url"`
 }
 
 // PrivacyConfig holds cookie-consent and data-sale disclosure settings per
@@ -555,10 +583,16 @@ type ContactRoleConfig struct {
 
 // ContactConfig holds the unified notification-routing tree per AI.md PART 12.
 // One config tree for every "where do messages go" decision.
+type DPOContactConfig struct {
+	Name  string `yaml:"name"`
+	Email string `yaml:"email"`
+}
+
 type ContactConfig struct {
 	Admin    ContactRoleConfig `yaml:"admin"`
 	Security ContactRoleConfig `yaml:"security"`
 	Abuse    ContactRoleConfig `yaml:"abuse"`
+	DPO      DPOContactConfig  `yaml:"dpo"`
 	General  ContactRoleConfig `yaml:"general"`
 }
 
@@ -1329,12 +1363,8 @@ type CSRFConfig struct {
 	ExemptPaths []string `yaml:"exempt_paths"`
 }
 
-// FooterConfig holds footer settings.
-// Cookie-consent banner text lives at server.privacy.consent (PrivacyConfig)
-// per AI.md PART 12 "Cookie Consent Banner", not here. No analytics/tracking
-// field is defined here: the IDEA.md non-goal "No tracking, logging, or
-// analytics" forbids the analytics-injection point that AI.md PART 12
-// "Analytics Tracking" describes for the generic template.
+// FooterConfig holds footer settings. Cookie-consent banner text lives at
+// server.privacy.consent and analytics configuration at server.tracking.
 type FooterConfig struct {
 	CustomHTML string `yaml:"custom_html"`
 }
@@ -1521,6 +1551,89 @@ func envDefault(key, def string) string {
 	return def
 }
 
+// ValidateTracking validates an optional analytics provider configuration.
+func ValidateTracking(cfg *TrackingConfig) error {
+	if cfg == nil || cfg.Type == "" || cfg.Type == "none" {
+		return nil
+	}
+	validURL := func(raw string) bool {
+		parsed, err := url.Parse(raw)
+		return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Hostname() != ""
+	}
+	switch strings.ToLower(cfg.Type) {
+	case "google":
+		if !regexp.MustCompile(`^(UA-[0-9]+-[0-9]+|G-[A-Z0-9]+)$`).MatchString(cfg.ID) {
+			return errors.New("google analytics ID must match UA-N-N or G-XXXXXXXX")
+		}
+	case "matomo", "piwik":
+		if _, err := strconv.Atoi(cfg.ID); err != nil {
+			return errors.New("matomo/piwik ID must be an integer")
+		}
+		if !validURL(cfg.URL) {
+			return errors.New("matomo/piwik requires a valid HTTP(S) URL")
+		}
+	case "owa":
+		if cfg.ID == "" || !validURL(cfg.URL) {
+			return errors.New("owa requires a site ID and valid HTTP(S) URL")
+		}
+	case "fathom":
+		if cfg.ID == "" || (cfg.URL != "" && !validURL(cfg.URL)) {
+			return errors.New("fathom requires a site ID and an optional valid HTTP(S) URL")
+		}
+	case "plausible":
+		if !validAnalyticsDomain(cfg.ID) || (cfg.URL != "" && !validURL(cfg.URL)) {
+			return errors.New("plausible requires a domain and an optional valid HTTP(S) URL")
+		}
+	case "umami":
+		if !validAnalyticsUUID(cfg.ID) || !validURL(cfg.URL) {
+			return errors.New("umami requires a UUID and valid HTTP(S) URL")
+		}
+	case "simple":
+	case "cloudflare":
+		if cfg.ID == "" {
+			return errors.New("cloudflare web analytics requires a beacon token")
+		}
+	default:
+		return fmt.Errorf("unknown analytics type %q", cfg.Type)
+	}
+	if cfg.URL != "" && !validURL(cfg.URL) {
+		return errors.New("tracking URL must be a valid HTTP(S) URL")
+	}
+	cfg.Type = strings.ToLower(cfg.Type)
+	return nil
+}
+
+var analyticsDomainPattern = regexp.MustCompile(`(?i)^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$`)
+var analyticsUUIDPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+func validAnalyticsDomain(domain string) bool { return analyticsDomainPattern.MatchString(domain) }
+func validAnalyticsUUID(id string) bool       { return analyticsUUIDPattern.MatchString(id) }
+
+func validateContactCaptcha(cfg *ServerContactPagesConfig, defaults ServerContactPagesConfig) {
+	if cfg == nil {
+		return
+	}
+	cfg.Captcha = strings.ToLower(strings.TrimSpace(cfg.Captcha))
+	switch cfg.Captcha {
+	case "", "simple":
+		cfg.Captcha = "simple"
+		cfg.CaptchaSiteKey = ""
+		cfg.CaptchaSecretKey = ""
+	case "recaptcha", "hcaptcha":
+		if cfg.CaptchaSiteKey == "" || cfg.CaptchaSecretKey == "" {
+			fmt.Fprintf(os.Stderr, "Warning: %s requires captcha_site_key and captcha_secret_key; using simple captcha instead\n", cfg.Captcha)
+			cfg.Captcha = defaults.Captcha
+			cfg.CaptchaSiteKey = defaults.CaptchaSiteKey
+			cfg.CaptchaSecretKey = defaults.CaptchaSecretKey
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "Warning: unknown contact captcha %q; using simple captcha instead\n", cfg.Captcha)
+		cfg.Captcha = defaults.Captcha
+		cfg.CaptchaSiteKey = defaults.CaptchaSiteKey
+		cfg.CaptchaSecretKey = defaults.CaptchaSecretKey
+	}
+}
+
 // DefaultAppConfig returns an AppConfig with sensible defaults per AI.md
 func DefaultAppConfig() *AppConfig {
 	fqdn := getHostname()
@@ -1539,9 +1652,15 @@ func DefaultAppConfig() *AppConfig {
 			APIVersion: defaultAPIVersion,
 			Mode:       "production",
 			MCP:        MCPConfig{Enabled: true},
-			Pages:      ServerPagesConfig{Help: ServerHelpPagesConfig{MCP: vidveilMCPHelp}},
-			Tokens:     TokensConfig{MaxLinked: 25, CookieMaxAge: "1y", IdlePurgeDays: 0},
-			Token:      generateToken(32),
+			Pages: ServerPagesConfig{
+				Contact: ServerContactPagesConfig{Enabled: true, Captcha: "simple", SuccessMessage: "Thank you for your message. We'll respond soon."},
+				Help: ServerHelpPagesConfig{
+					Content: "VidVeil searches across configured video engines. Search with a phrase, use bang shortcuts such as `!ph`, and manage saved engines and display options under `/server/preferences`.",
+					MCP:     vidveilMCPHelp,
+				},
+			},
+			Tokens: TokensConfig{MaxLinked: 25, CookieMaxAge: "1y", IdlePurgeDays: 0},
+			Token:  generateToken(32),
 			Security: SecurityConfig{
 				// Per AI.md PART 11 "Cryptographic Keys": canonical 32-byte
 				// AES-256-GCM at-rest key, auto-generated on first run and
@@ -1574,6 +1693,7 @@ func DefaultAppConfig() *AppConfig {
 					Email:    "",
 					Webhooks: map[string]string{},
 				},
+				DPO: DPOContactConfig{},
 				General: ContactRoleConfig{
 					Email:    "",
 					Webhooks: map[string]string{},
@@ -1838,7 +1958,7 @@ func DefaultAppConfig() *AppConfig {
 			// when Data.Sold is true.
 			Privacy: PrivacyConfig{
 				Consent: ConsentConfig{
-					Message: "This site uses cookies for age verification and to improve your experience.",
+					Message: "This site uses essential cookies and, with your consent, preference and analytics cookies. You can change your choice at any time.",
 					Policy: ConsentPolicyConfig{
 						URL:  "/server/privacy",
 						Text: "Privacy Policy",
@@ -1852,11 +1972,15 @@ func DefaultAppConfig() *AppConfig {
 				Data: PrivacyDataConfig{
 					Sold:           false,
 					StoredOnServer: true,
-					Sharing:        []SharingCondition{},
+					Sharing: []SharingCondition{
+						{Condition: "analytics", When: "Tracking configured and user consents", Data: "Anonymized page views, browser type, and country"},
+						{Condition: "email", When: "SMTP configured for sending emails", Data: "Email address and message content"},
+						{Condition: "user_initiated", When: "User explicitly shares content", Data: "The content the user chooses to share"},
+					},
 				},
 				Retention: PrivacyRetentionConfig{
-					Period:            "Not retained — preferences live in your browser only",
-					ExportAvailable:   false,
+					Period:            "Favorites remain until you delete them with your owner token. Preferences are stored in browser cookies. Operational logs are kept for up to 30 days. Anonymized analytics data may be retained for up to 12 months when tracking is configured.",
+					ExportAvailable:   true,
 					DeletionAvailable: true,
 				},
 				Cookies: CookieCategoriesConfig{
@@ -1878,7 +2002,12 @@ func DefaultAppConfig() *AppConfig {
 				ThirdParty: ThirdPartyConfig{
 					Services: []ThirdPartyService{},
 				},
-				Content: PrivacyContentConfig{},
+				Content: PrivacyContentConfig{
+					DataCollection:  "We process request metadata such as IP addresses for security and abuse prevention. Search queries are sent to the video engines selected for a search. VidVeil does not retain search history, though configured access logs can include request URLs. Optional analytics records usage only after consent.",
+					DataUsage:       "Data is used to provide search, maintain service security, and improve reliability. Data is not sold or used for targeted advertising.",
+					DataUsageIfSold: "Data is used to provide and secure the service. Some data may be shared or sold as described in the configured third-party services and applicable rights below.",
+					DataSecurity:    "Security controls protect service data. Access logs are retained for up to 30 days, and API token identifiers are stored as hashes.",
+				},
 			},
 		},
 		Web: WebConfig{
@@ -2087,6 +2216,11 @@ func validateConfig(cfg *AppConfig) {
 	defaults := DefaultAppConfig()
 	validateI2PConfig(&cfg.Server.I2P, defaults.Server.I2P)
 	validateUpdateChannel(&cfg.Server.Update, defaults.Server.Update)
+	if err := ValidateTracking(&cfg.Server.Tracking); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: invalid tracking configuration: %v; analytics disabled\n", err)
+		cfg.Server.Tracking = defaults.Server.Tracking
+	}
+	validateContactCaptcha(&cfg.Server.Pages.Contact, defaults.Server.Pages.Contact)
 
 	// Validate port (must be valid or use random per PART 8/12)
 	if cfg.Server.Port != "" {

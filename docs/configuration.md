@@ -194,10 +194,11 @@ server:
 Optional analytics is disabled when `server.tracking.type` is empty or `none`.
 Supported types are `google`, `matomo`, `piwik`, `owa`, `fathom`, `plausible`,
 `umami`, `simple`, and `cloudflare`; provider-specific `id` and `url` formats
-are validated at startup. Tracking runs only after visitor consent, uses a
-same-origin `/server/tracking.js` initializer, and is suppressed for Tor and
-I2P requests. The CSP adds the configured provider origins without enabling
-inline scripts.
+are validated at startup. Tracking runs only after visitor consent. Providers
+that need configuration code use the same-origin `/server/tracking.js`
+initializer; providers that do not need it load their external script alone.
+Tracking is suppressed for Tor and I2P requests. The CSP adds the configured
+provider origins without enabling inline scripts.
 
 The public contact form is enabled by default and uses the built-in, single-use
 arithmetic challenge. `server.pages.contact.captcha` may select `recaptcha` or

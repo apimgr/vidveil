@@ -60,7 +60,11 @@ preferences at [`/server/preferences/tokens`](https://x.scour.li/server/preferen
 Restore a primary token there when moving to another browser. Create a linked
 token for each automation or MCP client so it can be revoked independently.
 The primary token is required for token management; do not use it as an
-automation credential. The token page works without JavaScript.
+automation credential. The page shows the primary token and linked tokens in
+separate cards, supports independent reveal, rotation, rename, expiry, and
+revocation actions, and lets you forget the saved token in this browser without
+deleting pastes. Choose a preset expiry or open **Custom date** to set an exact
+expiry. The page works without JavaScript.
 
 ## Reset
 

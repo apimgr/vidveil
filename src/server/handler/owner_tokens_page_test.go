@@ -63,7 +63,7 @@ func TestOwnerTokensPageMasksPrimaryAndRendersManagementForms(t *testing.T) {
 		response := httptest.NewRecorder()
 		h.OwnerTokensPage(response, request)
 		body := response.Body.String()
-		for _, marker := range []string{`tok_••••••••••••••••••••••••` + issued.Token[len(issued.Token)-4:], `action="/server/preferences/token/reveal"`, `action="/server/preferences/token/rotate"`, `action="/server/preferences/tokens"`, `automation`, linked.Token[len(linked.Token)-4:], `name="csrf_token"`} {
+		for _, marker := range []string{`tok_••••••••••••••••••••••••` + issued.Token[len(issued.Token)-4:], `action="/server/preferences/token/reveal"`, `action="/server/preferences/token/rotate"`, `action="/server/preferences/tokens"`, `automation`, linked.Token[len(linked.Token)-4:], `name="csrf_token"`, `class="copy-value"`, `This browser`, `Forget saved token`, `Expires on`} {
 			if !strings.Contains(body, marker) {
 				t.Errorf("OwnerTokensPage(%q) omitted %q: %s", userAgent, marker, body)
 			}

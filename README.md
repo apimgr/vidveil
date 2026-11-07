@@ -150,7 +150,9 @@ first saved favorite creates an owner token. Save the primary token securely to
 restore access on another browser at `/server/preferences/tokens`. Create a
 separate linked token for each API or MCP client; do not use the primary or
 operator token for automation. API clients send owner tokens as Bearer
-credentials. See the [authentication guide](docs/api/authentication.md) and
+credentials. The token page supports restore, reveal, rotation, linked-token
+creation and management, and works without JavaScript. See the
+[authentication guide](docs/api/authentication.md) and
 [token management guide](docs/user-guide/preferences.md#owner-tokens).
 
 ### Search

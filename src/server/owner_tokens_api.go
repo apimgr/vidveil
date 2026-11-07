@@ -3,25 +3,28 @@
 package server
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/secret"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 	"github.com/go-chi/chi/v5"
 )
+
+const ownerTokenRevealCookie = "vidveil_token_reveal_once"
 
 func (s *Server) ownerTokenPrincipal(w http.ResponseWriter, r *http.Request) (apitoken.Principal, bool) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -104,11 +107,73 @@ func (s *Server) setOwnerTokenCookie(w http.ResponseWriter, raw string) {
 	http.SetCookie(w, &http.Cookie{Name: apitoken.OwnerCookieName, Value: raw, Path: "/", MaxAge: maxAge, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
 }
 
-func writeOwnerTokenReveal(w http.ResponseWriter, r *http.Request, token string) {
+func (s *Server) redirectOwnerTokenReveal(w http.ResponseWriter, r *http.Request, token string, id int64, primary bool, notice string) {
+	var nonce [24]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		http.Error(w, "Could not prepare token reveal", http.StatusInternalServerError)
+		return
+	}
+	key := hex.EncodeToString(nonce[:])
+	now := time.Now()
+	s.tokenRevealMu.Lock()
+	if s.tokenReveals == nil {
+		s.tokenReveals = make(map[string]tokenRevealFlash)
+	}
+	for existing, flash := range s.tokenReveals {
+		if !flash.expiresAt.After(now) {
+			delete(s.tokenReveals, existing)
+		}
+	}
+	if len(s.tokenReveals) >= 256 {
+		for existing := range s.tokenReveals {
+			delete(s.tokenReveals, existing)
+			break
+		}
+	}
+	s.tokenReveals[key] = tokenRevealFlash{token: token, id: id, primary: primary, expiresAt: now.Add(time.Minute)}
+	s.tokenRevealMu.Unlock()
+	time.AfterFunc(time.Minute, func() {
+		s.tokenRevealMu.Lock()
+		if flash, ok := s.tokenReveals[key]; ok && !flash.expiresAt.After(time.Now()) {
+			delete(s.tokenReveals, key)
+		}
+		s.tokenRevealMu.Unlock()
+	})
+	http.SetCookie(w, &http.Cookie{Name: ownerTokenRevealCookie, Value: key, Path: "/", MaxAge: 60, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+	fragment := "#primary"
+	if !primary {
+		fragment = fmt.Sprintf("#token-%d", id)
+	}
+	target := urlvar.BuildURL(r, "/server/preferences/tokens")
+	if notice != "" {
+		target += "?notice=" + url.QueryEscape(notice)
+	}
+	http.Redirect(w, r, target+fragment, http.StatusSeeOther)
+}
+
+func (s *Server) ownerTokenRevealMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie(ownerTokenRevealCookie)
+		if err == nil {
+			http.SetCookie(w, &http.Cookie{Name: ownerTokenRevealCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+			s.tokenRevealMu.Lock()
+			flash, found := s.tokenReveals[cookie.Value]
+			if found {
+				delete(s.tokenReveals, cookie.Value)
+			}
+			s.tokenRevealMu.Unlock()
+			if found && flash.expiresAt.After(time.Now()) {
+				r = r.WithContext(handler.WithOwnerTokenReveal(r.Context(), handler.OwnerTokenReveal{ID: flash.id, Primary: flash.primary, Token: flash.token}))
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) ownerTokenWebForget(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	locale := i18n.DetectLocale(r)
-	_, _ = fmt.Fprintf(w, `<!doctype html><html lang="%s" dir="%s"><meta charset="utf-8"><title>%s</title><main><h1>%s</h1><p>%s</p><code class="owner-token-value" data-owner-token-value>%s</code><p><button type="button" data-copy-owner-token data-copy-success="%s" data-copy-failed="%s">%s</button> <span role="status" aria-live="polite"></span></p><p><a href="/server/preferences/tokens">%s</a></p></main><script src="/static/js/app.js"></script></html>`, html.EscapeString(locale), i18n.Direction(locale), html.EscapeString(i18n.Translate(locale, "owner_tokens.title")), html.EscapeString(i18n.Translate(locale, "owner_tokens.title")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_store")), html.EscapeString(token), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_success")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy_failed")), html.EscapeString(i18n.Translate(locale, "owner_tokens.copy")), html.EscapeString(i18n.Translate(locale, "owner_tokens.return_preferences")))
+	http.SetCookie(w, &http.Cookie{Name: apitoken.OwnerCookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+	http.Redirect(w, r, urlvar.BuildURL(r, "/server/preferences/tokens")+"#primary", http.StatusSeeOther)
 }
 
 func (s *Server) ownerTokenWebRevealPrimary(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +187,7 @@ func (s *Server) ownerTokenWebRevealPrimary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s.auditOwnerToken("token.revealed", principal.OwnerID, principal.Prefix, r)
-	writeOwnerTokenReveal(w, r, token)
+	s.redirectOwnerTokenReveal(w, r, token, 0, true, "")
 }
 
 func (s *Server) ownerTokenWebRotatePrimary(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +207,7 @@ func (s *Server) ownerTokenWebRotatePrimary(w http.ResponseWriter, r *http.Reque
 	s.rotateCSRFSecretAfterAPITokenRegeneration(r)
 	s.setOwnerTokenCookie(w, issued.Token)
 	s.auditOwnerToken("token.rotated", principal.OwnerID, issued.Prefix, r)
-	writeOwnerTokenReveal(w, r, issued.Token)
+	s.redirectOwnerTokenReveal(w, r, issued.Token, 0, true, "token-rotated")
 }
 
 func (s *Server) ownerTokenWebCreateLinked(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +230,7 @@ func (s *Server) ownerTokenWebCreateLinked(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	s.auditOwnerToken("token.created", principal.OwnerID, issued.Prefix, r)
-	writeOwnerTokenReveal(w, r, issued.Token)
+	s.redirectOwnerTokenReveal(w, r, issued.Token, issued.TokenID, false, "token-created")
 }
 
 func (s *Server) ownerTokenWebLinkedID(w http.ResponseWriter, r *http.Request, sensitive bool) (apitoken.Principal, int64, bool) {
@@ -192,7 +257,7 @@ func (s *Server) ownerTokenWebRevealLinked(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	s.auditOwnerToken("token.revealed", principal.OwnerID, token[:12], r)
-	writeOwnerTokenReveal(w, r, token)
+	s.redirectOwnerTokenReveal(w, r, token, id, false, "")
 }
 
 func (s *Server) ownerTokenWebRotateLinked(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +272,7 @@ func (s *Server) ownerTokenWebRotateLinked(w http.ResponseWriter, r *http.Reques
 	}
 	s.rotateCSRFSecretAfterAPITokenRegeneration(r)
 	s.auditOwnerToken("token.rotated", principal.OwnerID, issued.Prefix, r)
-	writeOwnerTokenReveal(w, r, issued.Token)
+	s.redirectOwnerTokenReveal(w, r, issued.Token, id, false, "token-rotated")
 }
 
 func (s *Server) ownerTokenWebUpdateLinked(w http.ResponseWriter, r *http.Request) {
@@ -228,7 +293,7 @@ func (s *Server) ownerTokenWebUpdateLinked(w http.ResponseWriter, r *http.Reques
 		s.ownerTokenOperationError(w, err)
 		return
 	}
-	http.Redirect(w, r, "/server/preferences/tokens", http.StatusSeeOther)
+	http.Redirect(w, r, urlvar.BuildURL(r, "/server/preferences/tokens")+"?notice=token-renamed#token-"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 }
 
 func (s *Server) ownerTokenWebRevokeLinked(w http.ResponseWriter, r *http.Request) {
@@ -250,7 +315,7 @@ func (s *Server) ownerTokenWebRevokeLinked(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	s.auditOwnerToken("token.revoked", principal.OwnerID, prefix, r)
-	http.Redirect(w, r, "/server/preferences/tokens", http.StatusSeeOther)
+	http.Redirect(w, r, urlvar.BuildURL(r, "/server/preferences/tokens")+"?notice=token-revoked#token-"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 }
 
 func (s *Server) ownerTokenRestore(w http.ResponseWriter, r *http.Request) {
@@ -275,7 +340,7 @@ func (s *Server) ownerTokenRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setOwnerTokenCookie(w, strings.TrimSpace(r.FormValue("token")))
 	s.auditOwnerToken("token.restored", principal.OwnerID, principal.Prefix, r)
-	http.Redirect(w, r, "/server/preferences/tokens", http.StatusSeeOther)
+	http.Redirect(w, r, urlvar.BuildURL(r, "/server/preferences/tokens")+"#primary", http.StatusSeeOther)
 }
 
 func (s *Server) ownerTokensAPIList(w http.ResponseWriter, r *http.Request) {

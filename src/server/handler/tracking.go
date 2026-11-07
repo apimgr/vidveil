@@ -1,16 +1,21 @@
 package handler
 
 import (
+	"encoding/json"
 	"html"
 	"html/template"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
+
+func trackingJSString(value string) string {
+	encoded, _ := json.Marshal(value)
+	return string(encoded)
+}
 
 func trackingConfigured(cfg config.TrackingConfig) bool {
 	t := strings.ToLower(strings.TrimSpace(cfg.Type))
@@ -58,10 +63,9 @@ func trackingScriptMarkup(cfg config.TrackingConfig, r *http.Request) template.H
 		} else {
 			tag = `<script async src="https://www.google-analytics.com/analytics.js"></script>`
 		}
-	case "matomo", "piwik":
-		tag = `<script async src="` + html.EscapeString(base+"/matomo.js") + `"></script>`
-	case "owa":
-		tag = `<script async src="` + html.EscapeString(base+"/modules/base/js/owa.tracker-combined-min.js") + `"></script>`
+	case "matomo", "piwik", "owa":
+		// These providers load their external tracker from the generated same-origin
+		// script body so their configuration is queued before the tracker starts.
 	case "fathom":
 		scriptURL := "https://cdn.usefathom.com/script.js"
 		if base != "" {
@@ -83,8 +87,16 @@ func trackingScriptMarkup(cfg config.TrackingConfig, r *http.Request) template.H
 	default:
 		return ""
 	}
+	if tag == "" {
+		localURL := html.EscapeString(urlvar.BuildURL(r, "/server/tracking.js"))
+		tag = `<script async src="` + localURL + `"></script>`
+		return template.HTML(tag)
+	}
 	localURL := html.EscapeString(urlvar.BuildURL(r, "/server/tracking.js"))
-	return template.HTML(tag + `<script async src="` + localURL + `"></script>`)
+	if t := strings.ToLower(cfg.Type); t == "google" {
+		return template.HTML(tag + `<script async src="` + localURL + `"></script>`)
+	}
+	return template.HTML(tag)
 }
 
 func trackingNoScriptMarkup(cfg config.TrackingConfig, r *http.Request) template.HTML {
@@ -95,9 +107,9 @@ func trackingNoScriptMarkup(cfg config.TrackingConfig, r *http.Request) template
 }
 
 func trackingJavaScript(cfg config.TrackingConfig) string {
-	id := strconv.Quote(cfg.ID)
+	id := trackingJSString(cfg.ID)
 	base := strings.TrimRight(cfg.URL, "/")
-	baseJS := strconv.Quote(base)
+	baseJS := trackingJSString(base)
 	switch strings.ToLower(cfg.Type) {
 	case "google":
 		if strings.HasPrefix(cfg.ID, "G-") {
@@ -105,11 +117,11 @@ func trackingJavaScript(cfg config.TrackingConfig) string {
 		}
 		return "window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create'," + id + ",'auto');ga('send','pageview');\n"
 	case "matomo", "piwik":
-		return "window._paq=window._paq||[];_paq.push(['trackPageView']);_paq.push(['enableLinkTracking']);_paq.push(['setTrackerUrl'," + baseJS + "+'/matomo.php']);_paq.push(['setSiteId'," + id + "]);\n"
+		return "window._paq=window._paq||[];_paq.push(['trackPageView']);_paq.push(['enableLinkTracking']);_paq.push(['setTrackerUrl'," + baseJS + "+'/matomo.php']);_paq.push(['setSiteId'," + id + "]);var g=document.createElement('script');g.async=true;g.src=" + baseJS + "+'/matomo.js';document.head.appendChild(g);\n"
 	case "owa":
-		return "window.owa_baseUrl=" + baseJS + "+'/';window.owa_cmds=window.owa_cmds||[];owa_cmds.push(['setSiteId'," + id + "]);owa_cmds.push(['trackPageView']);owa_cmds.push(['trackClicks']);\n"
+		return "window.owa_baseUrl=" + baseJS + "+'/';window.owa_cmds=window.owa_cmds||[];owa_cmds.push(['setSiteId'," + id + "]);owa_cmds.push(['trackPageView']);owa_cmds.push(['trackClicks']);var o=document.createElement('script');o.async=true;o.src=owa_baseUrl+'modules/base/js/owa.tracker-combined-min.js';document.head.appendChild(o);\n"
 	case "fathom", "plausible", "umami", "simple", "cloudflare":
-		return "// The configured provider script records this page view.\n"
+		return ""
 	default:
 		return ""
 	}
@@ -202,6 +214,11 @@ func (h *ServerHandler) TrackingJavaScript(w http.ResponseWriter, r *http.Reques
 		http.NotFound(w, r)
 		return
 	}
+	body := trackingJavaScript(h.appConfig.Server.Tracking)
+	if body == "" {
+		http.NotFound(w, r)
+		return
+	}
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-	_, _ = w.Write([]byte(trackingJavaScript(h.appConfig.Server.Tracking)))
+	_, _ = w.Write([]byte(body))
 }

@@ -37,6 +37,7 @@ owner_token:       vidveil_owner_token_ab5213f6
 - Video Preview: Hover (desktop) and swipe (mobile) preview support
 - Client-Side Preferences: Guest preferences use `theme`, `lang`, and `vidveil_pref_*` cookies per AI.md PART 16; values are readable by the server and work with or without JavaScript
 - Favorites & History: Server-side favorites owned by an anonymous primary API token (cookie-backed web access works without JS) and local-only search history, both with export/import
+- Owner Token Management: Restore, reveal, rotate, and manage linked owner tokens at `/server/preferences/tokens`; the page works without JavaScript
 - Tor Support: Built-in Tor hidden service support for maximum anonymity
 - Geographic Content Restriction: Admin-configurable warnings/blocks for regions with adult content laws
 - Static Binary: Single static binary with all assets embedded

@@ -113,7 +113,16 @@ type Server struct {
 	operatorTokenHash   [sha256.Size]byte
 	operatorTokenSet    bool
 	tokenManager        *apitoken.Manager
+	tokenRevealMu       sync.Mutex
+	tokenReveals        map[string]tokenRevealFlash
 	secretsMgr          *secret.Manager
+}
+
+type tokenRevealFlash struct {
+	token     string
+	id        int64
+	primary   bool
+	expiresAt time.Time
 }
 
 // MigrationManager interface for database migrations
@@ -1141,9 +1150,10 @@ func (s *Server) setupRoutes() {
 		r.Get("/search.rss", h.SearchRSSFeed)
 		r.Get("/search.atom", h.SearchAtomFeed)
 		r.Get("/server/preferences", h.PreferencesPage)
-		r.Get("/server/preferences/tokens", h.OwnerTokensPage)
+		r.With(s.ownerTokenRevealMiddleware).Get("/server/preferences/tokens", h.OwnerTokensPage)
 		r.Post("/server/preferences", h.PreferencesSave)
 		r.Post("/server/preferences/token/restore", s.ownerTokenRestore)
+		r.Post("/server/preferences/token/forget", s.ownerTokenWebForget)
 		r.Post("/server/preferences/token/reveal", s.ownerTokenWebRevealPrimary)
 		r.Post("/server/preferences/token/rotate", s.ownerTokenWebRotatePrimary)
 		r.Post("/server/preferences/tokens", s.ownerTokenWebCreateLinked)

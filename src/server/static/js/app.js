@@ -570,7 +570,7 @@ async function getEngineCount() {
 document.addEventListener('DOMContentLoaded', async function() {
     document.querySelectorAll('[data-copy-owner-token]').forEach(function(button) {
         button.addEventListener('click', async function() {
-            var token = button.closest('main')?.querySelector('[data-owner-token-value]');
+            var token = button.closest('[data-token-card]')?.querySelector('[data-owner-token-value]');
             var status = button.parentElement?.querySelector('[role="status"]');
             if (!token || !status) return;
             try {

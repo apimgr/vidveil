@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/handler"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/ratelimit"
@@ -50,18 +51,37 @@ func TestOwnerTokenExpiryPresetIgnoresStaleCustomDate(t *testing.T) {
 	}
 }
 
-func TestOwnerTokenRevealPageHasLocalizedCopyControl(t *testing.T) {
+func TestOwnerTokenRevealRedirectsAndIsConsumedOnce(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/server/preferences/token/reveal?lang=es", nil)
 	response := httptest.NewRecorder()
-	writeOwnerTokenReveal(response, request, "tok_0123456789abcdefghijkmnpqrstuv")
-	body := response.Body.String()
-	if response.Header().Get("Cache-Control") != "no-store" || !strings.Contains(body, `<html lang="es"`) {
-		t.Fatalf("reveal response headers/locale = %v, body=%s", response.Header(), body)
+	s := &Server{}
+	secretToken := "tok_0123456789abcdefghijkmnpqrstuv"
+	s.redirectOwnerTokenReveal(response, request, secretToken, 0, true, "")
+	if response.Code != http.StatusSeeOther || !strings.Contains(response.Header().Get("Location"), "/server/preferences/tokens#primary") {
+		t.Fatalf("reveal redirect = %d %q", response.Code, response.Header().Get("Location"))
 	}
-	for _, marker := range []string{`data-owner-token-value`, `data-copy-owner-token`, "Copiar token", "Token copiado.", "tok_0123456789abcdefghijkmnpqrstuv"} {
-		if !strings.Contains(body, marker) {
-			t.Errorf("reveal page omitted %q: %s", marker, body)
-		}
+	cookies := response.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != ownerTokenRevealCookie {
+		t.Fatalf("reveal cookie = %#v", cookies)
+	}
+	request = httptest.NewRequest(http.MethodGet, "/server/preferences/tokens", nil)
+	request.AddCookie(cookies[0])
+	var got handler.OwnerTokenReveal
+	called := 0
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		called++
+		got, _ = handler.OwnerTokenRevealFromContext(r.Context())
+	})
+	s.ownerTokenRevealMiddleware(next).ServeHTTP(httptest.NewRecorder(), request)
+	if got.Token != secretToken || !got.Primary || called != 1 {
+		t.Fatalf("reveal flash = %#v, called %d", got, called)
+	}
+	got = handler.OwnerTokenReveal{}
+	request = httptest.NewRequest(http.MethodGet, "/server/preferences/tokens", nil)
+	request.AddCookie(cookies[0])
+	s.ownerTokenRevealMiddleware(next).ServeHTTP(httptest.NewRecorder(), request)
+	if got.Token != "" || called != 2 {
+		t.Fatal("one-time reveal was not consumed")
 	}
 }
 

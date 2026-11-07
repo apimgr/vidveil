@@ -135,7 +135,7 @@ func TestServerHandler_DPOPage_FallsBackToGeneralContact(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("DPOPage: status=%d want 200; body=%s", rr.Code, rr.Body.String())
 	}
-	if !strings.Contains(rr.Body.String(), "privacy@example.invalid") || strings.Contains(rr.Body.String(), "admin@example.invalid") {
+	if !strings.Contains(rr.Body.String(), "privacy@example.invalid") || !strings.Contains(rr.Body.String(), `href="/server/privacy"`) || !strings.Contains(rr.Body.String(), `href="/server/contact"`) || strings.Contains(rr.Body.String(), "admin@example.invalid") {
 		t.Errorf("DPOPage did not apply the configured fallback safely: %s", rr.Body.String())
 	}
 }
@@ -185,6 +185,23 @@ func TestTrackingJavaScriptRequiresConsent(t *testing.T) {
 	h.TrackingJavaScript(allowed, req)
 	if allowed.Code != http.StatusOK || !strings.Contains(allowed.Header().Get("Content-Type"), "application/javascript") || !strings.Contains(allowed.Body.String(), "G-ABC123") {
 		t.Fatalf("tracking with consent: status=%d type=%q body=%q", allowed.Code, allowed.Header().Get("Content-Type"), allowed.Body.String())
+	}
+}
+
+func TestExternalOnlyTrackingProviderOmitsInitializerAndReturnsNotFound(t *testing.T) {
+	cfg := config.TrackingConfig{Type: "fathom", ID: "site-id"}
+	req := httptest.NewRequest(http.MethodGet, "/server/tracking.js", nil)
+	req.AddCookie(&http.Cookie{Name: "cookie_consent", Value: url.QueryEscape(`{"analytics":true}`)})
+	markup := string(trackingScriptMarkup(cfg, req))
+	if !strings.Contains(markup, "cdn.usefathom.com/script.js") || strings.Contains(markup, "/server/tracking.js") {
+		t.Fatalf("external-only tracking markup = %q", markup)
+	}
+	h := NewServerHandler(config.DefaultAppConfig())
+	h.appConfig.Server.Tracking = cfg
+	response := httptest.NewRecorder()
+	h.TrackingJavaScript(response, req)
+	if response.Code != http.StatusNotFound || response.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("external-only tracking endpoint: status=%d cache=%q", response.Code, response.Header().Get("Cache-Control"))
 	}
 }
 
@@ -456,8 +473,22 @@ func TestAPIDPO_ReturnsConfiguredContactAndPrivacyURL(t *testing.T) {
 	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
 	h.APIDPO(rr, req)
-	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"name": "Privacy Officer"`) || !strings.Contains(rr.Body.String(), `"email": "dpo@example.invalid"`) || !strings.Contains(rr.Body.String(), `"privacy_url":`) {
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"name": "Privacy Officer"`) || !strings.Contains(rr.Body.String(), `"email": "dpo@example.invalid"`) || !strings.Contains(rr.Body.String(), `"privacy_url": "http`) || !strings.Contains(rr.Body.String(), "/server/privacy") {
 		t.Errorf("APIDPO response: status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestAPIDPOWithoutContactReturnsEmptyFieldsAndAbsolutePrivacyURL(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Contact.DPO = config.DPOContactConfig{Name: " ", Email: " "}
+	cfg.Server.Contact.General.Email = ""
+	h := NewServerHandler(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/dpo", nil)
+	req.Header.Set("Accept", "application/json")
+	rr := httptest.NewRecorder()
+	h.APIDPO(rr, req)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"name": ""`) || !strings.Contains(rr.Body.String(), `"email": ""`) || !strings.Contains(rr.Body.String(), `"privacy_url": "http`) || !strings.Contains(rr.Body.String(), "/server/privacy") {
+		t.Errorf("APIDPO without contact: status=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

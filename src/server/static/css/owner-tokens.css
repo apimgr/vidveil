@@ -1,73 +1,258 @@
 .owner-tokens-page {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 1.5rem 1rem 3rem;
+    width: min(100%, 80rem);
+    margin-inline: auto;
+    padding: var(--space-6) var(--space-4) var(--space-8);
 }
 
-.owner-tokens-heading,
-.owner-token-actions {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 0.75rem;
+.owner-tokens-heading {
+    margin-block-end: var(--space-6);
 }
 
-.owner-tokens-page section {
-    margin: 1.5rem 0;
-    padding: 1rem;
+.owner-tokens-heading a {
+    display: inline-block;
+    margin-block-end: var(--space-2);
+}
+
+.owner-tokens-heading h1 {
+    margin: 0;
+}
+
+.owner-tokens-layout,
+.owner-token-list {
+    display: grid;
+    gap: var(--space-6);
+    min-width: 0;
+}
+
+.owner-tokens-page .section-card {
+    min-width: 0;
+    margin: 0;
+    padding: var(--space-4);
     border: 1px solid var(--border);
     border-radius: 0.75rem;
     background: var(--bg-secondary);
 }
 
-.owner-token-list {
-    display: grid;
-    gap: 1rem;
-}
-
 .owner-token-card {
     min-width: 0;
-    padding: 1rem;
+    padding: var(--space-4);
     border: 1px solid var(--border);
-    border-radius: 0.5rem;
+    border-radius: 0.75rem;
     background: var(--bg-primary);
 }
 
-.owner-token-card code,
-.owner-tokens-page code {
+.owner-token-card > header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.owner-token-card h3 {
+    margin: 0;
     overflow-wrap: anywhere;
 }
 
-.owner-token-actions form,
-.owner-token-create-form {
-    display: flex;
-    align-items: end;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin: 0.75rem 0;
-}
-
-.owner-token-actions label,
-.owner-token-create-form label {
+.owner-token-card dl {
     display: grid;
-    gap: 0.35rem;
-    min-width: min(100%, 14rem);
+    grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
+    gap: var(--space-1) var(--space-3);
+    margin-block: var(--space-4);
 }
 
-.token-status {
+.owner-token-card dt {
     font-weight: 600;
 }
 
-@media (max-width: 600px) {
-    .owner-token-actions form,
-    .owner-token-create-form {
-        align-items: stretch;
-        flex-direction: column;
+.owner-token-card dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.copy-value {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.875rem;
+}
+
+.token-status {
+    display: inline-block;
+    font-weight: 600;
+}
+
+.owner-token-actions,
+.owner-token-fields {
+    display: flex;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+}
+
+.owner-token-actions form,
+.owner-token-create-form,
+.owner-token-edit form {
+    display: grid;
+    gap: var(--space-3);
+    min-width: 0;
+    margin: 0;
+}
+
+.owner-token-field,
+.owner-token-fields > label,
+.owner-token-create-form > label,
+.owner-token-edit label,
+.owner-token-custom-date label {
+    display: grid;
+    flex: 1 1 14rem;
+    gap: var(--space-1);
+    min-width: 0;
+}
+
+.owner-token-field small {
+    display: block;
+    margin-block-start: var(--space-1);
+    color: var(--text-muted);
+}
+
+.owner-token-page input,
+.owner-token-page select,
+.owner-tokens-page input,
+.owner-tokens-page select {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.75rem;
+    font-size: 1rem;
+}
+
+.owner-token-confirm,
+.owner-token-edit,
+.owner-token-custom-date {
+    min-width: 0;
+}
+
+.owner-token-confirm summary,
+.owner-token-edit summary,
+.owner-token-custom-date summary {
+    cursor: pointer;
+}
+
+.owner-tokens-page .btn-danger-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--error);
+    border-radius: 0.375rem;
+    background: transparent;
+    color: var(--error);
+    cursor: pointer;
+}
+
+.owner-tokens-page .owner-token-confirm summary.btn-danger,
+.owner-tokens-page .owner-token-confirm summary.btn-danger-ghost,
+.owner-tokens-page .owner-token-edit summary {
+    list-style: none;
+}
+
+.owner-tokens-page .owner-token-confirm summary::-webkit-details-marker,
+.owner-tokens-page .owner-token-edit summary::-webkit-details-marker {
+    display: none;
+}
+
+.owner-token-confirm[open] form,
+.owner-token-edit[open] form,
+.owner-token-custom-date[open] label {
+    margin-block-start: var(--space-3);
+}
+
+.owner-token-notice {
+    position: fixed;
+    z-index: var(--z-toast);
+    inset-block-start: calc(var(--space-4) + env(safe-area-inset-top));
+    inset-inline-end: calc(var(--space-4) + max(env(safe-area-inset-left), env(safe-area-inset-right)));
+    max-width: min(20rem, calc(100% - 2rem));
+}
+
+.owner-token-revoke {
+    margin-inline-start: auto;
+}
+
+.owner-token-restore {
+    max-width: 40rem;
+    margin-inline: auto !important;
+}
+
+.owner-token-primary-card { order: 1; }
+.owner-token-linked-section { order: 2; }
+.owner-token-create-card { order: 3; }
+.owner-token-browser-card { order: 4; }
+
+@media (min-width: 768px) {
+    .owner-tokens-layout {
+        width: min(100%, 40rem);
+        margin-inline: auto;
     }
 
-    .owner-token-actions button,
-    .owner-token-create-form button {
+    .owner-token-list:has(.owner-token-card:nth-child(2)) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .owner-token-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1024px) {
+    .owner-tokens-layout {
         width: 100%;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        align-items: start;
+    }
+
+    .owner-token-primary-card,
+    .owner-token-create-card,
+    .owner-token-browser-card {
+        grid-column: 1;
+        order: 0;
+    }
+
+    .owner-token-primary-card { grid-row: 1; }
+    .owner-token-create-card { grid-row: 2; }
+    .owner-token-browser-card { grid-row: 3; }
+
+    .owner-token-linked-section {
+        grid-column: 2;
+        grid-row: 1 / span 3;
+    }
+}
+
+@media (max-width: 767px) {
+    .owner-tokens-page .btn-primary,
+    .owner-tokens-page .btn-secondary,
+    .owner-tokens-page .btn-danger,
+    .owner-tokens-page .btn-danger-ghost,
+    .owner-tokens-page .owner-token-actions > form,
+    .owner-tokens-page .owner-token-actions > details {
+        width: 100%;
+    }
+
+    .owner-tokens-page .owner-token-actions > form button,
+    .owner-tokens-page .owner-token-confirm summary,
+    .owner-tokens-page .owner-token-edit summary {
+        width: 100%;
+    }
+
+    .owner-token-revoke {
+        margin-inline-start: 0;
+        padding-block-start: var(--space-3);
+        border-block-start: 1px solid var(--border);
     }
 }

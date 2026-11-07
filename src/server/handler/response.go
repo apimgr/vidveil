@@ -388,7 +388,11 @@ func (h *SearchHandler) renderResponseStatus(w http.ResponseWriter, r *http.Requ
 	if isTextBrowser(r) {
 		// Use no-JS templates from template/nojs/ directory per AI.md PART 14
 		w.WriteHeader(status)
-		h.renderTemplate(w, r, "nojs/"+name, data)
+		noJSTemplate := "nojs/" + name
+		if override, ok := data["NoJSTemplate"].(string); ok && override != "" {
+			noJSTemplate = override
+		}
+		h.renderTemplate(w, r, noJSTemplate, data)
 		return
 	}
 

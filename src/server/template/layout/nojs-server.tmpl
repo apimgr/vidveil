@@ -7,6 +7,7 @@
     <title>{{.Title}}</title>
 </head>
 <body>
+    {{ trackingNoScript }}
     {{if not .HasConsentCookie}}
     <aside aria-label="Cookie consent">
         <p>{{.ConsentMessage}} <a href="{{.ConsentPolicyURL}}">{{.ConsentPolicyText}}</a></p>

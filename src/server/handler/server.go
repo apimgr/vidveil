@@ -419,14 +419,16 @@ func (h *ServerHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 // DPOPage renders /server/dpo using the configured DPO/general contact fallback.
 func (h *ServerHandler) DPOPage(w http.ResponseWriter, r *http.Request) {
 	dpo := h.appConfig.Server.Contact.DPO
-	if strings.TrimSpace(dpo.Email) == "" {
-		dpo.Email = h.appConfig.Server.Contact.General.Email
+	dpo.Name = strings.TrimSpace(dpo.Name)
+	dpo.Email = strings.TrimSpace(dpo.Email)
+	if dpo.Email == "" {
+		dpo.Email = strings.TrimSpace(h.appConfig.Server.Contact.General.Email)
 	}
 	h.renderServerTemplate(w, r, "server-dpo", map[string]interface{}{
 		"DPOName":    dpo.Name,
 		"DPOEmail":   dpo.Email,
-		"PrivacyURL": urlvar.BuildURL(r, "/server/privacy"),
-		"ContactURL": urlvar.BuildURL(r, "/server/contact"),
+		"PrivacyURL": "/server/privacy",
+		"ContactURL": "/server/contact",
 	})
 }
 
@@ -1045,8 +1047,10 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 // APIDPO mirrors the public DPO contact page as JSON or plain text.
 func (h *ServerHandler) APIDPO(w http.ResponseWriter, r *http.Request) {
 	dpo := h.appConfig.Server.Contact.DPO
-	if strings.TrimSpace(dpo.Email) == "" {
-		dpo.Email = h.appConfig.Server.Contact.General.Email
+	dpo.Name = strings.TrimSpace(dpo.Name)
+	dpo.Email = strings.TrimSpace(dpo.Email)
+	if dpo.Email == "" {
+		dpo.Email = strings.TrimSpace(h.appConfig.Server.Contact.General.Email)
 	}
 	privacyURL := urlvar.BuildURL(r, "/server/privacy")
 	if getAPIResponseFormat(r) == "text" {

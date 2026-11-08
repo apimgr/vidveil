@@ -33,6 +33,7 @@ https://x.scour.li
 | **Related Searches** | Server-generated related search suggestions |
 | **Semantic Search** | AND-based filtering with synonym expansion across 27 categories |
 | **Tor Support** | Built-in Tor hidden service support |
+| **8 Languages** | English, Arabic, German, Spanish, French, Italian, Japanese, and Chinese |
 | **AI Integration** | OpenAPI-generated MCP tools and configurable `llms.txt` discovery |
 | **Content Restriction** | Geographic warnings/blocks for regions with adult content laws |
 | **Operator Management** | Configure through `server.yml` and the CLI; the protected API supports backup restore |
@@ -293,7 +294,7 @@ FlyFLV (`!ff`), HQPorner (`!hq`), NonkTube (`!nk`), NubilesPorn (`!np`), PornBox
 VidVeil has no admin web UI. Operators manage the server through `server.yml`,
 CLI maintenance commands, and operator-token-protected API endpoints. See the
 [configuration guide](docs/configuration.md), [CLI reference](docs/cli.md),
-and [API reference](docs/api/rest.md).
+the [translation guide](docs/translating.md), and [API reference](docs/api/rest.md).
 
 ### Server CLI
 

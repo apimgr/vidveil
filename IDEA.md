@@ -35,7 +35,7 @@ owner_token:       vidveil_owner_token_ab5213f6
 - Real-Time Streaming: SSE streaming delivers results as each engine responds
 - Thumbnail Proxy: All thumbnails proxied through server to prevent tracking
 - Video Preview: Hover (desktop) and swipe (mobile) preview support
-- Client-Side Preferences: Guest preferences use `theme`, `lang`, and `vidveil_pref_*` cookies per AI.md PART 16; values are readable by the server and work with or without JavaScript
+- Client-Side Preferences: Guest preferences use `theme`, `lang`, and `vidveil_pref_*` cookies per AI.md PART 16; values are readable by the server and work with or without JavaScript. The interface supports English, Arabic, German, Spanish, French, Italian, Japanese, and Chinese
 - Favorites & History: Server-side favorites owned by an anonymous primary API token (cookie-backed web access works without JS) and local-only search history, both with export/import
 - Owner Token Management: Restore, reveal, rotate, and manage linked owner tokens at `/server/preferences/tokens`; the page works without JavaScript
 - Tor Support: Built-in Tor hidden service support for maximum anonymity

@@ -792,7 +792,7 @@ func TestKeyConsistency(t *testing.T) {
 	if !ok {
 		t.Fatal("en.json not found in embedded locales")
 	}
-	for _, required := range []string{"ar", "de", "es", "fr", "ja", "zh"} {
+	for _, required := range []string{"ar", "de", "es", "fr", "it", "ja", "zh"} {
 		if _, exists := locales[required]; !exists {
 			t.Errorf("required locale %s.json is missing", required)
 		}

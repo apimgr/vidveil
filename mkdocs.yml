@@ -107,6 +107,7 @@ nav:
   - User Guide:
     - Search: user-guide/search.md
     - Preferences: user-guide/preferences.md
+    - Translating: translating.md
     - Bang Syntax: user-guide/bangs.md
     - CLI Reference: cli.md
   - API Reference:

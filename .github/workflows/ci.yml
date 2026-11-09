@@ -53,7 +53,11 @@ jobs:
         with:
           base: ${{ steps.range.outputs.base }}
           head: ${{ steps.range.outputs.head }}
-          extra_args: --results=verified,unknown
+          # The weekly full-history scan excludes AI.md's credential-shaped examples.
+          # Push and pull-request scans still include AI.md in their commit ranges.
+          extra_args: >-
+            --results=verified,unknown
+            ${{ github.event_name == 'schedule' && '--exclude-paths=.github/trufflehog-exclude-paths.txt' || '' }}
 
   workflow-policy:
     runs-on: ubuntu-26.04

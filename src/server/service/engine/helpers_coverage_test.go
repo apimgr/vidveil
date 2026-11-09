@@ -144,6 +144,31 @@ func TestParseGenericVideoItem_Thumbnail_Relative(t *testing.T) {
 	}
 }
 
+func TestParseGenericVideoItem_ThumbnailFromCurrentLazySourceAndSrcset(t *testing.T) {
+	for _, tc := range []struct {
+		name, image, want string
+	}{
+		{"lazy source", `<img data-original-src="../images/thumb%20one.jpg">`, "https://example.com/images/thumb%20one.jpg"},
+		{"srcset", `<img srcset="//cdn.example.com/thumb.jpg 1x, //cdn.example.com/thumb@2x.jpg 2x">`, "https://cdn.example.com/thumb.jpg"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sel := newSel(`<div><a href="/video/1">`+tc.image+`</a></div>`, "div")
+			got := parseGenericVideoItem(sel, "https://example.com/search/page", "test", "Test")
+			if got.Thumbnail != tc.want {
+				t.Fatalf("thumbnail = %q, want %q", got.Thumbnail, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseGenericVideoItem_ResolvesRelativePreviewURL(t *testing.T) {
+	sel := newSel(`<div data-preview-url="../previews/clip%20one.mp4"><a href="/video/1">Video</a></div>`, "div")
+	got := parseGenericVideoItem(sel, "https://example.com/search/page", "test", "Test")
+	if got.PreviewURL != "https://example.com/previews/clip%20one.mp4" {
+		t.Fatalf("preview URL = %q, want preserved escaped relative URL", got.PreviewURL)
+	}
+}
+
 // Duration extracted from .duration element.
 func TestParseGenericVideoItem_Duration(t *testing.T) {
 	sel := newSel(`<div><a href="/v/10" title="T"></a><span class="duration">12:34</span></div>`, "div")

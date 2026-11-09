@@ -5,12 +5,38 @@
 package handler
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
 )
+
+func TestProxyHostAllowlistIncludesCurrentSourceCDNs(t *testing.T) {
+	for _, host := range []string{"thumb-cdn77.xnxx-cdn.com", "thumb-cdn77.xvideos-cdn.com", "ci.phncdn.com"} {
+		if !isAllowedProxyHost(host) {
+			t.Errorf("current source CDN host %q is not allowed", host)
+		}
+	}
+}
+
+func TestProxyThumbnailPreservesPercentEscapesFromQuery(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	thumbURL := "https://xvideos.com/thumb%20one.jpg?token=a%2Fb"
+	sum := sha256.Sum256([]byte(thumbURL))
+	etag := `"` + hex.EncodeToString(sum[:16]) + `"`
+	req := httptest.NewRequest("GET", "/proxy/thumbnail?url="+url.QueryEscape(thumbURL), nil)
+	req.Header.Set("If-None-Match", etag)
+	rr := httptest.NewRecorder()
+
+	h.ProxyThumbnail(rr, req)
+
+	if rr.Code != http.StatusNotModified {
+		t.Fatalf("ProxyThumbnail status = %d, want %d (ETag %q, body %s)", rr.Code, http.StatusNotModified, rr.Header().Get("ETag"), rr.Body.String())
+	}
+}
 
 // ── ProxyThumbnail — validation early-returns ─────────────────────────────────
 

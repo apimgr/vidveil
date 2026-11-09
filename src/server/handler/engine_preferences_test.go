@@ -57,6 +57,17 @@ func TestRequestEngineSelectionLegacyEmptyFallsBackToDefault(t *testing.T) {
 	}
 }
 
+func TestRequestEngineSelectionEmptyPackedValueDefaultsToAll(t *testing.T) {
+	engines := []model.EngineInfo{{Name: "alpha"}, {Name: "beta"}}
+	req := httptest.NewRequest("GET", "/api/v1/search?q=test", nil)
+	req.AddCookie(&http.Cookie{Name: engineSelectionCookieName, Value: "1"})
+	req.AddCookie(&http.Cookie{Name: engineSelectionValueCookieName, Value: ""})
+
+	if selected, configured := requestEngineSelection(req, engines); configured || selected != nil {
+		t.Fatalf("empty packed selection = (%v, %v), want default selection", selected, configured)
+	}
+}
+
 func TestRequestEngineNamesDefaultsToAll(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/v1/search?q=test", nil)
 	if got := requestEngineNames(req, nil, []model.EngineInfo{{Name: "alpha"}}); got != nil {

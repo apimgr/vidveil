@@ -235,6 +235,25 @@ func TestPreferencesSave_PersistsEngineSelectionIncludingUncheckedEngines(t *tes
 	}
 }
 
+func TestPreferencesSave_WithoutEngineManagerDoesNotPanicOrDisableEngines(t *testing.T) {
+	h := NewSearchHandler(nil, nil)
+	form := url.Values{"engines_selection_set": {"1"}, "theme": {"dark"}}
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+
+	h.PreferencesSave(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("PreferencesSave status = %d, want %d", rr.Code, http.StatusSeeOther)
+	}
+	for _, cookie := range rr.Result().Cookies() {
+		if cookie.Name == engineSelectionValueCookieName || cookie.Name == engineSelectionCookieName {
+			t.Fatalf("nil engine manager wrote selection cookie %q", cookie.Name)
+		}
+	}
+}
+
 func TestPreferencesSave_OmittedPreferenceIsNotReset(t *testing.T) {
 	h := newRenderTestHandler()
 	rr := httptest.NewRecorder()

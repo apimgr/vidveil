@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -28,6 +29,28 @@ const MaxEngineResponseBytes int64 = 32 * 1024 * 1024
 // io.ReadAll directly on resp.Body (PART 11 security: bound untrusted input).
 func readEngineBody(resp *http.Response) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(resp.Body, MaxEngineResponseBytes))
+}
+
+func resolveSourceURL(baseURL, value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	base, baseErr := url.Parse(baseURL)
+	ref, refErr := url.Parse(value)
+	if baseErr != nil || refErr != nil {
+		return value
+	}
+	if ref.Scheme == "" && ref.Host != "" {
+		ref.Scheme = base.Scheme
+	}
+	if ref.IsAbs() || ref.Host != "" {
+		return ref.String()
+	}
+	if base.Scheme == "" || base.Host == "" {
+		return value
+	}
+	return base.ResolveReference(ref).String()
 }
 
 // genericSearch performs a generic search using common patterns
@@ -186,10 +209,7 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 	if href == "" {
 		return r
 	}
-	if !strings.HasPrefix(href, "http") {
-		href = baseURL + href
-	}
-	r.URL = href
+	r.URL = resolveSourceURL(baseURL, href)
 
 	// Find title - try multiple patterns
 	r.Title = parser.ExtractAttr(link, "title")
@@ -219,14 +239,16 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 
 	// Find thumbnail
 	img := s.Find("img").First()
-	r.Thumbnail = parser.ExtractAttr(img, "data-src", "data-original", "data-lazy-src", "src")
-	if r.Thumbnail != "" && !strings.HasPrefix(r.Thumbnail, "http") {
-		if strings.HasPrefix(r.Thumbnail, "//") {
-			r.Thumbnail = "https:" + r.Thumbnail
-		} else {
-			r.Thumbnail = baseURL + r.Thumbnail
+	r.Thumbnail = parser.ExtractAttr(img, "data-src", "data-original-src", "data-lazy-src", "data-original", "src")
+	if r.Thumbnail == "" {
+		if srcset := parser.ExtractAttr(img, "data-srcset", "srcset"); srcset != "" {
+			r.Thumbnail = strings.TrimSpace(strings.Split(srcset, ",")[0])
+			if fields := strings.Fields(r.Thumbnail); len(fields) > 0 {
+				r.Thumbnail = fields[0]
+			}
 		}
 	}
+	r.Thumbnail = resolveSourceURL(baseURL, r.Thumbnail)
 
 	// Find preview URL - common data attributes for video preview/rollover.
 	// "data-preview-custom" is specifically used by PornHat.
@@ -239,14 +261,7 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 	// Check on the container element
 	for _, attr := range previewAttrs {
 		if preview := parser.ExtractAttr(s, attr); preview != "" {
-			if !strings.HasPrefix(preview, "http") {
-				if strings.HasPrefix(preview, "//") {
-					preview = "https:" + preview
-				} else {
-					preview = baseURL + preview
-				}
-			}
-			r.PreviewURL = preview
+			r.PreviewURL = resolveSourceURL(baseURL, preview)
 			break
 		}
 	}
@@ -254,14 +269,7 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 	if r.PreviewURL == "" {
 		for _, attr := range previewAttrs {
 			if preview := parser.ExtractAttr(img, attr); preview != "" {
-				if !strings.HasPrefix(preview, "http") {
-					if strings.HasPrefix(preview, "//") {
-						preview = "https:" + preview
-					} else {
-						preview = baseURL + preview
-					}
-				}
-				r.PreviewURL = preview
+				r.PreviewURL = resolveSourceURL(baseURL, preview)
 				break
 			}
 		}
@@ -270,14 +278,7 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 	if r.PreviewURL == "" {
 		for _, attr := range previewAttrs {
 			if preview := parser.ExtractAttr(link, attr); preview != "" {
-				if !strings.HasPrefix(preview, "http") {
-					if strings.HasPrefix(preview, "//") {
-						preview = "https:" + preview
-					} else {
-						preview = baseURL + preview
-					}
-				}
-				r.PreviewURL = preview
+				r.PreviewURL = resolveSourceURL(baseURL, preview)
 				break
 			}
 		}

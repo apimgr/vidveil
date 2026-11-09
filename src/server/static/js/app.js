@@ -214,9 +214,15 @@ function readPreferenceCookies(defaults) {
             return;
         }
         if (key === 'engines') {
-            packedEngineSelectionSeen = true;
-            prefs.engineSelectionSet = true;
-            prefs.enabledEngines = raw === 'none' || raw === '' ? [] : raw.split('.');
+            if (raw === 'none') {
+                packedEngineSelectionSeen = true;
+                prefs.engineSelectionSet = true;
+                prefs.enabledEngines = [];
+            } else if (raw !== '') {
+                packedEngineSelectionSeen = true;
+                prefs.engineSelectionSet = true;
+                prefs.enabledEngines = raw.split('.');
+            }
             return;
         }
         if (!(key in defaults)) return;

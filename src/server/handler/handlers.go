@@ -512,7 +512,8 @@ var proxyHostSuffixes = []string{
 	"pornerbros.com", "pornflip.com", "pornhat.com", "pornhd.com", "pornhub.com",
 	"pornmd.com", "pornone.com", "porntop.com", "porntrex.com", "porntube.com",
 	"redtube.com", "sunporno.com", "tnaflix.com", "tube8.com", "tubegalore.com",
-	"txxx.com", "vjav.com", "xbabe.com", "xhamster.com", "xnxx.com", "xvideos.com",
+	"txxx.com", "vjav.com", "xbabe.com", "xhamster.com", "xnxx-cdn.com", "xnxx.com",
+	"xvideos-cdn.com", "xvideos.com", "phncdn.com",
 	"xxxymovies.com", "youjizz.com", "youporn.com",
 }
 
@@ -1276,7 +1277,10 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *SearchHandler) preferencePageData(w http.ResponseWriter, r *http.Request) map[string]interface{} {
-	engines := h.engineMgr.ListEngines()
+	var engines []model.EngineInfo
+	if h.engineMgr != nil {
+		engines = h.engineMgr.ListEngines()
+	}
 	if selected, configured := requestEngineSelection(r, engines); configured {
 		for i := range engines {
 			_, engines[i].Enabled = selected[engines[i].Name]
@@ -1331,16 +1335,18 @@ func requestEngineSelection(r *http.Request, engines []model.EngineInfo) (map[st
 		if packed.Value == "none" {
 			return selected, true
 		}
-		allowed := make(map[string]struct{}, len(engines))
-		for _, info := range engines {
-			allowed[info.Name] = struct{}{}
-		}
-		for _, name := range strings.Split(packed.Value, ".") {
-			if _, ok := allowed[name]; ok {
-				selected[name] = true
+		if packed.Value != "" {
+			allowed := make(map[string]struct{}, len(engines))
+			for _, info := range engines {
+				allowed[info.Name] = struct{}{}
 			}
+			for _, name := range strings.Split(packed.Value, ".") {
+				if _, ok := allowed[name]; ok {
+					selected[name] = true
+				}
+			}
+			return selected, true
 		}
-		return selected, true
 	}
 	// Read the per-engine cookies written by earlier versions until the
 	// browser next saves preferences in the compact format.
@@ -1569,6 +1575,10 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 	result := h.applyPreferences(w, r, values)
 	h.applyWebConsent(w, r)
 	if r.PostForm.Get("engines_selection_set") == "1" {
+		if h.engineMgr == nil {
+			writePreferenceRedirect(w, r)
+			return
+		}
 		selected := make(map[string]struct{}, len(r.PostForm["engines"]))
 		allowed := make(map[string]struct{})
 		for _, info := range h.engineMgr.ListEngines() {
@@ -4873,12 +4883,9 @@ func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Decode URL
-	thumbURL, err := url.QueryUnescape(encodedURL)
-	if err != nil {
-		SendError(w, CodeBadRequest, i18n.Translate(i18n.DetectLocale(r), "error.proxy_invalid_url"))
-		return
-	}
+	// URL.Query already decodes application/x-www-form-urlencoded values.
+	// Unescaping again corrupts percent-encoded paths and query parameters.
+	thumbURL := encodedURL
 
 	// Validate URL
 	parsedURL, err := url.Parse(thumbURL)
@@ -5036,12 +5043,9 @@ func (h *SearchHandler) ProxyVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Decode URL
-	videoURL, err := url.QueryUnescape(encodedURL)
-	if err != nil {
-		SendError(w, CodeBadRequest, i18n.Translate(i18n.DetectLocale(r), "error.proxy_invalid_url"))
-		return
-	}
+	// URL.Query already decodes application/x-www-form-urlencoded values.
+	// Unescaping again corrupts percent-encoded paths and query parameters.
+	videoURL := encodedURL
 
 	// Validate URL
 	parsedURL, err := url.Parse(videoURL)

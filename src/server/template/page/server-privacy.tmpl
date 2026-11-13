@@ -42,10 +42,10 @@
         <ul>
             <li><code>vidveil_history</code> — {{ t "privacy.storage_history" }}</li>
         </ul>
-        <p>{{ t "privacy.browser_only_manage" }} <a href="/server/preferences">{{ t "privacy.preferences_link" }}</a> {{ t "privacy.browser_only_erase" }}</p>
+        <p>{{ t "privacy.browser_only_manage" }} <a href="{{ path "/server/preferences" }}">{{ t "privacy.preferences_link" }}</a> {{ t "privacy.browser_only_erase" }}</p>
 
         <h2>{{ t "privacy.favorites" }}</h2>
-        <p>{{ t "privacy.favorites_body_1" }} <a href="/favorites">{{ t "privacy.favorites_link" }}</a> {{ t "privacy.favorites_body_2" }}</p>
+        <p>{{ t "privacy.favorites_body_1" }} <a href="{{ path "/favorites" }}">{{ t "privacy.favorites_link" }}</a> {{ t "privacy.favorites_body_2" }}</p>
 
         <h2>{{ t "privacy.cookies" }}</h2>
         <p>{{ tf "privacy.cookies_intro" "app_name" .AppName }}</p>
@@ -72,7 +72,7 @@
             <li><strong>{{ t "privacy.cookie_analytics" }}</strong> — {{ t "privacy.analytics_none" }}</li>
             {{ end }}
         </ul>
-        <p><a href="/server/preferences#cookies">{{ t "privacy.manage_cookies" }}</a></p>
+        <p><a href="{{ path "/server/preferences" }}#cookies">{{ t "privacy.manage_cookies" }}</a></p>
 
         {{ with .Privacy.Content.DataCollection }}
         <h2>{{ t "privacy.data_collection" }}</h2>
@@ -109,7 +109,7 @@
             {{ if .Privacy.Retention.DeletionAvailable }}
             <li>{{ t "privacy.rights_deletion" }}</li>
             {{ end }}
-            <li><a href="/server/preferences#cookies">{{ t "privacy.manage_cookies" }}</a></li>
+            <li><a href="{{ path "/server/preferences" }}#cookies">{{ t "privacy.manage_cookies" }}</a></li>
         </ul>
 
         <h2>{{ t "privacy.thumbnail_proxy" }}</h2>
@@ -157,13 +157,13 @@
             <p>{{ t "privacy.ccpa_body" }}</p>
             {{ if .CCPAOptedOut }}
             <p role="status">{{ t "privacy.ccpa_status_opted_out" }}</p>
-            <form method="post" action="/server/ccpa">
+            <form method="post" action="{{ path "/server/ccpa" }}">
                 {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
                 <input type="hidden" name="choice" value="opt-in">
                 <button type="submit" class="btn-secondary">{{ t "privacy.ccpa_opt_in" }}</button>
             </form>
             {{ else }}
-            <form method="post" action="/server/ccpa">
+            <form method="post" action="{{ path "/server/ccpa" }}">
                 {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
                 <input type="hidden" name="choice" value="opt-out">
                 <button type="submit" class="btn-primary">{{ t "privacy.ccpa_opt_out" }}</button>
@@ -176,12 +176,12 @@
         {{ if .DPOEmail }}
         <p>{{ if .DPOName }}{{ .DPOName }} — {{ end }}<a href="mailto:{{ .DPOEmail }}">{{ .DPOEmail }}</a></p>
         {{ else }}
-        <p>{{ t "dpo.no_email" }} <a href="/server/contact">{{ t "dpo.contact_form" }}</a>.</p>
+        <p>{{ t "dpo.no_email" }} <a href="{{ path "/server/contact" }}">{{ t "dpo.contact_form" }}</a>.</p>
         {{ end }}
-        <p><a href="/server/dpo">{{ t "dpo.title" }}</a></p>
+        <p><a href="{{ path "/server/dpo" }}">{{ t "dpo.title" }}</a></p>
 
         <h2>{{ t "privacy.questions" }}</h2>
-        <p>{{ t "privacy.questions_prefix" }} <a href="/server/contact">{{ t "privacy.contact_link" }}</a>.</p>
+        <p>{{ t "privacy.questions_prefix" }} <a href="{{ path "/server/contact" }}">{{ t "privacy.contact_link" }}</a>.</p>
         {{ end }}
     </div>
 </div>

@@ -30,7 +30,7 @@
         <p>{{ t "help.bang_shortcuts_body" }}</p>
 
         <h2>{{ t "help.available_bangs" }}</h2>
-        <p>{{ t "help.available_bangs_intro_1" }} <a href="/search?q=!">{{ t "help.search_page_link" }}</a> {{ t "help.available_bangs_intro_2" }}</p>
+        <p>{{ t "help.available_bangs_intro_1" }} <a href="{{ path "/search" }}?q=!">{{ t "help.search_page_link" }}</a> {{ t "help.available_bangs_intro_2" }}</p>
         <pre><code>curl {{.BaseURL}}{{.APIBase}}/bangs</code></pre>
 
         <h2>{{ t "help.autocomplete" }}</h2>
@@ -38,7 +38,7 @@
         <pre><code>curl "{{.BaseURL}}{{.APIBase}}/bangs/autocomplete?q=!p"</code></pre>
 
         <h2>{{ t "help.preferences" }}</h2>
-        <p>{{ t "help.preferences_intro" }} <a href="/server/preferences">{{ t "help.preferences_link" }}</a>:</p>
+        <p>{{ t "help.preferences_intro" }} <a href="{{ path "/server/preferences" }}">{{ t "help.preferences_link" }}</a>:</p>
         <ul>
             <li>{{ t "help.pref_theme" }}</li>
             <li>{{ t "help.pref_results_page" }}</li>
@@ -48,7 +48,7 @@
         <p>{{ t "help.preferences_storage" }}</p>
 
         <h2>{{ t "help.history_favorites" }}</h2>
-        <p><a href="/favorites">{{ t "help.favorites_link" }}</a> {{ t "help.history_favorites_body" }}</p>
+        <p><a href="{{ path "/favorites" }}">{{ t "help.favorites_link" }}</a> {{ t "help.history_favorites_body" }}</p>
 
         <h2>{{ t "help.video_preview" }}</h2>
         <p>{{ t "help.video_preview_body" }}</p>
@@ -106,9 +106,9 @@ curl "{{.BaseURL}}{{.APIBase}}/search.txt?q=sunset"</code></pre>
         <h3>{{ t "help.api_documentation" }}</h3>
         <p>{{ tf "help.api_documentation_intro" "app_name" .AppName }}</p>
         <ul>
-            <li><a href="/server/docs/swagger">{{ t "help.swagger_link" }}</a> — {{ t "help.swagger_desc" }} <code>/api/swagger</code></li>
-            <li><a href="/server/docs/graphql">{{ t "help.graphiql_link" }}</a> — {{ t "help.graphiql_desc" }} <code>/api/graphql</code></li>
-            {{if .MCPEnabled}}<li><a href="/server/help/mcp">MCP server connection guide</a></li>{{end}}
+            <li><a href="{{ path "/server/docs/swagger" }}">{{ t "help.swagger_link" }}</a> — {{ t "help.swagger_desc" }} <code>/api/swagger</code></li>
+            <li><a href="{{ path "/server/docs/graphql" }}">{{ t "help.graphiql_link" }}</a> — {{ t "help.graphiql_desc" }} <code>/api/graphql</code></li>
+            {{if .MCPEnabled}}<li><a href="{{ path "/server/help/mcp" }}">MCP server connection guide</a></li>{{end}}
         </ul>
 
         <h2>{{ t "help.faq" }}</h2>
@@ -129,7 +129,7 @@ curl "{{.BaseURL}}{{.APIBase}}/search.txt?q=sunset"</code></pre>
         <p>{{ t "help.faq_js_a" }}</p>
 
         <h3>{{ t "help.faq_specific_sites_q" }}</h3>
-        <p>{{ t "help.faq_specific_sites_a" }} <a href="/server/preferences">{{ t "help.preferences_link" }}</a>.</p>
+        <p>{{ t "help.faq_specific_sites_a" }} <a href="{{ path "/server/preferences" }}">{{ t "help.preferences_link" }}</a>.</p>
 
         <h2>{{ t "help.troubleshooting" }}</h2>
 
@@ -155,7 +155,7 @@ curl "{{.BaseURL}}{{.APIBase}}/search.txt?q=sunset"</code></pre>
         <p>{{ t "help.ts_age_loop_a" }}</p>
 
         <h3>{{ t "help.ts_favorites_q" }}</h3>
-        <p>{{ t "help.ts_favorites_a" }} <a href="/favorites">{{ t "help.favorites_link" }}</a>.</p>
+        <p>{{ t "help.ts_favorites_a" }} <a href="{{ path "/favorites" }}">{{ t "help.favorites_link" }}</a>.</p>
 
         <h3>{{ t "help.ts_prefs_q" }}</h3>
         <p>{{ t "help.ts_prefs_a" }}</p>
@@ -164,7 +164,7 @@ curl "{{.BaseURL}}{{.APIBase}}/search.txt?q=sunset"</code></pre>
         <p>{{ t "help.ts_tor_a" }}</p>
 
         <h2>{{ t "help.need_more_help" }}</h2>
-        <p>{{ t "help.need_more_help_body_1" }} <a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">{{ t "help.github_link" }}</a> {{ t "help.need_more_help_body_2" }} <a href="/server/contact">{{ t "help.contact_link" }}</a>.</p>
+        <p>{{ t "help.need_more_help_body_1" }} <a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">{{ t "help.github_link" }}</a> {{ t "help.need_more_help_body_2" }} <a href="{{ path "/server/contact" }}">{{ t "help.contact_link" }}</a>.</p>
         {{ with .PageContent }}<section class="page-custom-content">{{ . | markdownToHTML }}</section>{{ end }}
     </div>
 </div>

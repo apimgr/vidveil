@@ -231,6 +231,11 @@ challenge.
 | `CACHE_URL` | External cache connection string; sets `server.cache.url` and promotes the cache type from `memory` to `valkey` so it is actually used. Ignored when `VIDVEIL_SERVER_CACHE_URL` or `VIDVEIL_CACHE_URL` is set |
 | `I2P_ENABLED` | Opt in to the I2P eepsite; project-prefixed `VIDVEIL_SERVER_I2P_ENABLED` and `VIDVEIL_I2P_ENABLED` take precedence |
 
+Set `server.baseurl` or `BASEURL` when the reverse proxy publishes VidVeil
+under a path such as `/app`. Server-rendered navigation, forms, and assets
+retain that prefix. Trusted proxy prefix headers take precedence when the
+immediate proxy is configured in `server.trusted_proxies`.
+
 ### CLI environment variables
 
 Read by the CLI rather than the server configuration tree:

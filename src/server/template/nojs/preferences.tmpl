@@ -13,7 +13,7 @@
         <h1>{{ t "prefs.title" }}</h1>
         <p><em>{{ t "prefs.storage_note" }}</em></p>
 
-        <form method="post" action="/server/preferences">
+        <form method="post" action="{{ path "/server/preferences" }}">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             {{if .ReturnTo}}<input type="hidden" name="redirect" value="{{.ReturnTo}}">{{end}}
             <input type="hidden" name="engines_selection_set" value="1">
@@ -163,7 +163,7 @@
                 <button type="submit" name="action" value="reset" class="btn-danger">{{ t "prefs.reset_confirm_action" }}</button>
             </div>
         </form>
-        <p><a href="/server/preferences/tokens">{{ t "owner_tokens.title" }}</a></p>
+        <p><a href="{{ path "/server/preferences/tokens" }}">{{ t "owner_tokens.title" }}</a></p>
     </main>
     {{template "public/footer" .}}
 </body>

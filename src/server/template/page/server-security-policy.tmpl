@@ -30,10 +30,10 @@
 
         <h2>{{ t "security.policy_safe_harbor_title" }}</h2>
         <p>{{ t "security.policy_safe_harbor_body_pre" }}
-        <a href="/server/security">{{ t "security.policy_safe_harbor_link" }}</a>{{ t "security.policy_safe_harbor_body_post" }}</p>
+        <a href="{{ path "/server/security" }}">{{ t "security.policy_safe_harbor_link" }}</a>{{ t "security.policy_safe_harbor_body_post" }}</p>
         {{end}}
 
-        <p><a href="/server/security">{{ t "security.back_to_security" }}</a></p>
+        <p><a href="{{ path "/server/security" }}">{{ t "security.back_to_security" }}</a></p>
     </div>
 </div>
 {{end}}

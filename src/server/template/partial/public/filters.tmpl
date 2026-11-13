@@ -20,7 +20,7 @@
     </summary>
     <div class="filters-content" id="filters-content" role="group" aria-label="{{ t "a11y.search_filters" }}">
         {{if .SelfForm}}
-        <form method="get" action="/search" class="filters-form" id="filters-form" data-action="filters-submit">
+        <form method="get" action="{{ path "/search" }}" class="filters-form" id="filters-form" data-action="filters-submit">
         <input type="hidden" name="q" value="{{.Query}}">
         {{end}}
         <div class="filters-grid">

@@ -26,7 +26,7 @@
 
         <section id="authentication">
             <h2>Authentication</h2>
-            <p>Use the same <code>Authorization: Bearer</code> tokens as the REST API. Anonymous clients can use public tools. For ongoing automation, create a linked token for this client at <a href="/server/preferences/tokens">Preferences → Tokens</a>, so you can revoke it independently. Do not use your primary token or the operator token.</p>
+            <p>Use the same <code>Authorization: Bearer</code> tokens as the REST API. Anonymous clients can use public tools. For ongoing automation, create a linked token for this client at <a href="{{ path "/server/preferences/tokens" }}">Preferences → Tokens</a>, so you can revoke it independently. Do not use your primary token or the operator token.</p>
         </section>
 
         <section id="connect">
@@ -81,7 +81,7 @@
                 <thead><tr><th>Status</th><th>Cause</th><th>What to do</th></tr></thead>
                 <tbody>
                     <tr><td><code>400</code></td><td>Unsupported protocol version or mismatched protocol headers</td><td>Use a supported protocol version and let your MCP client send headers matching its JSON-RPC request.</td></tr>
-                    <tr><td><code>401</code></td><td>Missing, invalid, expired, or revoked token</td><td>Check the Bearer token and create or restore a token on <a href="/server/preferences/tokens">Preferences → Tokens</a>.</td></tr>
+                    <tr><td><code>401</code></td><td>Missing, invalid, expired, or revoked token</td><td>Check the Bearer token and create or restore a token on <a href="{{ path "/server/preferences/tokens" }}">Preferences → Tokens</a>.</td></tr>
                     <tr><td><code>403</code></td><td>Origin rejected or token lacks the required owner access</td><td>Connect from the expected origin and use a token authorized for the requested resource.</td></tr>
                     <tr><td><code>404</code></td><td>MCP is disabled</td><td>Ask the server operator to enable <code>server.mcp.enabled</code> in <code>server.yml</code>.</td></tr>
                     <tr><td><code>405</code></td><td>Unsupported HTTP method</td><td>Send MCP requests with POST; GET and DELETE are not supported.</td></tr>

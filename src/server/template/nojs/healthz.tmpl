@@ -8,10 +8,10 @@
 </head>
 <body>
     <nav aria-label="Site navigation">
-        <a href="/">{{ t "nav.home" }}</a>
-        <a href="/server/about">{{ t "nav.about" }}</a>
-        <a href="/server/privacy">{{ t "nav.privacy" }}</a>
-        <a href="/server/help">{{ t "nav.help" }}</a>
+        <a href="{{ path "/" }}">{{ t "nav.home" }}</a>
+        <a href="{{ path "/server/about" }}">{{ t "nav.about" }}</a>
+        <a href="{{ path "/server/privacy" }}">{{ t "nav.privacy" }}</a>
+        <a href="{{ path "/server/help" }}">{{ t "nav.help" }}</a>
     </nav>
     <main>
         <h1>{{.ProjectName}} — {{ t "healthz.system_health" }}</h1>
@@ -44,7 +44,7 @@
             <dt>{{ t "healthz.active_connections_label" }}</dt><dd>{{.Stats.ActiveConnections}}</dd>
         </dl>
     </main>
-    <footer><a href="/server/healthz">{{ t "healthz.last_checked" }} {{.TimestampDisplay}}</a></footer>
+    <footer><a href="{{ path "/server/healthz" }}">{{ t "healthz.last_checked" }} {{.TimestampDisplay}}</a></footer>
 </body>
 </html>
 {{end}}

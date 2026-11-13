@@ -2779,12 +2779,15 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		"tf": func(key string, args ...interface{}) string {
 			return i18n.TranslateFormat(lang, key, args...)
 		},
+		"path": func(value string) string {
+			return templatePath(r, value)
+		},
 		"safeHTML": func(s string) template.HTML {
 			return sanitize.HTML(s)
 		},
 		// asset appends the version-busting stamp per AI.md PART 9
 		"asset": func(path string) string {
-			return path + "?v=" + version.AssetStamp()
+			return templatePath(r, path) + "?v=" + version.AssetStamp()
 		},
 		"trackingScript": func() template.HTML {
 			return trackingScriptMarkup(h.appConfig.Server.Tracking, r)
@@ -4344,9 +4347,12 @@ func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, r *http.Request, 
 		"tf": func(key string, args ...interface{}) string {
 			return i18n.TranslateFormat(locale, key, args...)
 		},
+		"path": func(value string) string {
+			return templatePath(r, value)
+		},
 		// asset appends the version-busting stamp per AI.md PART 9
 		"asset": func(path string) string {
-			return path + "?v=" + version.AssetStamp()
+			return templatePath(r, path) + "?v=" + version.AssetStamp()
 		},
 	}).ParseFS(templatesFS, "template/page/error.tmpl")
 	if err != nil {
@@ -4591,6 +4597,9 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 		"tf": func(key string, args ...interface{}) string {
 			return i18n.TranslateFormat(locale, key, args...)
 		},
+		"path": func(value string) string {
+			return templatePath(r, value)
+		},
 		// safeHTML sanitizes s through the strict PART 16 allowlist
 		// policy and marks the result safe for template rendering.
 		"safeHTML": func(s string) template.HTML {
@@ -4599,7 +4608,7 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 		// asset appends the version-busting stamp per AI.md PART 9:
 		// {{ asset "/static/css/app.css" }} → /static/css/app.css?v={version}-{commit}
 		"asset": func(path string) string {
-			return path + "?v=" + version.AssetStamp()
+			return templatePath(r, path) + "?v=" + version.AssetStamp()
 		},
 		// toJSON marshals a value into an inline JSON data island (CSP-safe,
 		// non-executable <script type="application/json"> per AI.md PART 16).

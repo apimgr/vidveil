@@ -21,7 +21,7 @@
         {{if .SecurityMode}}
         <h2>{{ t "contact.security_report_title" }}</h2>
         <p>{{ t "contact.security_report_body" }}</p>
-        <form method="POST" action="/server/contact?security_id={{.SecurityID}}" class="preferences-form">
+        <form method="POST" action="{{ path "/server/contact" }}?security_id={{.SecurityID}}" class="preferences-form">
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
             <input type="hidden" name="security_id" value="{{.SecurityID}}">
             <div class="form-group">
@@ -121,7 +121,7 @@
         {{else}}
         {{if .ContactEnabled}}
         <h2>{{ t "contact.form_title" }}</h2>
-        <form method="POST" action="/server/contact" class="preferences-form">
+        <form method="POST" action="{{ path "/server/contact" }}" class="preferences-form">
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
             <div class="form-group hidden" aria-hidden="true">
                 <label class="form-label" for="contact_hp">{{ t "contact.label_honeypot" }}</label>
@@ -163,7 +163,7 @@
         {{end}}
 
         <h2>{{ t "contact.security_issues_title" }}</h2>
-        <p>{{ t "contact.security_issues_body_pre" }} <a href="/server/security">{{ t "contact.security_issues_link" }}</a>.</p>
+        <p>{{ t "contact.security_issues_body_pre" }} <a href="{{ path "/server/security" }}">{{ t "contact.security_issues_link" }}</a>.</p>
         {{end}}
 
         <h2>{{ t "contact.abuse_title" }}</h2>

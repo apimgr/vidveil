@@ -9,7 +9,7 @@
     <span class="site-banner-icon" aria-hidden="true">{{ if eq .Type "error" }}&#10060;{{ else if eq .Type "warning" }}&#9888;{{ else if eq .Type "success" }}&#9989;{{ else }}&#8505;{{ end }}</span>
     <span class="site-banner-text">{{.Message}}</span>
     {{ if .Dismissible }}
-    <form method="post" action="/announcements/dismiss" class="site-banner-dismiss">
+    <form method="post" action="{{ path "/announcements/dismiss" }}" class="site-banner-dismiss">
         {{ if $.CSRFToken }}<input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">{{ end }}
         <input type="hidden" name="id" value="{{.ID}}">
         <input type="hidden" name="return_to" value="{{$.CurrentPath}}">

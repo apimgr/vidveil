@@ -81,6 +81,15 @@ func (h *ServerHandler) SetDB(db *sql.DB) {
 	h.db = db
 }
 
+// templatePath adds the request-aware mount prefix to same-origin template URLs.
+func templatePath(r *http.Request, value string) string {
+	prefix := urlvar.GetPathPrefix(r)
+	if prefix == "" || prefix == "/" {
+		return value
+	}
+	return strings.TrimRight(prefix, "/") + "/" + strings.TrimLeft(value, "/")
+}
+
 // SetSecretsManager wires the app-secrets manager used to validate the
 // rotating {security_id} token (AI.md PART 11 "Security Reports").
 func (h *ServerHandler) SetSecretsManager(m *secret.Manager) {
@@ -189,10 +198,13 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		"tf": func(key string, args ...interface{}) string {
 			return i18n.TranslateFormat(locale, key, args...)
 		},
+		"path": func(value string) string {
+			return templatePath(r, value)
+		},
 		// asset appends the version-busting stamp per AI.md PART 9:
 		// {{ asset "/static/css/app.css" }} → /static/css/app.css?v={version}-{commit}
 		"asset": func(path string) string {
-			return path + "?v=" + version.AssetStamp()
+			return templatePath(r, path) + "?v=" + version.AssetStamp()
 		},
 		"trackingScript": func() template.HTML {
 			return trackingScriptMarkup(h.appConfig.Server.Tracking, r)

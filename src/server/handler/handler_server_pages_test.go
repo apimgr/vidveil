@@ -16,6 +16,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/notify"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 func simpleCaptchaFormValues(t *testing.T, h *ServerHandler, r *http.Request) string {
@@ -75,6 +76,27 @@ func TestServerHandler_AboutPage_Returns200(t *testing.T) {
 	ct := rr.Header().Get("Content-Type")
 	if !strings.Contains(ct, "text/html") {
 		t.Errorf("AboutPage: Content-Type=%q want text/html", ct)
+	}
+}
+
+func TestServerHandler_AboutPage_PreservesConfiguredBaseURL(t *testing.T) {
+	setRealTemplatesFS(t)
+	cfg := config.DefaultAppConfig()
+	cfg.Server.BaseURL = "/mounted"
+	urlvar.GlobalResolver().SetAppConfig(cfg)
+	t.Cleanup(func() { urlvar.GlobalResolver().SetAppConfig(nil) })
+	h := NewServerHandler(cfg)
+	req := httptest.NewRequest(http.MethodGet, "/mounted/server/about", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	response := httptest.NewRecorder()
+	h.AboutPage(response, req)
+	if response.Code != http.StatusOK {
+		t.Fatalf("AboutPage with base URL: status=%d body=%s", response.Code, response.Body.String())
+	}
+	for _, expected := range []string{`href="/mounted/server/privacy"`, `href="/mounted/static/css/common.css`, `href="/mounted/manifest.json"`} {
+		if !strings.Contains(response.Body.String(), expected) {
+			t.Errorf("AboutPage with base URL missing %q", expected)
+		}
 	}
 }
 

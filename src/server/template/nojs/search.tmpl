@@ -28,7 +28,7 @@
         {{end}}
 
         {{if .SpellSuggestion}}
-        <p class="spell-suggestion">{{ t "search.did_you_mean" }} <a href="/search?q={{urlquery .SpellSuggestion}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}">{{.SpellSuggestion}}</a>?</p>
+        <p class="spell-suggestion">{{ t "search.did_you_mean" }} <a href="{{ path "/search" }}?q={{urlquery .SpellSuggestion}}{{if .EnginesParam}}&amp;engines={{urlquery .EnginesParam}}{{end}}">{{.SpellSuggestion}}</a>?</p>
         {{end}}
 
         {{if .RelatedSearches}}
@@ -36,7 +36,7 @@
             <span class="related-label">{{ t "search.related_searches" }}</span>
             <div class="related-tags">
                 {{range $i, $term := .RelatedSearches}}
-                <a class="related-tag" href="/search?q={{urlquery $term}}{{if $.EnginesParam}}&amp;engines={{urlquery $.EnginesParam}}{{end}}" aria-label="{{tf "a11y.search_for" "term" $term}}">
+                <a class="related-tag" href="{{ path "/search" }}?q={{urlquery $term}}{{if $.EnginesParam}}&amp;engines={{urlquery $.EnginesParam}}{{end}}" aria-label="{{tf "a11y.search_for" "term" $term}}">
                     <svg class="related-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
                     <span>{{$term}}</span>
                 </a>
@@ -46,7 +46,7 @@
         {{end}}
 
         <div class="filters" role="group" aria-label="{{ t "a11y.filter_options" }}">
-            <form method="get" action="/search" class="filter-form">
+            <form method="get" action="{{ path "/search" }}" class="filter-form">
                 <input type="hidden" name="q" value="{{.Query}}">
                 <label for="filter-duration">{{ t "filter.duration" }}</label>
                 <select id="filter-duration" name="duration">
@@ -75,7 +75,7 @@
             {{$isFav := index $favs .URL}}
             <div class="video-card" role="listitem">
                 <a href="{{.URL}}" {{if $.OpenNewTab}}target="_blank" {{end}}rel="noopener noreferrer" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
-                    <img src="/api/v1/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">
+                    <img src="{{ path "/api/v1/proxy/thumbnails" }}?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">
                     <div class="video-info">
                         <h3 class="video-title">{{.Title}}</h3>
                         <p class="video-meta">
@@ -85,7 +85,7 @@
                         <p class="video-source">{{.Source}}</p>
                     </div>
                 </a>
-                <form action="/favorites" method="post">
+                <form action="{{ path "/favorites" }}" method="post">
                     {{if $csrf}}<input type="hidden" name="csrf_token" value="{{$csrf}}">{{end}}
                     {{if $isFav}}<input type="hidden" name="_method" value="DELETE">{{end}}
                     <input type="hidden" name="url" value="{{.URL}}">
@@ -102,7 +102,7 @@
         {{if or (gt .Page 1) .HasMore}}
         <nav class="pagination" aria-label="{{ t "a11y.pagination" }}">
             {{if gt .Page 1}}
-            <form method="get" action="/search">
+            <form method="get" action="{{ path "/search" }}">
                 <input type="hidden" name="q" value="{{.Query}}">
                 <input type="hidden" name="page" value="{{.PrevPage}}">
                 {{if .Duration}}<input type="hidden" name="duration" value="{{.Duration}}">{{end}}
@@ -111,7 +111,7 @@
             </form>
             {{end}}
             {{if .HasMore}}
-            <form method="get" action="/search">
+            <form method="get" action="{{ path "/search" }}">
                 <input type="hidden" name="q" value="{{.Query}}">
                 <input type="hidden" name="page" value="{{.NextPage}}">
                 {{if .Duration}}<input type="hidden" name="duration" value="{{.Duration}}">{{end}}

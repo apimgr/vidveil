@@ -1,6 +1,12 @@
 # Configuration
 
-Vidveil uses `server.yml` for runtime configuration.
+Vidveil uses `server.yml` for runtime configuration. Optional `yaml.d/*.yml`
+and `yaml.d/*.yaml` files beside it split larger configurations into
+byte-wise filename order. Maps merge recursively; later scalar and list values
+replace earlier values. Environment variables and CLI flags take precedence.
+The server watches both the main file and the drop-in directory, and backs up
+the directory when present. Secret-bearing files must use mode `0600`; writable
+drop-ins are refused.
 
 ## Config File Locations
 
@@ -140,9 +146,11 @@ server:
   seo:
     og_image: https://assets.example.org/social-card.jpg
     sitemap:
-      enabled: true
       max_urls: 50000
       include_images: false
+    feed:
+      max_items: 50
+      title: ""
 ```
 
 Remote sources must use HTTPS, resolve only to public IP addresses, and return
@@ -155,7 +163,14 @@ The generated `/sitemap.xml` includes public pages and the Swagger/GraphQL
 documentation. It omits visitor-specific preferences and favorites pages.
 `server.seo.sitemap.max_urls` is limited to the sitemap protocol maximum of
 50,000 URLs, and `include_images` adds the configured OpenGraph image (or the
-embedded default icon) to each listed page.
+embedded default icon) to each listed page. The sitemap is always served and
+includes only pages allowed by `web.robots.allow` and not denied by
+`web.robots.deny`.
+
+`/feed.xml` (Atom 1.0) and `/rss.xml` (RSS 2.0) are always served. They list
+recent search queries only after privacy filtering, retain at most
+`server.seo.feed.max_items` entries in memory, and clear them on restart. Feeds
+never include results, IP addresses, users, or sessions.
 
 ## Runtime Data Paths
 
@@ -649,9 +664,11 @@ server:
       facebook: ""
       custom: []
     sitemap:
-      enabled: true
       max_urls: 50000
       include_images: false
+    feed:
+      max_items: 50
+      title: ""
   update:
     branch: stable
     auto_install: false

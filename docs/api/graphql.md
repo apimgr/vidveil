@@ -2,6 +2,9 @@
 
 Endpoint: `https://x.scour.li/api/v1/server/graphql` (alias: `/api/graphql`)
 
+GraphQL is query-only and exposes read operations. Writes such as contact form
+submissions remain REST-only and appear in OpenAPI, not in this schema.
+
 Interactive playground: `https://x.scour.li/server/docs/graphql`
 
 ## Schema

@@ -208,7 +208,9 @@ GET  https://x.scour.li/api/v1/server/terms
 GET  https://x.scour.li/api/v1/server/security
 GET  https://x.scour.li/api/v1/server/security/policy
 GET  https://x.scour.li/api/v1/server/security/thanks
+GET  https://x.scour.li/api/v1/server/contact
 POST https://x.scour.li/api/v1/server/contact
+GET  https://x.scour.li/api/v1/server/auth/check
 POST https://x.scour.li/api/v1/server/reports/default
 POST https://x.scour.li/api/v1/server/reports/nel
 POST https://x.scour.li/api/v1/server/reports/csp
@@ -229,12 +231,18 @@ The three public security JSON endpoints mirror the overview, disclosure policy,
 and researcher acknowledgments. The token-bearing
 `/server/security/report/{tracking_id}` page has no API mirror.
 
-`POST /api/v1/server/contact` accepts `name`, `email`, `subject`, `message`,
-and a CAPTCHA response. With `simple` (default), send the one-use `captcha_id`
-and `captcha_answer` shown by `/server/contact`; with `recaptcha` or `hcaptcha`,
-send the corresponding `g-recaptcha-response` or `h-captcha-response` from the
-provider widget. The CAPTCHA is required for browser and API submissions. Tor
-and I2P always use the built-in challenge. Restore requires the operator token. CLI
+`GET /api/v1/server/contact` describes the public form, including field limits,
+the CAPTCHA challenge and public security/abuse contacts; it never returns
+recipient addresses. With a valid `security_id` query parameter it describes
+the coordinated-disclosure fields instead. `POST` accepts `name` (100 characters), `email` (254),
+`subject` (200), `message` (5000), and a CAPTCHA response. With `simple`
+(default), send the one-use `captcha_id` and `captcha_answer` returned by the
+GET response; with `recaptcha` or `hcaptcha`, send the corresponding
+`g-recaptcha-response` or `h-captcha-response` from the provider widget. The
+CAPTCHA is required for browser and API submissions. Tor and I2P always use the
+built-in challenge. `GET /api/v1/server/auth/check` requires a Bearer token and
+returns its kind (`operator` or `owner`) without changing token usage metadata
+or echoing the token; without a token, skip the check. Restore requires the operator token. CLI
 binary downloads are public unless `cli.binary_download.require_auth` is enabled. Browser security-report
 ingestion routes return `204` after recording a sanitized summary; they do not
 return submitted report bodies.

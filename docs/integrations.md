@@ -103,7 +103,8 @@ These are the well-defined entry points clients can integrate against.
 - `GET /humans.txt` — project and attribution information.
 
 Other `/.well-known/*` paths return 404 unless explicitly defined. The server
-also publishes `/robots.txt`, `/sitemap.xml`, `/manifest.json`, and `/sw.js`;
+also publishes `/robots.txt`, `/sitemap.xml`, `/feed.xml`, `/rss.xml`,
+`/manifest.json`, and `/sw.js`;
 the sitemap omits visitor-specific pages.
 
 ## Tor Hidden Service

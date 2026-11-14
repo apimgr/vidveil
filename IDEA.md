@@ -2,7 +2,7 @@
 
 ## Project description
 
-Privacy-respecting meta search engine for adult video content that aggregates results from 33 video sites without retaining search history; access logs may contain request metadata, and optional analytics require operator configuration and consent. Results stream in real-time via SSE as each engine responds.
+Privacy-respecting meta search engine for adult video content that aggregates results from 33 video sites without durable search-history storage. Its public feeds may contain only recent queries that pass the required privacy filters; that bounded feed is held in memory and cleared on restart. Access logs may contain request metadata, and optional analytics require operator configuration and consent. Results stream in real-time via SSE as each engine responds.
 
 **Target Users:**
 - Privacy-conscious users seeking adult content with clear controls over optional analytics
@@ -30,7 +30,7 @@ owner_token:       vidveil_owner_token_ab5213f6
 ### Product scope & non-goals
 
 **In scope (the WHAT):**
-- Privacy-conscious search: no retained search history; access logs may include request metadata; optional analytics require operator configuration and consent
+- Privacy-conscious search: no durable search history; public recent-search feeds contain only queries that pass the required privacy filters, bounded by `server.seo.feed.max_items` and cleared on restart; access logs may include request metadata; optional analytics require operator configuration and consent
 - Multi-Engine Aggregation: 33 engines with bang shortcuts for targeted searches
 - Real-Time Streaming: SSE streaming delivers results as each engine responds
 - Thumbnail Proxy: All thumbnails proxied through server to prevent tracking
@@ -210,7 +210,7 @@ External integrations and failure modes are NOT to be extended at code time with
 
 | Attacker goal | Defense |
 |---------------|---------|
-| Correlate IPs to search queries | Search requests are processed without retaining search history; configurable access log formats may include query strings; rate-limit responses do not echo the query |
+| Correlate IPs to search queries | Search requests are not associated with an account or identity; safe-filtered recent queries and timestamps are retained only in bounded process memory for public feeds; configurable access log formats may include query strings; rate-limit responses do not echo the query |
 | Inject XSS via crafted engine titles / tags / performer names | All result fields are HTML-escaped server-side before render; CSP + escape-on-render templates; no inline JS or CSS |
 | SSRF via thumbnail/preview URL | Thumbnail proxy validates scheme + host against an allowlist of known engine CDN hosts; rejects file://, gopher://, and RFC1918 targets |
 | Path traversal via static asset paths | `PathSecurityMiddleware` (PART 5) blocks `..`, `%2e%2e`, normalizes // -> / |
@@ -337,7 +337,7 @@ The following are intentional, project-defined deviations or strong defaults. An
 - Search history display (up to 8 recent with timestamps).
 - Per-item remove button and clear all button.
 - Timestamps: "just now", "5m ago", "1h ago", "2d ago".
-- Engine statistics (33 engines, no retained search history, Tor support).
+- Engine statistics (33 engines, no persistent search history, Tor support).
 - Collapsible filters panel.
 
 **Search Results Page (`/search?q={query}`):**
@@ -509,6 +509,7 @@ restated in this table; see AI.md.
 - 33 video sites via HTML parsing.
 - Engine definitions embedded at build time (`src/server/engine/engines.go`).
 - Search results fetched in real-time, then held in a short-lived API-response cache (30s TTL, per AI.md PART 12).
+- Public recent-search feeds retain only privacy-filtered query text and timestamps in bounded process memory; no query feed data is persisted across restarts.
 - No durable/persistent storage of search results (stateless; the cache is ephemeral and process-local by default).
 - Thumbnails proxied through server on-demand (proxy may cache temporarily to reduce repeated fetches).
 - Engine definitions updated at build time.

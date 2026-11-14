@@ -258,6 +258,29 @@ func TestSimpleCaptchaIsSingleUse(t *testing.T) {
 	}
 }
 
+func TestExternalCaptchaHasNoJavaScriptFallback(t *testing.T) {
+	setRealTemplatesFS(t)
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Pages.Contact.Captcha = "hcaptcha"
+	cfg.Server.Pages.Contact.CaptchaSiteKey = "public-site-key"
+	cfg.Server.Pages.Contact.CaptchaSecretKey = "private-secret-key"
+	h := NewServerHandler(cfg)
+	request := httptest.NewRequest(http.MethodGet, "/server/contact", nil)
+	request.Header.Set("User-Agent", "Mozilla/5.0")
+	response := httptest.NewRecorder()
+	h.ContactPage(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "<noscript>") || !strings.Contains(response.Body.String(), "captcha_fallback_answer") || !strings.Contains(response.Body.String(), "data-sitekey=\"public-site-key\"") {
+		t.Fatalf("external CAPTCHA page lacks its progressive fallback: status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	form := simpleCaptchaFormValues(t, h, httptest.NewRequest(http.MethodGet, "/server/contact", nil))
+	request = httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if !h.verifyCaptcha(request) {
+		t.Fatal("valid simple CAPTCHA fallback was rejected for external provider")
+	}
+}
+
 func TestServerHandler_ContactPage_GET_Returns200(t *testing.T) {
 	setRealTemplatesFS(t)
 	h := newServerHandler(t)

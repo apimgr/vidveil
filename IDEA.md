@@ -28,7 +28,7 @@ owner_token:       vidveil_owner_token_ab5213f6
 **Features:**
 - **Video search:** Search across 33 video engines, target engines with bang shortcuts, and receive results as engines respond. Engine availability is best-effort; a failing or rate-limited source must not prevent results from other sources.
 - **Result discovery:** Refine searches with autocomplete, related searches, source selection, duration and quality filters, sorting, and pagination. Search history is a visitor-controlled convenience and is not retained as a durable server-side history.
-- **Privacy:** Proxy thumbnails through VidVeil, provide optional analytics only with visitor consent, and disclose that access logs may contain request metadata. Public recent-search feeds may include only queries that pass the privacy filters required by AI.md; entries are bounded and are not retained across server restarts.
+- **Privacy:** Proxy thumbnails through VidVeil, provide optional analytics only with visitor consent, and disclose that access logs may contain request metadata. Public Atom and RSS feeds may include only privacy-filtered query text and timestamps; entries are bounded and are not retained across server restarts.
 - **Private favorites:** Visitors can save, organize, export, import, and clear favorites. Favorites belong to an anonymous owner and remain private to that owner. A visitor can manage their own favorites without creating a conventional account.
 - **Owner token management:** Owners can restore access to their resources and manage their own primary and linked tokens. A linked token can be used for automation without sharing the primary token.
 - **Preferences:** Visitors can choose appearance, language, search behavior, and result preferences. Preferences are visitor-scoped and do not require an account. The interface supports English, Arabic, German, Spanish, French, Italian, Japanese, and Chinese.
@@ -56,7 +56,7 @@ There are no conventional user accounts. Possession of an owner's valid token id
 
 - **Video result:** A result has an engine-specific identity, title, source link, thumbnail, source name, and available descriptive metadata such as duration, views, quality, publication date, tags, performer, preview, or download information.
 - **Engine:** A searchable source has a name, display name, availability, and supported search or media capabilities. VidVeil includes 33 active engines; individual sources can become unavailable.
-- **Search:** A visitor's query and its results are transient service data. Search terms that pass the required privacy filters may appear in a bounded public recent-search feed. The service does not provide durable server-side search history.
+- **Search:** A visitor's query and its results are transient service data. Search terms that pass the required privacy filters may appear as query text and timestamps in bounded public Atom and RSS feeds. The service does not provide durable server-side search history.
 - **Favorite:** A visitor-owned saved result can include its source link, title, thumbnail, source, and creation time. Favorites are private to their anonymous owner and persist until that owner removes them or the service data is removed.
 - **Owner token:** A credential grants access to one anonymous owner's private resources. Primary and linked tokens have distinct management roles; tokens are sensitive and must not be exposed in public output.
 - **Visitor preference:** Appearance, language, and search preferences belong to the visitor's browser and are not tied to a named account.

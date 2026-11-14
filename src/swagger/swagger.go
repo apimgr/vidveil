@@ -363,15 +363,34 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 	addOperation("/server/about", "get", "getServerAbout", "Get server information", "Return the public server name, version, and description.", nil, nil)
 	addOperation("/server/privacy", "get", "getServerPrivacy", "Get privacy information", "Return the server privacy policy and privacy signals.", nil, nil)
 	addOperation("/server/dpo", "get", "getServerDPO", "Get DPO contact", "Return the configured DPO contact and privacy policy URL.", nil, nil)
+	addOperation("/server/contact", "get", "getServerContactForm", "Get contact form description", "Return the public contact form fields and captcha descriptor without exposing recipients.", nil, nil)
+	addOperation("/server/auth/check", "get", "checkServerToken", "Check bearer token", "Return the kind of a valid bearer token without updating token use metadata or echoing the credential.", nil, nil)
 	addOperation("/server/help", "get", "getServerHelp", "Get server help", "Return usage and help information for this server.", nil, nil)
 	addOperation("/server/help/mcp", "get", "getServerHelpMCP", "Get MCP connection help", "Return MCP endpoint metadata, connection guidance, and anonymous tools.", nil, nil)
 	addOperation("/server/terms", "get", "getServerTerms", "Get server terms", "Return the server terms of service.", nil, nil)
-	addOperation("/server/contact", "post", "submitServerContact", "Submit a contact message", "Submit a message to the server contact form.", nil,
-		objectBody(map[string]interface{}{
-			"subject": stringProperty("Message subject"),
-			"message": stringProperty("Message body"),
-			"email":   stringProperty("Optional reply address"),
-		}, []string{"subject", "message"}, "application/x-www-form-urlencoded"))
+	contactBody := objectBody(map[string]interface{}{
+		"name":                 map[string]interface{}{"type": "string", "description": "Sender name", "maxLength": 100},
+		"email":                map[string]interface{}{"type": "string", "format": "email", "description": "Reply address", "maxLength": 254},
+		"subject":              map[string]interface{}{"type": "string", "description": "Message subject", "maxLength": 200},
+		"message":              map[string]interface{}{"type": "string", "description": "Message body", "maxLength": 5000},
+		"captcha_id":           stringProperty("Single-use captcha challenge id"),
+		"captcha_answer":       stringProperty("Answer to the simple captcha challenge"),
+		"g-recaptcha-response": stringProperty("Required when the configured provider is reCAPTCHA"),
+		"h-captcha-response":   stringProperty("Required when the configured provider is hCaptcha"),
+	}, []string{"name", "email", "subject", "message"}, "application/x-www-form-urlencoded")
+	contactSchema := contactBody["content"].(map[string]interface{})["application/x-www-form-urlencoded"].(map[string]interface{})["schema"].(map[string]interface{})
+	contactSchema["oneOf"] = []map[string]interface{}{
+		{"required": []string{"captcha_id", "captcha_answer"}},
+		{"required": []string{"g-recaptcha-response"}},
+		{"required": []string{"h-captcha-response"}},
+	}
+	addOperation("/server/contact", "post", "submitServerContact", "Submit a contact message", "Submit a message to the server contact form; exactly one configured or built-in CAPTCHA response is required.", nil, contactBody)
+	authCheck := paths[apiBase+"/server/auth/check"].(map[string]interface{})["get"].(map[string]interface{})
+	authCheck["security"] = []map[string]interface{}{{"BearerAuth": []string{}}}
+	authCheck["responses"] = map[string]interface{}{
+		"200": map[string]interface{}{"description": "Token is valid; response data contains the token kind"},
+		"401": map[string]interface{}{"description": "Bearer token is missing or invalid"},
+	}
 	for _, report := range []struct {
 		path string
 		id   string

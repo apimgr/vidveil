@@ -198,6 +198,24 @@ func TestGenerateSpecDocumentsImplementedAPIOperations(t *testing.T) {
 	}
 }
 
+func TestGenerateSpecRequiresContactCaptchaResponse(t *testing.T) {
+	var document struct {
+		Paths map[string]map[string]map[string]interface{} `json:"paths"`
+	}
+	if err := json.Unmarshal([]byte(GenerateSpec(config.DefaultAppConfig(), httptest.NewRequest(http.MethodGet, "/", nil))), &document); err != nil {
+		t.Fatalf("unmarshal OpenAPI document: %v", err)
+	}
+	operation := document.Paths["/api/v1/server/contact"]["post"]
+	requestBody := operation["requestBody"].(map[string]interface{})
+	content := requestBody["content"].(map[string]interface{})
+	media := content["application/x-www-form-urlencoded"].(map[string]interface{})
+	schema := media["schema"].(map[string]interface{})
+	oneOf := schema["oneOf"].([]interface{})
+	if len(oneOf) != 3 {
+		t.Fatalf("contact CAPTCHA alternatives = %d, want 3", len(oneOf))
+	}
+}
+
 // TestGenerateSpecOmitsAdminAPIRoutes ensures the spec does not publish
 // nonexistent admin route or credential contracts.
 func TestGenerateSpecOmitsAdminAPIRoutes(t *testing.T) {

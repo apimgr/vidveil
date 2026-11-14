@@ -140,6 +140,15 @@ func (m *Manager) IssuePrimary(ctx context.Context) (IssuedToken, error) {
 
 // Authenticate resolves an active owner token and updates bounded last-use data.
 func (m *Manager) Authenticate(ctx context.Context, raw string) (Principal, error) {
+	return m.authenticate(ctx, raw, true)
+}
+
+// ValidateOnly checks an owner token without changing last-use metadata.
+func (m *Manager) ValidateOnly(ctx context.Context, raw string) (Principal, error) {
+	return m.authenticate(ctx, raw, false)
+}
+
+func (m *Manager) authenticate(ctx context.Context, raw string, updateLastUsed bool) (Principal, error) {
 	if !strings.HasPrefix(raw, "tok_") {
 		return Principal{}, ErrInvalidToken
 	}
@@ -182,7 +191,7 @@ func (m *Manager) Authenticate(ctx context.Context, raw string) (Principal, erro
 	if found == nil || found.revoked.Valid || (found.expires.Valid && found.expires.Int64 <= now) {
 		return Principal{}, ErrInvalidToken
 	}
-	if !found.used.Valid || found.used.Int64 <= now-60 {
+	if updateLastUsed && (!found.used.Valid || found.used.Int64 <= now-60) {
 		if _, err := m.db.ExecContext(ctx, `UPDATE api_tokens SET last_used_at = ? WHERE id = ?`, now, found.id); err != nil {
 			return Principal{}, fmt.Errorf("update token use time: %w", err)
 		}

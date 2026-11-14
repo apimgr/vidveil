@@ -238,6 +238,8 @@ The root `/healthz` alias is disabled by default.
 | `https://x.scour.li/server/docs/graphql` | GraphiQL playground |
 | `https://x.scour.li/server/help/mcp` | MCP connection guide (when MCP is enabled) |
 | `https://x.scour.li/server/preferences/tokens` | Restore and manage owner tokens |
+| `https://x.scour.li/feed.xml` | Atom feed of privacy-filtered recent searches |
+| `https://x.scour.li/rss.xml` | RSS feed of privacy-filtered recent searches |
 | `https://x.scour.li/.well-known/llms.txt` | AI-agent discovery (`/llms.txt` alias) |
 | `https://x.scour.li/mcp` | MCP Streamable HTTP endpoint |
 

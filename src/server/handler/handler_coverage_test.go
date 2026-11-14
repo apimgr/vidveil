@@ -704,15 +704,21 @@ func TestAPIHelp_StatusOK(t *testing.T) {
 	}
 }
 
-// TestAPIContact_GetMethodNotAllowed verifies GET returns 405.
-func TestAPIContact_GetMethodNotAllowed(t *testing.T) {
+// TestAPIContact_GetFormDescription verifies the API mirrors the public form.
+func TestAPIContact_GetFormDescription(t *testing.T) {
 	cfg := createTestConfig()
+	cfg.Server.Pages.Contact.Enabled = true
 	h := NewServerHandler(cfg)
 	req := httptest.NewRequest("GET", "/api/v1/server/contact", nil)
 	rr := httptest.NewRecorder()
 	h.APIContact(rr, req)
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Errorf("APIContact GET status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("APIContact GET status = %d, want %d; body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	for _, field := range []string{`"max_length": 100`, `"max_length": 254`, `"max_length": 200`, `"max_length": 5000`, `"security_url"`, `"abuse_email"`} {
+		if !strings.Contains(rr.Body.String(), field) {
+			t.Errorf("APIContact GET response missing %q: %s", field, rr.Body.String())
+		}
 	}
 }
 

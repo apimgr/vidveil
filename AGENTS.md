@@ -91,7 +91,7 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-11-07
-- Current task: AI.md alignment pass and server page/documentation update complete; provider CI follows the gitcommit push
-- Verified: `make test` passes at 71% coverage; `go vet ./...` and `staticcheck ./...` pass; `mkdocs build --strict` succeeds; selected Chromium E2E checks pass
-- Relevant PARTs: 0, 1, 3, 10, 11, 12, 14, 16, 20, 21, 25, 27, 28, 31, 32
+- Last read AI.md: 2026-11-14
+- Current task: AI.md alignment pass, server page updates, and documentation refresh completed
+- Verified: `make test` passes at 71% coverage; `make lint` passes (`go vet ./...` and `staticcheck ./...`); `mkdocs build --strict` succeeds; the full Chromium E2E suite passes
+- Relevant PARTs: 0, 1, 3, 5, 10, 11, 12, 14, 16, 20, 21, 25, 27, 28, 31, 32

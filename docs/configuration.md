@@ -170,7 +170,9 @@ includes only pages allowed by `web.robots.allow` and not denied by
 `/feed.xml` (Atom 1.0) and `/rss.xml` (RSS 2.0) are always served. They list
 recent search queries only after privacy filtering, retain at most
 `server.seo.feed.max_items` entries in memory, and clear them on restart. Feeds
-never include results, IP addresses, users, or sessions.
+never include results, IP addresses, users, or sessions. Configure
+`server.seo.feed.max_items` from 1 to 200 (default `50`) and optionally set
+`server.seo.feed.title`; an empty title uses the configured branding title.
 
 ## Runtime Data Paths
 

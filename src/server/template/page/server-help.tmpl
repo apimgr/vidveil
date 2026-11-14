@@ -108,7 +108,7 @@ curl "{{.BaseURL}}{{.APIBase}}/search.txt?q=sunset"</code></pre>
         <ul>
             <li><a href="{{ path "/server/docs/swagger" }}">{{ t "help.swagger_link" }}</a> — {{ t "help.swagger_desc" }} <code>/api/swagger</code></li>
             <li><a href="{{ path "/server/docs/graphql" }}">{{ t "help.graphiql_link" }}</a> — {{ t "help.graphiql_desc" }} <code>/api/graphql</code></li>
-            {{if .MCPEnabled}}<li><a href="{{ path "/server/help/mcp" }}">MCP server connection guide</a></li>{{end}}
+            {{if .MCPEnabled}}<li><a href="{{ path "/server/help/mcp" }}">{{ t "help.mcp_link" }}</a></li>{{end}}
         </ul>
 
         <h2>{{ t "help.faq" }}</h2>

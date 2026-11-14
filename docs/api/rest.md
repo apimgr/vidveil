@@ -239,13 +239,21 @@ the coordinated-disclosure fields instead. `POST` accepts `name` (100 characters
 (default), send the one-use `captcha_id` and `captcha_answer` returned by the
 GET response; with `recaptcha` or `hcaptcha`, send the corresponding
 `g-recaptcha-response` or `h-captcha-response` from the provider widget. The
-CAPTCHA is required for browser and API submissions. Tor and I2P always use the
-built-in challenge. `GET /api/v1/server/auth/check` requires a Bearer token and
+CAPTCHA is required for browser and API submissions. Browser forms include a
+single-use built-in challenge in their `<noscript>` fallback. Tor and I2P
+always use the built-in challenge. `GET /api/v1/server/auth/check` requires a Bearer token and
 returns its kind (`operator` or `owner`) without changing token usage metadata
 or echoing the token; without a token, skip the check. Restore requires the operator token. CLI
 binary downloads are public unless `cli.binary_download.require_auth` is enabled. Browser security-report
 ingestion routes return `204` after recording a sanitized summary; they do not
 return submitted report bodies.
+
+The public syndication endpoints are `GET` and `HEAD /feed.xml` (Atom 1.0) and
+`GET` and `HEAD /rss.xml` (RSS 2.0). Both expose the same bounded set of recent
+searches after privacy filtering. They include query text and timestamps only;
+queries matching the configured sensitive-data filters are omitted. The
+responses use absolute links for the request host, XML escaping, `ETag`,
+`Last-Modified`, and `Cache-Control: public, max-age=300`.
 
 ## Metrics
 

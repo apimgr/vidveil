@@ -1021,7 +1021,16 @@ func CheckServerConnection() (bool, error) {
 	if apiClient == nil || cliConfig == nil || cliConfig.Server.Address == "" {
 		return false, nil
 	}
-	return apiClient.Health()
+	healthy, err := apiClient.Health()
+	if err != nil || !healthy {
+		return healthy, err
+	}
+	if strings.TrimSpace(cliConfig.Server.Token) != "" {
+		if _, err := apiClient.CheckAuth(); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
 }
 
 // startCLIBackgroundDiscovery refreshes server connection settings from /api/autodiscover.

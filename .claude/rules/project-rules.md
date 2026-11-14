@@ -1,7 +1,7 @@
 # Project Rules (PART 2, 3, 4)
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
-<!-- Rule summary checked against AI.md on 2026-11-06; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-14; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -29,6 +29,7 @@
 - Always use OS-specific paths exactly as defined below — never invent alternate paths
 - Always start `.gitignore` with the two-line header: `# gitignore created on MM/DD/YY at HH:MM` then literal `ignoredirmessage`
 - Always use `modernc.org/sqlite` (driver name `sqlite`, aliases `sqlite2`/`sqlite3`) for local SQLite; `github.com/tursodatabase/libsql-client-go` (driver `libsql`, alias `turso`) for remote-only libSQL/Turso
+- Always keep IDEA.md at the WHAT level; AI.md wins conflicts, which are corrected in IDEA.md without changing `## Project variables` unless the user explicitly confirms
 
 ## Key Rules Summary
 

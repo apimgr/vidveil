@@ -4,15 +4,18 @@ package config
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -1329,9 +1332,13 @@ type SEOVerificationConfig struct {
 
 // SEOSitemapConfig controls generated public sitemap output per AI.md PART 16.
 type SEOSitemapConfig struct {
-	Enabled       bool `yaml:"enabled"`
 	MaxURLs       int  `yaml:"max_urls"`
 	IncludeImages bool `yaml:"include_images"`
+}
+
+type SEOFeedConfig struct {
+	MaxItems int    `yaml:"max_items"`
+	Title    string `yaml:"title"`
 }
 
 // SEOConfig holds SEO/social metadata per AI.md PART 16
@@ -1348,6 +1355,7 @@ type SEOConfig struct {
 	Verification SEOVerificationConfig `yaml:"verification"`
 	// Sitemap controls generated sitemap output.
 	Sitemap SEOSitemapConfig `yaml:"sitemap"`
+	Feed    SEOFeedConfig    `yaml:"feed"`
 }
 
 // CSRFConfig holds CSRF settings per AI.md PART 16 → CSRF Protection
@@ -1676,7 +1684,7 @@ func DefaultAppConfig() *AppConfig {
 				Description:     "Privacy-respecting adult video search",
 				RefreshInterval: "24h",
 			},
-			SEO:     SEOConfig{Sitemap: SEOSitemapConfig{Enabled: true, MaxURLs: 50000}},
+			SEO:     SEOConfig{Sitemap: SEOSitemapConfig{MaxURLs: 50000}, Feed: SEOFeedConfig{MaxItems: 50}},
 			User:    "",
 			Group:   "",
 			PIDFile: true,
@@ -2003,7 +2011,7 @@ func DefaultAppConfig() *AppConfig {
 					Services: []ThirdPartyService{},
 				},
 				Content: PrivacyContentConfig{
-					DataCollection:  "We process request metadata such as IP addresses for security and abuse prevention. Search queries are sent to the video engines selected for a search. VidVeil does not retain search history, though configured access logs can include request URLs. Optional analytics records usage only after consent.",
+					DataCollection:  "We process request metadata such as IP addresses for security and abuse prevention. Search queries are sent to the video engines selected for a search. Queries that pass privacy filters may appear in public recent-search feeds; these bounded entries stay in process memory and are cleared on restart. Configured access logs can include request URLs. Optional analytics records usage only after consent.",
 					DataUsage:       "Data is used to provide search, maintain service security, and improve reliability. Data is not sold or used for targeted advertising.",
 					DataUsageIfSold: "Data is used to provide and secure the service. Some data may be shared or sold as described in the configured third-party services and applicable rights below.",
 					DataSecurity:    "Security controls protect service data. Access logs are retained for up to 30 days, and API token identifiers are stored as hashes.",
@@ -2160,20 +2168,19 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 			return nil, "", fmt.Errorf("failed to save default config: %w", err)
 		}
 
-		// Console output is handled in main.go per AI.md PART 7
-
-		// Apply VIDVEIL_* env var overrides per AI.md (env overrides config file)
-		applyEnvOverrides(cfg)
-		validateUpdateChannel(&cfg.Server.Update, DefaultAppConfig().Server.Update)
-		validateRestoreConfig(&cfg.Server.Restore, DefaultRestoreConfig())
-
-		return cfg, configPath, nil
 	}
 
 	// Load existing config
-	data, err := os.ReadFile(configPath)
+	data, dropins, overrides, err := loadMergedConfig(configPath)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to read config: %w", err)
+		if strings.Contains(err.Error(), "yaml:") {
+			fmt.Fprintf(os.Stderr, "Warning: failed to parse %s (%v), using default configuration\n", configPath, err)
+			data, err = yaml.Marshal(DefaultAppConfig())
+			dropins, overrides = nil, nil
+		}
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to load config: %w", err)
+		}
 	}
 
 	// Start with defaults and overlay the file contents.
@@ -2188,6 +2195,7 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 
 	// Validate and fix invalid config values per AI.md PART 12
 	validateConfig(cfg)
+	logConfigSources(dropins, overrides, cfg.Server.Mode == "debug")
 
 	if cfg.Server.Database.SQLite.Dir == "" || os.Getenv("DATABASE_DIR") != "" {
 		cfg.Server.Database.SQLite.Dir = dbDir
@@ -2210,6 +2218,213 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	return cfg, configPath, nil
 }
 
+func loadMergedConfig(configPath string) ([]byte, []string, []string, error) {
+	baseData, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("read %s: %w", configPath, err)
+	}
+	var merged yaml.Node
+	if err := yaml.Unmarshal(baseData, &merged); err != nil {
+		return nil, nil, nil, fmt.Errorf("%s: %w", configPath, err)
+	}
+	baseInfo, statErr := os.Stat(configPath)
+	if statErr != nil {
+		return nil, nil, nil, fmt.Errorf("inspect %s: %w", configPath, statErr)
+	}
+	if len(merged.Content) > 0 && yamlNodeHasSecrets(merged.Content[0]) && baseInfo.Mode().Perm()&0077 != 0 {
+		return nil, nil, nil, fmt.Errorf("%s contains secrets and must have mode 0600", configPath)
+	}
+	if len(merged.Content) == 0 {
+		return nil, nil, nil, fmt.Errorf("%s: empty YAML document", configPath)
+	}
+	if err := validateYAMLNode(merged.Content[0], configPath, ""); err != nil {
+		return nil, nil, nil, err
+	}
+	dropDir := filepath.Join(filepath.Dir(configPath), "yaml.d")
+	dropInfo, err := os.Lstat(dropDir)
+	if errors.Is(err, os.ErrNotExist) {
+		encoded, marshalErr := yaml.Marshal(&merged)
+		return encoded, nil, nil, marshalErr
+	}
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("inspect %s: %w", dropDir, err)
+	}
+	if dropInfo.Mode()&os.ModeSymlink != 0 || !dropInfo.IsDir() {
+		return nil, nil, nil, fmt.Errorf("%s must be a real directory", dropDir)
+	}
+	entries, err := os.ReadDir(dropDir)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("read %s: %w", dropDir, err)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	var loaded []string
+	overriddenBy := make(map[string]string)
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") || !(strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")) || strings.HasSuffix(name, ".bak") || strings.HasSuffix(name, "~") || strings.HasSuffix(name, ".orig") {
+			continue
+		}
+		file := filepath.Join(dropDir, name)
+		info, infoErr := os.Lstat(file)
+		if infoErr != nil {
+			return nil, nil, nil, fmt.Errorf("inspect %s: %w", file, infoErr)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, evalErr := filepath.EvalSymlinks(file)
+			if evalErr != nil {
+				return nil, nil, nil, fmt.Errorf("resolve %s: %w", file, evalErr)
+			}
+			rel, relErr := filepath.Rel(dropDir, target)
+			if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				return nil, nil, nil, fmt.Errorf("%s symlink target must stay inside yaml.d", file)
+			}
+			info, infoErr = os.Stat(file)
+			if infoErr != nil {
+				return nil, nil, nil, fmt.Errorf("inspect %s target: %w", file, infoErr)
+			}
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+		if info.Mode().Perm()&0022 != 0 {
+			return nil, nil, nil, fmt.Errorf("%s is group or world writable", file)
+		}
+		data, readErr := os.ReadFile(file)
+		if readErr != nil {
+			return nil, nil, nil, fmt.Errorf("read %s: %w", file, readErr)
+		}
+		var overlay yaml.Node
+		if decodeErr := yaml.Unmarshal(data, &overlay); decodeErr != nil {
+			return nil, nil, nil, fmt.Errorf("%s: %w", file, decodeErr)
+		}
+		if len(overlay.Content) == 0 {
+			return nil, nil, nil, fmt.Errorf("%s: empty YAML document", file)
+		}
+		if validateErr := validateYAMLNode(overlay.Content[0], file, ""); validateErr != nil {
+			return nil, nil, nil, validateErr
+		}
+		if yamlNodeHasSecrets(overlay.Content[0]) && info.Mode().Perm()&0077 != 0 {
+			return nil, nil, nil, fmt.Errorf("%s contains secrets and must have mode 0600", file)
+		}
+		var fileOverrides []string
+		collectYAMLOverrides(merged.Content[0], overlay.Content[0], "", &fileOverrides)
+		for _, key := range fileOverrides {
+			overriddenBy[key] = filepath.Base(file)
+		}
+		mergeYAMLNodes(merged.Content[0], overlay.Content[0])
+		loaded = append(loaded, file)
+	}
+	encoded, err := yaml.Marshal(&merged)
+	keys := make([]string, 0, len(overriddenBy))
+	for key := range overriddenBy {
+		keys = append(keys, key+" ("+overriddenBy[key]+")")
+	}
+	sort.Strings(keys)
+	return encoded, loaded, keys, err
+}
+
+func yamlNodeHasSecrets(node *yaml.Node) bool {
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			key := strings.ToLower(node.Content[i].Value)
+			if strings.Contains(key, "token") || strings.Contains(key, "secret") || strings.Contains(key, "password") || strings.Contains(key, "private_key") || strings.Contains(key, "encryption_key") || strings.Contains(key, "api_key") {
+				return true
+			}
+			if yamlNodeHasSecrets(node.Content[i+1]) {
+				return true
+			}
+		}
+	}
+	for _, child := range node.Content {
+		if child.Kind == yaml.SequenceNode && yamlNodeHasSecrets(child) {
+			return true
+		}
+		if child.Kind == yaml.MappingNode && node.Kind != yaml.MappingNode && yamlNodeHasSecrets(child) {
+			return true
+		}
+	}
+	return false
+}
+
+func validateYAMLNode(node *yaml.Node, file, key string) error {
+	if node.Tag == "!!null" {
+		return fmt.Errorf("%s:%d: explicit null is not allowed at %s", file, node.Line, key)
+	}
+	if node.Kind == yaml.MappingNode {
+		seen := make(map[string]bool, len(node.Content)/2)
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			name := node.Content[i].Value
+			childKey := name
+			if key != "" {
+				childKey = key + "." + name
+			}
+			if seen[name] {
+				return fmt.Errorf("%s:%d: duplicate key %s", file, node.Content[i].Line, childKey)
+			}
+			seen[name] = true
+			if err := validateYAMLNode(node.Content[i+1], file, childKey); err != nil {
+				return err
+			}
+		}
+	}
+	for _, child := range node.Content {
+		if child.Kind != yaml.MappingNode && child.Kind != yaml.SequenceNode {
+			continue
+		}
+		if err := validateYAMLNode(child, file, key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mergeYAMLNodes(base, overlay *yaml.Node) {
+	if base.Kind != yaml.MappingNode || overlay.Kind != yaml.MappingNode {
+		*base = *overlay
+		return
+	}
+	for i := 0; i+1 < len(overlay.Content); i += 2 {
+		key, value := overlay.Content[i], overlay.Content[i+1]
+		found := -1
+		for j := 0; j+1 < len(base.Content); j += 2 {
+			if base.Content[j].Value == key.Value {
+				found = j + 1
+				break
+			}
+		}
+		if found < 0 {
+			base.Content = append(base.Content, key, value)
+		} else if base.Content[found].Kind == yaml.MappingNode && value.Kind == yaml.MappingNode {
+			mergeYAMLNodes(base.Content[found], value)
+		} else {
+			base.Content[found] = value
+		}
+	}
+}
+
+func collectYAMLOverrides(base, overlay *yaml.Node, prefix string, output *[]string) {
+	if base.Kind != yaml.MappingNode || overlay.Kind != yaml.MappingNode {
+		return
+	}
+	for i := 0; i+1 < len(overlay.Content); i += 2 {
+		key, value := overlay.Content[i], overlay.Content[i+1]
+		path := key.Value
+		if prefix != "" {
+			path = prefix + "." + path
+		}
+		for j := 0; j+1 < len(base.Content); j += 2 {
+			if base.Content[j].Value == key.Value {
+				if base.Content[j+1].Kind == yaml.MappingNode && value.Kind == yaml.MappingNode {
+					collectYAMLOverrides(base.Content[j+1], value, path, output)
+				} else {
+					*output = append(*output, path)
+				}
+				break
+			}
+		}
+	}
+}
+
 // validateConfig validates all config values, replacing invalid with defaults per AI.md PART 12
 // Rule: If config setting is invalid, warn and replace with default. Never fail startup.
 func validateConfig(cfg *AppConfig) {
@@ -2221,6 +2436,10 @@ func validateConfig(cfg *AppConfig) {
 		cfg.Server.Tracking = defaults.Server.Tracking
 	}
 	validateContactCaptcha(&cfg.Server.Pages.Contact, defaults.Server.Pages.Contact)
+	if cfg.Server.SEO.Feed.MaxItems < 1 || cfg.Server.SEO.Feed.MaxItems > 200 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid seo.feed.max_items %d, using default %d\n", cfg.Server.SEO.Feed.MaxItems, defaults.Server.SEO.Feed.MaxItems)
+		cfg.Server.SEO.Feed.MaxItems = defaults.Server.SEO.Feed.MaxItems
+	}
 
 	// Validate port (must be valid or use random per PART 8/12)
 	if cfg.Server.Port != "" {
@@ -2495,9 +2714,6 @@ func SaveAppConfig(cfg *AppConfig, path string) (saveErr error) {
 	// Write atomically with the mode required by the current execution mode.
 	// server.yml contains operator tokens, encryption keys, and SMTP credentials.
 	mode := os.FileMode(0600)
-	if os.Geteuid() == 0 {
-		mode = 0644
-	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary config file: %w", err)
@@ -2745,27 +2961,21 @@ type ReloadCallback func(*AppConfig)
 
 // ConfigWatcher watches for config file changes
 type ConfigWatcher struct {
-	configPath string
-	appConfig  *AppConfig
-	callbacks  []ReloadCallback
-	stopChan   chan struct{}
-	lastMod    int64
+	configPath      string
+	appConfig       *AppConfig
+	callbacks       []ReloadCallback
+	stopChan        chan struct{}
+	lastFingerprint [32]byte
 }
 
 // NewWatcher creates a new config watcher
 func NewWatcher(configPath string, appConfig *AppConfig) *ConfigWatcher {
-	info, _ := os.Stat(configPath)
-	var lastMod int64
-	if info != nil {
-		lastMod = info.ModTime().UnixNano()
-	}
-
 	return &ConfigWatcher{
-		configPath: configPath,
-		appConfig:  appConfig,
-		callbacks:  make([]ReloadCallback, 0),
-		stopChan:   make(chan struct{}),
-		lastMod:    lastMod,
+		configPath:      configPath,
+		appConfig:       appConfig,
+		callbacks:       make([]ReloadCallback, 0),
+		stopChan:        make(chan struct{}),
+		lastFingerprint: configFilesFingerprint(configPath),
 	}
 }
 
@@ -2794,14 +3004,9 @@ func (w *ConfigWatcher) watch() {
 		case <-w.stopChan:
 			return
 		case <-ticker.C:
-			info, err := os.Stat(w.configPath)
-			if err != nil {
-				continue
-			}
-
-			modTime := info.ModTime().UnixNano()
-			if modTime > w.lastMod {
-				w.lastMod = modTime
+			fingerprint := configFilesFingerprint(w.configPath)
+			if fingerprint != w.lastFingerprint {
+				w.lastFingerprint = fingerprint
 				w.reload()
 			}
 		}
@@ -2810,12 +3015,11 @@ func (w *ConfigWatcher) watch() {
 
 // reload reloads the configuration and notifies callbacks
 func (w *ConfigWatcher) reload() {
-	data, err := os.ReadFile(w.configPath)
+	data, dropins, overrides, err := loadMergedConfig(w.configPath)
 	if err != nil {
 		fmt.Printf("⚠️  Failed to read config for reload: %v\n", err)
 		return
 	}
-
 	// Start from defaults and overlay the file; unknown or legacy keys are
 	// ignored rather than fatal (AI.md PART 5 never declares them errors).
 	// A genuine parse failure keeps the currently loaded config.
@@ -2828,6 +3032,14 @@ func (w *ConfigWatcher) reload() {
 
 	// Invalid values are warned about and replaced with defaults, same as startup
 	validateConfig(newCfg)
+	if driver := os.Getenv("DATABASE_DRIVER"); driver != "" {
+		newCfg.Server.Database.Driver = driver
+	}
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		newCfg.Server.Database.URL = dbURL
+	}
+	applyEnvOverrides(newCfg)
+	logConfigSources(dropins, overrides, newCfg.Server.Mode == "debug")
 
 	// Update the shared config — all settings that can live-reload without restart.
 	// Port and Address changes are intentionally excluded: they require a listener
@@ -2841,37 +3053,7 @@ func (w *ConfigWatcher) reload() {
 	}
 	pendingRestart := len(restartReasons) > 0
 
-	w.appConfig.Server.Branding = newCfg.Server.Branding
-	w.appConfig.Server.Token = newCfg.Server.Token
-	w.appConfig.Server.Contact = newCfg.Server.Contact
-	w.appConfig.Server.CORS = newCfg.Server.CORS
-	w.appConfig.Server.BaseURL = newCfg.Server.BaseURL
-	w.appConfig.Server.RateLimit = newCfg.Server.RateLimit
-	w.appConfig.Server.Notifications = newCfg.Server.Notifications
-	w.appConfig.Server.Schedule = newCfg.Server.Schedule
-	w.appConfig.Server.SSL = newCfg.Server.SSL
-	w.appConfig.Server.Metrics = newCfg.Server.Metrics
-	w.appConfig.Server.Logs = newCfg.Server.Logs
-	w.appConfig.Server.GeoIP = newCfg.Server.GeoIP
-	w.appConfig.Server.Cache = newCfg.Server.Cache
-	w.appConfig.Server.Session = newCfg.Server.Session
-	w.appConfig.Server.SecurityHeaders = newCfg.Server.SecurityHeaders
-	w.appConfig.Server.Compression = newCfg.Server.Compression
-	w.appConfig.Server.Limits = newCfg.Server.Limits
-	w.appConfig.Server.TrustedProxies = newCfg.Server.TrustedProxies
-	w.appConfig.Server.Security = newCfg.Server.Security
-	w.appConfig.Server.SEO = newCfg.Server.SEO
-	w.appConfig.Server.Compliance = newCfg.Server.Compliance
-	w.appConfig.Server.Backup = newCfg.Server.Backup
-	w.appConfig.Server.Tor = newCfg.Server.Tor
-	w.appConfig.Server.Healthz = newCfg.Server.Healthz
-	w.appConfig.Server.FQDN = newCfg.Server.FQDN
-	w.appConfig.Server.Mode = newCfg.Server.Mode
-	w.appConfig.Server.Update = newCfg.Server.Update
-	w.appConfig.Server.Privacy = newCfg.Server.Privacy
-	w.appConfig.Web = newCfg.Web
-	w.appConfig.Search = newCfg.Search
-
+	*w.appConfig = *newCfg
 	w.appConfig.PendingRestart = pendingRestart
 	w.appConfig.RestartReasons = restartReasons
 
@@ -2884,6 +3066,59 @@ func (w *ConfigWatcher) reload() {
 	// Notify callbacks
 	for _, callback := range w.callbacks {
 		callback(w.appConfig)
+	}
+}
+
+func configFilesFingerprint(configPath string) [32]byte {
+	var content bytes.Buffer
+	paths := []string{configPath}
+	dropDir := filepath.Join(filepath.Dir(configPath), "yaml.d")
+	if info, statErr := os.Lstat(dropDir); statErr == nil {
+		fmt.Fprintf(&content, "dir:%s:%o:%d\x00", dropDir, info.Mode(), info.ModTime().UnixNano())
+	} else {
+		content.WriteString("dir-missing\x00")
+	}
+	entries, err := os.ReadDir(dropDir)
+	if err == nil {
+		sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+		for _, entry := range entries {
+			name := entry.Name()
+			if strings.HasPrefix(name, ".") || !(strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")) {
+				continue
+			}
+			paths = append(paths, filepath.Join(dropDir, name))
+		}
+	}
+	for _, path := range paths {
+		if info, statErr := os.Lstat(path); statErr == nil {
+			fmt.Fprintf(&content, "%s:%o:%d\x00", path, info.Mode(), info.ModTime().UnixNano())
+			if info.Mode()&os.ModeSymlink != 0 {
+				if targetInfo, targetErr := os.Stat(path); targetErr == nil {
+					fmt.Fprintf(&content, "target:%o:%d\x00", targetInfo.Mode(), targetInfo.ModTime().UnixNano())
+				}
+			}
+		}
+		data, readErr := os.ReadFile(path)
+		content.WriteString(path)
+		content.WriteByte(0)
+		if readErr != nil {
+			content.WriteString(readErr.Error())
+		} else {
+			content.Write(data)
+		}
+		content.WriteByte(0)
+	}
+	return sha256.Sum256(content.Bytes())
+}
+
+func logConfigSources(dropins, overrides []string, debug bool) {
+	for _, file := range dropins {
+		log.Printf("INFO config drop-in loaded: %s", file)
+	}
+	if debug {
+		for _, key := range overrides {
+			log.Printf("DEBUG config override: %s", key)
+		}
 	}
 }
 

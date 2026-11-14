@@ -25,13 +25,17 @@
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
             <input type="hidden" name="security_id" value="{{.SecurityID}}">
             <div class="form-group">
+                <label class="form-label" for="name">{{ t "contact.label_name" }}</label>
+                <input class="form-input" type="text" id="name" name="name" required maxlength="100">
+            </div>
+            <div class="form-group">
                 <label class="form-label" for="email">{{ t "contact.label_email" }}</label>
-                <input class="form-input" aria-describedby="email-error" aria-invalid="false" type="email" id="email" name="email" required placeholder="{{ t "contact.placeholder_email" }}">
+                <input class="form-input" aria-describedby="email-error" aria-invalid="false" type="email" id="email" name="email" required maxlength="254" placeholder="{{ t "contact.placeholder_email" }}">
                 <p id="email-error" class="field-error" role="alert" hidden></p>
             </div>
             <div class="form-group">
                 <label class="form-label" for="researcher_gpg">{{ t "contact.label_researcher_gpg" }}</label>
-                <textarea class="form-input" id="researcher_gpg" name="researcher_gpg" rows="3" placeholder="{{ t "contact.placeholder_researcher_gpg" }}"></textarea>
+                <textarea class="form-input" id="researcher_gpg" name="researcher_gpg" rows="3" maxlength="16384" placeholder="{{ t "contact.placeholder_researcher_gpg" }}"></textarea>
             </div>
             <div class="form-group">
                 <label class="form-label" for="component">{{ t "contact.label_component" }}</label>
@@ -43,11 +47,11 @@
                     <option value="other">{{ t "contact.option_other" }}</option>
                 </select>
                 <p id="component-error" class="field-error" role="alert" hidden></p>
-                <input class="form-input" type="text" id="component_other" name="component_other" placeholder="{{ t "contact.placeholder_component_other" }}">
+                <input class="form-input" type="text" id="component_other" name="component_other" maxlength="255" placeholder="{{ t "contact.placeholder_component_other" }}">
             </div>
             <div class="form-group">
                 <label class="form-label" for="endpoint">{{ t "contact.label_endpoint" }}</label>
-                <input class="form-input" type="text" id="endpoint" name="endpoint" placeholder="/api/v1/search">
+                <input class="form-input" type="text" id="endpoint" name="endpoint" maxlength="2048" placeholder="/api/v1/search">
             </div>
             <div class="form-group">
                 <label class="form-label" for="severity">{{ t "contact.label_severity" }}</label>
@@ -62,22 +66,22 @@
             </div>
             <div class="form-group">
                 <label class="form-label" for="summary">{{ t "contact.label_summary" }}</label>
-                <input class="form-input" aria-describedby="summary-error" aria-invalid="false" type="text" id="summary" name="summary" required placeholder="{{ t "contact.placeholder_summary" }}">
+                <input class="form-input" aria-describedby="summary-error" aria-invalid="false" type="text" id="summary" name="summary" required maxlength="200" placeholder="{{ t "contact.placeholder_summary" }}">
                 <p id="summary-error" class="field-error" role="alert" hidden></p>
             </div>
             <div class="form-group">
                 <label class="form-label" for="steps">{{ t "contact.label_steps" }}</label>
-                <textarea class="form-input" aria-describedby="steps-error" aria-invalid="false" id="steps" name="steps" required rows="5"></textarea>
+                <textarea class="form-input" aria-describedby="steps-error" aria-invalid="false" id="steps" name="steps" required maxlength="10000" rows="5"></textarea>
                 <p id="steps-error" class="field-error" role="alert" hidden></p>
             </div>
             <div class="form-group">
                 <label class="form-label" for="impact">{{ t "contact.label_impact" }}</label>
-                <textarea class="form-input" aria-describedby="impact-error" aria-invalid="false" id="impact" name="impact" required rows="4"></textarea>
+                <textarea class="form-input" aria-describedby="impact-error" aria-invalid="false" id="impact" name="impact" required maxlength="5000" rows="4"></textarea>
                 <p id="impact-error" class="field-error" role="alert" hidden></p>
             </div>
             <div class="form-group">
                 <label class="form-label" for="suggested_fix">{{ t "contact.label_suggested_fix" }}</label>
-                <textarea class="form-input" id="suggested_fix" name="suggested_fix" rows="3"></textarea>
+                <textarea class="form-input" id="suggested_fix" name="suggested_fix" maxlength="5000" rows="3"></textarea>
             </div>
             <div class="form-group">
                 <label class="form-label"><input type="checkbox" name="cve_requested" value="1"> {{ t "contact.label_cve" }}</label>
@@ -97,8 +101,9 @@
                 <p id="credit_preference-error" class="field-error" role="alert" hidden></p>
             </div>
             <div class="form-group">
-                <label class="form-label" for="credit_name">{{ t "contact.label_credit_name" }}</label>
-                <input class="form-input" type="text" id="credit_name" name="credit_name">
+                <label class="form-label" for="credit_handle">{{ t "contact.label_credit_name" }}</label>
+                <input class="form-input" type="text" id="credit_handle" name="credit_handle" maxlength="100">
+                <p>{{ t "contact.credit_handle_hint" }}</p>
             </div>
             <div class="form-group">
                 <label class="form-label"><input type="checkbox" name="disclosure_agreement" value="1" required> {{ t "contact.label_disclosure_agreement" }}</label>
@@ -112,9 +117,23 @@
             {{ else if eq .CaptchaType "recaptcha" }}
             <div class="g-recaptcha" data-sitekey="{{ .CaptchaSiteKey }}"></div>
             <script async defer src="https://www.google.com/recaptcha/api.js"></script>
+            <noscript>
+                <div class="form-group">
+                    <label class="form-label" for="captcha_fallback_answer">{{ t "contact.captcha_question" }}: {{ .CaptchaFallbackQuestion }}</label>
+                    <input class="form-input" type="hidden" name="captcha_id" value="{{ .CaptchaFallbackID }}">
+                    <input class="form-input" type="number" id="captcha_fallback_answer" name="captcha_answer" required inputmode="numeric">
+                </div>
+            </noscript>
             {{ else if eq .CaptchaType "hcaptcha" }}
             <div class="h-captcha" data-sitekey="{{ .CaptchaSiteKey }}"></div>
             <script async defer src="https://js.hcaptcha.com/1/api.js"></script>
+            <noscript>
+                <div class="form-group">
+                    <label class="form-label" for="captcha_fallback_answer">{{ t "contact.captcha_question" }}: {{ .CaptchaFallbackQuestion }}</label>
+                    <input class="form-input" type="hidden" name="captcha_id" value="{{ .CaptchaFallbackID }}">
+                    <input class="form-input" type="number" id="captcha_fallback_answer" name="captcha_answer" required inputmode="numeric">
+                </div>
+            </noscript>
             {{ end }}
             <button type="submit" class="search-button" data-loading-text="{{ t "action.submitting" }}">{{ t "contact.submit_security_report" }}</button>
         </form>
@@ -129,7 +148,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label" for="name">{{ t "contact.label_name" }}</label>
-                <input class="form-input" type="text" id="name" name="name" required maxlength="254">
+                <input class="form-input" type="text" id="name" name="name" required maxlength="100">
             </div>
             <div class="form-group">
                 <label class="form-label" for="email">{{ t "contact.label_email" }}</label>
@@ -137,12 +156,12 @@
             </div>
             <div class="form-group">
                 <label class="form-label" for="subject">{{ t "contact.label_subject" }}</label>
-                <input class="form-input" aria-describedby="subject-error" aria-invalid="false" type="text" id="subject" name="subject" required placeholder="{{ t "contact.placeholder_subject" }}">
+                <input class="form-input" aria-describedby="subject-error" aria-invalid="false" type="text" id="subject" name="subject" required maxlength="200" placeholder="{{ t "contact.placeholder_subject" }}">
                 <p id="subject-error" class="field-error" role="alert" hidden></p>
             </div>
             <div class="form-group">
                 <label class="form-label" for="message">{{ t "contact.label_message" }}</label>
-                <textarea class="form-input" aria-describedby="message-error" aria-invalid="false" id="message" name="message" required rows="5" placeholder="{{ t "contact.placeholder_message" }}"></textarea>
+                <textarea class="form-input" aria-describedby="message-error" aria-invalid="false" id="message" name="message" required maxlength="5000" rows="5" placeholder="{{ t "contact.placeholder_message" }}"></textarea>
                 <p id="message-error" class="field-error" role="alert" hidden></p>
             </div>
             {{ if eq .CaptchaType "simple" }}
@@ -154,9 +173,23 @@
             {{ else if eq .CaptchaType "recaptcha" }}
             <div class="g-recaptcha" data-sitekey="{{ .CaptchaSiteKey }}"></div>
             <script async defer src="https://www.google.com/recaptcha/api.js"></script>
+            <noscript>
+                <div class="form-group">
+                    <label class="form-label" for="captcha_fallback_answer">{{ t "contact.captcha_question" }}: {{ .CaptchaFallbackQuestion }}</label>
+                    <input class="form-input" type="hidden" name="captcha_id" value="{{ .CaptchaFallbackID }}">
+                    <input class="form-input" type="number" id="captcha_fallback_answer" name="captcha_answer" required inputmode="numeric">
+                </div>
+            </noscript>
             {{ else if eq .CaptchaType "hcaptcha" }}
             <div class="h-captcha" data-sitekey="{{ .CaptchaSiteKey }}"></div>
             <script async defer src="https://js.hcaptcha.com/1/api.js"></script>
+            <noscript>
+                <div class="form-group">
+                    <label class="form-label" for="captcha_fallback_answer">{{ t "contact.captcha_question" }}: {{ .CaptchaFallbackQuestion }}</label>
+                    <input class="form-input" type="hidden" name="captcha_id" value="{{ .CaptchaFallbackID }}">
+                    <input class="form-input" type="number" id="captcha_fallback_answer" name="captcha_answer" required inputmode="numeric">
+                </div>
+            </noscript>
             {{ end }}
             <button type="submit" class="search-button" data-loading-text="{{ t "action.sending" }}">{{ t "contact.submit_message" }}</button>
         </form>

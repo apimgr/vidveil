@@ -40,8 +40,8 @@ func TestDefaultAppConfig(t *testing.T) {
 	if cfg.Server.Branding.RefreshInterval != "24h" {
 		t.Errorf("Expected daily branding refresh interval, got %q", cfg.Server.Branding.RefreshInterval)
 	}
-	if !cfg.Server.SEO.Sitemap.Enabled || cfg.Server.SEO.Sitemap.MaxURLs != 50000 || cfg.Server.SEO.Sitemap.IncludeImages {
-		t.Errorf("Expected sitemap defaults enabled/50000/no images, got %+v", cfg.Server.SEO.Sitemap)
+	if cfg.Server.SEO.Sitemap.MaxURLs != 50000 || cfg.Server.SEO.Sitemap.IncludeImages {
+		t.Errorf("Expected always-on sitemap defaults 50000/no images, got %+v", cfg.Server.SEO.Sitemap)
 	}
 
 	if cfg.Server.Address != "[::]" {
@@ -176,9 +176,6 @@ func TestSaveAppConfigPermissions(t *testing.T) {
 		t.Fatalf("stat config: %v", err)
 	}
 	want := os.FileMode(0600)
-	if os.Geteuid() == 0 {
-		want = 0644
-	}
 	if got := info.Mode().Perm(); got != want {
 		t.Fatalf("config permissions = %04o, want %04o", got, want)
 	}
@@ -649,19 +646,19 @@ func TestGetFQDNWithoutEnv(t *testing.T) {
 	}
 }
 
-// TestNewWatcherNonexistentPath verifies that NewWatcher succeeds and sets lastMod=0 for a missing file.
+// TestNewWatcherNonexistentPath verifies that NewWatcher fingerprints a missing file.
 func TestNewWatcherNonexistentPath(t *testing.T) {
 	cfg := DefaultAppConfig()
 	w := NewWatcher("/nonexistent/path/that/does/not/exist.yml", cfg)
 	if w == nil {
 		t.Fatal("NewWatcher returned nil for nonexistent path")
 	}
-	if w.lastMod != 0 {
-		t.Errorf("NewWatcher nonexistent path: lastMod = %d, want 0", w.lastMod)
+	if w.lastFingerprint != configFilesFingerprint("/nonexistent/path/that/does/not/exist.yml") {
+		t.Errorf("NewWatcher nonexistent path did not store the current fingerprint")
 	}
 }
 
-// TestNewWatcherExistingFile verifies that NewWatcher captures the correct lastMod for an existing file.
+// TestNewWatcherExistingFile verifies that NewWatcher captures the current file fingerprint.
 func TestNewWatcherExistingFile(t *testing.T) {
 	tmp, err := os.CreateTemp(t.TempDir(), "watcher-*.yml")
 	if err != nil {
@@ -671,19 +668,13 @@ func TestNewWatcherExistingFile(t *testing.T) {
 		t.Fatalf("close temporary config file: %v", err)
 	}
 
-	info, err := os.Stat(tmp.Name())
-	if err != nil {
-		t.Fatalf("failed to stat temp file: %v", err)
-	}
-	wantMod := info.ModTime().UnixNano()
-
 	cfg := DefaultAppConfig()
 	w := NewWatcher(tmp.Name(), cfg)
 	if w == nil {
 		t.Fatal("NewWatcher returned nil for existing file")
 	}
-	if w.lastMod != wantMod {
-		t.Errorf("NewWatcher existing file: lastMod = %d, want %d", w.lastMod, wantMod)
+	if w.lastFingerprint != configFilesFingerprint(tmp.Name()) {
+		t.Errorf("NewWatcher existing file did not store the current fingerprint")
 	}
 }
 

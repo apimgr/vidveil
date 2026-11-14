@@ -75,6 +75,9 @@ func (h *ServerHandler) newSimpleCaptcha(r *http.Request) (string, string) {
 }
 
 func (h *ServerHandler) verifyCaptcha(r *http.Request) bool {
+	if r.FormValue("captcha_id") != "" && r.FormValue("captcha_answer") != "" {
+		return h.verifySimpleCaptcha(r)
+	}
 	switch h.captchaType(r) {
 	case "simple":
 		return h.verifySimpleCaptcha(r)
@@ -160,6 +163,9 @@ func (h *ServerHandler) captchaTemplateData(r *http.Request) map[string]interfac
 		data["CaptchaQuestion"] = question
 	case "recaptcha", "hcaptcha":
 		data["CaptchaSiteKey"] = h.appConfig.Server.Pages.Contact.CaptchaSiteKey
+		id, question := h.newSimpleCaptcha(r)
+		data["CaptchaFallbackID"] = id
+		data["CaptchaFallbackQuestion"] = question
 	}
 	return data
 }

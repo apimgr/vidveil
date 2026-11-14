@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 
@@ -635,6 +636,56 @@ func resolveSecurityComponent(r *http.Request) string {
 	return component
 }
 
+func securityContactLengthError(r *http.Request) string {
+	limits := []struct {
+		field string
+		max   int
+	}{{"name", 100}, {"email", 254}, {"component_other", 255}, {"endpoint", 2048}, {"summary", 200}, {"steps", 10000}, {"impact", 5000}, {"suggested_fix", 5000}, {"credit_handle", 100}}
+	for _, limit := range limits {
+		if runeLength(strings.TrimSpace(r.FormValue(limit.field))) > limit.max {
+			return limit.field
+		}
+	}
+	gpg := strings.TrimSpace(r.FormValue("researcher_gpg"))
+	maxGPG := 16384
+	if strings.HasPrefix(strings.ToLower(gpg), "https://") {
+		maxGPG = 2048
+	}
+	if runeLength(gpg) > maxGPG {
+		return "researcher_gpg"
+	}
+	if strings.TrimSpace(r.FormValue("credit_preference")) == "handle" && strings.TrimSpace(r.FormValue("credit_handle")) == "" {
+		return "credit_handle"
+	}
+	return ""
+}
+
+func securityContactValidationError(r *http.Request) string {
+	if _, err := mail.ParseAddress(strings.TrimSpace(r.FormValue("email"))); err != nil {
+		return "email"
+	}
+	if value := strings.ToLower(strings.TrimSpace(r.FormValue("severity"))); value != "critical" && value != "high" && value != "medium" && value != "low" && value != "informational" {
+		return "severity"
+	}
+	switch strings.TrimSpace(r.FormValue("credit_preference")) {
+	case "real_name", "handle", "anonymous", "none":
+	default:
+		return "credit_preference"
+	}
+	return ""
+}
+
+func securityCreditName(preference, researcherName, handle string) string {
+	switch preference {
+	case "handle":
+		return strings.TrimSpace(handle)
+	case "real_name":
+		return strings.TrimSpace(researcherName)
+	default:
+		return ""
+	}
+}
+
 // logSecurityEvent writes to security.log per AI.md PART 11 when a logger is
 // wired; silently no-ops otherwise (e.g. in tests that don't set one up).
 func (h *ServerHandler) logSecurityEvent(event string, r *http.Request, details map[string]interface{}) {
@@ -660,9 +711,20 @@ func (h *ServerHandler) publicAbuseEmail() string {
 	return h.appConfig.Server.Contact.General.Email
 }
 
-// maxContactFieldLen bounds each contact-form field so a submission cannot be
-// used to flood downstream notification transports.
-const maxContactFieldLen = 8000
+func runeLength(value string) int { return utf8.RuneCountInString(value) }
+
+func contactFieldLengthError(name, email, subject, message string) string {
+	for _, field := range []struct {
+		name  string
+		value string
+		max   int
+	}{{"name", name, 100}, {"email", email, 254}, {"subject", subject, 200}, {"message", message, 5000}} {
+		if runeLength(strings.TrimSpace(field.value)) > field.max {
+			return field.name
+		}
+	}
+	return ""
+}
 
 // handleContactSubmit handles a non-security /server/contact submission and
 // dispatches it to the general contact role per AI.md PART 12.
@@ -697,8 +759,8 @@ func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Reque
 		h.renderContactError(w, r, "Please provide a valid email address.")
 		return
 	}
-	if len(name) > maxContactFieldLen || len(email) > maxContactFieldLen || len(subject) > maxContactFieldLen || len(message) > maxContactFieldLen {
-		h.renderContactError(w, r, "Your message is too long. Please shorten it and try again.")
+	if field := contactFieldLengthError(name, email, subject, message); field != "" {
+		h.renderContactError(w, r, "The "+field+" field is too long. Please shorten it and try again.")
 		return
 	}
 
@@ -763,6 +825,22 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		})
 		return
 	}
+	if field := securityContactLengthError(r); field != "" {
+		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
+			"SecurityMode": true, "SecurityID": securityID,
+			"DefaultDisclosureDays": h.defaultDisclosureDays(), "Components": h.securityComponentOptions(),
+			"Message": "A field is too long: " + field, "MessageType": "error",
+		})
+		return
+	}
+	if field := securityContactValidationError(r); field != "" {
+		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
+			"SecurityMode": true, "SecurityID": securityID,
+			"DefaultDisclosureDays": h.defaultDisclosureDays(), "Components": h.securityComponentOptions(),
+			"Message": "Invalid value for " + field + ".", "MessageType": "error",
+		})
+		return
+	}
 	if !h.verifyCaptcha(r) {
 		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 			"SecurityMode": true,
@@ -774,14 +852,15 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		return
 	}
 
-	email := r.FormValue("email")
+	name := strings.TrimSpace(r.FormValue("name"))
+	email := strings.TrimSpace(r.FormValue("email"))
 	component := resolveSecurityComponent(r)
 	severity := r.FormValue("severity")
 	summary := r.FormValue("summary")
 	steps := r.FormValue("steps")
 	impact := r.FormValue("impact")
 	creditPref := r.FormValue("credit_preference")
-	if email == "" || component == "" || severity == "" || summary == "" ||
+	if name == "" || email == "" || component == "" || severity == "" || summary == "" ||
 		steps == "" || impact == "" || creditPref == "" || r.FormValue("disclosure_agreement") == "" {
 		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 			"SecurityMode":          true,
@@ -799,7 +878,7 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		disclosureDays = v
 	}
 
-	body := "Steps to reproduce:\n" + steps + "\n\nImpact:\n" + impact
+	body := "Researcher name: " + name + "\nResearcher email: " + email + "\n\nSteps to reproduce:\n" + steps + "\n\nImpact:\n" + impact
 	if fix := r.FormValue("suggested_fix"); fix != "" {
 		body += "\n\nSuggested fix:\n" + fix
 	}
@@ -815,7 +894,7 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		CVERequested:             r.FormValue("cve_requested") != "",
 		DisclosureWindowDays:     disclosureDays,
 		CreditPreference:         creditPref,
-		CreditName:               r.FormValue("credit_name"),
+		CreditName:               securityCreditName(creditPref, name, r.FormValue("credit_handle")),
 		AppVersion:               version.GetVersion(),
 		CommitHash:               version.GetVersionInfo()["commit"],
 	})
@@ -1170,6 +1249,60 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 // APIContact handles POST {api_version}/server/contact
 // Per AI.md PART 9: error codes must use standard constants from response.go.
 func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		w.Header().Set("Cache-Control", "no-store")
+		securityMode := false
+		if id := h.securityIDFromRequest(r); id != "" {
+			securityMode = h.validSecurityID(r, id)
+		}
+		if !securityMode && !h.appConfig.Server.Pages.Contact.Enabled {
+			SendError(w, CodeNotFound, MsgNotFound)
+			return
+		}
+		fields := []map[string]interface{}{
+			{"name": "name", "type": "text", "required": true, "max_length": 100},
+			{"name": "email", "type": "email", "required": true, "max_length": 254},
+			{"name": "subject", "type": "text", "required": true, "max_length": 200},
+			{"name": "message", "type": "textarea", "required": true, "max_length": 5000},
+			{"name": "captcha", "type": "captcha", "required": true, "max_length": nil},
+		}
+		if securityMode {
+			fields = []map[string]interface{}{
+				{"name": "name", "type": "text", "required": true, "max_length": 100},
+				{"name": "email", "type": "email", "required": true, "max_length": 254},
+				{"name": "researcher_gpg", "type": "text_or_url", "required": false, "max_length": 16384, "max_length_when": []map[string]interface{}{{"prefix": "https://", "max_length": 2048}}},
+				{"name": "component", "type": "select_or_text", "required": true, "max_length": 255},
+				{"name": "endpoint", "type": "text", "required": false, "max_length": 2048},
+				{"name": "severity", "type": "enum", "required": true, "max_length": nil},
+				{"name": "summary", "type": "text", "required": true, "max_length": 200},
+				{"name": "steps", "type": "textarea", "required": true, "max_length": 10000},
+				{"name": "impact", "type": "textarea", "required": true, "max_length": 5000},
+				{"name": "suggested_fix", "type": "textarea", "required": false, "max_length": 5000},
+				{"name": "cve_requested", "type": "checkbox", "required": false, "max_length": nil},
+				{"name": "disclosure_days", "type": "number", "required": false, "max_length": nil},
+				{"name": "credit_preference", "type": "enum", "required": true, "max_length": nil},
+				{"name": "credit_handle", "type": "text", "required": false, "required_when": map[string]string{"field": "credit_preference", "equals": "handle"}, "max_length": 100},
+				{"name": "disclosure_agreement", "type": "checkbox", "required": true, "max_length": nil},
+				{"name": "captcha", "type": "captcha", "required": true, "max_length": nil},
+			}
+		}
+		captcha := map[string]interface{}{"provider": h.captchaType(r)}
+		switch h.captchaType(r) {
+		case "simple":
+			challengeID, question := h.newSimpleCaptcha(r)
+			captcha["challenge_id"] = challengeID
+			captcha["question"] = question
+		case "recaptcha", "hcaptcha":
+			captcha["site_key"] = h.appConfig.Server.Pages.Contact.CaptchaSiteKey
+		}
+		WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "data": map[string]interface{}{
+			"fields":       fields,
+			"captcha":      captcha,
+			"security_url": urlvar.BuildURL(r, "/server/security"),
+			"abuse_email":  h.publicAbuseEmail(),
+		}})
+		return
+	}
 	if r.Method != http.MethodPost {
 		SendError(w, CodeMethodNotAllowed, MsgMethodNotAllowed)
 		return
@@ -1209,8 +1342,8 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 		SendError(w, CodeValidation, "A valid email address is required")
 		return
 	}
-	if len(name) > maxContactFieldLen || len(email) > maxContactFieldLen || len(subject) > maxContactFieldLen || len(message) > maxContactFieldLen {
-		SendError(w, CodeValidation, "Contact fields are too long")
+	if field := contactFieldLengthError(name, email, subject, message); field != "" {
+		SendError(w, CodeValidation, "The "+field+" field is too long")
 		return
 	}
 	if h.notifyDispatcher != nil {
@@ -1227,16 +1360,25 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 // apiSecurityReportSubmit implements the Submission Flow of AI.md PART 11
 // for POST /api/{api_version}/server/contact with a valid security_id.
 func (h *ServerHandler) apiSecurityReportSubmit(w http.ResponseWriter, r *http.Request, securityID string) {
-	email := r.FormValue("email")
+	if field := securityContactLengthError(r); field != "" {
+		SendError(w, CodeValidation, "Field is too long: "+field)
+		return
+	}
+	if field := securityContactValidationError(r); field != "" {
+		SendError(w, CodeValidation, "Invalid value for "+field)
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	email := strings.TrimSpace(r.FormValue("email"))
 	component := resolveSecurityComponent(r)
 	severity := r.FormValue("severity")
 	summary := r.FormValue("summary")
 	steps := r.FormValue("steps")
 	impact := r.FormValue("impact")
 	creditPref := r.FormValue("credit_preference")
-	if email == "" || component == "" || severity == "" || summary == "" ||
+	if name == "" || email == "" || component == "" || severity == "" || summary == "" ||
 		steps == "" || impact == "" || creditPref == "" || r.FormValue("disclosure_agreement") == "" {
-		SendError(w, CodeValidation, "email, component, severity, summary, steps, impact, credit_preference, and disclosure_agreement are required")
+		SendError(w, CodeValidation, "name, email, component, severity, summary, steps, impact, credit_preference, and disclosure_agreement are required")
 		return
 	}
 	if _, err := mail.ParseAddress(email); err != nil {
@@ -1249,7 +1391,7 @@ func (h *ServerHandler) apiSecurityReportSubmit(w http.ResponseWriter, r *http.R
 		disclosureDays = v
 	}
 
-	body := "Steps to reproduce:\n" + steps + "\n\nImpact:\n" + impact
+	body := "Researcher name: " + name + "\nResearcher email: " + email + "\n\nSteps to reproduce:\n" + steps + "\n\nImpact:\n" + impact
 	if fix := r.FormValue("suggested_fix"); fix != "" {
 		body += "\n\nSuggested fix:\n" + fix
 	}
@@ -1265,7 +1407,7 @@ func (h *ServerHandler) apiSecurityReportSubmit(w http.ResponseWriter, r *http.R
 		CVERequested:             r.FormValue("cve_requested") != "",
 		DisclosureWindowDays:     disclosureDays,
 		CreditPreference:         creditPref,
-		CreditName:               r.FormValue("credit_name"),
+		CreditName:               securityCreditName(creditPref, name, r.FormValue("credit_handle")),
 		AppVersion:               version.GetVersion(),
 		CommitHash:               version.GetVersionInfo()["commit"],
 	})
@@ -1300,6 +1442,8 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, "engines_health: GET %s/engines/health\n", apiBase)
 		_, _ = fmt.Fprintf(w, "thumbnail_proxy: GET %s/proxy/thumbnails?url={url}\n", apiBase)
 		_, _ = fmt.Fprintf(w, "health: GET %s/server/healthz\n", apiBase)
+		_, _ = fmt.Fprintf(w, "contact_form: GET %s/server/contact; POST %s/server/contact\n", apiBase, apiBase)
+		_, _ = fmt.Fprintf(w, "auth_check: GET %s/server/auth/check (Bearer token)\n", apiBase)
 		_, _ = fmt.Fprintf(w, "swagger: /server/docs/swagger\n")
 		_, _ = fmt.Fprintf(w, "graphql: /server/docs/graphql\n")
 		return
@@ -1333,6 +1477,17 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 				"endpoint":    apiBase + "/engines/health",
 				"method":      "GET",
 				"description": "Per-engine health/availability status",
+			},
+			"contact_form": map[string]interface{}{
+				"endpoint":    apiBase + "/server/contact",
+				"methods":     []string{"GET", "POST"},
+				"description": "GET describes the contact form; POST submits it with a required captcha",
+			},
+			"auth_check": map[string]interface{}{
+				"endpoint":      apiBase + "/server/auth/check",
+				"method":        "GET",
+				"authorization": "Bearer token required",
+				"description":   "Validate a token and return its kind without changing token usage metadata",
 			},
 			"thumbnail_proxy": map[string]interface{}{
 				"endpoint":    apiBase + "/proxy/thumbnails",

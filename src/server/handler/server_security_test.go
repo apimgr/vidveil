@@ -107,6 +107,7 @@ func TestServerHandler_ContactPage_SecurityMode_ShowsComponentDropdown(t *testin
 
 func securityFormValues(component, componentOther string) url.Values {
 	v := url.Values{}
+	v.Set("name", "Security Researcher")
 	v.Set("email", "researcher@example.com")
 	v.Set("component", component)
 	if componentOther != "" {
@@ -119,6 +120,29 @@ func securityFormValues(component, componentOther string) url.Values {
 	v.Set("credit_preference", "anonymous")
 	v.Set("disclosure_agreement", "1")
 	return v
+}
+
+func TestSecurityContactValidationRejectsInvalidEnumsAndEmail(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		field string
+		value string
+		want  string
+	}{
+		{name: "severity", field: "severity", value: "urgent", want: "severity"},
+		{name: "credit preference", field: "credit_preference", value: "public", want: "credit_preference"},
+		{name: "email", field: "email", value: "not-an-email", want: "email"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			form := securityFormValues("API", "")
+			form.Set(tc.field, tc.value)
+			request := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form.Encode()))
+			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			if got := securityContactValidationError(request); got != tc.want {
+				t.Errorf("securityContactValidationError() = %q, want %q", got, tc.want)
+			}
+		})
+	}
 }
 
 // handleSecurityReportSubmit accepts a dropdown-selected component value directly.

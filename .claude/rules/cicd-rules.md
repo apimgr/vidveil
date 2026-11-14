@@ -1,7 +1,7 @@
 # CI/CD Rules (PART 27)
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
-<!-- Rule summary checked against AI.md on 2026-10-31; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-14; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 

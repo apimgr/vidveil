@@ -224,6 +224,21 @@ func (c *APIClient) GetVersion() (*VersionResponse, error) {
 	return &resp, nil
 }
 
+// CheckAuth validates a configured bearer token without changing server state.
+func (c *APIClient) CheckAuth() (string, error) {
+	url := fmt.Sprintf("%s/server/auth/check", c.GetAPIBaseURL())
+	var response struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Kind string `json:"kind"`
+		} `json:"data"`
+	}
+	if err := c.get(url, &response); err != nil {
+		return "", err
+	}
+	return response.Data.Kind, nil
+}
+
 // Autodiscover gets server connection defaults from the non-versioned autodiscover endpoint.
 func (c *APIClient) Autodiscover() (*AutodiscoverResponse, error) {
 	return c.AutodiscoverChannel("")

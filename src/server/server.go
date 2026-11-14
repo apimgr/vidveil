@@ -1009,6 +1009,10 @@ func (s *Server) setupRoutes() {
 	}
 	s.router.Get("/robots.txt", h.RobotsTxt)
 	s.router.Get("/sitemap.xml", h.SitemapXML)
+	s.router.Get("/feed.xml", func(w http.ResponseWriter, r *http.Request) { h.PublicFeed(w, r, true) })
+	s.router.Head("/feed.xml", func(w http.ResponseWriter, r *http.Request) { h.PublicFeed(w, r, true) })
+	s.router.Get("/rss.xml", func(w http.ResponseWriter, r *http.Request) { h.PublicFeed(w, r, false) })
+	s.router.Head("/rss.xml", func(w http.ResponseWriter, r *http.Request) { h.PublicFeed(w, r, false) })
 	s.router.Get("/.well-known/security.txt", h.SecurityTxt)
 	s.router.Get("/.well-known/pgp-key.asc", h.PGPKeyAsc)
 	// AI.md PART 14: AI-agent discovery file, served at both paths.
@@ -1103,6 +1107,7 @@ func (s *Server) setupRoutes() {
 	// Unversioned aliases (same handler, no redirect): /api/swagger  /api/graphql
 	apiBase := s.appConfig.APIBasePath()
 	gql := graphql.NewHandler(s.appConfig, s.engineMgr)
+	gql.SetSearchRecorder(h.RecordRecentSearch)
 
 	// Swagger UI (HTML)
 	s.router.Get("/server/docs/swagger", swagger.Handler(s.appConfig))
@@ -1266,6 +1271,8 @@ func (s *Server) setupRoutes() {
 			r.Get("/about", server.APIAbout)
 			r.Get("/privacy", server.APIPrivacy)
 			r.Get("/dpo", server.APIDPO)
+			r.Get("/auth/check", s.APIAuthCheck)
+			r.Get("/contact", server.APIContact)
 			r.Post("/contact", server.APIContact)
 			r.With(s.requireOperatorToken).Post("/restore", server.APIRestore)
 			r.Get("/help", server.APIHelp)
@@ -1441,6 +1448,29 @@ func (s *Server) matchesOperatorToken(providedToken string) bool {
 	providedHash := sha256.Sum256([]byte(providedToken))
 	configuredHash, configured := s.getOperatorTokenHash()
 	return configured && subtle.ConstantTimeCompare(providedHash[:], configuredHash[:]) == 1
+}
+
+func (s *Server) APIAuthCheck(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	provided, ok := bearerToken(strings.TrimSpace(r.Header.Get("Authorization")))
+	if !ok {
+		handler.SetBearerChallenge(w, "")
+		handler.SendError(w, handler.CodeUnauthorized, handler.MsgUnauthorized)
+		return
+	}
+	if s.matchesOperatorToken(provided) {
+		handler.SendOK(w, map[string]string{"kind": "operator"})
+		return
+	}
+	if s.tokenManager != nil {
+		_, err := s.tokenManager.ValidateOnly(r.Context(), provided)
+		if err == nil {
+			handler.SendOK(w, map[string]string{"kind": "owner"})
+			return
+		}
+	}
+	handler.SetBearerChallenge(w, "invalid_token")
+	handler.SendError(w, handler.CodeUnauthorized, handler.MsgUnauthorized)
 }
 
 // extractRequestToken accepts only the native Bearer credential form.

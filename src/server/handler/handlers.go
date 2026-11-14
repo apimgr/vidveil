@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -297,20 +298,22 @@ func getClientIP(r *http.Request) string {
 
 // SearchHandler holds dependencies for HTTP handlers
 type SearchHandler struct {
-	appConfig    *config.AppConfig
-	dataDir      string
-	configDir    string
-	engineMgr    *engine.EngineManager
-	searchCache  cache.SearchResultCache
-	metrics      *ServerMetrics
-	torSvc       TorStatusChecker
-	i2pSvc       I2PStatusChecker
-	geoipSvc     GeoIPChecker
-	secretsMgr   *secret.Manager
-	healthDB     *sql.DB
-	tokenManager *apitoken.Manager
-	ownerAudit   OwnerTokenAuditLogger
-	sched        SchedulerHealth
+	appConfig      *config.AppConfig
+	dataDir        string
+	configDir      string
+	engineMgr      *engine.EngineManager
+	searchCache    cache.SearchResultCache
+	metrics        *ServerMetrics
+	torSvc         TorStatusChecker
+	i2pSvc         I2PStatusChecker
+	geoipSvc       GeoIPChecker
+	secretsMgr     *secret.Manager
+	healthDB       *sql.DB
+	tokenManager   *apitoken.Manager
+	ownerAudit     OwnerTokenAuditLogger
+	sched          SchedulerHealth
+	recentSearchMu sync.Mutex
+	recentSearches []recentSearch
 }
 
 // SchedulerHealth is the minimal scheduler interface the /server/healthz check
@@ -1042,6 +1045,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
+	h.recordRecentSearch(query)
 
 	engineNames := requestEngineNames(r, parsed.Engines, h.engineMgr.ListEngines())
 
@@ -3173,18 +3177,12 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 		appConfig = config.DefaultAppConfig()
 	}
 	sitemapConfig := appConfig.Server.SEO.Sitemap
-	if !sitemapConfig.Enabled {
-		http.NotFound(w, r)
-		return
-	}
 	if sitemapConfig.MaxURLs < 1 || sitemapConfig.MaxURLs > 50000 {
 		sitemapConfig.MaxURLs = 50000
 	}
 
 	// Resolve the public origin per request so reverse proxy and Tor URLs are
 	// accurate. encoding/xml escapes host and path values before writing XML.
-	baseURL := urlvar.BuildURL(r, "")
-	lastModified := time.Now().UTC().Format(time.RFC3339)
 	pages := []struct {
 		path       string
 		changefreq string
@@ -3202,6 +3200,13 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 		{path: "/server/docs/swagger", changefreq: "weekly", priority: "0.7"},
 		{path: "/server/docs/graphql", changefreq: "weekly", priority: "0.7"},
 	}
+	allowedPages := pages[:0]
+	for _, page := range pages {
+		if robotsAllowsPath(page.path, appConfig.Web.Robots) {
+			allowedPages = append(allowedPages, page)
+		}
+	}
+	pages = allowedPages
 	if len(pages) > sitemapConfig.MaxURLs {
 		pages = pages[:sitemapConfig.MaxURLs]
 	}
@@ -3212,7 +3217,7 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 		ImageNS  string   `xml:"xmlns:image,attr,omitempty"`
 		URLItems []struct {
 			Loc        string `xml:"loc"`
-			LastMod    string `xml:"lastmod"`
+			LastMod    string `xml:"lastmod,omitempty"`
 			ChangeFreq string `xml:"changefreq"`
 			Priority   string `xml:"priority"`
 			Images     []struct {
@@ -3226,14 +3231,14 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 	for _, page := range pages {
 		entry := struct {
 			Loc        string `xml:"loc"`
-			LastMod    string `xml:"lastmod"`
+			LastMod    string `xml:"lastmod,omitempty"`
 			ChangeFreq string `xml:"changefreq"`
 			Priority   string `xml:"priority"`
 			Images     []struct {
 				Loc string `xml:"image:loc"`
 			} `xml:"image:image,omitempty"`
 		}{
-			Loc: baseURL + page.path, LastMod: lastModified,
+			Loc:        urlvar.BuildURL(r, page.path),
 			ChangeFreq: page.changefreq, Priority: page.priority,
 		}
 		if sitemapConfig.IncludeImages {
@@ -3260,6 +3265,21 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write(data); err != nil {
 		log.Printf("failed to write sitemap response")
 	}
+}
+
+func robotsAllowsPath(path string, robots config.RobotsConfig) bool {
+	allowed := len(robots.Allow) == 0
+	for _, rule := range robots.Allow {
+		if rule != "" && strings.HasPrefix(path, strings.TrimSuffix(rule, "*")) {
+			allowed = true
+		}
+	}
+	for _, rule := range robots.Deny {
+		if rule != "" && strings.HasPrefix(path, strings.TrimSuffix(rule, "*")) {
+			return false
+		}
+	}
+	return allowed
 }
 
 // Favicon serves favicon.ico - redirects to embedded ICO file
@@ -3343,6 +3363,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	h.recordRecentSearch(query)
 
 	// Check if user wants to show AI content (overrides server default)
 	showAI := requestShowAIContent(r)
@@ -5323,6 +5344,7 @@ func (h *SearchHandler) SearchRSSFeed(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, i18n.Translate(i18n.DetectLocale(r), "error.missing_query"), http.StatusBadRequest)
 		return
 	}
+	h.recordRecentSearch(query)
 	page := 1
 	if p := r.URL.Query().Get("page"); p != "" {
 		if pn, err := strconv.Atoi(p); err == nil && pn > 0 {
@@ -5348,6 +5370,7 @@ func (h *SearchHandler) SearchAtomFeed(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, i18n.Translate(i18n.DetectLocale(r), "error.missing_query"), http.StatusBadRequest)
 		return
 	}
+	h.recordRecentSearch(query)
 	page := 1
 	if p := r.URL.Query().Get("page"); p != "" {
 		if pn, err := strconv.Atoi(p); err == nil && pn > 0 {
@@ -5400,6 +5423,9 @@ func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 	if len(req.Queries) > maxBatch {
 		h.jsonError(w, fmt.Sprintf("batch limit is %d queries", maxBatch), CodeValidation, http.StatusBadRequest)
 		return
+	}
+	for _, query := range req.Queries {
+		h.recordRecentSearch(query.Q)
 	}
 
 	type batchResult struct {

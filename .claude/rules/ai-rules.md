@@ -1,7 +1,7 @@
 # AI Assistant Rules (PART 0, 1)
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
-<!-- Rule summary checked against AI.md on 2026-10-17; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-14; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -39,12 +39,16 @@
 - Use `gofmt`/2-space (or ecosystem default) formatting; every file ends with exactly one trailing newline
 - Use `curl -q -LSsf` (+ `-I`/`-o`/`-H`/`-X`/`-d` as needed) for ALL curl examples/scripts
 - Create/update `.claude/rules/*.md` (13 files) at session start if missing or if AI.md is newer
+- Compare relevant IDEA.md content with AI.md before each feature; fix WHAT/HOW conflicts in IDEA.md without changing frozen project variables
+- When AI.md contradicts itself or is ambiguous, leave AI.md unchanged and record the template issue in the parent API-template TODO inbox, never as a project implementation TODO
 - Read non-empty `.claude/memory/MEMORY.md` and its relevant references; preserve project-specific discoveries there instead of duplicating the AI.md spec
 - Write `.git/COMMIT_MESS` and re-read it before `gitcommit --dir {dir} all` (parent instance only)
 
 ## Key Rules Summary
 
 **AI.md structure:** PARTS 0-33 = HOW (implementation, read-only). IDEA.md = WHAT (business logic, editable).
+
+**IDEA.md alignment:** AI.md defines the implementation. Remove or reword IDEA.md implementation instructions that conflict with it, preserving product intent. Do not edit `## Project variables` without explicit confirmation. If AI.md itself is unclear or contradictory, record that template issue in the parent `TODO.API.md` inbox.
 
 **Session Init (first read):** check `.claude/rules/`, create/update rule files, create IDEA.md if missing, check TODO.AI.md/TODO.md, commit COMMIT/NEVER/MUST rules to memory.
 

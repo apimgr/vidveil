@@ -17,8 +17,9 @@ import (
 
 // Handler handles GraphQL requests
 type Handler struct {
-	appConfig *config.AppConfig
-	engineMgr *engine.EngineManager
+	appConfig      *config.AppConfig
+	engineMgr      *engine.EngineManager
+	searchRecorder func(string)
 }
 
 // NewHandler creates a new GraphQL handler
@@ -27,6 +28,11 @@ func NewHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManager) *H
 		appConfig: appConfig,
 		engineMgr: engineMgr,
 	}
+}
+
+// SetSearchRecorder wires the application callback for privacy-filtered search feed entries.
+func (h *Handler) SetSearchRecorder(record func(string)) {
+	h.searchRecorder = record
 }
 
 // DetectTheme determines the UI theme (light/dark/auto) from the request.
@@ -215,6 +221,9 @@ func (h *Handler) handleSearch(ctx context.Context, req Request) Response {
 		return Response{
 			Errors: []Error{{Message: "Missing search query"}},
 		}
+	}
+	if h.searchRecorder != nil {
+		h.searchRecorder(q)
 	}
 
 	results := h.engineMgr.Search(ctx, q, page, nil, "")

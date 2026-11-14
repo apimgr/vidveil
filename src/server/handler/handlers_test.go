@@ -143,7 +143,6 @@ func TestSecurityTxt(t *testing.T) {
 
 func TestSitemapXML(t *testing.T) {
 	cfg := createTestConfig()
-	cfg.Server.SEO.Sitemap.Enabled = true
 	cfg.Server.SEO.Sitemap.MaxURLs = 50000
 	h := &SearchHandler{appConfig: cfg}
 
@@ -172,10 +171,13 @@ func TestSitemapXML(t *testing.T) {
 	if !strings.Contains(body, "<loc>") {
 		t.Error("SitemapXML should contain <loc> elements")
 	}
-	for _, expected := range []string{"/server/docs/swagger", "/server/docs/graphql", "/server/security/policy", "<lastmod>"} {
+	for _, expected := range []string{"/server/docs/swagger", "/server/docs/graphql", "/server/security/policy"} {
 		if !strings.Contains(body, expected) {
 			t.Errorf("SitemapXML should contain %q", expected)
 		}
+	}
+	if strings.Contains(body, "<lastmod>") {
+		t.Error("SitemapXML must omit lastmod when no accurate page modification time is available")
 	}
 	for _, privatePath := range []string{"/server/preferences", "/favorites", "/server/security/report/"} {
 		if strings.Contains(body, privatePath) {
@@ -191,15 +193,13 @@ func TestSitemapXML(t *testing.T) {
 
 func TestSitemapXMLHonorsConfig(t *testing.T) {
 	cfg := createTestConfig()
-	cfg.Server.SEO.Sitemap.Enabled = false
 	h := &SearchHandler{appConfig: cfg}
 	rr := httptest.NewRecorder()
 	h.SitemapXML(rr, httptest.NewRequest("GET", "/sitemap.xml", nil))
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("disabled sitemap status = %d, want %d", rr.Code, http.StatusNotFound)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("always-on sitemap status = %d, want %d", rr.Code, http.StatusOK)
 	}
 
-	cfg.Server.SEO.Sitemap.Enabled = true
 	cfg.Server.SEO.Sitemap.MaxURLs = 1
 	rr = httptest.NewRecorder()
 	h.SitemapXML(rr, httptest.NewRequest("GET", "/sitemap.xml", nil))

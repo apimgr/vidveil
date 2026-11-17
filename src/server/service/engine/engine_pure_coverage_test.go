@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/parser"
 )
 
@@ -407,6 +408,17 @@ func TestSanitizePreviewURL(t *testing.T) {
 				t.Errorf("sanitizePreviewURL(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNormalizeResultSourceUsesRegisteredEngineMetadata(t *testing.T) {
+	engine := NewBaseEngine("canonical-source", "Canonical Source", "https://example.com", 1, config.DefaultAppConfig())
+	result := model.VideoResult{Source: "upstream-alias", SourceDisplay: "Untrusted display"}
+
+	normalizeResultSource(&result, engine.Name(), engine)
+
+	if result.Source != "canonical-source" || result.SourceDisplay != "Canonical Source" {
+		t.Fatalf("normalized source = (%q, %q), want canonical engine metadata", result.Source, result.SourceDisplay)
 	}
 }
 

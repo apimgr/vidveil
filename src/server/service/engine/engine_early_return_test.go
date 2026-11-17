@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 28: first-page-fast early return — once the accepted pool
-// reaches resultsPerPage*earlyReturnHeadroomFactor, SearchWithOperators must
-// respond immediately instead of waiting out the slowest engines, and the
-// engines it stopped waiting for must be marked skipped, never failed.
+// SearchWithOperators must collect every selected source before returning a
+// global result count and sorted page.
 package engine
 
 import (
@@ -15,62 +13,51 @@ import (
 	"github.com/apimgr/vidveil/src/server/model"
 )
 
-// earlyReturnResults builds n clearly distinct valid results that all match
-// the single-term query "hello" and are far enough apart to survive the
-// fuzzy title dedup.
-func earlyReturnResults(n int) []model.VideoResult {
-	distinct := []string{
-		"alpha wonder", "bravo galaxy", "charlie mountain", "delta ocean",
-		"echo forest", "foxtrot desert", "golf river", "hotel canyon",
-		"india valley", "juliet glacier", "kilo island", "lima volcano",
-	}
-	results := make([]model.VideoResult, 0, n)
-	for i := 0; i < n; i++ {
-		title := fmt.Sprintf("hello %s %d", distinct[i%len(distinct)], i)
-		results = append(results, validResult(title, fmt.Sprintf("https://example.com/er/%d", i)))
-	}
-	return results
+type delayedSearchEngine struct {
+	*mockSearchEngine
+	delay time.Duration
 }
 
-func TestSearchWithOperators_EarlyReturn_PageFilledSkipsSlowEngine(t *testing.T) {
+func (e *delayedSearchEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
+	time.Sleep(e.delay)
+	return e.mockSearchEngine.Search(ctx, query, page)
+}
+
+func TestSearchWithOperatorsCollectsEverySelectedEngineForTotal(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	// Long per-engine budget: batchDeadline = 10s + 2s grace = 12s, so a
-	// fast response can only come from the early-return path, never from
-	// the deadline firing.
-	cfg.Search.EngineTimeout = 10
+	cfg.Search.EngineTimeout = 1
 	m := NewEngineManager(cfg)
-	// resultsPerPage=2 makes the early-return target 2*earlyReturnHeadroomFactor;
-	// the fast engine supplies well over that so one report fills the page.
-	resultsPerPage := 2
-	m.engines["fast"] = &mockSearchEngine{
-		name:    "fast",
-		results: earlyReturnResults(resultsPerPage*earlyReturnHeadroomFactor + 6),
-		avail:   true,
-		tier:    1,
+	fastResults := make([]model.VideoResult, 0, 6)
+	for i, title := range []string{"alpha wonder", "bravo galaxy", "charlie mountain", "delta ocean", "echo forest", "foxtrot desert"} {
+		fastResults = append(fastResults, validResult(fmt.Sprintf("hello %s %d", title, i), fmt.Sprintf("https://example.com/fast/%d", i)))
 	}
-	m.engines["slow"] = &blockingEngine{name: "slow", delay: 30 * time.Second}
+	slowResults := []model.VideoResult{
+		validResult("hello zebra valley", "https://example.com/slow/1"),
+		validResult("hello yellow canyon", "https://example.com/slow/2"),
+		validResult("hello violet river", "https://example.com/slow/3"),
+	}
+	m.engines["fast"] = &mockSearchEngine{name: "fast", results: fastResults, avail: true, tier: 1}
+	m.engines["slow"] = &delayedSearchEngine{
+		mockSearchEngine: &mockSearchEngine{name: "slow", results: slowResults, avail: true, tier: 1},
+		delay:            100 * time.Millisecond,
+	}
 
 	start := time.Now()
 	resp := m.SearchWithOperators(context.Background(), "hello", 1,
-		[]string{"fast", "slow"}, nil, nil, nil, false, "", resultsPerPage, ResultFilterOptions{})
-	elapsed := time.Since(start)
-
+		[]string{"fast", "slow"}, nil, nil, nil, false, "", 2, ResultFilterOptions{})
+	if elapsed := time.Since(start); elapsed < 100*time.Millisecond {
+		t.Fatalf("search returned before the delayed source completed: %v", elapsed)
+	}
 	if resp == nil {
-		t.Fatal("SearchWithOperators: nil response")
+		t.Fatal("SearchWithOperators returned nil response")
 	}
-	if elapsed > 5*time.Second {
-		t.Fatalf("early return did not fire: took %v (deadline path is ~12s)", elapsed)
+	if got := resp.Pagination.Total; got != len(fastResults)+len(slowResults) {
+		t.Fatalf("Pagination.Total = %d, want %d results across both sources", got, len(fastResults)+len(slowResults))
 	}
-	if len(resp.Data.Results) != resultsPerPage {
-		t.Fatalf("expected %d results after page slice, got %d", resultsPerPage, len(resp.Data.Results))
+	if len(resp.Data.Results) != 2 {
+		t.Fatalf("page result count = %d, want 2", len(resp.Data.Results))
 	}
-	if !containsSlice(resp.Data.EnginesUsed, "fast") {
-		t.Errorf("fast engine missing from EnginesUsed: %v", resp.Data.EnginesUsed)
-	}
-	if containsSlice(resp.Data.EnginesFailed, "slow") {
-		t.Errorf("skipped engine must not be reported as failed: %v", resp.Data.EnginesFailed)
-	}
-	if stat, ok := resp.Data.EngineStats["slow"]; !ok || stat.Error != "skipped_page_filled" {
-		t.Errorf("slow engine stat should be skipped_page_filled, got %+v", resp.Data.EngineStats["slow"])
+	if got := resp.Data.EngineStats["slow"].ResultCount; got != len(slowResults) {
+		t.Fatalf("slow engine result count = %d, want %d", got, len(slowResults))
 	}
 }

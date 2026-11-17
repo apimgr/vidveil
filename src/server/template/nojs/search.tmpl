@@ -10,7 +10,7 @@
     {{template "public/site-banner" .}}
     {{template "public/header" .}}
     <main class="results" id="main-content" role="main" aria-label="{{ t "a11y.search_results" }}">
-        <p class="meta" aria-live="polite"><span>{{len .Results}}</span> {{ t "search.results_for" }} "{{.Query}}"</p>
+        <p class="meta" aria-live="polite"><span>{{.TotalResults}}</span> {{ t "search.results_for" }} "{{.Query}}"</p>
 
         {{if eq .ErrorCode "RATE_LIMITED"}}
         <div class="empty-state search-error" role="alert" aria-live="assertive">

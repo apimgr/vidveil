@@ -15,7 +15,7 @@ import (
 )
 
 func TestProxyHostAllowlistIncludesCurrentSourceCDNs(t *testing.T) {
-	for _, host := range []string{"thumb-cdn77.xnxx-cdn.com", "thumb-cdn77.xvideos-cdn.com", "ci.phncdn.com"} {
+	for _, host := range []string{"thumb-cdn77.xnxx-cdn.com", "thumb-cdn77.xvideos-cdn.com", "ci.phncdn.com", "g5.nvdst.com"} {
 		if !isAllowedProxyHost(host) {
 			t.Errorf("current source CDN host %q is not allowed", host)
 		}

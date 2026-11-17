@@ -13,7 +13,7 @@ type AnyPornEngine struct{ *BaseEngine }
 
 // newAnyPornEngine creates a new AnyPorn engine
 func newAnyPornEngine(appConfig *config.AppConfig) *AnyPornEngine {
-	return &AnyPornEngine{NewBaseEngine("anyporn", "AnyPorn", "https://www.anyporn.com", 3, appConfig)}
+	return &AnyPornEngine{NewBaseEngine("anyporn", "AnyPorn", "https://www.anyporn.com", 5, appConfig)}
 }
 
 // Search performs a search on AnyPorn

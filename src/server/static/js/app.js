@@ -1473,6 +1473,7 @@ function handleDownloadClick(event, downloadUrl) {
     var searchQuery = '';
     var RESULTS_PER_BATCH = 20;
     var allResults = [];
+    var totalResults = 0;
     var resultCountFormats = [];
     var displayedCount = 0;
     // True while a refetchSearchResults() background update is in flight and
@@ -1570,6 +1571,8 @@ function handleDownloadClick(event, downloadUrl) {
 
         var initialSearchI18n = getSearchI18n();
         resultCountFormats = Array.isArray(initialSearchI18n.resultCountFormats) ? initialSearchI18n.resultCountFormats.slice() : [];
+        var initialTotal = Number(searchMeta.dataset.totalResults);
+        totalResults = Number.isInteger(initialTotal) && initialTotal >= 0 ? initialTotal : 0;
 
         // Initialize autocomplete for results page search
         setupAutocomplete('results-search-input', 'autocomplete-dropdown-results');
@@ -1703,14 +1706,14 @@ function handleDownloadClick(event, downloadUrl) {
         }
 
         var countEl = document.getElementById('result-count');
-        if (countEl) countEl.textContent = formatResultNumber(allResults.length);
+        if (countEl) countEl.textContent = formatResultNumber(totalResults);
 
         // The server rendered page 1; infinite scroll fetches further pages via SSE.
         currentPage = 1;
         hasMoreResults = true;
         setupInfiniteScroll();
         applySearchFiltersAndSort();
-        announce(formatResultCount(allResults.length));
+        announce(formatResultCount(totalResults));
         initRelatedSearchesToggle();
         updateSearchStatus();
         return true;
@@ -1883,7 +1886,8 @@ function handleDownloadClick(event, downloadUrl) {
 
                 var countEl = document.getElementById('result-count');
                 var streamDisplayCount = data.display_count === allResults.length ? data.display_count_text : null;
-                if (countEl) countEl.textContent = formatResultNumber(allResults.length, streamDisplayCount);
+                totalResults = Math.max(totalResults, allResults.length);
+                if (countEl) countEl.textContent = formatResultNumber(totalResults, streamDisplayCount);
 
                 // Add to source filter if new
                 var source = r.source || '';
@@ -1976,6 +1980,10 @@ function handleDownloadClick(event, downloadUrl) {
         })
         .then(function(data) {
             isSearching = false;
+            var responseTotal = Number(data.pagination && data.pagination.total);
+            totalResults = Number.isInteger(responseTotal) && responseTotal >= 0 ? responseTotal : 0;
+            var searchMeta = document.getElementById('search-meta');
+            if (searchMeta) searchMeta.dataset.totalResults = String(totalResults);
             var timeContainer = document.getElementById('search-time-container');
             var displayData = data.data && data.data.display;
             if (timeContainer && displayData && typeof displayData.search_time === 'string') {
@@ -2042,15 +2050,15 @@ function handleDownloadClick(event, downloadUrl) {
             }
 
             var countEl = document.getElementById('result-count');
-            var displayCount = displayData && displayData.result_count === allResults.length
+            var displayCount = displayData && displayData.result_count === totalResults
                 ? displayData.result_count_text
                 : null;
-            if (countEl) countEl.textContent = formatResultNumber(allResults.length, displayCount);
+            if (countEl) countEl.textContent = formatResultNumber(totalResults, displayCount);
 
             setupInfiniteScroll();
             // Apply default filters from preferences
             applySearchFiltersAndSort();
-            announce(formatResultCount(allResults.length, displayCount));
+            announce(formatResultCount(totalResults, displayCount));
             updateSearchStatus();
             hideSearchElement('status-bar');
         })
@@ -2421,6 +2429,7 @@ function handleDownloadClick(event, downloadUrl) {
             infiniteScrollObserver = null;
         }
         allResults = [];
+        totalResults = 0;
         sourcesSet = new Set();
         enginesWithResults = new Set();
         enginesWithResultsFinal = null;
@@ -2658,7 +2667,8 @@ function handleDownloadClick(event, downloadUrl) {
 
                 var countEl = document.getElementById('result-count');
                 var streamDisplayCount = data.display_count === allResults.length ? data.display_count_text : null;
-                if (countEl) countEl.textContent = formatResultNumber(allResults.length, streamDisplayCount);
+                totalResults = Math.max(totalResults, allResults.length);
+                if (countEl) countEl.textContent = formatResultNumber(totalResults, streamDisplayCount);
             }
         };
 

@@ -45,7 +45,7 @@
             <div class="spinner large" aria-hidden="true"></div>
             <p id="loading-text">{{ t "search.connecting_engines" }}</p>
         </div>
-        <p class="meta" id="search-meta" data-query="{{.Query}}" data-search-session="{{.SearchSessionID}}" data-preferences-applied="true" data-filter-duration="{{.FilterDuration}}" data-filter-quality="{{.FilterQuality}}" data-filter-sort="{{.FilterSort}}" data-preview-first="{{.PreviewFirst}}" aria-live="polite"><span id="result-count">{{ count (len .Results) }}</span> {{ t "search.results_word" }} <span id="search-time-container">{{ tf "search.results_duration" "duration" .SearchTime }}</span></p>
+        <p class="meta" id="search-meta" data-query="{{.Query}}" data-search-session="{{.SearchSessionID}}" data-total-results="{{.TotalResults}}" data-preferences-applied="true" data-filter-duration="{{.FilterDuration}}" data-filter-quality="{{.FilterQuality}}" data-filter-sort="{{.FilterSort}}" data-preview-first="{{.PreviewFirst}}" aria-live="polite"><span id="result-count">{{ count .TotalResults }}</span> {{ t "search.results_word" }} <span id="search-time-container">{{ tf "search.results_duration" "duration" .SearchTime }}</span></p>
 
         {{/* Server-rendered empty state — visible for every client, including
              no-JS. app.js reuses/overwrites this same #no-results-message

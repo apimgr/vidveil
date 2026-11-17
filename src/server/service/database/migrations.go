@@ -99,6 +99,12 @@ func (sm *SchemaManager) ensureFavoriteOwnerColumn(ctx context.Context) error {
 	if _, err := sm.db.ExecContext(ctx, `UPDATE favorites SET owner_id = 'legacy-favorite-' || visitor_id WHERE owner_id IS NULL`); err != nil {
 		return fmt.Errorf("assign legacy favorite owners: %w", err)
 	}
+	if _, err := sm.db.ExecContext(ctx, `DELETE FROM favorites WHERE id NOT IN (SELECT MIN(id) FROM favorites GROUP BY owner_id, url)`); err != nil {
+		return fmt.Errorf("deduplicate favorites per owner: %w", err)
+	}
+	if _, err := sm.db.ExecContext(ctx, `UPDATE favorites SET visitor_id = owner_id WHERE visitor_id != owner_id`); err != nil {
+		return fmt.Errorf("normalize favorite owner keys: %w", err)
+	}
 	if _, err := sm.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_favorites_owner_id ON favorites(owner_id)`); err != nil {
 		return fmt.Errorf("index favorite owners: %w", err)
 	}

@@ -447,6 +447,32 @@ func TestEngineManager_InitializeEngines_ListEngines_NonEmpty(t *testing.T) {
 	}
 }
 
+func TestEngineManager_InitializeEngines_SourceCountAndTierMetadata(t *testing.T) {
+	m := newTestManager()
+	list := m.ListEngines()
+	if len(list) != 33 {
+		t.Fatalf("ListEngines() returned %d sources, want 33", len(list))
+	}
+	tierCounts := make(map[int]int)
+	for _, info := range list {
+		tierCounts[info.Tier]++
+	}
+	for tier, wantCount := range map[int]int{1: 5, 2: 2, 3: 12, 4: 12, 5: 1, 6: 1} {
+		if got := tierCounts[tier]; got != wantCount {
+			t.Errorf("tier %d source count = %d, want %d", tier, got, wantCount)
+		}
+	}
+	for name, wantTier := range map[string]int{"anyporn": 5, "3movs": 6} {
+		engine, ok := m.GetEngine(name)
+		if !ok {
+			t.Fatalf("GetEngine(%q) returned false", name)
+		}
+		if got := engine.Tier(); got != wantTier {
+			t.Errorf("%s tier = %d, want %d", name, got, wantTier)
+		}
+	}
+}
+
 func TestEngineManager_EnabledCount_GreaterThanZero(t *testing.T) {
 	m := newTestManager()
 	if m.EnabledCount() == 0 {

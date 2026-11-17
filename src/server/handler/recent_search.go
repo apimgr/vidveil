@@ -29,12 +29,13 @@ func (h *SearchHandler) recordRecentSearch(query string) {
 	if unsafeRecentSearch(query) {
 		return
 	}
+	queryKey := normalizeRecentSearchQuery(query)
 	h.recentSearchMu.Lock()
 	defer h.recentSearchMu.Unlock()
 	for _, entry := range h.recentSearches {
-		if entry.Query == query {
+		if normalizeRecentSearchQuery(entry.Query) == queryKey {
 			entry.At = time.Now().UTC()
-			h.recentSearches = append([]recentSearch{entry}, h.recentSearchesWithout(query)...)
+			h.recentSearches = append([]recentSearch{entry}, h.recentSearchesWithout(queryKey)...)
 			return
 		}
 	}
@@ -46,6 +47,10 @@ func (h *SearchHandler) recordRecentSearch(query string) {
 	if len(h.recentSearches) > maxItems {
 		h.recentSearches = h.recentSearches[:maxItems]
 	}
+}
+
+func normalizeRecentSearchQuery(query string) string {
+	return strings.ToLower(strings.Join(strings.Fields(query), " "))
 }
 
 // RecordRecentSearch records a query after applying the feed's privacy filters.
@@ -68,7 +73,7 @@ func (h *SearchHandler) recentSearchSnapshot() []recentSearch {
 func (h *SearchHandler) recentSearchesWithout(query string) []recentSearch {
 	items := make([]recentSearch, 0, len(h.recentSearches)-1)
 	for _, item := range h.recentSearches {
-		if item.Query != query {
+		if normalizeRecentSearchQuery(item.Query) != query {
 			items = append(items, item)
 		}
 	}
@@ -106,7 +111,8 @@ func unsafeRecentSearch(query string) bool {
 		}
 	}
 	for _, candidate := range strings.FieldsFunc(query, func(r rune) bool {
-		return !(r == ':' || r == '.' || r == '[' || r == ']' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z')
+		return r != ':' && r != '.' && r != '[' && r != ']' &&
+			(r < '0' || r > '9') && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z')
 	}) {
 		if net.ParseIP(strings.Trim(candidate, "[]")) != nil {
 			return true

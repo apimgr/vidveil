@@ -13,7 +13,7 @@ type ThreeMovsEngine struct{ *BaseEngine }
 
 // newThreeMovsEngine creates a new 3Movs engine
 func newThreeMovsEngine(appConfig *config.AppConfig) *ThreeMovsEngine {
-	return &ThreeMovsEngine{NewBaseEngine("3movs", "3Movs", "https://www.3movs.com", 3, appConfig)}
+	return &ThreeMovsEngine{NewBaseEngine("3movs", "3Movs", "https://www.3movs.com", 6, appConfig)}
 }
 
 // Search performs a search on 3Movs

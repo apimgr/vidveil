@@ -75,6 +75,13 @@ func TestRequestEngineNamesDefaultsToAll(t *testing.T) {
 	}
 }
 
+func TestRequestEngineNamesEmptyQuerySelectionDefaultsToAll(t *testing.T) {
+	req := httptest.NewRequest("GET", "/search?q=test&engines=", nil)
+	if got := requestEngineNames(req, nil, []model.EngineInfo{{Name: "alpha"}}); got != nil {
+		t.Fatalf("requestEngineNames() = %v, want nil (all engines)", got)
+	}
+}
+
 func TestRequestEngineNamesSavedEmptySelectionDoesNotSelectAll(t *testing.T) {
 	engines := []model.EngineInfo{{Name: "alpha"}, {Name: "beta"}}
 	req := httptest.NewRequest("GET", "/api/v1/search?q=test", nil)

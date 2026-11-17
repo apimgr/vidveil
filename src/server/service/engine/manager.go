@@ -208,11 +208,9 @@ type ResultFilterOptions struct {
 // default for this call — this is how the server honors a visitor's
 // `results_per_page` preference cookie (IDEA.md "Search Settings": server
 // is authoritative for pagination, not client-side JS). Pass 0 to use the
-// configured default. Collection returns early (first-page-fast) once the
-// accepted pool reaches resultsPerPage*earlyReturnHeadroomFactor candidates:
-// the response is sliced to resultsPerPage regardless, so waiting for the
-// slowest engines past that point only delays the page; remaining engines are
-// cancelled and their stats marked "skipped_page_filled" (not failed).
+// configured default. All selected engines are collected until they complete
+// or the bounded batch deadline expires so pagination totals and global sort
+// reflect every available source response.
 func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, page int, engineNames []string, exactPhrases []string, exclusions []string, requiredTerms []string, previewFirst bool, sessionID string, resultsPerPage int, filterOpts ResultFilterOptions) *model.SearchResponse {
 	startTime := time.Now()
 
@@ -323,8 +321,7 @@ func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, p
 	}
 	queryIntent := DetectQueryIntent(query)
 
-	// Resolve the effective page size before collection (it doubles as the
-	// early-return fill target below). resultsPerPage > 0 means the caller
+	// Resolve the effective page size before collection. resultsPerPage > 0 means the caller
 	// passed an explicit per-request override (the visitor's results_per_page
 	// preference cookie); otherwise fall back to the configured default.
 	if resultsPerPage <= 0 {
@@ -333,23 +330,11 @@ func (m *EngineManager) SearchWithOperators(ctx context.Context, query string, p
 			resultsPerPage = m.appConfig.Search.ResultsPerPage
 		}
 	}
-	// First-page-fast early return: once the accepted (post-filter,
-	// deduplicated) pool reaches this many candidates, stop waiting for
-	// slower engines and respond immediately — the response is sliced to
-	// resultsPerPage anyway, so waiting for the stragglers only delays the
-	// page. The headroom factor keeps enough surplus candidates that the
-	// post-collection relevance filter (MinRelevanceScore) and sorts still
-	// have a meaningful pool to trim from.
-	earlyReturnTarget := resultsPerPage * earlyReturnHeadroomFactor
-
 	// Collect with a batch deadline so a hung engine (one ignoring context
 	// cancellation) can never block the response: we return whatever arrived by
 	// the deadline. reported tracks which engines answered so the rest can be
-	// marked as timed-out failures afterward. pageFilled records that
-	// collection stopped because the page target was met, so unreported
-	// engines are marked skipped rather than falsely marked as timeouts.
+	// marked as timed-out failures afterward.
 	reported := make(map[string]bool, len(enginesToUse))
-	pageFilled := false
 	deadline := time.NewTimer(m.batchDeadline(enginesToUse))
 	defer deadline.Stop()
 
@@ -378,8 +363,10 @@ collect:
 		} else {
 			enginesUsed = append(enginesUsed, result.engine)
 			resultCount := 0
+			engine, _ := m.GetEngine(result.engine)
 			// Filter results by thumbnail validity, minimum duration, term matching, and deduplicate
 			for _, r := range result.results {
+				normalizeResultSource(&r, result.engine, engine)
 				// Skip results with empty/invalid thumbnails
 				if !isValidThumbnail(r.Thumbnail) {
 					continue
@@ -447,29 +434,13 @@ collect:
 				ResponseTimeMS: result.responseTimeMS,
 				ResultCount:    resultCount,
 			}
-			// First-page-fast: the accepted pool already covers the page plus
-			// relevance-filter headroom — cancel the remaining engines and
-			// respond now instead of waiting out the slowest ones.
-			if len(allResults) >= earlyReturnTarget {
-				pageFilled = true
-				fanCancel()
-				break collect
-			}
 		}
 	}
 
-	// Any selected engine that never reported is recorded honestly: if
-	// collection ended because the page filled early, the engine was skipped
-	// (not a failure — it is neither used nor failed, its stat carries a
-	// stable machine code); if collection ran out the batch deadline or the
-	// request was cancelled, it is a timed-out failure so the response
-	// reflects degraded coverage instead of silently omitting it.
+	// Any selected engine that never reported before the batch deadline is
+	// recorded as timed out so the response exposes degraded source coverage.
 	for _, e := range enginesToUse {
 		if !reported[e.Name()] {
-			if pageFilled {
-				engineStats[e.Name()] = model.EngineStatInfo{Error: "skipped_page_filled"}
-				continue
-			}
 			enginesFailed = append(enginesFailed, e.Name())
 			engineStats[e.Name()] = model.EngineStatInfo{Error: "timeout"}
 		}
@@ -909,14 +880,6 @@ const writeTimeoutSafetyMargin = 5 * time.Second
 // fixed (not tied to WriteTimeout) so a caller always gets a fast answer —
 // queuing itself must never become the reason a request runs long.
 const searchQueueTimeout = 2 * time.Second
-
-// earlyReturnHeadroomFactor multiplies resultsPerPage to set the accepted-pool
-// size at which SearchWithOperators stops waiting for slower engines and
-// responds (first-page-fast early return). The surplus over one page keeps the
-// post-collection relevance filter (MinRelevanceScore) and preview-first/sort
-// passes working over a meaningful candidate pool, so early return trades
-// almost no ranking quality for a large latency win on broad queries.
-const earlyReturnHeadroomFactor = 2
 
 // overloadedSearchResponse builds the canonical error envelope (AI.md PART
 // 14/PART 12 "Rate Limiting") returned when SearchWithOperators cannot
@@ -1452,6 +1415,17 @@ func isValidThumbnail(thumbnail string) bool {
 	return true
 }
 
+// normalizeResultSource assigns canonical source identifiers from the
+// registered engine so every API result uses the same source metadata.
+func normalizeResultSource(result *model.VideoResult, engineName string, engine interface{ DisplayName() string }) {
+	result.Source = engineName
+	if engine != nil {
+		result.SourceDisplay = engine.DisplayName()
+		return
+	}
+	result.SourceDisplay = engineName
+}
+
 // sanitizePreviewURL validates a preview URL for browser <video> playback
 // Returns "" when the URL is not absolute http(s) or points at a resource a
 // <video> element cannot play (image rollovers, HLS playlists), so the frontend
@@ -1810,6 +1784,7 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 				// Stream each result individually with thumbnail validation and deduplication
 				accepted := make([]model.VideoResult, 0, len(results))
 				for _, r := range results {
+					normalizeResultSource(&r, e.Name(), e)
 					// Skip results with empty/invalid thumbnails
 					if !isValidThumbnail(r.Thumbnail) {
 						continue

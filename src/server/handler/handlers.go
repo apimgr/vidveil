@@ -511,7 +511,7 @@ var proxyHostSuffixes = []string{
 	"3movs.com", "4tube.com", "alphaporno.com", "anyporn.com", "c1.ttcache.com",
 	"dl.xnxx.com", "drtuber.com", "empflix.com", "eporner.com", "flyflv.com",
 	"fux.com", "gotporn.com", "hellporno.com", "hqporner.com", "lovehomeporn.com",
-	"motherless.com", "nonktube.com", "nubiles-porn.com", "nuvid.com", "pornbox.com",
+	"motherless.com", "nonktube.com", "nvdst.com", "nubiles-porn.com", "nuvid.com", "pornbox.com",
 	"pornerbros.com", "pornflip.com", "pornhat.com", "pornhd.com", "pornhub.com",
 	"pornmd.com", "pornone.com", "porntop.com", "porntrex.com", "porntube.com",
 	"redtube.com", "sunporno.com", "tnaflix.com", "tube8.com", "tubegalore.com",
@@ -1111,11 +1111,11 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		}
 
 		pageResults := results.Data.Results
-		resultCountFormats := formatResultCountFormats(maxInt(1000, len(pageResults)), resolveLocale(r))
+		resultCountFormats := formatResultCountFormats(maxInt(1000, results.Pagination.Total), resolveLocale(r))
 		// A full page came back, so another page is worth requesting. Explicit
 		// session tokens are used by the JavaScript infinite-scroll API; native
 		// page links remain stateless so previous-page navigation is repeatable.
-		hasMore := results.Pagination.Limit > 0 && len(pageResults) >= results.Pagination.Limit
+		hasMore := results.Pagination.Pages > page
 		nextPage := page + 1
 
 		// Embed the server-computed page as an inline JSON payload so the JS
@@ -1148,6 +1148,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"SearchQuery":        searchQuery,
 			"ResultsJSON":        template.JS(resultsJSON),
 			"Results":            pageResults,
+			"TotalResults":       results.Pagination.Total,
 			"FavoriteURLs":       favoriteURLs,
 			"CurrentPath":        r.URL.RequestURI(),
 			"EnginesUsed":        results.Data.EnginesUsed,
@@ -1233,9 +1234,10 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 			"Query":              query,
 			"SearchQuery":        searchQuery,
 			"ResultsJSON":        template.JS(resultsJSON),
+			"TotalResults":       results.Pagination.Total,
 			"EnginesUsed":        results.Data.EnginesUsed,
 			"SearchTime":         humanformat.Duration(time.Duration(results.Data.SearchTimeMS)*time.Millisecond, resolveLocale(r)),
-			"ResultCountFormats": formatResultCountFormats(maxInt(1000, len(results.Data.Results)), resolveLocale(r)),
+			"ResultCountFormats": formatResultCountFormats(maxInt(1000, results.Pagination.Total), resolveLocale(r)),
 			"Theme":              h.getRequestTheme(r),
 			"HasBang":            parsed.HasBang,
 			"BangEngines":        parsed.Engines,
@@ -1379,7 +1381,7 @@ func requestEngineNames(r *http.Request, bangEngines []string, engines []model.E
 			}
 		}
 		if len(names) == 0 {
-			return []string{"__none__"}
+			return nil
 		}
 		return names
 	}
@@ -3532,7 +3534,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		if results.Data.SpellSuggestion != "" {
 			_, _ = fmt.Fprintf(w, "did_you_mean: %s\n", results.Data.SpellSuggestion)
 		}
-		_, _ = fmt.Fprintf(w, "results: %d\n", len(results.Data.Results))
+		_, _ = fmt.Fprintf(w, "results: %d\n", results.Pagination.Total)
 		_, _ = fmt.Fprintf(w, "---\n")
 		for i, r := range results.Data.Results {
 			_, _ = fmt.Fprintf(w, "%d. %s\n", i+1, r.Title)
@@ -3556,9 +3558,9 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		response.Data = results.Data
 		response.Data.Display = &model.SearchDisplay{
 			SearchTime:         humanformat.Duration(time.Duration(results.Data.SearchTimeMS)*time.Millisecond, resolveLocale(r)),
-			ResultCount:        len(results.Data.Results),
-			ResultCountText:    humanformat.Count(int64(len(results.Data.Results)), resolveLocale(r)),
-			ResultCountFormats: formatResultCountFormats(len(results.Data.Results), resolveLocale(r)),
+			ResultCount:        results.Pagination.Total,
+			ResultCountText:    humanformat.Count(int64(results.Pagination.Total), resolveLocale(r)),
+			ResultCountFormats: formatResultCountFormats(results.Pagination.Total, resolveLocale(r)),
 		}
 		h.jsonResponse(w, &response)
 		return
@@ -4309,6 +4311,7 @@ func (h *SearchHandler) renderSearchOverloadPage(w http.ResponseWriter, r *http.
 		"SearchQuery":    searchQuery,
 		"ResultsJSON":    template.JS("[]"),
 		"Results":        []model.VideoResult{},
+		"TotalResults":   0,
 		"FavoriteURLs":   map[string]bool{},
 		"CurrentPath":    r.URL.RequestURI(),
 		"SearchTime":     int64(0),

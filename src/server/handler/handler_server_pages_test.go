@@ -590,10 +590,11 @@ func TestSearchPage_NoJS_RendersResultsInVisibleGrid(t *testing.T) {
 	rr := httptest.NewRecorder()
 
 	data := map[string]interface{}{
-		"Title":       "test - VidVeil",
-		"Query":       "test",
-		"SearchQuery": "test",
-		"ResultsJSON": template.JS(`[{"url":"https://example.com/v","title":"Sample Video","source":"testsrc"}]`),
+		"Title":        "test - VidVeil",
+		"Query":        "test",
+		"SearchQuery":  "test",
+		"ResultsJSON":  template.JS(`[{"url":"https://example.com/v","title":"Sample Video","source":"testsrc"}]`),
+		"TotalResults": 1,
 		"Results": []map[string]interface{}{
 			{
 				"URL":       "https://example.com/v",

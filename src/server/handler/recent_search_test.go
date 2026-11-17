@@ -42,8 +42,9 @@ func TestRecordRecentSearchFiltersAndBounds(t *testing.T) {
 	h.recordRecentSearch("person@example.com")
 	h.recordRecentSearch("privacy search")
 	h.recordRecentSearch("privacy search")
+	h.recordRecentSearch("  PRIVACY   SEARCH  ")
 	if got := h.recentSearchSnapshot(); len(got) != 1 || got[0].Query != "privacy search" {
-		t.Fatalf("recent searches = %#v, want one safe unique query", got)
+		t.Fatalf("recent searches = %#v, want one safe, normalized unique query", got)
 	}
 
 	h.appConfig = createTestConfig()

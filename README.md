@@ -26,7 +26,7 @@ https://x.scour.li
 | **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
 | **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |
 | **SSE Streaming** | Real-time result streaming as engines respond |
-| **Video Previews** | Hover (desktop) and swipe (mobile) preview for 8+ engines |
+| **Video Previews** | Hover (desktop) and swipe (mobile) preview for 8+ engines, with thumbnail fallback when video preview is unavailable |
 | **Thumbnail Proxy** | All thumbnails proxied to prevent engine tracking |
 | **Private Favorites** | Favorites belong to an anonymous owner and can be restored on another browser with the primary token |
 | **Autocomplete** | Bang shortcuts, performer names, and search terms autocomplete |
@@ -157,6 +157,12 @@ creation and management, and works without JavaScript. See the
 [token management guide](docs/user-guide/preferences.md#owner-tokens).
 
 ### Search
+
+Search results are collected from enabled engines until they respond or the
+request reaches its bounded deadline. The server applies the selected filters,
+sort order, and pagination, and reports the aggregate total across responding
+engines rather than only the results on the current page. Omitting an engine
+selection searches all enabled engines.
 
 ```
 GET https://x.scour.li/api/v1/search?q={query}&page={page}&engines={engines}

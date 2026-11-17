@@ -1112,10 +1112,13 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 		pageResults := results.Data.Results
 		resultCountFormats := formatResultCountFormats(maxInt(1000, results.Pagination.Total), resolveLocale(r))
-		// A full page came back, so another page is worth requesting. Explicit
-		// session tokens are used by the JavaScript infinite-scroll API; native
+		// A full page came back, so another upstream page is worth requesting.
+		// Individual upstreams do not expose consistent total-hit counts, so the
+		// aggregate pagination total describes the results collected for this
+		// request, while this flag is a conservative full-page continuation hint.
+		// Explicit session tokens are used by the JavaScript infinite-scroll API; native
 		// page links remain stateless so previous-page navigation is repeatable.
-		hasMore := results.Pagination.Pages > page
+		hasMore := results.Pagination.Limit > 0 && len(pageResults) >= results.Pagination.Limit
 		nextPage := page + 1
 
 		// Embed the server-computed page as an inline JSON payload so the JS
@@ -1341,6 +1344,13 @@ func requestEngineSelection(r *http.Request, engines []model.EngineInfo) (map[st
 		if packed.Value == "none" {
 			return selected, true
 		}
+		if compactEngineSelectionPattern.MatchString(packed.Value) {
+			decoded, ok := decodeEngineSelection(packed.Value, engines)
+			if ok {
+				return decoded, true
+			}
+			return nil, false
+		}
 		if packed.Value != "" {
 			allowed := make(map[string]struct{}, len(engines))
 			for _, info := range engines {
@@ -1365,6 +1375,64 @@ func requestEngineSelection(r *http.Request, engines []model.EngineInfo) (map[st
 		return nil, false
 	}
 	return selected, true
+}
+
+func encodeEngineSelection(selected map[string]struct{}, engines []model.EngineInfo) string {
+	if len(selected) == 0 {
+		return "none"
+	}
+	ordered := append([]model.EngineInfo(nil), engines...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Name < ordered[j].Name })
+	bits := make([]byte, (len(ordered)+7)/8)
+	for i, engine := range ordered {
+		if _, ok := selected[engine.Name]; ok {
+			bits[i/8] |= 1 << uint(i%8)
+		}
+	}
+	digest := sha256.Sum256([]byte(strings.Join(engineNames(ordered), "\n")))
+	return "b" + hex.EncodeToString(digest[:4]) + hex.EncodeToString(bits)
+}
+
+func decodeEngineSelection(packed string, engines []model.EngineInfo) (map[string]bool, bool) {
+	if !compactEngineSelectionPattern.MatchString(packed) || len(packed)%2 != 1 {
+		return nil, false
+	}
+	ordered := append([]model.EngineInfo(nil), engines...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Name < ordered[j].Name })
+	digest := sha256.Sum256([]byte(strings.Join(engineNames(ordered), "\n")))
+	if strings.TrimPrefix(packed, "b")[:8] != hex.EncodeToString(digest[:4]) {
+		return nil, false
+	}
+	bits, err := hex.DecodeString(strings.TrimPrefix(packed, "b")[8:])
+	if err != nil || len(bits) != (len(engines)+7)/8 {
+		return nil, false
+	}
+	selected := make(map[string]bool)
+	for i, engine := range ordered {
+		if bits[i/8]&(1<<uint(i%8)) != 0 {
+			selected[engine.Name] = true
+		}
+	}
+	return selected, true
+}
+
+func engineNames(engines []model.EngineInfo) []string {
+	names := make([]string, len(engines))
+	for i, engine := range engines {
+		names[i] = engine.Name
+	}
+	return names
+}
+
+func engineNamesFromSelection(selected map[string]bool) []string {
+	names := make([]string, 0, len(selected))
+	for name, enabled := range selected {
+		if enabled {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 func requestEngineNames(r *http.Request, bangEngines []string, engines []model.EngineInfo) []string {
@@ -1595,6 +1663,10 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 			if value, ok := validatePreference(engineSelectionValueCookieName, packed); ok {
 				if value == "none" {
 					engineNames = nil
+				} else if compactEngineSelectionPattern.MatchString(value) {
+					if decoded, valid := decodeEngineSelection(value, h.engineMgr.ListEngines()); valid {
+						engineNames = engineNamesFromSelection(decoded)
+					}
 				} else {
 					engineNames = strings.Split(value, ".")
 				}
@@ -1607,15 +1679,7 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 		}
 		secure := strings.HasPrefix(urlSchemeForRequest(r), "https")
 		http.SetCookie(w, &http.Cookie{Name: engineSelectionCookieName, Value: "1", Path: "/", MaxAge: 31536000, Secure: secure, SameSite: http.SameSiteLaxMode})
-		selectedNames := make([]string, 0, len(selected))
-		for name := range selected {
-			selectedNames = append(selectedNames, name)
-		}
-		sort.Strings(selectedNames)
-		packed := strings.Join(selectedNames, ".")
-		if packed == "" {
-			packed = "none"
-		}
+		packed := encodeEngineSelection(selected, h.engineMgr.ListEngines())
 		http.SetCookie(w, &http.Cookie{Name: engineSelectionValueCookieName, Value: packed, Path: "/", MaxAge: 31536000, Secure: secure, SameSite: http.SameSiteLaxMode})
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/") {

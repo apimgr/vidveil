@@ -8,6 +8,8 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -37,6 +39,51 @@ func TestExportablePreferenceQuery_ReflectsCookies(t *testing.T) {
 	q := h.exportablePreferenceQuery(req)
 	if q != "lang=fr&theme=light&vidveil_pref_results_per_page=50" {
 		t.Errorf("exportablePreferenceQuery() = %q, want canonical app preference included", q)
+	}
+}
+
+func TestEngineSelectionPreference_ExportsAndImportsAllEngines(t *testing.T) {
+	h := newRenderTestHandler()
+	h.engineMgr.InitializeEngines()
+	engines := h.engineMgr.ListEngines()
+	engineNames := make([]string, 0, len(engines))
+	for _, engine := range engines {
+		engineNames = append(engineNames, engine.Name)
+	}
+	sort.Strings(engineNames)
+	selectedNames := make(map[string]struct{}, len(engineNames))
+	for _, name := range engineNames {
+		selectedNames[name] = struct{}{}
+	}
+	packed := encodeEngineSelection(selectedNames, engines)
+	if len(packed) > 64 {
+		t.Fatalf("compact test engine selection length = %d, want at most 64 bytes", len(packed))
+	}
+
+	exportRequest := httptest.NewRequest(http.MethodGet, "/server/preferences/export", nil)
+	exportRequest.AddCookie(&http.Cookie{Name: engineSelectionCookieName, Value: "1"})
+	exportRequest.AddCookie(&http.Cookie{Name: engineSelectionValueCookieName, Value: packed})
+	exported, err := url.ParseQuery(h.exportablePreferenceQuery(exportRequest))
+	if err != nil {
+		t.Fatalf("parse exported preferences: %v", err)
+	}
+	if got := exported.Get(engineSelectionValueCookieName); got != packed {
+		t.Fatalf("exported engine selection length = %d, want %d", len(got), len(packed))
+	}
+
+	importURL := "/server/preferences/import?" + exported.Encode()
+	importResponse := httptest.NewRecorder()
+	h.PreferencesImport(importResponse, httptest.NewRequest(http.MethodGet, importURL, nil))
+	if importResponse.Code != http.StatusSeeOther {
+		t.Fatalf("import status = %d, want %d", importResponse.Code, http.StatusSeeOther)
+	}
+	importRequest := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
+	for _, cookie := range importResponse.Result().Cookies() {
+		importRequest.AddCookie(cookie)
+	}
+	selected, configured := requestEngineSelection(importRequest, engines)
+	if !configured || len(selected) != len(engineNames) {
+		t.Fatalf("imported engine selection = %d configured=%t, want %d engines", len(selected), configured, len(engineNames))
 	}
 }
 

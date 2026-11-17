@@ -99,6 +99,31 @@ func TestPreferencesSaveCodeOverridesEngineSelection(t *testing.T) {
 	}
 }
 
+func TestPreferencesSaveCodeAppliesCompactEngineSelection(t *testing.T) {
+	h := newRenderTestHandler()
+	h.engineMgr.InitializeEngines()
+	engines := h.engineMgr.ListEngines()
+	packed := encodeEngineSelection(map[string]struct{}{"pornhub": {}}, engines)
+	code := base64.RawURLEncoding.EncodeToString([]byte(engineSelectionValueCookieName + "=" + packed + "&" + engineSelectionCookieName + "=1"))
+	form := url.Values{"code": {code}, "engines_selection_set": {"1"}, "engines": {"xvideos"}}
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+	h.PreferencesSave(response, req)
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("PreferencesSave status = %d, want 303", response.Code)
+	}
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == engineSelectionValueCookieName {
+			if cookie.Value != packed {
+				t.Fatalf("compact imported engine selection = %q, want %q", cookie.Value, packed)
+			}
+			return
+		}
+	}
+	t.Fatal("compact imported engine selection cookie was not set")
+}
+
 func TestPreferencesResetDeletesAppCookiesAndPreservesCredentials(t *testing.T) {
 	h := newRenderTestHandler()
 	form := url.Values{"action": {"reset"}, "redirect": {"/search?q=hello"}}

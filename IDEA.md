@@ -27,7 +27,7 @@ owner_token:       vidveil_owner_token_ab5213f6
 
 **Features:**
 - **Video search:** Search across 33 video engines, target engines with bang shortcuts, and receive results as engines respond. Engine availability is best-effort; a failing or rate-limited source must not prevent results from other sources. Search responses use canonical engine names and display names; blank engine selection means all available engines.
-- **Result discovery:** Refine searches with autocomplete, related searches, source selection, duration and quality filters, sorting, and pagination. The server applies preferences, filtering, sorting, and pagination, and reports the aggregate result total across responding sources rather than only the current page. When a playable video preview is unavailable, use the result thumbnail as the visual preview. Search history is a visitor-controlled convenience and is not retained as a durable server-side history; recent-search entries differing only by case or whitespace are deduplicated.
+- **Result discovery:** Refine searches with autocomplete, related searches, source selection, duration and quality filters, sorting, and pagination. The server applies preferences, filtering, sorting, and pagination, and reports the aggregate count collected from responding sources rather than only the displayed page. Upstream sites do not consistently expose all-pages hit counts, so this count covers the results returned for the requested upstream page. When a playable video preview is unavailable, use the result thumbnail as the visual preview. Search history is a visitor-controlled convenience and is not retained as a durable server-side history; recent-search entries differing only by case or whitespace are deduplicated.
 - **Privacy:** Proxy thumbnails through VidVeil, provide optional analytics only with visitor consent, and disclose that access logs may contain request metadata. Public Atom and RSS feeds may include only privacy-filtered query text and timestamps; entries are bounded and are not retained across server restarts.
 - **Private favorites:** Visitors can save, organize, export, import, and clear favorites. Favorites belong to an anonymous owner, are unique by result URL for that owner, and remain private to that owner. A visitor can manage their own favorites without creating a conventional account.
 - **Owner token management:** Owners can restore access to their resources and manage their own primary and linked tokens. A linked token can be used for automation without sharing the primary token.
@@ -36,6 +36,30 @@ owner_token:       vidveil_owner_token_ab5213f6
 - **Service information:** Visitors can read public information, privacy, contact, help, and security reporting content. The service provides REST, GraphQL, Swagger/OpenAPI, and MCP interfaces for supported search and discovery functions.
 - **Operator control:** Operators configure the service through its configuration file and command-line tools. There is no browser-based operator administration product.
 - **Privacy network access:** The service supports Tor access. Tor use for searches can be selected by a visitor where enabled.
+
+**Guest preferences:** These preferences are cookie-only, read per request, and are never stored server-side. Preference export/import includes every valid `vidveil_pref_*` cookie listed here.
+
+| Cookie | Allowed values | Default | Export/import |
+|--------|----------------|---------|---------------|
+| `vidveil_pref_grid_density` | `comfortable`, `default`, `compact` | `default` | Included |
+| `vidveil_pref_thumbnail_size` | `small`, `medium`, `large` | `medium` | Included |
+| `vidveil_pref_autoplay_preview` | `0`, `1` | `1` | Included |
+| `vidveil_pref_preview_delay` | `0`, `200`, `500`, `1000` milliseconds | `0` | Included |
+| `vidveil_pref_results_per_page` | `0`, `20`, `50`, `100`; `0` means infinite scroll | `0` | Included |
+| `vidveil_pref_open_new_tab` | `0`, `1` | `1` | Included |
+| `vidveil_pref_preview_first` | `0`, `1` | `1` | Included |
+| `vidveil_pref_show_ai_content` | `0`, `1` | `0` | Included |
+| `vidveil_pref_default_duration` | `any`, `short`, `medium`, `long` | `any` | Included |
+| `vidveil_pref_min_quality` | `0`, `240`, `360`, `480`, `720`, `1080`, `2160` | `360` | Included |
+| `vidveil_pref_default_sort` | `any`, `duration-desc`, `duration-asc`, `views`, `quality` | `any` | Included |
+| `vidveil_pref_min_duration` | `0`, `60`, `180`, `300`, `600`, `1200`, `1800` seconds | `600` | Included |
+| `vidveil_pref_max_history` | `0`, `10`, `25`, `50`, `100`; `0` means unlimited | `0` | Included |
+| `vidveil_pref_auto_clear_history` | `0`, `1`, `7`, `30` days; `0` means never | `0` | Included |
+| `vidveil_pref_use_tor` | `0`, `1` | `0` | Included |
+| `vidveil_pref_engines_selected` | `1` means an explicit selection is active | Unset; all enabled engines | Included |
+| `vidveil_pref_engines` | `none` or a compact `b`-prefixed hexadecimal registry fingerprint and engine-selection bitset (at most 64 characters) | Unset; all enabled engines | Included |
+
+Older per-engine cookies named `vidveil_pref_engine_{name}` accept `0` or `1` and remain readable/importable for compatibility. Older dot-separated engine lists remain readable when they fit the 64-character preference-value limit. Current preference writes use the compact bitset in the engine-selection cookies above; engine names are ordered alphabetically when encoding and decoding it, and a registry fingerprint prevents a changed engine set from silently changing saved selections.
 
 **Non-goals:**
 - Named user accounts, social profiles, organizations, or multi-tenant workspaces.

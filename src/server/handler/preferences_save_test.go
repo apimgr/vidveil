@@ -227,8 +227,8 @@ func TestPreferencesSave_PersistsEngineSelectionIncludingUncheckedEngines(t *tes
 	if cookies[engineSelectionCookieName] != "1" {
 		t.Errorf("engine selection marker = %q, want 1", cookies[engineSelectionCookieName])
 	}
-	if cookies[engineSelectionValueCookieName] != "pornhub" {
-		t.Errorf("packed engine selection = %q, want pornhub", cookies[engineSelectionValueCookieName])
+	if cookies[engineSelectionValueCookieName] != encodeEngineSelection(map[string]struct{}{"pornhub": {}}, h.engineMgr.ListEngines()) {
+		t.Errorf("packed engine selection = %q, want compact pornhub selection", cookies[engineSelectionValueCookieName])
 	}
 	if len(rr.Result().Cookies()) > 30 {
 		t.Errorf("preferences save emitted %d cookies; want a compact response", len(rr.Result().Cookies()))

@@ -2261,7 +2261,7 @@ func loadMergedConfig(configPath string) ([]byte, []string, []string, error) {
 	overriddenBy := make(map[string]string)
 	for _, entry := range entries {
 		name := entry.Name()
-		if strings.HasPrefix(name, ".") || !(strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")) || strings.HasSuffix(name, ".bak") || strings.HasSuffix(name, "~") || strings.HasSuffix(name, ".orig") {
+		if strings.HasPrefix(name, ".") || (!strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml")) || strings.HasSuffix(name, ".bak") || strings.HasSuffix(name, "~") || strings.HasSuffix(name, ".orig") {
 			continue
 		}
 		file := filepath.Join(dropDir, name)
@@ -3083,7 +3083,7 @@ func configFilesFingerprint(configPath string) [32]byte {
 		sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 		for _, entry := range entries {
 			name := entry.Name()
-			if strings.HasPrefix(name, ".") || !(strings.HasSuffix(name, ".yml") || strings.HasSuffix(name, ".yaml")) {
+			if strings.HasPrefix(name, ".") || (!strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml")) {
 				continue
 			}
 			paths = append(paths, filepath.Join(dropDir, name))

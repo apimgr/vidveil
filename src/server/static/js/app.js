@@ -1521,7 +1521,9 @@ function handleDownloadClick(event, downloadUrl) {
     // searchSessionID (see SessionDedupStore). The client performs NO dedup
     // logic itself — it only generates and forwards the opaque session token.
     // AND-based term filtering with synonym expansion is also handled server-side
-    // in manager.go using taxonomy.go. Client-side only handles duration/quality/source/preview filters.
+    // in manager.go using taxonomy.go. Search filters and ordering are always
+    // applied by the server; the client forwards preference values and renders
+    // the returned results.
 
     // Generates a random opaque session token for the current search.
     // Uses crypto.randomUUID() where available, falling back to Math.random()
@@ -1573,6 +1575,9 @@ function handleDownloadClick(event, downloadUrl) {
         resultCountFormats = Array.isArray(initialSearchI18n.resultCountFormats) ? initialSearchI18n.resultCountFormats.slice() : [];
         var initialTotal = Number(searchMeta.dataset.totalResults);
         totalResults = Number.isInteger(initialTotal) && initialTotal >= 0 ? initialTotal : 0;
+        var initialPage = Number(searchMeta.dataset.page);
+        currentPage = Number.isInteger(initialPage) && initialPage > 0 ? initialPage : 1;
+        hasMoreResults = searchMeta.dataset.hasMore === 'true';
 
         // Initialize autocomplete for results page search
         setupAutocomplete('results-search-input', 'autocomplete-dropdown-results');
@@ -1595,11 +1600,10 @@ function handleDownloadClick(event, downloadUrl) {
             }
         }
 
-        // Apply default filters from preferences. Preview-first stays a
-        // client-side sort priority (mirrors the server's own previewFirst
-        // stream ordering, never a data filter). Duration/quality/sort are
-        // real server-authoritative filters (AI.md PART 16) and their defaults
-        // are stored in app preference cookies. A saved default takes effect
+        // Apply default filters from preferences. Preview-first, duration,
+        // quality, and sort are server-authoritative search options (AI.md
+        // PART 16), and their defaults are stored in app preference cookies.
+        // A saved default takes effect
         // through an in-place refetch when it was not applied during rendering. A
         // saved default takes effect via an in-place refetch (same request
         // parseResultFilterOptions/SearchWithOperators would apply from a
@@ -1640,21 +1644,25 @@ function handleDownloadClick(event, downloadUrl) {
                 // The page the server rendered didn't have these defaults
                 // applied yet - refetch once, in place, with them included.
                 refetchSearchResults();
-            } else if (!hydrateServerResults(minDuration)) {
+            } else if (!hydrateServerResults()) {
                 // Hydrate from the server-rendered inline payload (no second
-                // search). Only fall back to SSE streaming if missing.
-                streamResults(minDuration);
+                // search). If it is missing, fetch from the server using the
+                // selected sort mode instead of sorting records in the browser.
+                if (searchCurrentSort || searchPreviewFirst) {
+                    fallbackToJSONSearch();
+                } else {
+                    streamResults(minDuration);
+                }
             }
         }
     }
 
     // Enhance the server-rendered first page: read the inline JSON payload the
-    // server already computed, rebuild richer cards (preview hover, favorites,
-    // filter/sort data attributes) applying localStorage-only prefs, then apply
-    // client-side sort/filter. No network round-trip — the search ran once,
-    // server-side. Returns false when no payload is present (e.g. an old cached
-    // page) so the caller can fall back to SSE streaming.
-    function hydrateServerResults(minDuration) {
+    // server already computed and rebuild richer cards (preview hover,
+    // favorites, and display attributes). No network round-trip — the search
+    // ran once, server-side. Returns false when no payload is present (e.g. an
+    // old cached page) so the caller can fetch the result set from the server.
+    function hydrateServerResults() {
         var dataEl = document.getElementById('search-results-data');
         if (!dataEl) return false;
 
@@ -1691,10 +1699,6 @@ function handleDownloadClick(event, downloadUrl) {
 
         for (var i = 0; i < serverResults.length; i++) {
             var r = serverResults[i];
-            // Client-side min-duration filter from the guest preference cookies.
-            if (minDuration > 0 && r.duration_seconds > 0 && r.duration_seconds < minDuration) {
-                continue;
-            }
             allResults.push(r);
             var source = r.source || '';
             if (source) enginesWithResults.add(source);
@@ -1708,11 +1712,9 @@ function handleDownloadClick(event, downloadUrl) {
         var countEl = document.getElementById('result-count');
         if (countEl) countEl.textContent = formatResultNumber(totalResults);
 
-        // The server rendered page 1; infinite scroll fetches further pages via SSE.
-        currentPage = 1;
-        hasMoreResults = true;
+        // The server rendered this page; infinite scroll fetches subsequent
+        // pages using the selected server-side search path.
         setupInfiniteScroll();
-        applySearchFiltersAndSort();
         announce(formatResultCount(totalResults));
         initRelatedSearchesToggle();
         updateSearchStatus();
@@ -1735,10 +1737,7 @@ function handleDownloadClick(event, downloadUrl) {
             searchUrl += '&min_quality=' + userPrefs.minQuality;
         }
 
-        // Tell the server to sort each engine batch preview-first during streaming
-        if (searchPreviewFirst) {
-            searchUrl += '&preview_first=1';
-        }
+        searchUrl += '&preview_first=' + (searchPreviewFirst ? '1' : '0');
 
         // Engines to query: the filter panel's own source selection (if the
         // visitor has narrowed it) takes priority over the blanket enabled-
@@ -1781,7 +1780,7 @@ function handleDownloadClick(event, downloadUrl) {
             if (streamDone) return;
             eventSource.close();
             if (allResults.length === 0) {
-                fallbackToJSONSearch(minDuration);
+                fallbackToJSONSearch();
             } else {
                 isSearching = false;
                 pendingGridSwap = false;
@@ -1829,9 +1828,8 @@ function handleDownloadClick(event, downloadUrl) {
                     // Setup infinite scroll after initial results load
                     setupInfiniteScroll();
                     // Apply default filters from preferences
-                    applySearchFiltersAndSort();
                     // A11Y: Announce result count to screen readers
-                    announce(formatResultCount(allResults.length));
+                    announce(formatResultCount(totalResults));
                     // Related searches are server-rendered — just add show-more toggle
                     initRelatedSearchesToggle();
                 }
@@ -1855,11 +1853,6 @@ function handleDownloadClick(event, downloadUrl) {
             // Got a result (already deduplicated server-side)
             if (data.result && data.result.title) {
                 var r = data.result;
-
-                // Apply min duration filter (client-side additional filter)
-                if (minDuration > 0 && r.duration_seconds > 0 && r.duration_seconds < minDuration) {
-                    return;
-                }
 
                 // Show UI on first result
                 if (firstResult) {
@@ -1930,7 +1923,7 @@ function handleDownloadClick(event, downloadUrl) {
             if (allResults.length === 0) {
                 // Show user-friendly error message
                 showToast(getSearchI18n().connectionRetry, 'warning');
-                fallbackToJSONSearch(minDuration);
+                fallbackToJSONSearch();
             } else {
                 // We have some results, just finish gracefully
                 isSearching = false;
@@ -1947,11 +1940,12 @@ function handleDownloadClick(event, downloadUrl) {
     }
 
     // Fallback to JSON API when SSE fails (e.g., proxy doesn't support SSE)
-    function fallbackToJSONSearch(minDuration) {
+    function fallbackToJSONSearch() {
         var loadingText = document.getElementById('loading-text');
         if (loadingText) loadingText.textContent = getSearchI18n().loadingResults;
 
         var fallbackUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&session=' + encodeURIComponent(searchSessionID) + '&display=human';
+        fallbackUrl += '&page=' + currentPage;
         var fallbackEngineList = (searchCurrentSourceFilters.size > 0)
             ? Array.from(searchCurrentSourceFilters)
             : (userPrefs.enabledEngines || []);
@@ -1968,6 +1962,10 @@ function handleDownloadClick(event, downloadUrl) {
         if (searchCurrentSort) {
             fallbackUrl += '&sort=' + encodeURIComponent(searchCurrentSort);
         }
+        if (userPrefs.minDuration && parseInt(userPrefs.minDuration) > 0) {
+            fallbackUrl += '&min_duration=' + parseInt(userPrefs.minDuration);
+        }
+        fallbackUrl += '&preview_first=' + (searchPreviewFirst ? '1' : '0');
 
         fetch(fallbackUrl, {
             headers: { 'Accept': 'application/json' }
@@ -1984,6 +1982,11 @@ function handleDownloadClick(event, downloadUrl) {
             totalResults = Number.isInteger(responseTotal) && responseTotal >= 0 ? responseTotal : 0;
             var searchMeta = document.getElementById('search-meta');
             if (searchMeta) searchMeta.dataset.totalResults = String(totalResults);
+            var responsePage = Number(data.pagination && data.pagination.page);
+            if (Number.isInteger(responsePage) && responsePage > 0) currentPage = responsePage;
+            var responseLimit = Number(data.pagination && data.pagination.limit);
+            var responseResults = data.data && Array.isArray(data.data.results) ? data.data.results : [];
+            hasMoreResults = Number.isInteger(responseLimit) && responseLimit > 0 && responseResults.length >= responseLimit;
             var timeContainer = document.getElementById('search-time-container');
             var displayData = data.data && data.data.display;
             if (timeContainer && displayData && typeof displayData.search_time === 'string') {
@@ -2030,10 +2033,6 @@ function handleDownloadClick(event, downloadUrl) {
             var results = data.data.results;
             for (var i = 0; i < results.length; i++) {
                 var r = results[i];
-                // Apply min duration filter (client-side additional filter)
-                if (minDuration > 0 && r.duration_seconds > 0 && r.duration_seconds < minDuration) {
-                    continue;
-                }
                 allResults.push(r);
                 // Track engine for status display
                 if (r.source) {
@@ -2056,8 +2055,6 @@ function handleDownloadClick(event, downloadUrl) {
             if (countEl) countEl.textContent = formatResultNumber(totalResults, displayCount);
 
             setupInfiniteScroll();
-            // Apply default filters from preferences
-            applySearchFiltersAndSort();
             announce(formatResultCount(totalResults, displayCount));
             updateSearchStatus();
             hideSearchElement('status-bar');
@@ -2395,11 +2392,8 @@ function handleDownloadClick(event, downloadUrl) {
 
     function updatePreviewFirst(checked) {
         searchPreviewFirst = checked;
-        // Preview-first is a display-order priority, not a data filter - it
-        // mirrors the server's own previewFirst stream ordering, so this can
-        // stay a pure client-side reorder of the already-rendered cards.
-        applySearchFiltersAndSort();
         updateFilterCount();
+        refetchSearchResults();
     }
 
     function searchSortResults(value) {
@@ -2415,6 +2409,7 @@ function handleDownloadClick(event, downloadUrl) {
         if (!searchQuery) return;
 
         var params = new URLSearchParams(window.location.search);
+        params.set('page', '1');
         if (searchCurrentDurationFilter) params.set('duration', searchCurrentDurationFilter); else params.delete('duration');
         if (searchCurrentQualityFilter) params.set('quality', searchCurrentQualityFilter); else params.delete('quality');
         if (searchCurrentSort) params.set('sort', searchCurrentSort); else params.delete('sort');
@@ -2422,6 +2417,7 @@ function handleDownloadClick(event, downloadUrl) {
         if (searchCurrentSourceFilters.size > 0) {
             searchCurrentSourceFilters.forEach(function(s) { params.append('engines', s); });
         }
+        params.set('preview_first', searchPreviewFirst ? '1' : '0');
         history.replaceState(null, '', window.location.pathname + '?' + params.toString());
 
         if (infiniteScrollObserver) {
@@ -2455,31 +2451,13 @@ function handleDownloadClick(event, downloadUrl) {
         showSearchElement('status-bar');
 
         var minDuration = parseInt(userPrefs.minDuration) || 0;
-        if (searchCurrentSort) {
+        if (searchCurrentSort || searchPreviewFirst) {
             // Global sort requires the synchronous JSON API - the SSE stream
-            // only orders results within each engine's own batch (see
-            // SearchStreamWithOperators, which has no SortBy parameter).
-            fallbackToJSONSearch(minDuration);
+            // only orders results within each engine's own batch, not globally.
+            fallbackToJSONSearch();
         } else {
             streamResults(minDuration);
         }
-    }
-
-    // Preview-first-only reorder of the already-rendered cards. Duration/
-    // quality/source/sort are never applied here - those are always fetched
-    // fresh from the server via refetchSearchResults().
-    function applySearchFiltersAndSort() {
-        var grid = document.getElementById('video-grid');
-        if (!grid) return;
-        if (!searchPreviewFirst) return;
-
-        var cardArray = Array.from(grid.querySelectorAll('.video-card'));
-        cardArray.sort(function(a, b) {
-            var aHasPreview = a.dataset.hasPreview ? 1 : 0;
-            var bHasPreview = b.dataset.hasPreview ? 1 : 0;
-            return bHasPreview - aHasPreview; // Preview videos first
-        });
-        cardArray.forEach(function(card) { grid.appendChild(card); });
     }
 
     function updateSearchStatus() {
@@ -2497,7 +2475,7 @@ function handleDownloadClick(event, downloadUrl) {
             if (statusText) statusText.textContent = formatResultCount(allResults.length) + ' (' + appI18n.searchStreaming + ')';
             if (engineStatus) engineStatus.textContent = fmtI18n(appI18n.searchEnginesResponding, {count: formatSearchNumber(enginesWithResults.size)});
         } else {
-            var msg = formatResultCount(allResults.length);
+            var msg = formatResultCount(totalResults);
             if (minDuration > 0) {
                 msg += ' ' + fmtI18n(appI18n.searchMinimumDuration, {minutes: formatSearchNumber(Math.floor(minDuration / 60))});
             }
@@ -2585,11 +2563,106 @@ function handleDownloadClick(event, downloadUrl) {
         infiniteScrollObserver.observe(sentinel);
     }
 
+    function loadMoreResultsJSON() {
+        var params = new URLSearchParams({
+            q: searchQuery,
+            page: String(currentPage),
+            session: searchSessionID,
+            display: 'human'
+        });
+        if (userPrefs.showAIContent) params.set('show_ai', '1');
+        if (userPrefs.minQuality && parseInt(userPrefs.minQuality) > 0) {
+            params.set('min_quality', String(parseInt(userPrefs.minQuality)));
+        }
+        if (userPrefs.minDuration && parseInt(userPrefs.minDuration) > 0) {
+            params.set('min_duration', String(parseInt(userPrefs.minDuration)));
+        }
+        if (searchCurrentDurationFilter) params.set('duration', searchCurrentDurationFilter);
+        if (searchCurrentQualityFilter) params.set('quality', searchCurrentQualityFilter);
+        if (searchCurrentSort) params.set('sort', searchCurrentSort);
+        params.set('preview_first', searchPreviewFirst ? '1' : '0');
+        var selectedEngines = searchCurrentSourceFilters.size > 0
+            ? Array.from(searchCurrentSourceFilters)
+            : (userPrefs.enabledEngines || []);
+        if (selectedEngines.length > 0) {
+            params.set('engines', selectedEngines.join(','));
+        } else if (userPrefs.engineSelectionSet) {
+            params.set('engines', '__none__');
+        }
+
+        var loadIndicator = document.getElementById('load-more-indicator');
+        if (loadIndicator) loadIndicator.classList.remove('hidden');
+
+        fetch('/api/v1/search?' + params.toString(), {
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(function(response) {
+            if (!response.ok) throw new Error('Search request failed');
+            return response.json();
+        })
+        .then(function(data) {
+            var pageResults = data.data && Array.isArray(data.data.results) ? data.data.results : [];
+            var pagination = data.pagination || {};
+            var responsePage = Number(pagination.page);
+            var responseLimit = Number(pagination.limit);
+            if (Number.isInteger(responsePage) && responsePage > 0) currentPage = responsePage;
+
+            if (!data.ok || pageResults.length === 0) {
+                hasMoreResults = false;
+                currentPage = Math.max(1, currentPage - 1);
+                var sentinel = document.getElementById('scroll-sentinel');
+                if (sentinel) {
+                    if (infiniteScrollObserver) infiniteScrollObserver.unobserve(sentinel);
+                    var endMessage = document.createElement('p');
+                    endMessage.className = 'no-more-results';
+                    endMessage.textContent = getAppI18n().searchNoMoreResults;
+                    sentinel.replaceWith(endMessage);
+                }
+                return;
+            }
+
+            pageResults.forEach(function(result) {
+                allResults.push(result);
+                if (result.source) enginesWithResults.add(result.source);
+                addResultCard(result);
+                var source = result.source || '';
+                if (source && !sourcesSet.has(source)) {
+                    sourcesSet.add(source);
+                    addSourceCheckbox(source, result.source_display || source);
+                }
+            });
+
+            var responseTotal = Number(pagination.total);
+            if (Number.isInteger(responseTotal) && responseTotal >= 0) {
+                totalResults = Math.max(totalResults, responseTotal, allResults.length);
+            } else {
+                totalResults = Math.max(totalResults, allResults.length);
+            }
+            hasMoreResults = Number.isInteger(responseLimit) && responseLimit > 0 && pageResults.length >= responseLimit;
+            var countEl = document.getElementById('result-count');
+            if (countEl) countEl.textContent = formatResultNumber(totalResults);
+            updateSearchStatus();
+        })
+        .catch(function() {
+            currentPage = Math.max(1, currentPage - 1);
+            showToast(getSearchI18n().connectionRetry, 'warning');
+        })
+        .finally(function() {
+            isLoadingMore = false;
+            if (loadIndicator) loadIndicator.classList.add('hidden');
+        });
+    }
+
     function loadMoreResults() {
         if (isLoadingMore || !hasMoreResults) return;
 
         isLoadingMore = true;
         currentPage++;
+
+        if (searchCurrentSort || searchPreviewFirst) {
+            loadMoreResultsJSON();
+            return;
+        }
 
         var loadIndicator = document.getElementById('load-more-indicator');
         if (loadIndicator) loadIndicator.classList.remove('hidden');
@@ -2602,9 +2675,7 @@ function handleDownloadClick(event, downloadUrl) {
         if (userPrefs.minQuality && parseInt(userPrefs.minQuality) > 0) {
             pageUrl += '&min_quality=' + userPrefs.minQuality;
         }
-        if (searchPreviewFirst) {
-            pageUrl += '&preview_first=1';
-        }
+        pageUrl += '&preview_first=' + (searchPreviewFirst ? '1' : '0');
         if (userPrefs.enabledEngines && (userPrefs.enabledEngines.length > 0 || userPrefs.engineSelectionSet)) {
             pageUrl += '&engines=' + encodeURIComponent(userPrefs.enabledEngines.length ? userPrefs.enabledEngines.join(',') : '__none__');
         }
@@ -2639,12 +2710,6 @@ function handleDownloadClick(event, downloadUrl) {
                         endMsg.textContent = getAppI18n().searchNoMoreResults;
                         sentinel.replaceWith(endMsg);
                     }
-                } else {
-                    // New page appended raw via addResultCard() above —
-                    // re-apply preview-first / user sort so infinite-scroll
-                    // pages stay ordered the same way the initial page is
-                    // (IDEA.md "Preview First (toggle)" / "Client-Side Sorting").
-                    applySearchFiltersAndSort();
                 }
                 updateSearchStatus();
                 return;
@@ -2705,7 +2770,6 @@ function handleDownloadClick(event, downloadUrl) {
             // keep the page counter so the next scroll requests the next page
             // (server session dedup prevents repeats either way).
             if (gotResults) {
-                applySearchFiltersAndSort();
                 updateSearchStatus();
                 return;
             }

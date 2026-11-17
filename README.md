@@ -29,6 +29,7 @@ https://x.scour.li
 | **Video Previews** | Hover (desktop) and swipe (mobile) preview for 8+ engines, with thumbnail fallback when video preview is unavailable |
 | **Thumbnail Proxy** | All thumbnails proxied to prevent engine tracking |
 | **Private Favorites** | Favorites belong to an anonymous owner and can be restored on another browser with the primary token |
+| **Preference Sync** | Visitor preferences stay in browser cookies and can be exported or imported with a shareable URL or code |
 | **Autocomplete** | Bang shortcuts, performer names, and search terms autocomplete |
 | **Related Searches** | Server-generated related search suggestions |
 | **Semantic Search** | AND-based filtering with synonym expansion across 27 categories |
@@ -160,9 +161,11 @@ creation and management, and works without JavaScript. See the
 
 Search results are collected from enabled engines until they respond or the
 request reaches its bounded deadline. The server applies the selected filters,
-sort order, and pagination, and reports the aggregate total across responding
-engines rather than only the results on the current page. Omitting an engine
-selection searches all enabled engines.
+sort order, and pagination, and reports the aggregate count collected from
+responding engines rather than only the displayed page. Upstream sites do not
+consistently expose all-pages hit counts, so this count covers results returned
+for the requested upstream page. Omitting an engine selection searches all
+enabled engines.
 
 ```
 GET https://x.scour.li/api/v1/search?q={query}&page={page}&engines={engines}

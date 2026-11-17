@@ -1930,10 +1930,9 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 				// a preview URL stream before results without one. This is a per-engine,
 				// best-effort ordering only — engines stream concurrently onto the shared
 				// channel, so it cannot guarantee a globally preview-first order across
-				// engines by itself. The client applies its own final preview-first sort
-				// once the stream completes (per IDEA.md "Client-Side Sorting"), and the
-				// non-streaming path (sortResultsPreviewFirst, used by SearchWithOperators)
-				// gives non-JS/API/CLI clients a fully-ordered, non-partial result set.
+				// engines by itself. Callers that require a global order use the
+				// non-streaming SearchWithOperators path, which sorts the complete result
+				// set before returning it.
 				if previewFirst {
 					accepted = sortResultsPreviewFirst(accepted)
 				}

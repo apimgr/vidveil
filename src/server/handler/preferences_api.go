@@ -17,6 +17,8 @@ import (
 
 var preferenceKeyPattern = regexp.MustCompile(`^vidveil_pref_[a-z][a-z0-9_]{0,63}$`)
 var preferenceValuePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
+var engineSelectionValuePattern = regexp.MustCompile(`^[a-z0-9_]{1,48}$`)
+var compactEngineSelectionPattern = regexp.MustCompile(`^b[0-9a-f]{10,63}$`)
 
 type preferenceResult struct {
 	Theme   string            `json:"theme"`
@@ -48,6 +50,20 @@ func (h *SearchHandler) effectivePreferences(r *http.Request) preferenceResult {
 }
 
 func validatePreference(name, value string) (string, bool) {
+	if name == engineSelectionValueCookieName {
+		if value == "none" || len(value) <= 64 && compactEngineSelectionPattern.MatchString(value) && len(value)%2 == 1 {
+			return value, true
+		}
+		if len(value) == 0 || len(value) > 64 {
+			return "", false
+		}
+		for _, engineName := range strings.Split(value, ".") {
+			if engineName == "none" || !engineSelectionValuePattern.MatchString(engineName) {
+				return "", false
+			}
+		}
+		return value, true
+	}
 	if len(value) > 64 {
 		return "", false
 	}

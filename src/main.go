@@ -331,8 +331,20 @@ func run(ctx context.Context) error {
 	}
 	if address == "" && os.Getenv("LISTEN") != "" {
 		address = os.Getenv("LISTEN")
-	} else if address == "" && os.Getenv("ADDRESS") != "" {
-		address = os.Getenv("ADDRESS")
+	}
+	peekConfigDir := configDir
+	if peekConfigDir == "" {
+		peekConfigDir = pathpkg.GetDefaultConfigDir(pathpkg.IsPrivilegedMode())
+	}
+	peekAddress, peekPort := peekServerListenConfig(filepath.Join(peekConfigDir, "server.yml"))
+	if address == "" {
+		address = peekAddress
+	}
+	if address == "" {
+		address = "[::]"
+	}
+	if port == "" {
+		port = peekPort
 	}
 
 	// Per AI.md PART 8: --baseurl PATH (URL path prefix, default "/").
@@ -905,7 +917,7 @@ func run(ctx context.Context) error {
 	// This satisfies: "Bind privileged ports as root, then drop"
 	var httpListener, httpsListener net.Listener
 	if httpPort != "" {
-		addr := appConfig.Server.Address + ":" + httpPort
+		addr := net.JoinHostPort(strings.Trim(appConfig.Server.Address, "[]"), httpPort)
 		httpListener, err = srv.Listen(addr)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to bind %s: %v\n", addr, err)
@@ -913,7 +925,7 @@ func run(ctx context.Context) error {
 		}
 	}
 	if httpsPort != "" {
-		addr := appConfig.Server.Address + ":" + httpsPort
+		addr := net.JoinHostPort(strings.Trim(appConfig.Server.Address, "[]"), httpsPort)
 		httpsListener, err = srv.Listen(addr)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to bind %s: %v\n", addr, err)
@@ -928,7 +940,7 @@ func run(ctx context.Context) error {
 		primaryPort = httpPort
 		primaryIsHTTPS = false
 	}
-	listenAddr := appConfig.Server.Address + ":" + primaryPort
+	listenAddr := net.JoinHostPort(strings.Trim(appConfig.Server.Address, "[]"), primaryPort)
 
 	// Re-apply ownership immediately before dropping privileges per AI.md PART 23
 	// step 8c — catches files created since the initial EnsureSystemUser call
@@ -1185,7 +1197,7 @@ func run(ctx context.Context) error {
 	})
 	signalpkg.SetStatusDumpFunc(func() {
 		// Dump status to stderr
-		fmt.Fprintf(os.Stderr, "[STATUS] Server running on %s:%s\n", appConfig.Server.Address, appConfig.Server.Port)
+		fmt.Fprintf(os.Stderr, "[STATUS] Server running on %s\n", net.JoinHostPort(strings.Trim(appConfig.Server.Address, "[]"), appConfig.Server.Port))
 		fmt.Fprintf(os.Stderr, "[STATUS] Mode: %s, Debug: %v\n", appConfig.Server.Mode, mode.IsDebugEnabled())
 		fmt.Fprintf(os.Stderr, "[STATUS] Uptime: %v\n", time.Since(startTime))
 	})
@@ -1239,7 +1251,7 @@ Server Configuration:
 --log DIR                              - Log directory
 --backup DIR                           - Backup directory
 --pid FILE                             - PID file path
---address ADDR                         - Listen address (default: 0.0.0.0)
+--address ADDR                         - Listen address (default: [::], dual-stack; IPv4-only fallback if IPv6 is unavailable)
 --port PORT                            - Listen port (default: random 64xxx, 80 in container)
 --baseurl PATH                         - URL path prefix (default: /)
 --daemon                               - Run as daemon (detach from terminal)
@@ -1258,6 +1270,41 @@ tor CMD                                - Tor management (run tor help for detail
 
 Run '%s <command> help' for detailed help on any command.
 `, binaryName, version.GetVersion(), binaryName, binaryName)
+}
+
+func peekServerListenConfig(configPath string) (address, port string) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return "", ""
+	}
+	var document yaml.Node
+	if yaml.Unmarshal(data, &document) != nil || len(document.Content) == 0 {
+		return "", ""
+	}
+	root := document.Content[0]
+	serverNode := yamlMappingValue(root, "server")
+	if serverNode == nil || serverNode.Kind != yaml.MappingNode {
+		return "", ""
+	}
+	if value := yamlMappingValue(serverNode, "address"); value != nil && value.Kind == yaml.ScalarNode {
+		address = value.Value
+	}
+	if value := yamlMappingValue(serverNode, "port"); value != nil && value.Kind == yaml.ScalarNode {
+		port = value.Value
+	}
+	return address, port
+}
+
+func yamlMappingValue(node *yaml.Node, key string) *yaml.Node {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			return node.Content[i+1]
+		}
+	}
+	return nil
 }
 
 func printVersion() {

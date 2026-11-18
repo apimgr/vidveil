@@ -27,6 +27,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/common/authpad"
 	"github.com/apimgr/vidveil/src/common/i18n"
+	"github.com/apimgr/vidveil/src/common/netutil"
 	"github.com/apimgr/vidveil/src/common/outsan"
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
@@ -1527,14 +1528,18 @@ func (s *Server) ListenAndServe(addr string) error {
 		IdleTimeout:  idleTimeout,
 	}
 	s.registerHTTPServer(srv)
-	return srv.ListenAndServe()
+	listener, err := netutil.ListenTCP(addr)
+	if err != nil {
+		return err
+	}
+	return srv.Serve(listener)
 }
 
 // Listen binds to the given address and returns the listener without accepting
 // connections. Call Serve(l) after privilege drop.
 // Per AI.md PART 23: bind privileged ports as root, then drop, then serve.
 func (s *Server) Listen(addr string) (net.Listener, error) {
-	return net.Listen("tcp", addr)
+	return netutil.ListenTCP(addr)
 }
 
 // ServeOn serves HTTP requests on the given pre-bound listener.

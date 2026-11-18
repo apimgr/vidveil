@@ -76,7 +76,7 @@ If `server.port` is omitted, Vidveil selects a random unused port in the `64xxx`
 
 ```yaml
 server:
-  address: "0.0.0.0"
+  address: "[::]"
   port: "64893"
   cors:
     allowed_origins:
@@ -231,8 +231,7 @@ challenge.
 | `CONFIG_DIR` | Override config root |
 | `DATA_DIR` | Override data root |
 | `LOG_DIR` | Override log root |
-| `LISTEN` | Override listen address (wins over `ADDRESS`) |
-| `ADDRESS` | Fallback listen address, used only when `LISTEN` is unset |
+| `LISTEN` | Listen address; overrides `server.address` (default: `[::]`, dual-stack; `0.0.0.0` is IPv4-only) |
 | `PORT` | Initial listen port (default: random `64xxx`, `80` in containers) |
 | `CACHE_DIR` | Override cache directory (default: `/var/cache/apimgr/vidveil` when root, else `~/.cache/apimgr/vidveil`) |
 | `BACKUP_DIR` | Override backup directory (default: `/mnt/Backups/apimgr/vidveil` when root, else `~/.local/share/Backups/apimgr/vidveil`) |

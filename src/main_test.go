@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1439,5 +1440,30 @@ func TestApplyPortOverride_SamePortNoRewrite(t *testing.T) {
 	}
 	if persisted {
 		t.Error("applyPortOverride() persisted = true, want false when port is unchanged")
+	}
+}
+
+func TestPeekServerListenConfigReadsOnlyScalarServerFields(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "server.yml")
+	contents := "server:\n  address: \"[::]\"\n  port: 8080\n  mode: [ignored]\ndatabase:\n  port: 9999\n"
+	if err := os.WriteFile(configPath, []byte(contents), 0600); err != nil {
+		t.Fatal(err)
+	}
+	address, port := peekServerListenConfig(configPath)
+	if address != "[::]" || port != "8080" {
+		t.Fatalf("peekServerListenConfig() = (%q, %q), want ([::], 8080)", address, port)
+	}
+}
+
+func TestPeekServerListenConfigIgnoresMissingAndNonScalarValues(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "server.yml")
+	if address, port := peekServerListenConfig(configPath); address != "" || port != "" {
+		t.Fatalf("missing config peek = (%q, %q), want empty values", address, port)
+	}
+	if err := os.WriteFile(configPath, []byte("server:\n  address: [::]\n  port: {value: 8080}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if address, port := peekServerListenConfig(configPath); address != "" || port != "" {
+		t.Fatalf("non-scalar config peek = (%q, %q), want empty values", address, port)
 	}
 }

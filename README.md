@@ -136,7 +136,7 @@ Configuration file location (created on first run):
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `MODE` | `production` or `development` | `production` |
-| `LISTEN` | Listen address | `0.0.0.0` |
+| `LISTEN` | Listen address | `[::]` (dual-stack; `0.0.0.0` selects IPv4 only) |
 | `PORT` | Listen port | Random `64xxx` (`80` in containers) |
 | `CONFIG_DIR` | Config directory | Platform-specific |
 | `DATA_DIR` | Data directory | Platform-specific |

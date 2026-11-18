@@ -42,7 +42,7 @@ log "Container starting..."
 log "MODE: ${MODE:-production}"
 log "DEBUG: ${DEBUG:-false}"
 log "TZ: ${TZ}"
-log "ADDRESS: ${ADDRESS:-0.0.0.0}"
+log "LISTEN: ${LISTEN:-[::]}"
 log "PORT: ${PORT:-80}"
 
 # =============================================================================
@@ -51,8 +51,8 @@ log "PORT: ${PORT:-80}"
 log "Starting ${APP_NAME}..."
 
 # Build flags from environment
-FLAGS="--address ${ADDRESS:-0.0.0.0} --port ${PORT:-80}"
-[ "${DEBUG:-false}" = "true" ] && FLAGS="$FLAGS --debug"
+FLAGS=(--address "${LISTEN:-[::]}" --port "${PORT:-80}")
+[ "${DEBUG:-false}" = "true" ] && FLAGS+=(--debug)
 
 # Start binary (binary handles ALL setup: dirs, perms, user/group, Tor, etc.)
-exec $APP_BIN $FLAGS "$@"
+exec "$APP_BIN" "${FLAGS[@]}" "$@"

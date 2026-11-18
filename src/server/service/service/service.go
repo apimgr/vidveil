@@ -435,6 +435,7 @@ Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
+ExecStartPre=+/usr/bin/install -d -m 0755 /etc/apimgr/%s /var/lib/apimgr/%s /var/cache/apimgr/%s /var/log/apimgr/%s /var/run/apimgr/%s
 
 # Security hardening per AI.md PART 24
 NoNewPrivileges=yes
@@ -445,10 +446,14 @@ ReadWritePaths=/etc/apimgr/%s
 ReadWritePaths=/var/lib/apimgr/%s
 ReadWritePaths=/var/cache/apimgr/%s
 ReadWritePaths=/var/log/apimgr/%s
+ReadWritePaths=-/var/run/apimgr/%s
+ReadWritePaths=-/mnt/Backups/apimgr/%s
 
 [Install]
 WantedBy=multi-user.target
-`, m.description, m.name, m.name, m.name, m.execPath, m.name, m.name, m.name, m.name)
+`, m.description, m.name, m.name, m.name, m.execPath,
+		m.name, m.name, m.name, m.name, m.name,
+		m.name, m.name, m.name, m.name, m.name, m.name)
 
 	if err := os.WriteFile(unitPath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write unit file: %w", err)
@@ -494,7 +499,7 @@ description="%s"
 command="%s"
 command_args=""
 command_user="%s:%s"
-pidfile="/var/run/apimgr/%s.pid"
+pidfile="/var/run/apimgr/%s/%s.pid"
 command_background=true
 output_log="/var/log/apimgr/%s/server.log"
 error_log="/var/log/apimgr/%s/error.log"
@@ -506,7 +511,7 @@ depend() {
 }
 
 start_pre() {
-    checkpath -d -m 0755 -o %s:%s /var/run/apimgr
+    checkpath -d -m 0755 -o %s:%s /var/run/apimgr/%s
     checkpath -d -m 0755 -o %s:%s /var/log/apimgr/%s
 }
 `, m.name, m.description, m.execPath,
@@ -514,7 +519,8 @@ start_pre() {
 		m.name,
 		m.name,
 		m.name,
-		m.name, m.name,
+		m.name,
+		m.name, m.name, m.name,
 		m.name, m.name, m.name)
 
 	if err := os.WriteFile(initPath, []byte(content), 0755); err != nil {
@@ -560,7 +566,7 @@ func (m *SystemServiceManager) installSysVinit() error {
 NAME=%s
 DAEMON=%s
 DAEMON_USER=%s
-PIDFILE=/var/run/apimgr/%s.pid
+PIDFILE=/var/run/apimgr/%s/%s.pid
 LOGFILE=/var/log/apimgr/%s/server.log
 
 case "$1" in
@@ -603,7 +609,7 @@ esac
 exit 0
 `, m.name, m.description, m.description,
 		m.name, m.execPath, m.name,
-		m.name, m.name)
+		m.name, m.name, m.name)
 
 	if err := os.WriteFile(initPath, []byte(content), 0755); err != nil {
 		return fmt.Errorf("failed to write SysVinit script: %w", err)
@@ -872,7 +878,7 @@ name="%s"
 rcvar="${name}_enable"
 command="%s"
 command_args=""
-pidfile="/var/run/${name}.pid"
+pidfile="/var/run/apimgr/${name}/${name}.pid"
 
 load_rc_config $name
 run_rc_command "$1"

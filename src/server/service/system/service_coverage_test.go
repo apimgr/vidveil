@@ -5,6 +5,7 @@
 package system
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -92,15 +93,13 @@ func TestInstallSystemd_NoPanic(t *testing.T) {
 func TestSystemdUnitAllowsPIDFileUnderStrictProtection(t *testing.T) {
 	sm := newCovSM(t)
 	unit := sm.systemdUnit()
-	if !strings.Contains(unit, "RuntimeDirectory=apimgr\n") {
-		t.Error("systemd unit does not create the PID runtime directory")
-	}
-	if !strings.Contains(unit, "RuntimeDirectoryMode=0755\n") {
-		t.Error("systemd unit does not set the runtime directory mode")
+	if !strings.Contains(unit, "ExecStartPre=+/usr/bin/install -d -m 0755") {
+		t.Error("systemd unit does not create writable directories before sandboxing")
 	}
 	paths := appPath.GetAppPaths(sm.configDir, sm.dataDir)
-	for _, dir := range []string{paths.Config, paths.Data, paths.Cache, paths.Log, paths.Backup, appPath.GetMaintenanceLockDir(paths.Data)} {
-		if !strings.Contains(unit, "ReadWritePaths="+escapeSystemdPath(dir)+"\n") {
+	for _, dir := range []string{paths.Config, paths.Data, paths.Cache, paths.Log, paths.Backup, filepath.Dir(appPath.GetDefaultPIDFile(true)), appPath.GetMaintenanceLockDir(paths.Data)} {
+		entry := "ReadWritePaths=-" + escapeSystemdPath(dir) + "\n"
+		if !strings.Contains(unit, entry) {
 			t.Errorf("systemd unit does not allow writes to %q", dir)
 		}
 	}

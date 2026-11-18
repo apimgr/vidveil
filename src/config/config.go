@@ -1861,7 +1861,7 @@ func DefaultAppConfig() *AppConfig {
 			},
 			CORS: CORSConfig{
 				AllowedOrigins:   []string{"*"},
-				AllowCredentials: true,
+				AllowCredentials: false,
 				MaxAge:           86400,
 			},
 			SecurityHeaders: SecurityHeadersConfig{

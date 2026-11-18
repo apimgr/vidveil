@@ -218,6 +218,9 @@ function readPreferenceCookies(defaults) {
                 packedEngineSelectionSeen = true;
                 prefs.engineSelectionSet = true;
                 prefs.enabledEngines = [];
+            } else if (/^b[0-9a-f]{10,63}$/.test(raw) && raw.length % 2 === 1) {
+                packedEngineSelectionSeen = true;
+                prefs.engineSelectionSet = true;
             } else if (raw !== '') {
                 packedEngineSelectionSeen = true;
                 prefs.engineSelectionSet = true;
@@ -1742,10 +1745,7 @@ function handleDownloadClick(event, downloadUrl) {
         // Engines to query: the filter panel's own source selection (if the
         // visitor has narrowed it) takes priority over the blanket enabled-
         // engines preference, same precedence as the no-JS query param path.
-        var streamEngineList = (searchCurrentSourceFilters.size > 0)
-            ? Array.from(searchCurrentSourceFilters)
-            : (userPrefs.enabledEngines || []);
-        if (searchCurrentSourceFilters.size === 0 && userPrefs.engineSelectionSet && streamEngineList.length === 0) streamEngineList = ['__none__'];
+        var streamEngineList = Array.from(searchCurrentSourceFilters);
         if (streamEngineList.length > 0) {
             searchUrl += '&engines=' + encodeURIComponent(streamEngineList.join(','));
         }
@@ -1946,10 +1946,7 @@ function handleDownloadClick(event, downloadUrl) {
 
         var fallbackUrl = '/api/v1/search?q=' + encodeURIComponent(searchQuery) + '&session=' + encodeURIComponent(searchSessionID) + '&display=human';
         fallbackUrl += '&page=' + currentPage;
-        var fallbackEngineList = (searchCurrentSourceFilters.size > 0)
-            ? Array.from(searchCurrentSourceFilters)
-            : (userPrefs.enabledEngines || []);
-        if (searchCurrentSourceFilters.size === 0 && userPrefs.engineSelectionSet && fallbackEngineList.length === 0) fallbackEngineList = ['__none__'];
+        var fallbackEngineList = Array.from(searchCurrentSourceFilters);
         if (fallbackEngineList.length > 0) {
             fallbackUrl += '&engines=' + encodeURIComponent(fallbackEngineList.join(','));
         }
@@ -3831,12 +3828,6 @@ document.addEventListener('error', function(e) {
 
             document.getElementById('use-tor').checked = prefs.useTor;
 
-            var savedEngines = prefs.enabledEngines || prefs.engines || [];
-            if (prefs.engineSelectionSet) {
-                document.querySelectorAll('input[name="engines"]').forEach(function(cb) {
-                    cb.checked = savedEngines.includes(cb.value);
-                });
-            }
         }
 
         // Single-submit-only guard (AI.md PART 16: "Never let a single-submit

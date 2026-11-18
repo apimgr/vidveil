@@ -259,13 +259,13 @@ func GetDefaultPIDFile(isRoot bool) string {
 	switch runtime.GOOS {
 	case "linux":
 		if isRoot {
-			return fmt.Sprintf("/var/run/%s/%s.pid", ProjectOrg, ProjectName)
+			return fmt.Sprintf("/var/run/%s/%s/%s.pid", ProjectOrg, ProjectName, ProjectName)
 		}
 		home, _ := os.UserHomeDir()
 		return filepath.Join(home, ".local", "share", ProjectOrg, ProjectName, ProjectName+".pid")
 	case "darwin":
 		if isRoot {
-			return fmt.Sprintf("/var/run/%s/%s.pid", ProjectOrg, ProjectName)
+			return fmt.Sprintf("/var/run/%s/%s/%s.pid", ProjectOrg, ProjectName, ProjectName)
 		}
 		home, _ := os.UserHomeDir()
 		return filepath.Join(home, "Library", "Application Support", ProjectOrg, ProjectName, ProjectName+".pid")
@@ -275,7 +275,7 @@ func GetDefaultPIDFile(isRoot bool) string {
 	default:
 		// BSD
 		if isRoot {
-			return fmt.Sprintf("/var/run/%s/%s.pid", ProjectOrg, ProjectName)
+			return fmt.Sprintf("/var/run/%s/%s/%s.pid", ProjectOrg, ProjectName, ProjectName)
 		}
 		home, _ := os.UserHomeDir()
 		return filepath.Join(home, ".local", "share", ProjectOrg, ProjectName, ProjectName+".pid")

@@ -423,6 +423,32 @@ func TestXXXYMoviesEngine_Search_HttpTest(t *testing.T) {
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
+func TestXXXYMoviesEngine_UsesCurrentSearchRoute(t *testing.T) {
+	var gotPath, gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotQuery = r.URL.Query().Get("q")
+		if r.URL.Query().Get("page") != "2" {
+			t.Errorf("search page = %q, want 2", r.URL.Query().Get("page"))
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(universalHTML))
+	}))
+	t.Cleanup(srv.Close)
+	e := newXXXYMoviesEngine(defaultCfg())
+	e.baseURL = srv.URL
+	results, err := e.Search(context.Background(), "lesbian", 2)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if gotPath != "/search/" || gotQuery != "lesbian" {
+		t.Fatalf("search URL = %s?q=%s, want /search/?q=lesbian", gotPath, gotQuery)
+	}
+	if len(results) == 0 {
+		t.Fatal("Search returned no results from the current result-card markup")
+	}
+}
+
 // ── YouJizz ───────────────────────────────────────────────────────────────────
 
 func TestYouJizzEngine_Search_HttpTest(t *testing.T) {
@@ -482,6 +508,29 @@ func TestBaseEngine_MakeRequest_RateLimit(t *testing.T) {
 	t.Cleanup(srv.Close)
 	e := NewBaseEngine("test", "Test", srv.URL, 1, defaultCfg())
 	_, _ = e.MakeRequest(context.Background(), srv.URL+"/limit")
+}
+
+func TestBaseEngine_MakeRequest_ClientErrorsRecordFailure(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusNotFound, http.StatusGone} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+			}))
+			t.Cleanup(srv.Close)
+			e := NewBaseEngine("test", "Test", srv.URL, 1, defaultCfg())
+			e.minRequestInterval = 0
+			if resp, err := e.MakeRequest(context.Background(), srv.URL+"/search"); err == nil {
+				if resp != nil {
+					_ = resp.Body.Close()
+				}
+				t.Fatalf("MakeRequest returned no error for HTTP %d", status)
+			}
+			stats := e.GetStats()
+			if stats.TotalFailures != 1 || stats.TotalSuccesses != 0 {
+				t.Fatalf("health stats = failures %d, successes %d; want 1, 0", stats.TotalFailures, stats.TotalSuccesses)
+			}
+		})
+	}
 }
 
 // ── genericSearch coverage ────────────────────────────────────────────────────

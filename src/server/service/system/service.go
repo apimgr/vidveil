@@ -730,17 +730,18 @@ func (sm *ServiceManager) installSystemd() error {
 
 func (sm *ServiceManager) systemdUnit() string {
 	paths := appPath.GetAppPaths(sm.configDir, sm.dataDir)
-	readWritePaths := make([]string, 0, 6)
+	readWritePaths := make([]string, 0, 7)
 	for _, dir := range []string{
 		paths.Config,
 		paths.Data,
 		paths.Cache,
 		paths.Log,
 		paths.Backup,
+		filepath.Dir(appPath.GetDefaultPIDFile(true)),
 		appPath.GetMaintenanceLockDir(paths.Data),
 	} {
 		if dir != "" {
-			readWritePaths = append(readWritePaths, "ReadWritePaths="+escapeSystemdPath(dir))
+			readWritePaths = append(readWritePaths, "ReadWritePaths=-"+escapeSystemdPath(dir))
 		}
 	}
 
@@ -757,8 +758,7 @@ Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-RuntimeDirectory=%s
-RuntimeDirectoryMode=0755
+ExecStartPre=+/usr/bin/install -d -m 0755 /etc/%s/%s /var/lib/%s/%s /var/cache/%s/%s /var/log/%s/%s /var/run/%s/%s
 
 # Security hardening (binary drops privileges after port binding)
 ProtectSystem=strict
@@ -769,7 +769,12 @@ PrivateTmp=yes
 [Install]
 WantedBy=multi-user.target
 
-`, sm.appName, sm.projectOrg, sm.appName, sm.binaryPath, sm.projectOrg,
+	`, sm.appName, sm.projectOrg, sm.appName, sm.binaryPath,
+		sm.projectOrg, sm.internalName,
+		sm.projectOrg, sm.internalName,
+		sm.projectOrg, sm.internalName,
+		sm.projectOrg, sm.internalName,
+		sm.projectOrg, sm.internalName,
 		strings.Join(readWritePaths, "\n"))
 }
 
@@ -861,7 +866,7 @@ description="%s"
 command="%s"
 command_args=""
 command_user="%s:%s"
-pidfile="/var/run/%s/%s.pid"
+pidfile="/var/run/%s/%s/%s.pid"
 command_background=true
 output_log="/var/log/%s/%s/server.log"
 error_log="/var/log/%s/%s/error.log"
@@ -873,7 +878,7 @@ depend() {
 }
 
 start_pre() {
-    checkpath -d -m 0755 -o %s:%s /var/run/%s
+    checkpath -d -m 0755 -o %s:%s /var/run/%s/%s
     checkpath -d -m 0755 -o %s:%s /var/log/%s/%s
 }
 `,
@@ -882,10 +887,9 @@ start_pre() {
 		sm.description,
 		sm.binaryPath,
 		sm.user, sm.group,
-		sm.projectOrg, sm.internalName,
-		sm.projectOrg, sm.internalName,
-		sm.projectOrg, sm.internalName,
-		sm.user, sm.group, sm.projectOrg,
+		sm.projectOrg, sm.internalName, sm.internalName,
+		sm.projectOrg, sm.internalName, sm.projectOrg, sm.internalName,
+		sm.user, sm.group, sm.projectOrg, sm.internalName,
 		sm.user, sm.group, sm.projectOrg, sm.internalName,
 	)
 
@@ -930,7 +934,7 @@ func (sm *ServiceManager) installSysVInit() error {
 NAME=%s
 DAEMON=%s
 DAEMON_USER=%s
-PIDFILE=/var/run/%s/%s.pid
+PIDFILE=/var/run/%s/%s/%s.pid
 LOGFILE=/var/log/%s/%s/server.log
 
 case "$1" in
@@ -974,7 +978,7 @@ exit 0
 		sm.internalName,
 		sm.binaryPath,
 		sm.user,
-		sm.projectOrg, sm.internalName,
+		sm.projectOrg, sm.internalName, sm.internalName,
 		sm.projectOrg, sm.internalName,
 	)
 

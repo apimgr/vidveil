@@ -455,6 +455,11 @@ func (e *BaseEngine) MakeRequestWithMod(ctx context.Context, reqURL string, mod 
 			_ = resp.Body.Close()
 			return retry.ErrRateLimit
 		}
+		if resp.StatusCode >= 400 {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+			return fmt.Errorf("upstream returned HTTP status %d", resp.StatusCode)
+		}
 
 		return nil
 	})

@@ -196,7 +196,7 @@ func TestGetDefaultPIDFileLinuxRoot(t *testing.T) {
 		t.Skip("linux-only assertion")
 	}
 	got := GetDefaultPIDFile(true)
-	want := "/var/run/apimgr/vidveil.pid"
+	want := "/var/run/apimgr/vidveil/vidveil.pid"
 	if got != want {
 		t.Errorf("GetDefaultPIDFile(root) = %q, want %q", got, want)
 	}

@@ -519,6 +519,33 @@ func TestMaintenanceModeMiddleware_MaintenanceFlagExists_Returns503(t *testing.T
 	}
 }
 
+func TestMaintenanceModeMiddleware_PWAAssetsPassThrough(t *testing.T) {
+	isolateMaintenanceDataDir(t)
+	h := newRenderTestHandler()
+	paths := config.GetAppPaths("", "")
+	flagFile := paths.Data + "/maintenance.flag"
+	if err := os.MkdirAll(paths.Data, 0755); err != nil {
+		t.Skipf("cannot create data dir %s: %v", paths.Data, err)
+	}
+	if err := os.WriteFile(flagFile, []byte(""), 0644); err != nil {
+		t.Skipf("cannot create maintenance flag: %v", err)
+	}
+	defer func() { _ = os.Remove(flagFile) }()
+
+	handler := h.MaintenanceModeMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, path := range []string{"/sw.js", "/manifest.json", "/offline.html"} {
+		t.Run(path, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
+			if rr.Code != http.StatusOK {
+				t.Errorf("MaintenanceModeMiddleware(%s): status = %d, want 200", path, rr.Code)
+			}
+		})
+	}
+}
+
 // TestMaintenanceModeMiddleware_APIPath_ReturnsJSONEnvelope verifies that
 // /api/** requests blocked by maintenance mode get the canonical
 // {"ok":false,"error":"MAINTENANCE",...} JSON body and X-Maintenance-*

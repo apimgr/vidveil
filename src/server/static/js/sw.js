@@ -5,14 +5,27 @@
 // vidveil-cache-v{version}-{commit}, the AI.md PART 16 cache naming
 // convention. Do not change the literal without updating that rewrite.
 const CACHE_NAME = 'vidveil-cache-v1';
+const ASSET_STAMP = '__ASSET_STAMP__';
 const STATIC_ASSETS = [
-  '/',
   '/offline.html',
-  '/static/css/common.css',
-  '/static/js/app.js',
-  '/manifest.json',
-  '/static/images/placeholder.svg'
+  '/static/css/common.css?v=' + ASSET_STAMP,
+  '/static/css/components.css?v=' + ASSET_STAMP,
+  '/static/css/public.css?v=' + ASSET_STAMP,
+  '/static/js/app.js?v=' + ASSET_STAMP,
+  '/manifest.json?v=' + ASSET_STAMP
 ];
+
+const NAV_TIMEOUT_MS = 8000;
+
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Navigation request timed out')), ms);
+    promise.then(
+      value => { clearTimeout(timer); resolve(value); },
+      error => { clearTimeout(timer); reject(error); }
+    );
+  });
+}
 
 // Synthesized last-resort response so respondWith never resolves undefined
 // (undefined would surface as net::ERR_FAILED instead of a readable page)
@@ -28,8 +41,13 @@ function offlineFallbackResponse() {
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
+      .then(cache => Promise.all(STATIC_ASSETS.map(async asset => {
+        const response = await fetch(asset);
+        if (!response.ok || response.redirected) {
+          throw new Error('Precache request failed: ' + asset);
+        }
+        await cache.put(asset, response);
+      })))
   );
 });
 
@@ -38,14 +56,14 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(key => key.startsWith('vidveil-') && key !== CACHE_NAME)
+        keys.filter(key => key.startsWith('vidveil-cache-') && key !== CACHE_NAME)
             .map(key => caches.delete(key))
       ))
       .then(() => self.clients.claim())
   );
 });
 
-// Fetch event - cache-first for static, network-first for API
+// Fetch event - cache-first for static assets, network-first for navigations
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
@@ -66,8 +84,8 @@ self.addEventListener('fetch', event => {
       caches.match(event.request)
         .then(cached => cached || fetch(event.request)
           .then(response => {
-            // Only cache successful responses — never error pages
-            if (response.ok) {
+            // Only cache successful responses — never error pages or redirects.
+            if (response.ok && !response.redirected) {
               const clone = response.clone();
               caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
             }
@@ -82,10 +100,13 @@ self.addEventListener('fetch', event => {
   // Navigations - network first, cache fallback, offline page, synthesized 503 last resort
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
+      withTimeout(fetch(event.request), NAV_TIMEOUT_MS)
         .then(response => {
-          // Only cache successful responses — never error pages or the age gate redirect chain
-          if (response.ok) {
+          if (response.redirected) {
+            throw new Error('Navigation followed a redirect');
+          }
+          // Only cache successful responses — never error pages or redirects.
+          if (response.ok && !response.redirected) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
           }
@@ -105,8 +126,8 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Only cache successful responses — never error pages
-        if (response.ok) {
+        // Only cache successful responses — never error pages or redirects.
+        if (response.ok && !response.redirected) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }

@@ -640,7 +640,8 @@ func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handle
 			path == apiBase+"/server/healthz" || path == "/api/healthz" ||
 			path == "/version" || path == apiBase+"/version" ||
 			strings.HasPrefix(path, "/static/") ||
-			strings.HasPrefix(path, "/branding/") {
+			strings.HasPrefix(path, "/branding/") ||
+			path == "/sw.js" || path == "/manifest.json" || path == "/offline.html" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -717,6 +718,7 @@ func (h *SearchHandler) AgeVerifyMiddleware(next http.Handler) http.Handler {
 		path := r.URL.Path
 		if strings.HasPrefix(path, "/static/") || strings.HasPrefix(path, "/branding/") ||
 			strings.HasPrefix(path, "/api/") ||
+			path == "/sw.js" || path == "/manifest.json" || path == "/offline.html" ||
 			path == "/healthz" ||
 			path == "/robots.txt" ||
 			path == "/llms.txt" ||
@@ -851,6 +853,7 @@ func (h *SearchHandler) ContentRestrictionMiddleware(next http.Handler) http.Han
 		path := r.URL.Path
 		if strings.HasPrefix(path, "/static/") || strings.HasPrefix(path, "/branding/") ||
 			strings.HasPrefix(path, "/api/") ||
+			path == "/sw.js" || path == "/manifest.json" || path == "/offline.html" ||
 			path == "/healthz" ||
 			path == "/robots.txt" ||
 			path == "/llms.txt" ||

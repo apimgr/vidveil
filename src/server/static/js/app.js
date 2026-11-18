@@ -2990,7 +2990,26 @@ window.handleDownloadClick = handleDownloadClick;
 window.announce = announce;
 
 // PWA Service Worker Registration (AI.md PART 16)
+var serviceWorkerUpdateAccepted = false;
+var serviceWorkerReloading = false;
+var serviceWorkerReloadTimer = null;
+
+function reloadAfterServiceWorkerUpdate() {
+    if (serviceWorkerReloading) { return; }
+    serviceWorkerReloading = true;
+    if (serviceWorkerReloadTimer) {
+        clearTimeout(serviceWorkerReloadTimer);
+        serviceWorkerReloadTimer = null;
+    }
+    window.location.reload();
+}
+
 if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+        if (serviceWorkerUpdateAccepted) {
+            reloadAfterServiceWorkerUpdate();
+        }
+    });
     navigator.serviceWorker.register('/sw.js', { scope: '/' })
         .catch(function() {});
 }
@@ -3090,14 +3109,19 @@ function showUpdateNotification() {
 }
 
 function updateApp() {
+    serviceWorkerUpdateAccepted = true;
+    serviceWorkerReloadTimer = setTimeout(reloadAfterServiceWorkerUpdate, 5000);
+    if (!('serviceWorker' in navigator)) {
+        reloadAfterServiceWorkerUpdate();
+        return;
+    }
     navigator.serviceWorker.ready.then(function(reg) {
         if (reg.waiting) {
             reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        } else {
+            reloadAfterServiceWorkerUpdate();
         }
-    });
-    navigator.serviceWorker.addEventListener('controllerchange', function() {
-        window.location.reload();
-    });
+    }).catch(reloadAfterServiceWorkerUpdate);
 }
 
 // Check for SW updates and notify user (AI.md PART 16)

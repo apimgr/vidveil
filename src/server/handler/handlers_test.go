@@ -380,6 +380,9 @@ func TestAgeVerifyMiddleware_StaticBypass(t *testing.T) {
 		"/healthz",
 		"/robots.txt",
 		"/age-verify",
+		"/sw.js",
+		"/manifest.json",
+		"/offline.html",
 	}
 
 	for _, path := range testPaths {

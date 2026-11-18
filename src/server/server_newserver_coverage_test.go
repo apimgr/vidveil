@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/branding"
 	"github.com/apimgr/vidveil/src/server/service/engine"
@@ -90,6 +91,26 @@ func TestNewServer_SearchHandlerSet(t *testing.T) {
 	s := newTestServer(t)
 	if s.searchHandler == nil {
 		t.Error("NewServer: searchHandler is nil after setupRoutes")
+	}
+}
+
+func TestServiceWorkerUsesBuildStampedPrecacheURLs(t *testing.T) {
+	s := newTestServer(t)
+	rr := httptest.NewRecorder()
+	s.router.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/sw.js", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET /sw.js status = %d, want 200", rr.Code)
+	}
+	body := rr.Body.String()
+	stamp := version.AssetStamp()
+	if !strings.Contains(body, "const ASSET_STAMP = '"+stamp+"'") {
+		t.Fatalf("service worker precache URLs do not contain build asset stamp %q", stamp)
+	}
+	if strings.Contains(body, "__ASSET_STAMP__") {
+		t.Error("service worker response contains an unreplaced asset stamp placeholder")
+	}
+	if strings.Contains(body, "  '/',") {
+		t.Error("service worker must not precache the root navigation")
 	}
 }
 

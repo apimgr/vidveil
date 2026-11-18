@@ -93,7 +93,7 @@ func TestServerHandler_AboutPage_PreservesConfiguredBaseURL(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("AboutPage with base URL: status=%d body=%s", response.Code, response.Body.String())
 	}
-	for _, expected := range []string{`href="/mounted/server/privacy"`, `href="/mounted/static/css/common.css`, `href="/mounted/manifest.json"`} {
+	for _, expected := range []string{`href="/mounted/server/privacy"`, `href="/mounted/static/css/common.css`, `href="/mounted/manifest.json?v=`} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("AboutPage with base URL missing %q", expected)
 		}

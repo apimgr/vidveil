@@ -237,6 +237,15 @@ func TestContentRestrictionMiddleware_AgeVerifyPath_Skips(t *testing.T) {
 	}
 }
 
+func TestContentRestrictionMiddleware_PWAAssetsSkip(t *testing.T) {
+	h := &SearchHandler{appConfig: createTestConfig()}
+	for _, path := range []string{"/sw.js", "/manifest.json", "/offline.html"} {
+		if !middlewareCallsNext(h, path, nil) {
+			t.Errorf("ContentRestrictionMiddleware: %s should call next", path)
+		}
+	}
+}
+
 func TestContentRestrictionMiddleware_ContentRestrictedPath_Skips(t *testing.T) {
 	h := &SearchHandler{appConfig: createTestConfig()}
 	if !middlewareCallsNext(h, "/content-restricted", nil) {

@@ -1034,6 +1034,7 @@ func (s *Server) setupRoutes() {
 		// AI.md PART 16 format: {app_name}-cache-v{version}
 		swCache := "vidveil-cache-v" + version.Version + "-" + version.CommitID
 		body := strings.Replace(string(data), "vidveil-cache-v1", swCache, 1)
+		body = strings.ReplaceAll(body, "__ASSET_STAMP__", version.AssetStamp())
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Header().Set("Service-Worker-Allowed", "/")
 		// PART 9: /sw.js is no-cache + build-stamp ETag — never long-cached,

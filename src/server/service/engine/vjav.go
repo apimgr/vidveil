@@ -19,7 +19,7 @@ func newVJAVEngine(appConfig *config.AppConfig) *VJAVEngine {
 // Search performs a search on VJAV
 func (e *VJAVEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
 	searchURL := e.BuildSearchURL("/search/{query}/?page={page}", query, page)
-	return genericSearch(ctx, e.BaseEngine, searchURL, "div.video-item, article.video, div.item")
+	return genericSearchWithPageValidation(ctx, e.BaseEngine, searchURL, "div.video-item, article.video, div.item", true)
 }
 
 // SupportsFeature returns whether the engine supports a feature

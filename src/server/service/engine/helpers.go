@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -55,6 +56,10 @@ func resolveSourceURL(baseURL, value string) string {
 
 // genericSearch performs a generic search using common patterns
 func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]model.VideoResult, error) {
+	return genericSearchWithPageValidation(ctx, e, url, selector, false)
+}
+
+func genericSearchWithPageValidation(ctx context.Context, e *BaseEngine, url, selector string, rejectUnrenderedEmptyPage bool) ([]model.VideoResult, error) {
 	resp, err := e.MakeRequest(ctx, url)
 	if err != nil {
 		return nil, err
@@ -74,6 +79,9 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
 		return nil, err
+	}
+	if strings.Contains(strings.ToLower(string(body)), "cookies required") {
+		return nil, fmt.Errorf("upstream requires browser cookies")
 	}
 
 	// Best-effort schema.org VideoObject data emitted as JSON-LD, keyed by
@@ -104,6 +112,9 @@ func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]
 			}
 		}
 	})
+	if rejectUnrenderedEmptyPage && len(results) == 0 && strings.TrimSpace(doc.Find("title").First().Text()) == "" {
+		return nil, fmt.Errorf("upstream returned an unrendered search page")
+	}
 
 	// Best-effort per-result detail-page fetch for schema.org VideoObject
 	// JSON-LD (Search.DetailEnrichment, off by default - see config.go).

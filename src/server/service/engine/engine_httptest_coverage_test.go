@@ -116,6 +116,28 @@ func TestDrTuberEngine_Search_HttpTest(t *testing.T) {
 	_, _ = e.Search(context.Background(), "test", 1)
 }
 
+func TestDrTuberEngine_UsesLiveSearchRoute(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><head><title>Search</title></head><body><a class="th ch-video" href="/video/1" title="Video"><img src="https://cdn.example/thumb.jpg"></a></body></html>`))
+	}))
+	t.Cleanup(srv.Close)
+	e := newDrTuberEngine(defaultCfg())
+	e.baseURL = srv.URL
+	results, err := e.Search(context.Background(), "lesbian", 2)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if gotPath != "/search/videos/lesbian/2" {
+		t.Fatalf("search path = %q, want /search/videos/lesbian/2", gotPath)
+	}
+	if len(results) != 1 {
+		t.Fatalf("Search returned %d results, want 1", len(results))
+	}
+}
+
 // ── Eporner ───────────────────────────────────────────────────────────────────
 
 func TestEpornerEngine_Search_HttpTest(t *testing.T) {
@@ -556,6 +578,30 @@ func TestGenericSearch_NoMatchingSelector_EmptyResults(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Errorf("genericSearch no match: expected 0 results, got %d", len(results))
+	}
+}
+
+func TestGenericSearch_RejectsUnrenderedAndCookieBlockedPages(t *testing.T) {
+	for name, body := range map[string]string{
+		"unrendered":       `...`,
+		"cookies required": `<div class="cookie-error-box">Cookies Required</div>`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(body))
+			}))
+			t.Cleanup(srv.Close)
+			e := NewBaseEngine("test", "Test", srv.URL, 1, defaultCfg())
+			var err error
+			if name == "unrendered" {
+				_, err = genericSearchWithPageValidation(context.Background(), e, srv.URL, ".video-item", true)
+			} else {
+				_, err = genericSearch(context.Background(), e, srv.URL, ".video-item")
+			}
+			if err == nil {
+				t.Fatal("genericSearch did not report the invalid source page")
+			}
+		})
 	}
 }
 

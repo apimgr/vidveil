@@ -18,7 +18,7 @@ func newDrTuberEngine(appConfig *config.AppConfig) *DrTuberEngine {
 
 // Search performs a search on DrTuber
 func (e *DrTuberEngine) Search(ctx context.Context, query string, page int) ([]model.VideoResult, error) {
-	searchURL := e.BuildSearchURL("/search/videos?search_type=videos&search_id={query}&p={page}", query, page)
+	searchURL := e.BuildSearchURL("/search/videos/{query}/{page}", query, page)
 	return genericSearch(ctx, e.BaseEngine, searchURL, "a.th.ch-video")
 }
 

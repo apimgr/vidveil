@@ -3,8 +3,11 @@ package config
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -637,12 +640,12 @@ type SSLConfig struct {
 
 // LetsEncryptConfig holds Let's Encrypt settings
 type LetsEncryptConfig struct {
-	Enabled         bool   `yaml:"enabled"`
-	Domain          string `yaml:"domain"`
-	Email           string `yaml:"email"`
-	Challenge       string `yaml:"challenge"`
-	DNSProviderType string `yaml:"dns_provider_type"`
-	DNSProviderKey  string `yaml:"dns_provider_key"`
+	Enabled        bool              `yaml:"enabled"`
+	Domain         string            `yaml:"domain"`
+	Email          string            `yaml:"email"`
+	Challenge      string            `yaml:"challenge"`
+	DNSProvider    string            `yaml:"dns_provider"`
+	DNSCredentials map[string]string `yaml:"dns_credentials" json:"-"`
 }
 
 // MetricsConfig holds Prometheus metrics settings per AI.md PART 20
@@ -2192,6 +2195,17 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 		fmt.Fprintf(os.Stderr, "Warning: failed to parse %s (%v), using default configuration\n", configPath, err)
 		cfg = DefaultAppConfig()
 	}
+	credentialFiles := append([]string{configPath}, dropins...)
+	if err := persistDNSCredentials(credentialFiles, cfg.Server.Security.EncryptionKey); err != nil {
+		return nil, "", fmt.Errorf("protect DNS credentials: %w", err)
+	}
+	for name, value := range cfg.Server.SSL.LetsEncrypt.DNSCredentials {
+		plain, decryptErr := decryptDNSCredential(value, cfg.Server.Security.EncryptionKey)
+		if decryptErr != nil {
+			return nil, "", fmt.Errorf("decrypt DNS credential %s: %w", name, decryptErr)
+		}
+		cfg.Server.SSL.LetsEncrypt.DNSCredentials[name] = plain
+	}
 
 	// Validate and fix invalid config values per AI.md PART 12
 	validateConfig(cfg)
@@ -2327,6 +2341,17 @@ func yamlNodeHasSecrets(node *yaml.Node) bool {
 	if node.Kind == yaml.MappingNode {
 		for i := 0; i+1 < len(node.Content); i += 2 {
 			key := strings.ToLower(node.Content[i].Value)
+			if key == "dns_credentials" {
+				credentials := node.Content[i+1]
+				if credentials.Kind == yaml.MappingNode {
+					for j := 1; j < len(credentials.Content); j += 2 {
+						if strings.HasPrefix(credentials.Content[j].Value, "enc:v1:") {
+							return true
+						}
+					}
+				}
+				continue
+			}
 			if strings.Contains(key, "token") || strings.Contains(key, "secret") || strings.Contains(key, "password") || strings.Contains(key, "private_key") || strings.Contains(key, "encryption_key") || strings.Contains(key, "api_key") {
 				return true
 			}
@@ -2694,8 +2719,199 @@ func validateBackupRetention(cfg *AppConfig) {
 }
 
 // SaveAppConfig saves configuration to file
+func encryptDNSCredential(value, key string) (string, error) {
+	if strings.HasPrefix(value, "enc:v1:") {
+		return value, nil
+	}
+	keyBytes, err := hex.DecodeString(key)
+	if err != nil || len(keyBytes) != 32 {
+		return "", errors.New("server.security.encryption_key must be 32-byte hex")
+	}
+	block, err := aes.NewCipher(keyBytes)
+	if err != nil {
+		return "", err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return "", err
+	}
+	sealed := aead.Seal(nonce, nonce, []byte(value), nil)
+	return "enc:v1:" + base64.StdEncoding.EncodeToString(sealed), nil
+}
+
+func decryptDNSCredential(value, key string) (string, error) {
+	if !strings.HasPrefix(value, "enc:v1:") {
+		return value, nil
+	}
+	keyBytes, err := hex.DecodeString(key)
+	if err != nil || len(keyBytes) != 32 {
+		return "", errors.New("server.security.encryption_key must be 32-byte hex")
+	}
+	sealed, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(value, "enc:v1:"))
+	if err != nil {
+		return "", errors.New("invalid encrypted credential")
+	}
+	block, err := aes.NewCipher(keyBytes)
+	if err != nil {
+		return "", err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	if len(sealed) < aead.NonceSize() {
+		return "", errors.New("invalid encrypted credential")
+	}
+	plain, err := aead.Open(nil, sealed[:aead.NonceSize()], sealed[aead.NonceSize():], nil)
+	if err != nil {
+		return "", errors.New("cannot decrypt credential with configured encryption key")
+	}
+	return string(plain), nil
+}
+
+func persistDNSCredentials(files []string, key string) error {
+	if len(files) == 0 {
+		return nil
+	}
+	for index, file := range files {
+		writePath := file
+		var err error
+		if index > 0 {
+			writePath, err = safeConfigDropinTarget(file)
+		} else if resolved, resolveErr := filepath.EvalSymlinks(file); resolveErr == nil {
+			writePath = resolved
+		} else {
+			err = resolveErr
+		}
+		if err != nil {
+			return err
+		}
+		if writePath == "" {
+			continue
+		}
+		data, err := os.ReadFile(writePath)
+		if err != nil {
+			return err
+		}
+		var doc yaml.Node
+		if err := yaml.Unmarshal(data, &doc); err != nil || len(doc.Content) == 0 {
+			continue
+		}
+		root := doc.Content[0]
+		server := yamlMapValue(root, "server")
+		ssl := yamlMapValue(server, "ssl")
+		le := yamlMapValue(ssl, "letsencrypt")
+		credentials := yamlMapValue(le, "dns_credentials")
+		changed := false
+		if credentials != nil && credentials.Kind == yaml.MappingNode {
+			for i := 1; i < len(credentials.Content); i += 2 {
+				value := credentials.Content[i]
+				if strings.HasPrefix(value.Value, "enc:v1:") {
+					continue
+				}
+				encrypted, err := encryptDNSCredential(value.Value, key)
+				if err != nil {
+					return fmt.Errorf("%s: %w", file, err)
+				}
+				value.Value, value.Tag, changed = encrypted, "!!str", true
+			}
+		}
+		if !changed {
+			continue
+		}
+		encoded, err := yaml.Marshal(&doc)
+		if err != nil {
+			return err
+		}
+		if err := atomicConfigWrite(writePath, encoded); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func safeConfigDropinTarget(file string) (string, error) {
+	info, err := os.Lstat(file)
+	if err != nil {
+		return "", err
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		if !info.Mode().IsRegular() {
+			return "", nil
+		}
+		return file, nil
+	}
+	target, err := filepath.EvalSymlinks(file)
+	if err != nil {
+		return "", err
+	}
+	base := filepath.Dir(file)
+	rel, err := filepath.Rel(base, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%s symlink target must stay inside yaml.d", file)
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		return "", err
+	}
+	if !targetInfo.Mode().IsRegular() {
+		return "", nil
+	}
+	return target, nil
+}
+
+func yamlMapValue(node *yaml.Node, key string) *yaml.Node {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			return node.Content[i+1]
+		}
+	}
+	return nil
+}
+
+func atomicConfigWrite(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
+}
+
 func SaveAppConfig(cfg *AppConfig, path string) (saveErr error) {
-	data, err := yaml.Marshal(cfg)
+	configToSave := *cfg
+	configToSave.Server.SSL.LetsEncrypt.DNSCredentials = make(map[string]string, len(cfg.Server.SSL.LetsEncrypt.DNSCredentials))
+	for name, value := range cfg.Server.SSL.LetsEncrypt.DNSCredentials {
+		encrypted, encryptErr := encryptDNSCredential(value, cfg.Server.Security.EncryptionKey)
+		if encryptErr != nil {
+			return fmt.Errorf("encrypt DNS credential %s: %w", name, encryptErr)
+		}
+		configToSave.Server.SSL.LetsEncrypt.DNSCredentials[name] = encrypted
+	}
+	data, err := yaml.Marshal(&configToSave)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -2746,7 +2962,65 @@ func SaveAppConfig(cfg *AppConfig, path string) (saveErr error) {
 	if err := os.Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("failed to replace config: %w", err)
 	}
+	if err := flattenDNSSettingsFromDropins(filepath.Join(filepath.Dir(path), "yaml.d")); err != nil {
+		return fmt.Errorf("move DNS settings into encrypted base config: %w", err)
+	}
 
+	return nil
+}
+
+func flattenDNSSettingsFromDropins(dropDir string) error {
+	entries, err := os.ReadDir(dropDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || (!strings.HasSuffix(entry.Name(), ".yml") && !strings.HasSuffix(entry.Name(), ".yaml")) {
+			continue
+		}
+		file := filepath.Join(dropDir, entry.Name())
+		writePath, err := safeConfigDropinTarget(file)
+		if err != nil {
+			return err
+		}
+		if writePath == "" {
+			continue
+		}
+		data, err := os.ReadFile(writePath)
+		if err != nil {
+			return err
+		}
+		var doc yaml.Node
+		if err := yaml.Unmarshal(data, &doc); err != nil || len(doc.Content) == 0 {
+			continue
+		}
+		le := yamlMapValue(yamlMapValue(yamlMapValue(doc.Content[0], "server"), "ssl"), "letsencrypt")
+		if le == nil || le.Kind != yaml.MappingNode {
+			continue
+		}
+		changed := false
+		for i := 0; i+1 < len(le.Content); {
+			key := le.Content[i].Value
+			if key == "dns_provider" || key == "dns_credentials" || key == "dns_provider_type" || key == "dns_provider_key" {
+				le.Content = append(le.Content[:i], le.Content[i+2:]...)
+				changed = true
+				continue
+			}
+			i += 2
+		}
+		if changed {
+			encoded, err := yaml.Marshal(&doc)
+			if err != nil {
+				return err
+			}
+			if err := atomicConfigWrite(writePath, encoded); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 

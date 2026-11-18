@@ -2,6 +2,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -178,6 +179,96 @@ func TestSaveAppConfigPermissions(t *testing.T) {
 	want := os.FileMode(0600)
 	if got := info.Mode().Perm(); got != want {
 		t.Fatalf("config permissions = %04o, want %04o", got, want)
+	}
+}
+
+func TestDNSCredentialsAreEncryptedOnDiskAndHiddenFromJSON(t *testing.T) {
+	configDir := t.TempDir()
+	dataDir := t.TempDir()
+	cfg := DefaultAppConfig()
+	cfg.Server.SSL.LetsEncrypt.DNSProvider = "cloudflare"
+	cfg.Server.SSL.LetsEncrypt.DNSCredentials = map[string]string{"CF_DNS_API_TOKEN": "sensitive-token-value"}
+	path := filepath.Join(configDir, "server.yml")
+	if err := SaveAppConfig(cfg, path); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if strings.Contains(string(contents), "sensitive-token-value") || !strings.Contains(string(contents), "enc:v1:") {
+		t.Fatal("DNS credential was not encrypted at rest")
+	}
+	loaded, _, err := LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		t.Fatalf("LoadAppConfig: %v", err)
+	}
+	if got := loaded.Server.SSL.LetsEncrypt.DNSCredentials["CF_DNS_API_TOKEN"]; got != "sensitive-token-value" {
+		t.Fatalf("loaded DNS credential = %q", got)
+	}
+	encoded, err := json.Marshal(loaded.Server.SSL.LetsEncrypt)
+	if err != nil {
+		t.Fatalf("marshal config JSON: %v", err)
+	}
+	if strings.Contains(string(encoded), "sensitive-token-value") || strings.Contains(string(encoded), "dns_credentials") {
+		t.Fatal("DNS credentials appeared in JSON serialization")
+	}
+}
+
+func TestPlaintextDNSCredentialsAreAtomicallyProtectedFromDropin(t *testing.T) {
+	configDir := t.TempDir()
+	dataDir := t.TempDir()
+	if err := SaveAppConfig(DefaultAppConfig(), filepath.Join(configDir, "server.yml")); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+	dropDir := filepath.Join(configDir, "yaml.d")
+	if err := os.Mkdir(dropDir, 0755); err != nil {
+		t.Fatalf("create drop-in directory: %v", err)
+	}
+	targetPath := filepath.Join(dropDir, "dns-target.yml")
+	dropPath := filepath.Join(dropDir, "dns.yml")
+	if err := os.WriteFile(targetPath, []byte("server:\n  ssl:\n    letsencrypt:\n      dns_provider: cloudflare\n      dns_credentials:\n        CF_DNS_API_TOKEN: plaintext-token\n"), 0644); err != nil {
+		t.Fatalf("write drop-in: %v", err)
+	}
+	if err := os.Symlink(targetPath, dropPath); err != nil {
+		t.Fatalf("symlink drop-in: %v", err)
+	}
+	loaded, _, err := LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		t.Fatalf("LoadAppConfig: %v", err)
+	}
+	if got := loaded.Server.SSL.LetsEncrypt.DNSCredentials["CF_DNS_API_TOKEN"]; got != "plaintext-token" {
+		t.Fatalf("loaded credential = %q", got)
+	}
+	contents, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatalf("read protected drop-in: %v", err)
+	}
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		t.Fatalf("stat protected drop-in: %v", err)
+	}
+	if strings.Contains(string(contents), "plaintext-token") || !strings.Contains(string(contents), "enc:v1:") {
+		t.Fatal("plaintext DNS credential remained in the drop-in")
+	}
+	if got := info.Mode().Perm(); got != 0600 {
+		t.Fatalf("protected drop-in mode = %04o, want 0600", got)
+	}
+}
+
+func TestLoadAppConfigAcceptsServerConfigSymlinkOutsideConfigDir(t *testing.T) {
+	configDir := t.TempDir()
+	dataDir := t.TempDir()
+	targetDir := t.TempDir()
+	target := filepath.Join(targetDir, "server.yml")
+	if err := SaveAppConfig(DefaultAppConfig(), target); err != nil {
+		t.Fatalf("SaveAppConfig: %v", err)
+	}
+	if err := os.Symlink(target, filepath.Join(configDir, "server.yml")); err != nil {
+		t.Fatalf("symlink server.yml: %v", err)
+	}
+	if _, _, err := LoadAppConfig(configDir, dataDir); err != nil {
+		t.Fatalf("LoadAppConfig through server.yml symlink: %v", err)
 	}
 }
 

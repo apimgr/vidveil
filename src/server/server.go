@@ -1118,11 +1118,11 @@ func (s *Server) setupRoutes() {
 	// Versioned OpenAPI JSON spec
 	s.router.Get(apiBase+"/server/swagger", swagger.SpecHandler(s.appConfig))
 	// Versioned GraphQL endpoint
-	s.router.HandleFunc(apiBase+"/server/graphql", gql.Handle)
+	s.router.Post(apiBase+"/server/graphql", gql.Handle)
 
 	// Unversioned aliases — SAME handler, not redirects (PART 14)
 	s.router.Get("/api/swagger", swagger.SpecHandler(s.appConfig))
-	s.router.HandleFunc("/api/graphql", gql.Handle)
+	s.router.Post("/api/graphql", gql.Handle)
 	// /api/healthz is the unversioned direct JSON alias for {api_version}/server/healthz
 	s.router.Get("/api/healthz", h.APIHealthCheck)
 

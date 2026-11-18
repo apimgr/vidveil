@@ -11,10 +11,12 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-acme/lego/v4/certcrypto"
@@ -27,6 +29,13 @@ import (
 )
 
 // legoUser implements registration.User for lego certificate requests.
+var dnsProviderEnvMu sync.Mutex
+
+type dnsSavedEnv struct {
+	value string
+	set   bool
+}
+
 type legoUser struct {
 	email        string
 	registration *registration.Resource
@@ -38,12 +47,12 @@ func (u *legoUser) GetRegistration() *registration.Resource { return u.registrat
 func (u *legoUser) GetPrivateKey() crypto.PrivateKey        { return u.key }
 
 // requestDNS01 requests a Let's Encrypt certificate using DNS-01 challenge via lego.
-// Provider is selected from server.ssl.letsencrypt.dns_provider_type.
-// Credentials are provided as JSON in server.ssl.letsencrypt.dns_provider_key.
+// Provider and credentials come from server.ssl.letsencrypt.dns_provider and
+// server.ssl.letsencrypt.dns_credentials.
 func (m *SSLManager) requestDNS01(domain string) error {
-	providerType := m.appConfig.Server.SSL.LetsEncrypt.DNSProviderType
+	providerType := m.appConfig.Server.SSL.LetsEncrypt.DNSProvider
 	if providerType == "" {
-		return fmt.Errorf("DNS-01: dns_provider_type must be set in server.yml (e.g. cloudflare, route53, digitalocean)")
+		return fmt.Errorf("DNS-01: dns_provider must be set in server.yml (e.g. cloudflare, route53, digitalocean)")
 	}
 
 	email := m.appConfig.Server.SSL.LetsEncrypt.Email
@@ -51,7 +60,7 @@ func (m *SSLManager) requestDNS01(domain string) error {
 		email = "admin@" + domain
 	}
 
-	credsJSON := m.appConfig.Server.SSL.LetsEncrypt.DNSProviderKey
+	creds := m.appConfig.Server.SSL.LetsEncrypt.DNSCredentials
 
 	// Generate account key for ACME registration
 	accountKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -70,7 +79,7 @@ func (m *SSLManager) requestDNS01(domain string) error {
 	}
 
 	// Build DNS provider from type and credentials
-	provider, err := buildDNSProvider(providerType, credsJSON)
+	provider, err := buildDNSProvider(providerType, creds)
 	if err != nil {
 		return fmt.Errorf("DNS-01: %w", err)
 	}
@@ -129,6 +138,9 @@ func (m *SSLManager) requestDNS01(domain string) error {
 	m.mu.Lock()
 	m.certificate = &tlsCert
 	m.mu.Unlock()
+	if err := m.recordDNSValidation(); err != nil {
+		return fmt.Errorf("certificate issued but DNS validation state could not be stored: %w", err)
+	}
 
 	fmt.Printf("DNS-01: certificate obtained for %s (expires %s)\n",
 		domain, leaf.NotAfter.Format(time.RFC1123))
@@ -136,38 +148,58 @@ func (m *SSLManager) requestDNS01(domain string) error {
 	return nil
 }
 
-// buildDNSProvider constructs a lego DNS provider from the provider name and JSON
-// credentials. Per AI.md PART 15, ALL lego DNS providers are supported: the name is
-// dispatched dynamically via lego's provider registry and each provider reads its own
-// credential fields from the process environment. credsJSON is a JSON object whose keys
-// are set as environment variables before the provider is built; if empty, the provider
-// reads pre-existing environment variables.
-func buildDNSProvider(providerType, credsJSON string) (challenge.Provider, error) {
-	// Apply credentials as environment variables if provided
-	if credsJSON != "" {
-		if err := applyCredsFromJSON(credsJSON); err != nil {
-			return nil, fmt.Errorf("failed to parse dns_provider_key JSON: %w", err)
+// ValidateDNSProvider constructs the configured lego provider without creating
+// or changing DNS records.
+func (m *SSLManager) ValidateDNSProvider() error {
+	providerName := m.appConfig.Server.SSL.LetsEncrypt.DNSProvider
+	if providerName == "" {
+		return fmt.Errorf("dns_provider must be set")
+	}
+	_, err := buildDNSProvider(providerName, m.appConfig.Server.SSL.LetsEncrypt.DNSCredentials)
+	if err != nil {
+		log.Printf("ERROR: DNS-01 provider validation failed: %v", err)
+	}
+	return err
+}
+
+// buildDNSProvider scopes credentials to lego's provider constructor and restores
+// the caller's environment before returning. lego providers capture credentials
+// during construction, so they remain usable without retaining environment values.
+func buildDNSProvider(providerName string, credentials map[string]string) (challenge.Provider, error) {
+	if strings.TrimSpace(providerName) == "" {
+		return nil, fmt.Errorf("dns_provider must be set")
+	}
+	dnsProviderEnvMu.Lock()
+	defer dnsProviderEnvMu.Unlock()
+	saved := make(map[string]dnsSavedEnv, len(credentials))
+	for name, value := range credentials {
+		old, set := os.LookupEnv(name)
+		saved[name] = dnsSavedEnv{value: old, set: set}
+		if err := os.Setenv(name, value); err != nil {
+			restoreDNSEnvironment(saved)
+			return nil, fmt.Errorf("cannot set environment variable %s", name)
 		}
 	}
-
-	provider, err := dns.NewDNSChallengeProviderByName(providerType)
+	provider, err := dns.NewDNSChallengeProviderByName(providerName)
+	restoreDNSEnvironment(saved)
 	if err != nil {
-		return nil, fmt.Errorf("dns_provider_type %q: %w", providerType, err)
+		message := err.Error()
+		for _, value := range credentials {
+			if value != "" {
+				message = strings.ReplaceAll(message, value, "[redacted]")
+			}
+		}
+		return nil, fmt.Errorf("dns_provider %q: %s", providerName, message)
 	}
 	return provider, nil
 }
 
-// applyCredsFromJSON sets environment variables from a JSON credentials map.
-// Keys become env var names (upper-cased with _ separator as needed by each provider).
-func applyCredsFromJSON(credsJSON string) error {
-	var creds map[string]string
-	if err := json.Unmarshal([]byte(credsJSON), &creds); err != nil {
-		return err
-	}
-	for k, v := range creds {
-		if err := os.Setenv(k, v); err != nil {
-			return fmt.Errorf("failed to set env %s: %w", k, err)
+func restoreDNSEnvironment(saved map[string]dnsSavedEnv) {
+	for name, old := range saved {
+		if old.set {
+			_ = os.Setenv(name, old.value)
+		} else {
+			_ = os.Unsetenv(name)
 		}
 	}
-	return nil
 }

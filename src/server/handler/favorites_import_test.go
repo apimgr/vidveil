@@ -19,6 +19,21 @@ func TestFavoritesImportRejectsInvalidJSON(t *testing.T) {
 	}
 }
 
+func TestDecodeFavoriteImportAcceptsArrayAndObject(t *testing.T) {
+	for _, input := range []string{
+		`[{"url":"https://example.test/video","title":"Example"}]`,
+		`{"favorites":[{"url":"https://example.test/video","title":"Example"}]}`,
+	} {
+		entries, err := decodeFavoriteImport(strings.NewReader(input))
+		if err != nil {
+			t.Fatalf("decodeFavoriteImport(%s): %v", input, err)
+		}
+		if len(entries) != 1 || entries[0].URL != "https://example.test/video" {
+			t.Fatalf("decoded entries = %+v", entries)
+		}
+	}
+}
+
 func TestFavoritesExportRequiresOwnerToken(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/favorites/export", nil)
 	response := httptest.NewRecorder()

@@ -339,7 +339,7 @@ func TestRequestTLSALPN01SetsAutocert(t *testing.T) {
 
 func TestRequestDNS01MissingProviderReturnsError(t *testing.T) {
 	m := newEnabledSSLManager(t)
-	m.appConfig.Server.SSL.LetsEncrypt.DNSProviderType = ""
+	m.appConfig.Server.SSL.LetsEncrypt.DNSProvider = ""
 	err := m.requestDNS01("example.com")
 	if err == nil {
 		t.Error("expected error when DNSProviderType is empty")
@@ -348,7 +348,7 @@ func TestRequestDNS01MissingProviderReturnsError(t *testing.T) {
 
 func TestRequestDNS01MissingCredsReturnsError(t *testing.T) {
 	m := newEnabledSSLManager(t)
-	m.appConfig.Server.SSL.LetsEncrypt.DNSProviderType = "cloudflare"
+	m.appConfig.Server.SSL.LetsEncrypt.DNSProvider = "cloudflare"
 	// No credentials in env or config — lego provider init must return an error.
 	err := m.requestDNS01("example.com")
 	if err == nil {
@@ -369,6 +369,24 @@ func TestInitializeSSLEnabledNoCertsGeneratesSelfSigned(t *testing.T) {
 	m.mu.RUnlock()
 	if cert == nil {
 		t.Error("Initialize should generate a self-signed cert when none exist")
+	}
+}
+
+func TestInitializeUsesExistingCertificateWhenDNSProviderIsInvalid(t *testing.T) {
+	m := newEnabledSSLManager(t)
+	if err := m.generateSelfSigned(); err != nil {
+		t.Fatalf("generate existing certificate: %v", err)
+	}
+	m.appConfig.Server.SSL.LetsEncrypt.Enabled = true
+	m.appConfig.Server.SSL.LetsEncrypt.Challenge = "dns-01"
+	m.appConfig.Server.SSL.LetsEncrypt.DNSProvider = "unsupported-provider"
+	if err := m.Initialize(); err != nil {
+		t.Fatalf("Initialize with existing certificate and invalid DNS provider: %v", err)
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.certificate == nil {
+		t.Fatal("existing certificate was not loaded")
 	}
 }
 

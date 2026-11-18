@@ -399,9 +399,7 @@ func (h *SearchHandler) FavoritesImport(w http.ResponseWriter, r *http.Request) 
 		reader = file
 	}
 
-	var entries []importFavoriteEntry
-	decoder := json.NewDecoder(reader)
-	decodeErr := decoder.Decode(&entries)
+	entries, decodeErr := decodeFavoriteImport(reader)
 	if uploadedFile != nil {
 		if err := uploadedFile.Close(); decodeErr == nil && err != nil {
 			decodeErr = err
@@ -409,11 +407,6 @@ func (h *SearchHandler) FavoritesImport(w http.ResponseWriter, r *http.Request) 
 	}
 	if decodeErr != nil {
 		SendNegotiatedError(w, r, "BAD_REQUEST", "invalid favorites JSON")
-		return
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); err != io.EOF {
-		SendNegotiatedError(w, r, "BAD_REQUEST", "favorites JSON must contain one array")
 		return
 	}
 	for _, entry := range entries {
@@ -469,6 +462,37 @@ func (h *SearchHandler) FavoritesImport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	http.Redirect(w, r, "/favorites", http.StatusFound)
+}
+
+func decodeFavoriteImport(reader io.Reader) ([]importFavoriteEntry, error) {
+	decoder := json.NewDecoder(reader)
+	var payload json.RawMessage
+	if err := decoder.Decode(&payload); err != nil {
+		return nil, err
+	}
+	var entries []importFavoriteEntry
+	trimmed := strings.TrimSpace(string(payload))
+	if strings.HasPrefix(trimmed, "[") {
+		if err := json.Unmarshal(payload, &entries); err != nil {
+			return nil, err
+		}
+	} else {
+		var wrapped struct {
+			Favorites []importFavoriteEntry `json:"favorites"`
+		}
+		if err := json.Unmarshal(payload, &wrapped); err != nil {
+			return nil, err
+		}
+		if wrapped.Favorites == nil {
+			return nil, fmt.Errorf("favorites array is required")
+		}
+		entries = wrapped.Favorites
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return nil, fmt.Errorf("favorites JSON must contain one value")
+	}
+	return entries, nil
 }
 
 // FavoritesAPIList handles GET /api/{api_version}/favorites.

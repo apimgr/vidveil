@@ -368,6 +368,18 @@ func GenerateSpec(appConfig *config.AppConfig, r *http.Request) string {
 	addOperation("/server/help", "get", "getServerHelp", "Get server help", "Return usage and help information for this server.", nil, nil)
 	addOperation("/server/help/mcp", "get", "getServerHelpMCP", "Get MCP connection help", "Return MCP endpoint metadata, connection guidance, and anonymous tools.", nil, nil)
 	addOperation("/server/terms", "get", "getServerTerms", "Get server terms", "Return the server terms of service.", nil, nil)
+	addOperation("/server/swagger", "get", "getOpenAPISpec", "Get the OpenAPI specification", "Return the generated OpenAPI JSON document.", nil, nil)
+	addOperation("/server/graphql", "post", "executeGraphQL", "Execute a GraphQL query", "Execute a GraphQL query against the service schema.", nil,
+		objectBody(map[string]interface{}{"query": stringProperty("GraphQL query document"), "variables": map[string]interface{}{"type": "object"}}, []string{"query"}, "application/json"))
+	addOperation("/server/mcp", "post", "executeMCP", "Call MCP tools", "Streamable HTTP endpoint for the Model Context Protocol.", nil,
+		objectBody(map[string]interface{}{}, nil, "application/json"))
+	addOperation("/favorites/", "get", "listFavorites", "List favorites", "List private favorites belonging to the current anonymous owner.", nil, nil)
+	addOperation("/favorites/", "post", "addFavorite", "Add a favorite", "Save a result as a private favorite for the current anonymous owner.", nil,
+		objectBody(map[string]interface{}{"url": stringProperty("Result URL"), "title": stringProperty("Result title"), "thumbnail": stringProperty("Thumbnail URL"), "source": stringProperty("Canonical source name")}, []string{"url", "title"}, "application/json"))
+	addOperation("/favorites/import", "post", "importFavorites", "Import favorites", "Import private favorites from an export payload.", nil,
+		objectBody(map[string]interface{}{"favorites": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"url": stringProperty("Result URL"), "title": stringProperty("Result title"), "thumbnail": stringProperty("Thumbnail URL"), "source": stringProperty("Canonical source name")}, "required": []string{"url", "title"}}}}, []string{"favorites"}, "application/json"))
+	addOperation("/favorites/{id}", "delete", "removeFavorite", "Remove a favorite", "Remove one private favorite belonging to the current anonymous owner.", []map[string]interface{}{pathParameter("id", "Favorite identifier")}, nil)
+	addOperation("/favorites/", "delete", "clearFavorites", "Clear favorites", "Remove all private favorites belonging to the current anonymous owner.", nil, nil)
 	contactBody := objectBody(map[string]interface{}{
 		"name":                 map[string]interface{}{"type": "string", "description": "Sender name", "maxLength": 100},
 		"email":                map[string]interface{}{"type": "string", "format": "email", "description": "Reply address", "maxLength": 254},

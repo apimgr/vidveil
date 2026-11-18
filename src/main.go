@@ -608,6 +608,7 @@ func run(ctx context.Context) error {
 	// Initialize services per AI.md specifications
 	// SSL service (PART 15)
 	sslSvc := ssl.NewSSLManager(appConfig, paths.Config)
+	sslSvc.SetDatabase(migrationMgr.GetDB())
 	if err := sslSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" SSL service initialization failed: %v\n", err)
 	}

@@ -7,9 +7,13 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -29,6 +33,7 @@ import (
 // SSLManager handles SSL/TLS certificates including Let's Encrypt
 type SSLManager struct {
 	appConfig *config.AppConfig
+	db        *sql.DB
 	// certPath is the base SSL directory ({config_dir}/ssl or CertPath override)
 	certPath string
 	// configDir is the config root used to build spec-compliant subdirectory paths
@@ -46,6 +51,48 @@ type SSLManager struct {
 	systemCert bool
 	// userCert is true when the loaded cert is under {config_dir}/ssl/local — never auto-renewed
 	userCert bool
+}
+
+// SetDatabase enables persistence of DNS provider validation state.
+func (m *SSLManager) SetDatabase(db *sql.DB) { m.db = db }
+
+func (m *SSLManager) syncDNSConfigState() error {
+	if m.db == nil {
+		return nil
+	}
+	le := m.appConfig.Server.SSL.LetsEncrypt
+	payload, err := json.Marshal(struct {
+		Provider    string            `json:"provider"`
+		Credentials map[string]string `json:"credentials"`
+	}{le.DNSProvider, le.DNSCredentials})
+	if err != nil {
+		return err
+	}
+	digest := sha256.Sum256(payload)
+	fingerprint := hex.EncodeToString(digest[:])
+	var old string
+	err = m.db.QueryRow("SELECT value FROM app_secrets WHERE key = ?", "dns_config_fingerprint").Scan(&old)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if old != "" && old != fingerprint {
+		if _, err := m.db.Exec("DELETE FROM app_secrets WHERE key = ?", "dns_validated_at"); err != nil {
+			return err
+		}
+	}
+	_, err = m.db.Exec("INSERT INTO app_secrets (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", "dns_config_fingerprint", fingerprint)
+	return err
+}
+
+func (m *SSLManager) recordDNSValidation() error {
+	if m.db == nil {
+		return nil
+	}
+	if err := m.syncDNSConfigState(); err != nil {
+		return err
+	}
+	_, err := m.db.Exec("INSERT INTO app_secrets (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", "dns_validated_at", time.Now().UTC().Format(time.RFC3339))
+	return err
 }
 
 // CertInfo contains certificate information
@@ -92,6 +139,15 @@ func NewSSLManager(appConfig *config.AppConfig, configDir string) *SSLManager {
 func (m *SSLManager) Initialize() error {
 	if !m.appConfig.Server.SSL.Enabled {
 		return nil
+	}
+	if m.appConfig.Server.SSL.LetsEncrypt.Enabled {
+		if err := m.syncDNSConfigState(); err != nil {
+			return fmt.Errorf("sync DNS provider state: %w", err)
+		}
+	}
+	if m.appConfig.Server.SSL.LetsEncrypt.Enabled && strings.EqualFold(m.appConfig.Server.SSL.LetsEncrypt.Challenge, "dns-01") {
+		// Validation logs the failure; existing certificates can still be loaded.
+		_ = m.ValidateDNSProvider()
 	}
 
 	fqdn := m.appConfig.Server.FQDN
@@ -269,6 +325,14 @@ func (m *SSLManager) RequestCertificate(domain string) error {
 	}
 
 	challenge := strings.ToLower(m.appConfig.Server.SSL.LetsEncrypt.Challenge)
+	if challenge == "dns-01" {
+		if err := m.syncDNSConfigState(); err != nil {
+			return fmt.Errorf("sync DNS provider state: %w", err)
+		}
+		if err := m.ValidateDNSProvider(); err != nil {
+			return fmt.Errorf("DNS-01 provider validation failed: %w", err)
+		}
+	}
 
 	switch challenge {
 	case "http-01":

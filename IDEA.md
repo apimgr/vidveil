@@ -34,6 +34,7 @@ owner_token:       vidveil_owner_token_ab5213f6
 - **Preferences:** Visitors can choose appearance, language, search behavior, and result preferences. Preferences are visitor-scoped and do not require an account. The interface supports English, Arabic, German, Spanish, French, Italian, Japanese, and Chinese.
 - **Content safeguards:** Operators can configure geographic content restrictions. AI-generated content is filtered by default, with a visitor preference to show it.
 - **Service information:** Visitors can read public information, privacy, contact, help, and security reporting content. The service provides REST, GraphQL, Swagger/OpenAPI, and MCP interfaces for supported search and discovery functions.
+- **Contact and security reports:** Contact messages use server-side shape, signed form-time, CAPTCHA, rate, content, and duplicate checks before delivery. Security reports use the shared shape, form-time, CAPTCHA, and rate checks before report creation. Tor and I2P requests use the built-in challenge and do not share a tunnel-wide per-IP submission limit.
 - **Operator control:** Operators configure the service through its configuration file and command-line tools. There is no browser-based operator administration product.
 - **Privacy network access:** The service supports Tor access. Tor use for searches can be selected by a visitor where enabled.
 
@@ -93,7 +94,7 @@ There are no conventional user accounts. Possession of an owner's valid token id
 | Video search engines | Third-party sites and their responses are untrusted and may change or be unavailable. | Report unavailable sources while continuing with usable results from other engines. |
 | Thumbnail and preview sources | External media may be unsafe, malformed, or privacy-invasive. | Serve media through the service's privacy protections; omit unusable media. |
 | Tor | Tor may be available on the host or deployment, but is not guaranteed. | Preserve ordinary service access when Tor is unavailable. |
-| GeoIP and public blocklist data | Public datasets can be stale or temporarily unreachable. | Continue using the last usable data and report service status without treating location data as authoritative identity. |
+| GeoIP and public blocklist data | GeoIP uses the iptoasn ASN/country and DB-IP city datasets distributed by sapics/ip-location-db; data can be stale or temporarily unreachable. | Verify downloaded database checksums, retain the last usable data, and fail open on lookup errors without treating location data as authoritative identity. |
 | Incoming visitors and clients | Requests may be malformed or malicious. | Validate requests and return safe errors without exposing private data or internals. |
 
 ### Threat model & abuse cases

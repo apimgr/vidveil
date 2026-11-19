@@ -42,6 +42,22 @@ server:
       captcha_site_key: ""
       captcha_secret_key: ""
       success_message: Thank you for your message. We'll respond soon.
+      antispam:
+        honeypot: true
+        min_fill_seconds: 3
+        max_age_seconds: 43200
+        per_ip: 5
+        per_email: 3
+        global: 60
+        window: 1h
+        max_links: 2
+        reject_markup: true
+        blocked_words: []
+        blocked_email_domains: []
+        blocked_link_domains: []
+        strikes: 3
+        ban_hours: 24
+        duplicate_window_hours: 24
     help:
       mcp: >-
         VidVeil searches across 33 video engines and streams results as they respond. Use searchVideos for a phrase, optionally with a bang such as !ph to target Pornhub; use listEngines to inspect engine availability, listBangs to discover shortcuts, and autocompleteBangs to find matching shortcuts or suggestions. For example: search for ocean sunsets with !ph, then compare the returned titles and source engines. Favorites are private owner resources; use a linked token for automation and never share a primary or operator token.
@@ -295,6 +311,28 @@ server:
   mcp:
     enabled: true
   pages:
+    contact:
+      enabled: true
+      captcha: simple
+      captcha_site_key: ""
+      captcha_secret_key: ""
+      success_message: "Thank you for your message. We'll respond soon."
+      antispam:
+        honeypot: true
+        min_fill_seconds: 3
+        max_age_seconds: 43200
+        per_ip: 5
+        per_email: 3
+        global: 60
+        window: 1h
+        max_links: 2
+        reject_markup: true
+        blocked_words: []
+        blocked_email_domains: []
+        blocked_link_domains: []
+        strikes: 3
+        ban_hours: 24
+        duplicate_window_hours: 24
     help:
       content: 'VidVeil searches across configured video engines. Search with a phrase, use bang shortcuts such as `!ph`, and manage saved engines and display options under `/server/preferences`.'
       mcp: 'VidVeil searches across 33 video engines and streams results as they respond. Use `searchVideos` for a phrase, optionally with a bang such as `!ph` to target Pornhub; use `listEngines` to inspect engine availability, `listBangs` to discover shortcuts, and `autocompleteBangs` to find matching shortcuts or suggestions. For example: search for ocean sunsets with `!ph`, then compare the returned titles and source engines. Favorites are private owner resources; use a linked token for automation and never share a primary or operator token.'
@@ -556,7 +594,7 @@ server:
     ttl: 30
   geoip:
     enabled: true
-    dir: ""
+    dir: "{data_dir}/security/geoip"
     update: weekly
     country_mode: none
     deny_countries: []
@@ -566,7 +604,6 @@ server:
       asn: true
       country: true
       city: true
-      whois: true
     content_restriction:
       mode: warn
       restricted_countries: []

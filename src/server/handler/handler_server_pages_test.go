@@ -34,11 +34,19 @@ func simpleCaptchaFormValues(t *testing.T, h *ServerHandler, r *http.Request) st
 	if err != nil {
 		t.Fatal(err)
 	}
-	return "captcha_id=" + url.QueryEscape(id) + "&captcha_answer=" + strconv.Itoa(left+right)
+	answer := left + right
+	if parts[1] == "-" {
+		answer = left - right
+	}
+	return "captcha_id=" + url.QueryEscape(id) + "&captcha_answer=" + strconv.Itoa(answer)
 }
 
 func addSimpleCaptcha(t *testing.T, h *ServerHandler, form url.Values) {
 	t.Helper()
+	if h.secretsMgr != nil {
+		h.appConfig.Server.Pages.Contact.Antispam.MinFillSeconds = 0
+		form.Set("form_token", h.issueContactFormToken(httptest.NewRequest(http.MethodGet, "/server/contact", nil)))
+	}
 	values, err := url.ParseQuery(simpleCaptchaFormValues(t, h, httptest.NewRequest(http.MethodGet, "/server/contact", nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -244,7 +252,11 @@ func TestSimpleCaptchaIsSingleUse(t *testing.T) {
 	if leftErr != nil || rightErr != nil {
 		t.Fatalf("invalid arithmetic challenge %q", question)
 	}
-	answer = strconv.Itoa(left + right)
+	answerValue := left + right
+	if parts[1] == "-" {
+		answerValue = left - right
+	}
+	answer = strconv.Itoa(answerValue)
 	form := url.Values{"captcha_id": {id}, "captcha_answer": {answer}}
 	first := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form.Encode()))
 	first.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -306,8 +318,13 @@ func TestRenderServerTemplate_UnknownTemplate_Returns500(t *testing.T) {
 // ContactPage POST routes to handleContactSubmit and renders a success response.
 func TestServerHandler_ContactPage_POST_Returns200(t *testing.T) {
 	setRealTemplatesFS(t)
-	h := newServerHandler(t)
-	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader("subject=hello&message=world"))
+	h, _ := newSecurityTestHandler(t)
+	h.appConfig.Server.Pages.Contact.Antispam.MinFillSeconds = 0
+	h.appConfig.Server.Contact.General.Email = "contact@example.test"
+	h.SetEmailService(&recordingSecurityReportEmailSender{})
+	form := url.Values{"name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"hello"}, "message": {"world"}}
+	addSimpleCaptcha(t, h, form)
+	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ContactPage(rr, req)
@@ -331,14 +348,18 @@ func TestServerHandler_ContactSubmit_DispatchesGeneral(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	h := newServerHandler(t)
+	h, _ := newSecurityTestHandler(t)
+	h.appConfig.Server.Pages.Contact.Antispam.MinFillSeconds = 0
+	h.appConfig.Server.Contact.General.Email = "contact@example.test"
+	h.SetEmailService(&recordingSecurityReportEmailSender{})
 	contact := &config.ContactConfig{
 		General: config.ContactRoleConfig{Webhooks: map[string]string{"generic": ts.URL}},
 	}
 	h.SetNotifyDispatcher(notify.New(contact, "vidveil", "1.0.0", ts.URL))
 
-	form := simpleCaptchaFormValues(t, h, httptest.NewRequest(http.MethodGet, "/server/contact", nil)) + "&name=Alice&email=a%40b.com&subject=hello&message=world"
-	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form))
+	form := url.Values{"name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"hello"}, "message": {"world"}}
+	addSimpleCaptcha(t, h, form)
+	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ContactPage(rr, req)
@@ -380,11 +401,11 @@ func TestServerHandler_ContactSubmit_MissingFieldsError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ContactPage(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("ContactSubmit invalid: status=%d want 200; body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("ContactSubmit invalid: status=%d want 400; body=%s", rr.Code, rr.Body.String())
 	}
-	if !strings.Contains(rr.Body.String(), "name, a valid email address, a subject, and a message") {
-		t.Errorf("ContactSubmit invalid: expected validation error; body=%s", rr.Body.String())
+	if !strings.Contains(rr.Body.String(), "Invalid form submission") {
+		t.Errorf("ContactSubmit invalid: expected shape validation error; body=%s", rr.Body.String())
 	}
 	select {
 	case <-dispatched:
@@ -397,7 +418,7 @@ func TestServerHandler_ContactSubmit_MissingFieldsError(t *testing.T) {
 // page is returned so the bot cannot detect the rejection.
 func TestServerHandler_ContactSubmit_HoneypotSilentlySucceeds(t *testing.T) {
 	setRealTemplatesFS(t)
-	h := newServerHandler(t)
+	h, _ := newSecurityTestHandler(t)
 
 	dispatched := make(chan struct{}, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -413,8 +434,8 @@ func TestServerHandler_ContactSubmit_HoneypotSilentlySucceeds(t *testing.T) {
 	}
 	h.SetNotifyDispatcher(notify.New(contact, "vidveil", "1.0.0", ts.URL))
 
-	req := httptest.NewRequest(http.MethodPost, "/server/contact",
-		strings.NewReader("subject=hello&message=world&contact_hp=iamabot"))
+	form := url.Values{"name": {"Bot"}, "email": {"bot@example.test"}, "subject": {"hello"}, "message": {"world"}, "website": {"iamabot"}}
+	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ContactPage(rr, req)

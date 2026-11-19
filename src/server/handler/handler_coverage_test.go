@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -725,6 +726,7 @@ func TestAPIContact_GetFormDescription(t *testing.T) {
 // TestAPIContact_PostMissingFields verifies POST with missing fields returns 400.
 func TestAPIContact_PostMissingFields(t *testing.T) {
 	cfg := createTestConfig()
+	cfg.Server.Pages.Contact.Enabled = true
 	h := NewServerHandler(cfg)
 	body := strings.NewReader("subject=hello")
 	req := httptest.NewRequest("POST", "/api/v1/server/contact", body)
@@ -738,11 +740,12 @@ func TestAPIContact_PostMissingFields(t *testing.T) {
 
 // TestAPIContact_PostValid verifies a valid POST returns 200.
 func TestAPIContact_PostValid(t *testing.T) {
-	cfg := createTestConfig()
-	cfg.Server.Pages.Contact.Enabled = true
-	h := NewServerHandler(cfg)
-	form := simpleCaptchaFormValues(t, h, httptest.NewRequest("GET", "/api/v1/server/contact", nil)) + "&name=Alice&email=a%40b.com&subject=hello&message=world"
-	body := strings.NewReader(form)
+	h, _ := newSecurityTestHandler(t)
+	h.appConfig.Server.Pages.Contact.Enabled = true
+	h.SetEmailService(&recordingSecurityReportEmailSender{})
+	form := url.Values{"name": {"Alice"}, "email": {"a@b.com"}, "subject": {"hello"}, "message": {"world"}}
+	addSimpleCaptcha(t, h, form)
+	body := strings.NewReader(form.Encode())
 	req := httptest.NewRequest("POST", "/api/v1/server/contact", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()

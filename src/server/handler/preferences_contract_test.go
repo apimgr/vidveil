@@ -74,6 +74,26 @@ func TestPreferencesSaveCodeOverridesFormAndAppliesConsent(t *testing.T) {
 	}
 }
 
+func TestPreferencesSaveInvalidCodeValueKeepsSubmittedValue(t *testing.T) {
+	h := newRenderTestHandler()
+	code := base64.RawURLEncoding.EncodeToString([]byte("theme=neon&lang=not-a-locale"))
+	form := url.Values{"code": {code}, "theme": {"light"}, "lang": {"fr"}}
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+	h.PreferencesSave(response, req)
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("PreferencesSave status = %d, want 303", response.Code)
+	}
+	cookies := map[string]string{}
+	for _, cookie := range response.Result().Cookies() {
+		cookies[cookie.Name] = cookie.Value
+	}
+	if cookies["theme"] != "light" || cookies["lang"] != "fr" {
+		t.Fatalf("invalid imported values replaced submitted values: %#v", cookies)
+	}
+}
+
 func TestPreferencesSaveCodeOverridesEngineSelection(t *testing.T) {
 	h := newRenderTestHandler()
 	h.engineMgr.InitializeEngines()
@@ -129,7 +149,7 @@ func TestPreferencesResetDeletesAppCookiesAndPreservesCredentials(t *testing.T) 
 	form := url.Values{"action": {"reset"}, "redirect": {"/search?q=hello"}}
 	req := httptest.NewRequest(http.MethodPost, "/server/preferences", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	for _, name := range []string{"theme", "lang", "vidveil_pref_results_per_page", "cookie_consent", "ccpa_opt_out", "vidveil_build", "content_ack", "age_verified", "dismissed_announcements", "forward_ip", "csrf_token", "vidveil_owner_token_ab5213f6"} {
+	for _, name := range []string{"theme", "lang", "vidveil_pref_results_per_page", engineSelectionCookieName, engineSelectionValueCookieName, "cookie_consent", "ccpa_opt_out", "vidveil_build", "content_ack", "age_verified", "dismissed_announcements", "forward_ip", "csrf_token", "vidveil_owner_token_ab5213f6"} {
 		req.AddCookie(&http.Cookie{Name: name, Value: "present"})
 	}
 	response := httptest.NewRecorder()
@@ -143,7 +163,7 @@ func TestPreferencesResetDeletesAppCookiesAndPreservesCredentials(t *testing.T) 
 			deleted[cookie.Name] = true
 		}
 	}
-	for _, name := range []string{"theme", "lang", "vidveil_pref_results_per_page", "cookie_consent", "ccpa_opt_out", "vidveil_build", "content_ack", "age_verified", "dismissed_announcements", "forward_ip"} {
+	for _, name := range []string{"theme", "lang", "vidveil_pref_results_per_page", engineSelectionCookieName, engineSelectionValueCookieName, "cookie_consent", "ccpa_opt_out", "vidveil_build", "content_ack", "age_verified", "dismissed_announcements", "forward_ip"} {
 		if !deleted[name] {
 			t.Errorf("reset did not delete %q", name)
 		}

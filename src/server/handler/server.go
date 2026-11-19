@@ -26,7 +26,6 @@ import (
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/notify"
-	"github.com/apimgr/vidveil/src/server/service/email"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/pgp"
 	"github.com/apimgr/vidveil/src/server/service/secreport"
@@ -44,7 +43,7 @@ type ServerHandler struct {
 	configDir  string
 	dataDir    string
 	logger     *logging.AppLogger
-	emailSvc   *email.EmailService
+	emailSvc   SecurityReportEmailSender
 	// notifyDispatcher routes contact-form and other events to the configured
 	// PART 12 webhook transports. Nil until wired via SetNotifyDispatcher.
 	notifyDispatcher *notify.Dispatcher
@@ -52,6 +51,40 @@ type ServerHandler struct {
 	captchaMu        sync.Mutex
 	captchaAnswers   map[string]captchaChallenge
 	captchaAttempts  map[string]captchaRateWindow
+	contactMu        sync.Mutex
+	contactCounts    map[string]contactWindow
+	contactSeen      []contactDedup
+	contactStrikes   map[string][]time.Time
+	contactBans      map[string]time.Time
+}
+
+// SecurityReportEmailSender sends the maintainer notice and optional researcher acknowledgment.
+type SecurityReportEmailSender interface {
+	Send(templateName, to string, vars map[string]string) error
+	SendRaw(to, subject, body string) error
+}
+
+type contactEmailSender interface {
+	SendContact(to, replyTo, subject, body string) error
+}
+
+func (h *ServerHandler) sendGeneralContactEmail(name, email, subject, message string) error {
+	sender, ok := h.emailSvc.(contactEmailSender)
+	if !ok {
+		return fmt.Errorf("contact email sender is unavailable")
+	}
+	to := strings.TrimSpace(h.appConfig.Server.Contact.General.Email)
+	if to == "" {
+		to = strings.TrimSpace(h.appConfig.Server.Contact.Admin.Email)
+	}
+	if to == "" {
+		return fmt.Errorf("contact email recipient is unavailable")
+	}
+	body := fmt.Sprintf("Name: %s\nEmail: %s\n\n%s", name, email, message)
+	if err := sender.SendContact(to, email, subject, body); err != nil {
+		return err
+	}
+	return nil
 }
 
 // NewServerHandler creates a new server handler
@@ -127,7 +160,7 @@ func (h *ServerHandler) SetLogger(l *logging.AppLogger) {
 
 // SetEmailService wires the email service used to send maintainer
 // notifications and researcher acknowledgments per AI.md PART 11.
-func (h *ServerHandler) SetEmailService(e *email.EmailService) {
+func (h *ServerHandler) SetEmailService(e SecurityReportEmailSender) {
 	h.emailSvc = e
 }
 
@@ -365,6 +398,7 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		for key, value := range h.captchaTemplateData(r) {
 			data[key] = value
 		}
+		data["ContactFormToken"] = h.issueContactFormToken(r)
 	}
 
 	// Per AI.md PART 30 inject locale + direction for <html lang="" dir="">.
@@ -729,20 +763,37 @@ func contactFieldLengthError(name, email, subject, message string) string {
 // handleContactSubmit handles a non-security /server/contact submission and
 // dispatches it to the general contact role per AI.md PART 12.
 func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, contactBodyLimit)
 	if err := r.ParseForm(); err != nil {
+		w = withResponseStatus(w, http.StatusBadRequest)
 		h.renderContactError(w, r, "Invalid form submission.")
 		return
 	}
-
-	// Honeypot: legitimate browsers leave the hidden field empty. A filled
-	// value indicates a bot — respond with the normal success page so the
-	// bot cannot distinguish rejection from acceptance.
-	if strings.TrimSpace(r.FormValue("contact_hp")) != "" {
+	if h.contactIsBanned(r) {
+		h.contactBlock(r, "banned")
+		writeContactBanned(w, false)
+		return
+	}
+	if reason := h.contactShapeError(r, false); reason != "" {
+		h.contactBlock(r, reason)
+		w = withResponseStatus(w, http.StatusBadRequest)
+		h.renderContactError(w, r, "Invalid form submission.")
+		return
+	}
+	if h.contactHoneypotFilled(r) {
+		if h.contactBlock(r, "honeypot") {
+			writeContactBanned(w, false)
+			return
+		}
 		h.renderContactSuccess(w, r)
 		return
 	}
+	if !h.validContactFormToken(r) {
+		h.contactFormFailure(w, r, "fill_time", false)
+		return
+	}
 	if !h.verifyCaptcha(r) {
-		h.renderContactError(w, r, "Please complete the captcha and try again.")
+		h.contactFormFailure(w, r, "captcha", false)
 		return
 	}
 
@@ -752,18 +803,46 @@ func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Reque
 	message := strings.TrimSpace(r.FormValue("message"))
 
 	if name == "" || email == "" || subject == "" || message == "" || strings.ContainsAny(name+subject, "\r\n") {
+		w = withResponseStatus(w, http.StatusBadRequest)
 		h.renderContactError(w, r, "Please provide your name, a valid email address, a subject, and a message.")
 		return
 	}
 	if _, err := mail.ParseAddress(email); err != nil {
+		w = withResponseStatus(w, http.StatusBadRequest)
 		h.renderContactError(w, r, "Please provide a valid email address.")
 		return
 	}
 	if field := contactFieldLengthError(name, email, subject, message); field != "" {
+		w = withResponseStatus(w, http.StatusBadRequest)
 		h.renderContactError(w, r, "The "+field+" field is too long. Please shorten it and try again.")
 		return
 	}
+	if reason := h.contactContentError(r); reason != "" {
+		h.contactFormFailure(w, r, reason, false)
+		return
+	}
+	if reason := h.contactRateError(r); reason != "" {
+		h.contactFormFailure(w, r, reason, false)
+		return
+	}
+	if h.duplicateContact(r) {
+		h.releaseContactRate(r)
+		if h.contactBlock(r, "duplicate") {
+			writeContactBanned(w, false)
+			return
+		}
+		h.renderContactSuccess(w, r)
+		return
+	}
 
+	if err := h.sendGeneralContactEmail(name, email, subject, message); err != nil {
+		h.releaseContactRate(r)
+		h.forgetContactDuplicate(r)
+		log.Printf("contact notification: delivery failed")
+		w = withResponseStatus(w, http.StatusServiceUnavailable)
+		h.renderContactError(w, r, "We could not send your message. Please try again later.")
+		return
+	}
 	if h.notifyDispatcher != nil {
 		body := fmt.Sprintf("Name: %s\nEmail: %s\n\n%s", name, email, message)
 		h.notifyDispatcher.Send(r.Context(), notify.RoleGeneral, notify.Payload{
@@ -773,7 +852,6 @@ func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Reque
 			Severity: notify.SeverityInfo,
 		})
 	}
-
 	h.renderContactSuccess(w, r)
 }
 
@@ -797,6 +875,21 @@ func (h *ServerHandler) renderContactError(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+func (h *ServerHandler) renderSecurityContactFeedback(w http.ResponseWriter, r *http.Request, securityID, msg, messageType string) {
+	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
+		"SecurityMode": true, "SecurityID": securityID, "DefaultDisclosureDays": h.defaultDisclosureDays(),
+		"Components": h.securityComponentOptions(), "Message": msg, "MessageType": messageType,
+	})
+}
+
+func (h *ServerHandler) renderContactFailure(w http.ResponseWriter, r *http.Request, msg string) {
+	if id := h.securityIDFromRequest(r); id != "" && h.validSecurityID(r, id) {
+		h.renderSecurityContactFeedback(w, r, id, msg, "error")
+		return
+	}
+	h.renderContactError(w, r, msg)
+}
+
 // HelpPage renders /server/help web page
 func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 	h.renderServerTemplate(w, r, "server-help", map[string]interface{}{
@@ -814,7 +907,9 @@ func (h *ServerHandler) TermsPage(w http.ResponseWriter, r *http.Request) {
 // handleSecurityReportSubmit implements the Submission Flow of AI.md PART 11
 // "Security Reports — Coordinated Disclosure Pipeline" for the HTML form POST.
 func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *http.Request, securityID string) {
+	r.Body = http.MaxBytesReader(w, r.Body, contactBodyLimit)
 	if err := r.ParseForm(); err != nil {
+		w = withResponseStatus(w, http.StatusBadRequest)
 		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 			"SecurityMode":          true,
 			"SecurityID":            securityID,
@@ -825,7 +920,31 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		})
 		return
 	}
+	if h.contactIsBanned(r) {
+		h.contactBlock(r, "banned")
+		writeContactBanned(w, false)
+		return
+	}
+	if reason := h.contactShapeError(r, true); reason != "" {
+		h.contactBlock(r, reason)
+		w = withResponseStatus(w, http.StatusBadRequest)
+		h.renderSecurityContactFeedback(w, r, securityID, "Invalid form submission.", "error")
+		return
+	}
+	if h.contactHoneypotFilled(r) {
+		if h.contactBlock(r, "honeypot") {
+			writeContactBanned(w, false)
+			return
+		}
+		h.renderSecurityContactFeedback(w, r, securityID, "Thank you — your security report was received.", "success")
+		return
+	}
+	if !h.validContactFormToken(r) {
+		h.contactFormFailure(w, r, "fill_time", false)
+		return
+	}
 	if field := securityContactLengthError(r); field != "" {
+		w = withResponseStatus(w, http.StatusBadRequest)
 		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 			"SecurityMode": true, "SecurityID": securityID,
 			"DefaultDisclosureDays": h.defaultDisclosureDays(), "Components": h.securityComponentOptions(),
@@ -834,6 +953,7 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		return
 	}
 	if field := securityContactValidationError(r); field != "" {
+		w = withResponseStatus(w, http.StatusBadRequest)
 		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 			"SecurityMode": true, "SecurityID": securityID,
 			"DefaultDisclosureDays": h.defaultDisclosureDays(), "Components": h.securityComponentOptions(),
@@ -842,13 +962,11 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		return
 	}
 	if !h.verifyCaptcha(r) {
-		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
-			"SecurityMode": true,
-			"SecurityID":   securityID,
-			"Components":   h.securityComponentOptions(),
-			"Message":      "Please complete the captcha and try again.",
-			"MessageType":  "error",
-		})
+		h.contactFormFailure(w, r, "captcha", false)
+		return
+	}
+	if reason := h.contactRateError(r); reason != "" {
+		h.contactFormFailure(w, r, reason, false)
 		return
 	}
 
@@ -862,6 +980,7 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 	creditPref := r.FormValue("credit_preference")
 	if name == "" || email == "" || component == "" || severity == "" || summary == "" ||
 		steps == "" || impact == "" || creditPref == "" || r.FormValue("disclosure_agreement") == "" {
+		w = withResponseStatus(w, http.StatusBadRequest)
 		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 			"SecurityMode":          true,
 			"SecurityID":            securityID,
@@ -899,6 +1018,7 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		CommitHash:               version.GetVersionInfo()["commit"],
 	})
 	if err != nil {
+		h.releaseContactRate(r)
 		log.Printf("security report: create: %v", err)
 		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 			"SecurityMode":          true,
@@ -912,7 +1032,7 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 	}
 
 	h.notifyMaintainer(submission.TrackingID, severity, component, r.FormValue("endpoint"), summary)
-	h.acknowledgeResearcher(r, email, r.FormValue("researcher_gpg"), submission.TrackingID, submission.ReportToken)
+	acknowledgmentSent := h.acknowledgeResearcher(r, email, r.FormValue("researcher_gpg"), submission.TrackingID, submission.ReportToken)
 
 	h.logSecurityEvent("security.report_received", r, map[string]interface{}{
 		"tracking_id": submission.TrackingID,
@@ -920,8 +1040,12 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		"component":   component,
 	})
 
+	message := "Thank you — your security report was received. Tracking ID: " + submission.TrackingID + "."
+	if acknowledgmentSent {
+		message += " Check your email for the status-tracking link."
+	}
 	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
-		"Message":     "Thank you — your security report was received. Tracking ID: " + submission.TrackingID + ". Check your email for a confirmation with a status-tracking link.",
+		"Message":     message,
 		"MessageType": "success",
 	})
 }
@@ -965,27 +1089,38 @@ func (h *ServerHandler) notifyMaintainer(trackingID, severity, component, endpoi
 
 // acknowledgeResearcher sends the researcher acknowledgment per Submission
 // Flow step 5 — PGP-encrypted to the researcher's supplied key when present.
-func (h *ServerHandler) acknowledgeResearcher(r *http.Request, to, rawResearcherKey, trackingID, reportToken string) {
+func (h *ServerHandler) acknowledgeResearcher(r *http.Request, to, rawResearcherKey, trackingID, reportToken string) bool {
 	if h.emailSvc == nil || to == "" {
-		return
+		return false
 	}
 	statusURL := urlvar.BuildURL(r, "/server/security/report/"+trackingID) + "?token=" + reportToken
 	vars := map[string]string{
 		"tracking_id":       trackingID,
 		"report_status_url": statusURL,
 	}
-	if pub, err := secreport.ResolveResearcherKey(rawResearcherKey); err == nil && len(pub) > 0 {
-		plaintext := fmt.Sprintf("Tracking ID: %s\nStatus URL: %s\n", trackingID, statusURL)
-		if encrypted, encErr := pgp.EncryptMessageToPublicKey(pub, []byte(plaintext)); encErr == nil {
-			if err := h.emailSvc.SendRaw(to, "Security report received - "+trackingID, string(encrypted)); err != nil {
-				log.Printf("security report: send researcher acknowledgment: %v", err)
-			}
-			return
+	if rawResearcherKey != "" {
+		pub, err := secreport.ResolveResearcherKey(rawResearcherKey)
+		if err != nil || len(pub) == 0 {
+			log.Printf("security report: resolve researcher acknowledgment key: %v", err)
+			return false
 		}
+		plaintext := fmt.Sprintf("Tracking ID: %s\nStatus URL: %s\n", trackingID, statusURL)
+		encrypted, err := pgp.EncryptMessageToPublicKey(pub, []byte(plaintext))
+		if err != nil {
+			log.Printf("security report: encrypt researcher acknowledgment: %v", err)
+			return false
+		}
+		if err := h.emailSvc.SendRaw(to, "Security report received - "+trackingID, string(encrypted)); err != nil {
+			log.Printf("security report: send researcher acknowledgment: %v", err)
+			return false
+		}
+		return true
 	}
 	if err := h.emailSvc.Send("security_report_researcher_ack", to, vars); err != nil {
 		log.Printf("security report: send researcher acknowledgment (plaintext fallback): %v", err)
+		return false
 	}
+	return true
 }
 
 // SecurityPage renders /server/security — human-readable rendering of
@@ -1264,7 +1399,8 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 			{"name": "email", "type": "email", "required": true, "max_length": 254},
 			{"name": "subject", "type": "text", "required": true, "max_length": 200},
 			{"name": "message", "type": "textarea", "required": true, "max_length": 5000},
-			{"name": "captcha", "type": "captcha", "required": true, "max_length": nil},
+			{"name": "website", "type": "text", "required": false, "hidden": true, "max_length": 200},
+			{"name": "form_token", "type": "hidden", "required": true, "max_length": 100},
 		}
 		if securityMode {
 			fields = []map[string]interface{}{
@@ -1283,21 +1419,15 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 				{"name": "credit_preference", "type": "enum", "required": true, "max_length": nil},
 				{"name": "credit_handle", "type": "text", "required": false, "required_when": map[string]string{"field": "credit_preference", "equals": "handle"}, "max_length": 100},
 				{"name": "disclosure_agreement", "type": "checkbox", "required": true, "max_length": nil},
-				{"name": "captcha", "type": "captcha", "required": true, "max_length": nil},
+				{"name": "website", "type": "text", "required": false, "hidden": true, "max_length": 200},
+				{"name": "form_token", "type": "hidden", "required": true, "max_length": 100},
 			}
 		}
-		captcha := map[string]interface{}{"provider": h.captchaType(r)}
-		switch h.captchaType(r) {
-		case "simple":
-			challengeID, question := h.newSimpleCaptcha(r)
-			captcha["challenge_id"] = challengeID
-			captcha["question"] = question
-		case "recaptcha", "hcaptcha":
-			captcha["site_key"] = h.appConfig.Server.Pages.Contact.CaptchaSiteKey
-		}
+		captcha := h.apiCaptchaDescriptor(r)
 		WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "data": map[string]interface{}{
 			"fields":       fields,
 			"captcha":      captcha,
+			"form_token":   h.issueContactFormToken(r),
 			"security_url": urlvar.BuildURL(r, "/server/security"),
 			"abuse_email":  h.publicAbuseEmail(),
 		}})
@@ -1308,18 +1438,40 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, contactBodyLimit)
 	if err := r.ParseForm(); err != nil {
 		SendError(w, CodeBadRequest, "Invalid form data")
 		return
 	}
-	if !h.verifyCaptcha(r) {
-		SendError(w, CodeValidation, "Captcha is invalid or expired")
+	if h.contactIsBanned(r) {
+		h.contactBlock(r, "banned")
+		writeContactBanned(w, true)
 		return
 	}
-
 	securityID := h.securityIDFromRequest(r)
 	if securityID != "" {
 		if h.validSecurityID(r, securityID) {
+			if reason := h.contactShapeError(r, true); reason != "" {
+				h.contactBlock(r, reason)
+				WriteJSON(w, http.StatusBadRequest, APIResponse{OK: false, Error: CodeValidation, Message: "Invalid form data", Details: map[string]interface{}{"field": "form"}})
+				return
+			}
+			if h.contactHoneypotFilled(r) {
+				if h.contactBlock(r, "honeypot") {
+					writeContactBanned(w, true)
+					return
+				}
+				SendOK(w, map[string]interface{}{"tracking_id": ""})
+				return
+			}
+			if !h.validContactFormToken(r) {
+				h.contactFormFailure(w, r, "fill_time", true)
+				return
+			}
+			if !h.verifyCaptcha(r) {
+				h.contactFormFailure(w, r, "captcha", true)
+				return
+			}
 			h.apiSecurityReportSubmit(w, r, securityID)
 			return
 		}
@@ -1327,6 +1479,27 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 	}
 	if !h.appConfig.Server.Pages.Contact.Enabled {
 		SendError(w, CodeNotFound, MsgNotFound)
+		return
+	}
+	if reason := h.contactShapeError(r, false); reason != "" {
+		h.contactBlock(r, reason)
+		WriteJSON(w, http.StatusBadRequest, APIResponse{OK: false, Error: CodeValidation, Message: "Invalid form data", Details: map[string]interface{}{"field": "form"}})
+		return
+	}
+	if h.contactHoneypotFilled(r) {
+		if h.contactBlock(r, "honeypot") {
+			writeContactBanned(w, true)
+			return
+		}
+		SendOK(w, map[string]interface{}{"message": "Message received successfully"})
+		return
+	}
+	if !h.validContactFormToken(r) {
+		h.contactFormFailure(w, r, "fill_time", true)
+		return
+	}
+	if !h.verifyCaptcha(r) {
+		h.contactFormFailure(w, r, "captcha", true)
 		return
 	}
 
@@ -1346,6 +1519,29 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 		SendError(w, CodeValidation, "The "+field+" field is too long")
 		return
 	}
+	if reason := h.contactContentError(r); reason != "" {
+		h.contactFormFailure(w, r, reason, true)
+		return
+	}
+	if reason := h.contactRateError(r); reason != "" {
+		h.contactFormFailure(w, r, reason, true)
+		return
+	}
+	if h.duplicateContact(r) {
+		if h.contactBlock(r, "duplicate") {
+			writeContactBanned(w, true)
+			return
+		}
+		SendOK(w, map[string]interface{}{"message": "Message received successfully"})
+		return
+	}
+	if err := h.sendGeneralContactEmail(name, email, subject, message); err != nil {
+		h.releaseContactRate(r)
+		h.forgetContactDuplicate(r)
+		log.Printf("contact notification: delivery failed")
+		SendError(w, CodeServerError, "Unable to send message")
+		return
+	}
 	if h.notifyDispatcher != nil {
 		h.notifyDispatcher.Send(r.Context(), notify.RoleGeneral, notify.Payload{
 			Event: "contact.general", Subject: subject,
@@ -1353,7 +1549,6 @@ func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
 			Severity: notify.SeverityInfo,
 		})
 	}
-
 	SendOK(w, map[string]interface{}{"message": "Message received successfully"})
 }
 
@@ -1385,6 +1580,10 @@ func (h *ServerHandler) apiSecurityReportSubmit(w http.ResponseWriter, r *http.R
 		SendError(w, CodeValidation, "A valid email address is required")
 		return
 	}
+	if reason := h.contactRateError(r); reason != "" {
+		h.contactFormFailure(w, r, reason, true)
+		return
+	}
 
 	disclosureDays := h.defaultDisclosureDays()
 	if v, err := strconv.Atoi(r.FormValue("disclosure_days")); err == nil && v > 0 {
@@ -1412,6 +1611,7 @@ func (h *ServerHandler) apiSecurityReportSubmit(w http.ResponseWriter, r *http.R
 		CommitHash:               version.GetVersionInfo()["commit"],
 	})
 	if err != nil {
+		h.releaseContactRate(r)
 		log.Printf("security report: create: %v", err)
 		SendError(w, CodeServerError, "Unable to process security report")
 		return

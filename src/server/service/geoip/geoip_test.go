@@ -2,6 +2,7 @@
 package geoip
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -65,8 +66,9 @@ func TestNewGeoIPService_FallbackDirContainsGeoip(t *testing.T) {
 	cfg := config.DefaultAppConfig()
 	cfg.Server.GeoIP.Dir = ""
 	svc := NewGeoIPService(cfg)
-	if !strings.Contains(svc.dataDir, "geoip") {
-		t.Errorf("expected fallback dataDir to contain 'geoip', got %q", svc.dataDir)
+	want := filepath.Join(config.GetAppPaths("", "").Data, "security", "geoip")
+	if svc.dataDir != want {
+		t.Errorf("fallback dataDir = %q, want %q", svc.dataDir, want)
 	}
 }
 
@@ -624,6 +626,10 @@ func TestOpenDatabases_SetsLastUpdate(t *testing.T) {
 func TestDownloadFile_Success(t *testing.T) {
 	body := []byte("fake mmdb content")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".sha256") {
+			_, _ = fmt.Fprintf(w, "%x  test.mmdb\n", sha256.Sum256(body))
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(body)
 	}))
@@ -631,7 +637,7 @@ func TestDownloadFile_Success(t *testing.T) {
 
 	svc := newDisabledService(t)
 	dest := filepath.Join(t.TempDir(), "test.mmdb")
-	if err := svc.downloadFile(srv.URL, dest); err != nil {
+	if err := svc.downloadFileWithChecksum(srv.URL+"/test.mmdb", srv.URL+"/test.mmdb.sha256", dest, srv.Client()); err != nil {
 		t.Fatalf("downloadFile() returned error: %v", err)
 	}
 	got, err := os.ReadFile(dest)
@@ -652,7 +658,7 @@ func TestDownloadFile_Non200Error(t *testing.T) {
 
 	svc := newDisabledService(t)
 	dest := filepath.Join(t.TempDir(), "test.mmdb")
-	err := svc.downloadFile(srv.URL, dest)
+	err := svc.downloadFileWithChecksum(srv.URL+"/test.mmdb", srv.URL+"/test.mmdb.sha256", dest, srv.Client())
 	if err == nil {
 		t.Fatal("downloadFile() expected error on 404, got nil")
 	}
@@ -671,9 +677,13 @@ func TestDownloadFile_UnreachableURL(t *testing.T) {
 	}
 }
 
-// downloadFile cleans up the tmp file on copy error (server closes mid-stream).
+// downloadFile removes its temporary file after a successful verified download.
 func TestDownloadFile_ServerError_NoOrphanFile(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".sha256") {
+			_, _ = fmt.Fprintf(w, "%x  test.mmdb\n", sha256.Sum256(nil))
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		// Write nothing; close immediately — io.Copy gets EOF which is treated as success.
 		// The rename still happens; this tests the zero-byte success path.
@@ -683,10 +693,13 @@ func TestDownloadFile_ServerError_NoOrphanFile(t *testing.T) {
 	svc := newDisabledService(t)
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "test.mmdb")
-	_ = svc.downloadFile(srv.URL, dest)
-	// Whether it succeeds (zero-byte file) or fails, no .tmp file should remain.
-	if _, err := os.Stat(dest + ".tmp"); !os.IsNotExist(err) {
-		t.Error("downloadFile left behind a .tmp file after completion")
+	_ = svc.downloadFileWithChecksum(srv.URL+"/test.mmdb", srv.URL+"/test.mmdb.sha256", dest, srv.Client())
+	leftovers, err := filepath.Glob(filepath.Join(dir, ".geoip-*.tmp"))
+	if err != nil {
+		t.Fatalf("find temporary GeoIP files: %v", err)
+	}
+	if len(leftovers) != 0 {
+		t.Errorf("downloadFile left behind temporary files: %v", leftovers)
 	}
 }
 
@@ -695,7 +708,7 @@ func TestDownloadFile_ServerError_NoOrphanFile(t *testing.T) {
 // When ASN/Country/City files already exist, downloadIfMissing skips downloads.
 func TestDownloadIfMissing_FilesExist_NoError(t *testing.T) {
 	dir := t.TempDir()
-	for _, name := range []string{"asn.mmdb", "country.mmdb", "city.mmdb"} {
+	for _, name := range []string{"iptoasn-asn.mmdb", "iptoasn-country.mmdb", "dbip-city-ipv4.mmdb", "dbip-city-ipv6.mmdb"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("placeholder"), 0600); err != nil {
 			t.Fatalf("WriteFile %s: %v", name, err)
 		}

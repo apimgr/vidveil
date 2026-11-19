@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
@@ -41,18 +42,42 @@ func (h *ServerHandler) newSimpleCaptcha(r *http.Request) (string, string) {
 	if _, err := rand.Read(token[:]); err != nil {
 		return "", ""
 	}
-	a, err := rand.Int(rand.Reader, big.NewInt(9))
+	a, err := rand.Int(rand.Reader, big.NewInt(20))
 	if err != nil {
 		return "", ""
 	}
-	b, err := rand.Int(rand.Reader, big.NewInt(9))
+	b, err := rand.Int(rand.Reader, big.NewInt(20))
 	if err != nil {
 		return "", ""
 	}
 	left, right := int(a.Int64())+1, int(b.Int64())+1
+	operator := "+"
+	choice, err := rand.Int(rand.Reader, big.NewInt(2))
+	if err != nil {
+		return "", ""
+	}
+	if choice.Int64() == 1 {
+		operator = "-"
+		if right > left {
+			left, right = right, left
+		}
+	}
 	id := hex.EncodeToString(token[:])
-	answer := sha256.Sum256([]byte(strconv.Itoa(left + right)))
+	answerValue := left + right
+	if operator == "-" {
+		answerValue = left - right
+	}
+	answer := sha256.Sum256([]byte(strconv.Itoa(answerValue)))
 	now := time.Now()
+	if h.db != nil {
+		if _, err := h.db.ExecContext(r.Context(), `DELETE FROM captcha_challenges WHERE expires_at <= ?`, now); err != nil {
+			return "", ""
+		}
+		if _, err := h.db.ExecContext(r.Context(), `INSERT INTO captcha_challenges (id, answer_hash, expires_at) VALUES (?, ?, ?)`, id, hex.EncodeToString(answer[:]), now.Add(10*time.Minute)); err != nil {
+			return "", ""
+		}
+		return id, strconv.Itoa(left) + " " + operator + " " + strconv.Itoa(right) + " = ?"
+	}
 	h.captchaMu.Lock()
 	if h.captchaAnswers == nil {
 		h.captchaAnswers = make(map[string]captchaChallenge)
@@ -71,10 +96,26 @@ func (h *ServerHandler) newSimpleCaptcha(r *http.Request) (string, string) {
 	if id == "" {
 		return "", ""
 	}
-	return id, strconv.Itoa(left) + " + " + strconv.Itoa(right) + " = ?"
+	return id, strconv.Itoa(left) + " " + operator + " " + strconv.Itoa(right) + " = ?"
 }
 
 func (h *ServerHandler) verifyCaptcha(r *http.Request) bool {
+	if providerToken := strings.TrimSpace(r.FormValue("captcha_response")); providerToken != "" {
+		switch h.captchaType(r) {
+		case "recaptcha":
+			r.Form.Set("g-recaptcha-response", providerToken)
+		case "hcaptcha":
+			r.Form.Set("h-captcha-response", providerToken)
+		default:
+			return false
+		}
+	}
+	if strings.TrimSpace(r.FormValue("g-recaptcha-response")) != "" {
+		return h.verifyRemoteCaptcha(r, "https://www.google.com/recaptcha/api/siteverify", "g-recaptcha-response", true)
+	}
+	if strings.TrimSpace(r.FormValue("h-captcha-response")) != "" {
+		return h.verifyRemoteCaptcha(r, "https://api.hcaptcha.com/siteverify", "h-captcha-response", false)
+	}
 	if r.FormValue("captcha_id") != "" && r.FormValue("captcha_answer") != "" {
 		return h.verifySimpleCaptcha(r)
 	}
@@ -116,6 +157,40 @@ func (h *ServerHandler) verifySimpleCaptcha(r *http.Request) bool {
 	challenge, ok := h.captchaAnswers[id]
 	delete(h.captchaAnswers, id)
 	h.captchaMu.Unlock()
+	if h.db != nil {
+		var hash string
+		var expires time.Time
+		tx, err := h.db.BeginTx(r.Context(), nil)
+		if err != nil {
+			return false
+		}
+		if err := tx.QueryRowContext(r.Context(), `SELECT answer_hash, expires_at FROM captcha_challenges WHERE id = ?`, id).Scan(&hash, &expires); err != nil {
+			_ = tx.Rollback()
+			return false
+		}
+		result, err := tx.ExecContext(r.Context(), `DELETE FROM captcha_challenges WHERE id = ?`, id)
+		if err != nil {
+			_ = tx.Rollback()
+			return false
+		}
+		rows, err := result.RowsAffected()
+		if err != nil || rows != 1 {
+			_ = tx.Rollback()
+			return false
+		}
+		if err := tx.Commit(); err != nil {
+			return false
+		}
+		if time.Now().After(expires) {
+			return false
+		}
+		stored, decodeErr := hex.DecodeString(hash)
+		if decodeErr != nil || len(stored) != sha256.Size {
+			return false
+		}
+		supplied := sha256.Sum256([]byte(strings.TrimSpace(r.FormValue("captcha_answer"))))
+		return subtle.ConstantTimeCompare(stored, supplied[:]) == 1
+	}
 	if !ok || now.After(challenge.expires) {
 		return false
 	}
@@ -168,6 +243,21 @@ func (h *ServerHandler) captchaTemplateData(r *http.Request) map[string]interfac
 		data["CaptchaFallbackQuestion"] = question
 	}
 	return data
+}
+
+func (h *ServerHandler) apiCaptchaDescriptor(r *http.Request) map[string]interface{} {
+	typeName := h.captchaType(r)
+	descriptor := map[string]interface{}{"provider": typeName}
+	if typeName == "simple" {
+		id, question := h.newSimpleCaptcha(r)
+		descriptor["challenge_id"] = id
+		descriptor["question"] = i18n.Translate(i18n.DetectLocale(r), "contact.captcha_question") + ": " + question
+	} else {
+		descriptor["site_key"] = h.appConfig.Server.Pages.Contact.CaptchaSiteKey
+		id, question := h.newSimpleCaptcha(r)
+		descriptor["fallback"] = map[string]interface{}{"provider": "simple", "challenge_id": id, "question": i18n.Translate(i18n.DetectLocale(r), "contact.captcha_question") + ": " + question}
+	}
+	return descriptor
 }
 
 func CaptchaCSPOrigins(cfg config.ServerContactPagesConfig, r *http.Request) (scripts, frames, connections []string) {

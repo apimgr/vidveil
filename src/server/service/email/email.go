@@ -61,21 +61,8 @@ complete report body.
 
 	"security_report_researcher_ack": `Subject: Security report received - {tracking_id}
 ---
-Thank you for your responsible disclosure report.
-
 Tracking ID: {tracking_id}
-
-We have received your report and will review it under our coordinated
-disclosure policy. You can check the status of your report at any time:
-
-{report_status_url}
-
-Please keep this link private — it is a one-shot access URL scoped to
-your report only.
-
-────────────────────────────────────────────────────────────────────────
-{app_name}
-{app_url}`,
+Status URL: {report_status_url}`,
 
 	"backup_complete": `Subject: Backup Complete - {app_name}
 ---
@@ -273,6 +260,19 @@ func (s *EmailService) SendRaw(to, subject, body string) error {
 	return s.sendEmail(to, subject, body)
 }
 
+// SendContact sends a plain-text contact message from the configured server
+// identity and uses the validated submitter address only as Reply-To.
+func (s *EmailService) SendContact(to, replyTo, subject, body string) error {
+	if !s.appConfig.Server.Notifications.Email.Enabled {
+		return fmt.Errorf("email is not enabled")
+	}
+	appName := strings.TrimSpace(s.appConfig.Server.Branding.Title)
+	if appName == "" {
+		appName = "vidveil"
+	}
+	return s.sendEmailWithReplyTo(to, "["+appName+" contact] "+subject, body, replyTo)
+}
+
 // getTemplate returns template content, preferring custom over embedded
 func (s *EmailService) getTemplate(name string) (string, error) {
 	// Check for custom template first
@@ -421,6 +421,10 @@ func (s *EmailService) effectiveEmailConfig() (host string, port int, username, 
 
 // sendEmail sends the actual email via SMTP
 func (s *EmailService) sendEmail(to, subject, body string) error {
+	return s.sendEmailWithReplyTo(to, subject, body, s.appConfig.Server.Notifications.Email.ReplyTo)
+}
+
+func (s *EmailService) sendEmailWithReplyTo(to, subject, body, replyTo string) error {
 	host, port, username, password, fromAddr, fromName, tlsMode := s.effectiveEmailConfig()
 
 	// Try autodetect if host is empty (per AI.md PART 17: autodetect is always enabled)
@@ -447,7 +451,7 @@ func (s *EmailService) sendEmail(to, subject, body string) error {
 	var msg bytes.Buffer
 	_, _ = fmt.Fprintf(&msg, "From: %s\r\n", fromHeader)
 	_, _ = fmt.Fprintf(&msg, "To: %s\r\n", sanitizeEmailHeader(to))
-	if replyTo := strings.TrimSpace(s.appConfig.Server.Notifications.Email.ReplyTo); replyTo != "" {
+	if replyTo = strings.TrimSpace(replyTo); replyTo != "" {
 		_, _ = fmt.Fprintf(&msg, "Reply-To: %s\r\n", sanitizeEmailHeader(replyTo))
 	}
 	_, _ = fmt.Fprintf(&msg, "Subject: %s\r\n", sanitizeEmailHeader(subject))

@@ -20,6 +20,12 @@ var preferenceValuePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
 var engineSelectionValuePattern = regexp.MustCompile(`^[a-z0-9_]{1,48}$`)
 var compactEngineSelectionPattern = regexp.MustCompile(`^b[0-9a-f]{10,63}$`)
 
+var appPreferenceCookieNames = []string{
+	"theme", "lang", "cookie_consent", "ccpa_opt_out", "vidveil_build", "age_verified",
+	"content_ack", "dismissed_announcements", "forward_ip", "preview_first",
+	engineSelectionCookieName, engineSelectionValueCookieName,
+}
+
 type preferenceResult struct {
 	Theme   string            `json:"theme"`
 	Lang    string            `json:"lang"`
@@ -209,7 +215,7 @@ func resetPreferenceCookies(w http.ResponseWriter, r *http.Request) {
 	delete := func(name string) {
 		http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, Secure: secure, SameSite: http.SameSiteLaxMode})
 	}
-	for _, name := range []string{"theme", "lang", "cookie_consent", "ccpa_opt_out", "vidveil_build", "age_verified", "content_ack", "dismissed_announcements", "forward_ip", "preview_first"} {
+	for _, name := range appPreferenceCookieNames {
 		delete(name)
 	}
 	for _, cookie := range r.Cookies() {
@@ -228,7 +234,18 @@ func preferencesWithCode(form url.Values) url.Values {
 	if code, ok := decodePreferenceCode(form.Get("code")); ok {
 		if imported, err := url.ParseQuery(code); err == nil {
 			for key, items := range imported {
-				values[key] = items
+				valid := make([]string, 0, len(items))
+				for _, item := range items {
+					if _, ok := validatePreference(key, item); ok {
+						valid = append(valid, item)
+					}
+				}
+				if len(valid) > 0 {
+					values[key] = []string{valid[len(valid)-1]}
+				} else if _, exists := values[key]; !exists {
+					// Keep invalid imports visible to applyPreferences so they are reported as ignored.
+					values[key] = items
+				}
 			}
 		}
 	}

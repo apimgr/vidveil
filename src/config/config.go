@@ -232,11 +232,30 @@ type ServerPageContentConfig struct {
 }
 
 type ServerContactPagesConfig struct {
-	Enabled          bool   `yaml:"enabled"`
-	Captcha          string `yaml:"captcha"`
-	CaptchaSiteKey   string `yaml:"captcha_site_key"`
-	CaptchaSecretKey string `yaml:"captcha_secret_key"`
-	SuccessMessage   string `yaml:"success_message"`
+	Enabled          bool                  `yaml:"enabled"`
+	Captcha          string                `yaml:"captcha"`
+	CaptchaSiteKey   string                `yaml:"captcha_site_key"`
+	CaptchaSecretKey string                `yaml:"captcha_secret_key"`
+	SuccessMessage   string                `yaml:"success_message"`
+	Antispam         ContactAntispamConfig `yaml:"antispam"`
+}
+
+type ContactAntispamConfig struct {
+	Honeypot             bool     `yaml:"honeypot"`
+	MinFillSeconds       int      `yaml:"min_fill_seconds"`
+	MaxAgeSeconds        int      `yaml:"max_age_seconds"`
+	PerIP                int      `yaml:"per_ip"`
+	PerEmail             int      `yaml:"per_email"`
+	Global               int      `yaml:"global"`
+	Window               string   `yaml:"window"`
+	MaxLinks             int      `yaml:"max_links"`
+	RejectMarkup         bool     `yaml:"reject_markup"`
+	BlockedWords         []string `yaml:"blocked_words"`
+	BlockedEmailDomains  []string `yaml:"blocked_email_domains"`
+	BlockedLinkDomains   []string `yaml:"blocked_link_domains"`
+	Strikes              int      `yaml:"strikes"`
+	BanHours             int      `yaml:"ban_hours"`
+	DuplicateWindowHours int      `yaml:"duplicate_window_hours"`
 }
 
 type ServerHelpPagesConfig struct {
@@ -711,8 +730,6 @@ type GeoIPDatabasesConfig struct {
 	ASN     bool `yaml:"asn"`
 	Country bool `yaml:"country"`
 	City    bool `yaml:"city"`
-	// Whois enables combined WHOIS/ASN/country lookup (same source as Country)
-	Whois bool `yaml:"whois"`
 }
 
 // ContentRestrictionConfig holds settings for geographic content restrictions
@@ -1664,7 +1681,14 @@ func DefaultAppConfig() *AppConfig {
 			Mode:       "production",
 			MCP:        MCPConfig{Enabled: true},
 			Pages: ServerPagesConfig{
-				Contact: ServerContactPagesConfig{Enabled: true, Captcha: "simple", SuccessMessage: "Thank you for your message. We'll respond soon."},
+				Contact: ServerContactPagesConfig{
+					Enabled: true, Captcha: "simple", SuccessMessage: "Thank you for your message. We'll respond soon.",
+					Antispam: ContactAntispamConfig{
+						Honeypot: true, MinFillSeconds: 3, MaxAgeSeconds: 43200,
+						PerIP: 5, PerEmail: 3, Global: 60, Window: "1h", MaxLinks: 2,
+						RejectMarkup: true, Strikes: 3, BanHours: 24, DuplicateWindowHours: 24,
+					},
+				},
 				Help: ServerHelpPagesConfig{
 					Content: "VidVeil searches across configured video engines. Search with a phrase, use bang shortcuts such as `!ph`, and manage saved engines and display options under `/server/preferences`.",
 					MCP:     vidveilMCPHelp,
@@ -1917,8 +1941,7 @@ func DefaultAppConfig() *AppConfig {
 					ASN:     true,
 					Country: true,
 					// Need city for region-level restriction
-					City:  true,
-					Whois: true,
+					City: true,
 				},
 				ContentRestriction: ContentRestrictionConfig{
 					Mode:      "warn",

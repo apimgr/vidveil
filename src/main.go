@@ -744,6 +744,18 @@ func run(ctx context.Context) error {
 			if removed > 0 {
 				logger.Info("expired API tokens removed", map[string]interface{}{"count": removed})
 			}
+			captchaCleanup, err := migrationMgr.GetDB().ExecContext(cleanupCtx,
+				`DELETE FROM captcha_challenges WHERE expires_at <= ?`, time.Now())
+			if err != nil {
+				return fmt.Errorf("remove expired CAPTCHA challenges: %w", err)
+			}
+			removedChallenges, err := captchaCleanup.RowsAffected()
+			if err != nil {
+				return fmt.Errorf("count removed CAPTCHA challenges: %w", err)
+			}
+			if removedChallenges > 0 {
+				logger.Info("expired CAPTCHA challenges removed", map[string]interface{}{"count": removedChallenges})
+			}
 			return nil
 		},
 		LogRotation: func(ctx context.Context) error {

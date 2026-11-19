@@ -60,6 +60,9 @@ func (m *Manager) EnsureSecrets(ctx context.Context) error {
 
 // Get retrieves a secret value (base64-encoded)
 func (m *Manager) Get(ctx context.Context, key SecretKey) ([]byte, error) {
+	if m == nil || m.db == nil {
+		return nil, fmt.Errorf("secret %s unavailable: database is not initialized", key)
+	}
 	var value string
 	err := m.db.QueryRowContext(ctx,
 		"SELECT value FROM app_secrets WHERE key = ?", string(key)).Scan(&value)

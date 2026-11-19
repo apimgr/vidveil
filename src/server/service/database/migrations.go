@@ -221,6 +221,12 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			expires_at DATETIME,
 			previous_value TEXT
 		)`,
+		`CREATE TABLE IF NOT EXISTS captcha_challenges (
+			id VARCHAR(32) PRIMARY KEY,
+			answer_hash VARCHAR(64) NOT NULL,
+			expires_at TIMESTAMP NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_captcha_challenges_expires ON captcha_challenges(expires_at)`,
 
 		// Notifications table per AI.md PART 17
 		// Stores notification center history (toast/banner are real-time only)

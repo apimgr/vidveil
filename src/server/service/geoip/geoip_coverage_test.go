@@ -57,9 +57,10 @@ func TestDownloadIfMissing_FilesExist_SkipsDownload(t *testing.T) {
 	s, tmp := newGeoIPForTest(t)
 
 	// Pre-create all three DB files so downloadIfMissing skips the download
-	createFakeMMDB(t, filepath.Join(tmp, "asn.mmdb"))
-	createFakeMMDB(t, filepath.Join(tmp, "country.mmdb"))
-	createFakeMMDB(t, filepath.Join(tmp, "city.mmdb"))
+	createFakeMMDB(t, filepath.Join(tmp, "iptoasn-asn.mmdb"))
+	createFakeMMDB(t, filepath.Join(tmp, "iptoasn-country.mmdb"))
+	createFakeMMDB(t, filepath.Join(tmp, "dbip-city-ipv4.mmdb"))
+	createFakeMMDB(t, filepath.Join(tmp, "dbip-city-ipv6.mmdb"))
 
 	err := s.downloadIfMissing()
 	if err != nil {
@@ -72,7 +73,7 @@ func TestDownloadIfMissing_ASNExists_CountryMissing(t *testing.T) {
 	s.appConfig.Server.GeoIP.Databases.Country = false
 	s.appConfig.Server.GeoIP.Databases.City = false
 
-	createFakeMMDB(t, filepath.Join(tmp, "asn.mmdb"))
+	createFakeMMDB(t, filepath.Join(tmp, "iptoasn-asn.mmdb"))
 
 	err := s.downloadIfMissing()
 	if err != nil {
@@ -87,7 +88,7 @@ func TestOpenDatabases_ASN_InvalidMMDB_ReturnsError(t *testing.T) {
 	s.appConfig.Server.GeoIP.Databases.Country = false
 	s.appConfig.Server.GeoIP.Databases.City = false
 
-	createFakeMMDB(t, filepath.Join(tmp, "asn.mmdb"))
+	createFakeMMDB(t, filepath.Join(tmp, "iptoasn-asn.mmdb"))
 
 	err := s.openDatabases()
 	if err == nil {
@@ -100,7 +101,7 @@ func TestOpenDatabases_Country_InvalidMMDB_ReturnsError(t *testing.T) {
 	s.appConfig.Server.GeoIP.Databases.ASN = false
 	s.appConfig.Server.GeoIP.Databases.City = false
 
-	createFakeMMDB(t, filepath.Join(tmp, "country.mmdb"))
+	createFakeMMDB(t, filepath.Join(tmp, "iptoasn-country.mmdb"))
 
 	err := s.openDatabases()
 	if err == nil {
@@ -113,7 +114,7 @@ func TestOpenDatabases_City_InvalidMMDB_ReturnsError(t *testing.T) {
 	s.appConfig.Server.GeoIP.Databases.ASN = false
 	s.appConfig.Server.GeoIP.Databases.Country = false
 
-	createFakeMMDB(t, filepath.Join(tmp, "city.mmdb"))
+	createFakeMMDB(t, filepath.Join(tmp, "dbip-city-ipv4.mmdb"))
 
 	err := s.openDatabases()
 	if err == nil {
@@ -144,7 +145,7 @@ func TestInitialize_Enabled_DBFilesExist_InvalidMMDB_ReturnsError(t *testing.T) 
 	s.appConfig.Server.GeoIP.Databases.Country = false
 	s.appConfig.Server.GeoIP.Databases.City = false
 
-	createFakeMMDB(t, filepath.Join(tmp, "asn.mmdb"))
+	createFakeMMDB(t, filepath.Join(tmp, "iptoasn-asn.mmdb"))
 
 	err := s.Initialize()
 	if err == nil {
@@ -159,7 +160,7 @@ func TestUpdate_Enabled_DBsPresent_OpenFails(t *testing.T) {
 	s.appConfig.Server.GeoIP.Databases.Country = false
 	s.appConfig.Server.GeoIP.Databases.City = false
 
-	createFakeMMDB(t, filepath.Join(tmp, "asn.mmdb"))
+	createFakeMMDB(t, filepath.Join(tmp, "iptoasn-asn.mmdb"))
 
 	err := s.Update()
 	if err == nil {

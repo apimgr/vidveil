@@ -126,6 +126,38 @@ type APIResponse struct {
 	Details any    `json:"details,omitempty"`
 }
 
+type deferredStatusResponseWriter struct {
+	http.ResponseWriter
+	preferred int
+	wrote     bool
+}
+
+func withResponseStatus(w http.ResponseWriter, status int) http.ResponseWriter {
+	return &deferredStatusResponseWriter{ResponseWriter: w, preferred: status}
+}
+
+func (w *deferredStatusResponseWriter) WriteHeader(status int) {
+	if w.wrote {
+		return
+	}
+	if status < http.StatusBadRequest && w.preferred != 0 {
+		status = w.preferred
+	}
+	w.wrote = true
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *deferredStatusResponseWriter) Write(data []byte) (int, error) {
+	if !w.wrote {
+		status := w.preferred
+		if status == 0 {
+			status = http.StatusOK
+		}
+		w.WriteHeader(status)
+	}
+	return w.ResponseWriter.Write(data)
+}
+
 // marshalPublicJSON is the shared sanitization chokepoint for every public
 // JSON response, including canonical success and error envelopes.
 func marshalPublicJSON(data any) ([]byte, error) {

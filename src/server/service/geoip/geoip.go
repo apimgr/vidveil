@@ -3,6 +3,8 @@
 package geoip
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,10 +21,10 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
-// Database URLs per AI.md PART 19 - using ip-location-db via jsDelivr
+// Database URLs per AI.md PART 19.
 const (
-	ASNURL     = "https://cdn.jsdelivr.net/npm/@ip-location-db/asn-mmdb/asn.mmdb"
-	CountryURL = "https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb"
+	ASNURL     = "https://github.com/sapics/ip-location-db/releases/download/latest/iptoasn-asn.mmdb"
+	CountryURL = "https://github.com/sapics/ip-location-db/releases/download/latest/iptoasn-country.mmdb"
 	CityURL    = "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv4.mmdb"
 	CityURLv6  = "https://github.com/sapics/ip-location-db/releases/download/latest/dbip-city-ipv6.mmdb"
 )
@@ -103,12 +106,12 @@ func applyCityRecord(result *GeoIPResult, record cityRecord) {
 }
 
 // NewGeoIPService creates a new GeoIP service
-// Per AI.md PART 19: Security DBs go in {config}/security/geoip/
+// Per AI.md PART 19: GeoIP databases go in {data_dir}/security/geoip/.
 func NewGeoIPService(appConfig *config.AppConfig) *GeoIPService {
-	dataDir := appConfig.Server.GeoIP.Dir
+	paths := config.GetAppPaths("", "")
+	dataDir := strings.ReplaceAll(appConfig.Server.GeoIP.Dir, "{data_dir}", paths.Data)
 	if dataDir == "" {
-		paths := config.GetAppPaths("", "")
-		dataDir = filepath.Join(paths.Config, "security", "geoip")
+		dataDir = filepath.Join(paths.Data, "security", "geoip")
 	}
 
 	return &GeoIPService{
@@ -141,36 +144,44 @@ func (s *GeoIPService) downloadIfMissing() error {
 	dbs := s.appConfig.Server.GeoIP.Databases
 
 	if dbs.ASN {
-		asnPath := filepath.Join(s.dataDir, "asn.mmdb")
+		asnPath := filepath.Join(s.dataDir, "iptoasn-asn.mmdb")
 		if _, err := os.Stat(asnPath); os.IsNotExist(err) {
 			if err := s.downloadFile(ASNURL, asnPath); err != nil {
 				return fmt.Errorf("failed to download ASN database: %w", err)
 			}
+		} else if err != nil {
+			return fmt.Errorf("stat ASN database: %w", err)
 		}
 	}
 
 	if dbs.Country {
-		countryPath := filepath.Join(s.dataDir, "country.mmdb")
+		countryPath := filepath.Join(s.dataDir, "iptoasn-country.mmdb")
 		if _, err := os.Stat(countryPath); os.IsNotExist(err) {
 			if err := s.downloadFile(CountryURL, countryPath); err != nil {
 				return fmt.Errorf("failed to download country database: %w", err)
 			}
+		} else if err != nil {
+			return fmt.Errorf("stat country database: %w", err)
 		}
 	}
 
 	if dbs.City {
-		cityPath := filepath.Join(s.dataDir, "city.mmdb")
+		cityPath := filepath.Join(s.dataDir, "dbip-city-ipv4.mmdb")
 		if _, err := os.Stat(cityPath); os.IsNotExist(err) {
 			if err := s.downloadFile(CityURL, cityPath); err != nil {
 				return fmt.Errorf("failed to download city database: %w", err)
 			}
+		} else if err != nil {
+			return fmt.Errorf("stat city database: %w", err)
 		}
 
-		cityPathV6 := filepath.Join(s.dataDir, "city-ipv6.mmdb")
+		cityPathV6 := filepath.Join(s.dataDir, "dbip-city-ipv6.mmdb")
 		if _, err := os.Stat(cityPathV6); os.IsNotExist(err) {
 			if err := s.downloadFile(CityURLv6, cityPathV6); err != nil {
 				return fmt.Errorf("failed to download city IPv6 database: %w", err)
 			}
+		} else if err != nil {
+			return fmt.Errorf("stat city IPv6 database: %w", err)
 		}
 	}
 
@@ -178,43 +189,143 @@ func (s *GeoIPService) downloadIfMissing() error {
 }
 
 // downloadFile downloads a file from URL to path
-// Uses User-Agent header as jsDelivr requires it for some files
+// Verifies the upstream SHA-256 manifest before atomically replacing the file.
 func (s *GeoIPService) downloadFile(url, path string) error {
+	checksumURL, err := checksumURL(url)
+	if err != nil {
+		return err
+	}
+	return s.downloadFileWithChecksum(url, checksumURL, path, &http.Client{Timeout: 60 * time.Second})
+}
+
+func (s *GeoIPService) downloadFileWithChecksum(url, checksumURL, path string, client *http.Client) error {
+	filename := filepath.Base(strings.Split(url, "?")[0])
+	digest, err := fetchChecksum(client, checksumURL, filename)
+	if err != nil {
+		return err
+	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-
-	client := &http.Client{Timeout: 60 * time.Second}
+	req.Header.Set("User-Agent", "vidveil GeoIP database updater")
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
-
 	if resp.StatusCode != http.StatusOK {
+		closeErr := resp.Body.Close()
+		if closeErr != nil {
+			return fmt.Errorf("download failed with status %d (close response: %w)", resp.StatusCode, closeErr)
+		}
 		return fmt.Errorf("download failed with status %d", resp.StatusCode)
 	}
-
-	tmpPath := path + ".tmp"
-	out, err := os.Create(tmpPath)
-	if err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			return fmt.Errorf("create GeoIP database directory: %w (close response: %v)", err, closeErr)
+		}
 		return err
 	}
-
-	_, err = io.Copy(out, resp.Body)
-	closeErr := out.Close()
+	out, err := os.CreateTemp(filepath.Dir(path), ".geoip-*.tmp")
 	if err != nil {
-		_ = os.Remove(tmpPath)
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			return fmt.Errorf("create temporary GeoIP database: %w (close response: %v)", err, closeErr)
+		}
 		return err
+	}
+	tmpPath := out.Name()
+	cleanup := func(primary error) error {
+		if removeErr := os.Remove(tmpPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			if primary != nil {
+				return fmt.Errorf("%w (remove temporary GeoIP file: %v)", primary, removeErr)
+			}
+			return fmt.Errorf("remove temporary GeoIP file: %w", removeErr)
+		}
+		return primary
+	}
+	hasher := sha256.New()
+	_, copyErr := io.Copy(io.MultiWriter(out, hasher), resp.Body)
+	bodyCloseErr := resp.Body.Close()
+	fileCloseErr := out.Close()
+	if copyErr != nil {
+		return cleanup(copyErr)
+	}
+	if bodyCloseErr != nil {
+		return cleanup(fmt.Errorf("close GeoIP response: %w", bodyCloseErr))
+	}
+	if fileCloseErr != nil {
+		return cleanup(fmt.Errorf("close downloaded GeoIP database: %w", fileCloseErr))
+	}
+	if !equalDigest(hasher.Sum(nil), digest) {
+		return cleanup(fmt.Errorf("SHA-256 checksum mismatch for %s", filepath.Base(path)))
+	}
+	if err := os.Chmod(tmpPath, 0644); err != nil {
+		return cleanup(fmt.Errorf("set GeoIP database permissions: %w", err))
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return cleanup(fmt.Errorf("replace GeoIP database: %w", err))
+	}
+	return nil
+}
+
+func checksumURL(databaseURL string) (string, error) {
+	u, err := http.NewRequest("GET", databaseURL, nil)
+	if err != nil {
+		return "", err
+	}
+	base := filepath.Base(u.URL.Path)
+	if base == "." || base == "/" || base == "" {
+		return "", fmt.Errorf("invalid GeoIP database URL %q", databaseURL)
+	}
+	return "https://github.com/sapics/ip-location-db/releases/download/checksum/" + base + ".sha256", nil
+}
+
+func fetchChecksum(client *http.Client, url, filename string) ([]byte, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	content, readErr := io.ReadAll(io.LimitReader(resp.Body, 4097))
+	closeErr := resp.Body.Close()
+	if readErr != nil {
+		return nil, readErr
 	}
 	if closeErr != nil {
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("close downloaded GeoIP database: %w", closeErr)
+		return nil, fmt.Errorf("close GeoIP checksum response: %w", closeErr)
 	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("checksum download failed with status %d", resp.StatusCode)
+	}
+	if len(content) > 4096 {
+		return nil, fmt.Errorf("GeoIP checksum response is too large")
+	}
+	fields := strings.Fields(string(content))
+	if len(fields) == 0 || (len(fields) > 1 && strings.TrimPrefix(fields[1], "*") != filename) {
+		return nil, fmt.Errorf("GeoIP checksum manifest does not name %s", filename)
+	}
+	if len(fields[0]) != sha256.Size*2 {
+		return nil, fmt.Errorf("invalid SHA-256 checksum for %s", filename)
+	}
+	digest, err := hex.DecodeString(fields[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid SHA-256 checksum for %s: %w", filename, err)
+	}
+	return digest, nil
+}
 
-	return os.Rename(tmpPath, path)
+func equalDigest(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	var diff byte
+	for i := range a {
+		diff |= a[i] ^ b[i]
+	}
+	return diff == 0
 }
 
 // openDatabases opens all configured databases
@@ -225,7 +336,7 @@ func (s *GeoIPService) openDatabases() error {
 	dbs := s.appConfig.Server.GeoIP.Databases
 
 	if dbs.ASN {
-		asnPath := filepath.Join(s.dataDir, "asn.mmdb")
+		asnPath := filepath.Join(s.dataDir, "iptoasn-asn.mmdb")
 		if _, err := os.Stat(asnPath); err == nil {
 			db, err := maxminddb.Open(asnPath)
 			if err != nil {
@@ -236,7 +347,7 @@ func (s *GeoIPService) openDatabases() error {
 	}
 
 	if dbs.Country {
-		countryPath := filepath.Join(s.dataDir, "country.mmdb")
+		countryPath := filepath.Join(s.dataDir, "iptoasn-country.mmdb")
 		if _, err := os.Stat(countryPath); err == nil {
 			db, err := maxminddb.Open(countryPath)
 			if err != nil {
@@ -247,7 +358,7 @@ func (s *GeoIPService) openDatabases() error {
 	}
 
 	if dbs.City {
-		cityPath := filepath.Join(s.dataDir, "city.mmdb")
+		cityPath := filepath.Join(s.dataDir, "dbip-city-ipv4.mmdb")
 		if _, err := os.Stat(cityPath); err == nil {
 			db, err := maxminddb.Open(cityPath)
 			if err != nil {
@@ -256,7 +367,7 @@ func (s *GeoIPService) openDatabases() error {
 			s.cityDB = db
 		}
 
-		cityPathV6 := filepath.Join(s.dataDir, "city-ipv6.mmdb")
+		cityPathV6 := filepath.Join(s.dataDir, "dbip-city-ipv6.mmdb")
 		if _, err := os.Stat(cityPathV6); err == nil {
 			db, err := maxminddb.Open(cityPathV6)
 			if err != nil {
@@ -539,38 +650,54 @@ func (s *GeoIPService) Update() error {
 		return nil
 	}
 
-	// Close existing databases
-	s.Close()
-
 	dbs := s.appConfig.Server.GeoIP.Databases
-
+	type update struct{ url, path string }
+	var updates []update
 	if dbs.ASN {
-		asnPath := filepath.Join(s.dataDir, "asn.mmdb")
-		if err := s.downloadFile(ASNURL, asnPath); err != nil {
-			return fmt.Errorf("failed to update ASN database: %w", err)
-		}
+		updates = append(updates, update{ASNURL, filepath.Join(s.dataDir, "iptoasn-asn.mmdb")})
 	}
-
 	if dbs.Country {
-		countryPath := filepath.Join(s.dataDir, "country.mmdb")
-		if err := s.downloadFile(CountryURL, countryPath); err != nil {
-			return fmt.Errorf("failed to update country database: %w", err)
-		}
+		updates = append(updates, update{CountryURL, filepath.Join(s.dataDir, "iptoasn-country.mmdb")})
 	}
-
 	if dbs.City {
-		cityPath := filepath.Join(s.dataDir, "city.mmdb")
-		if err := s.downloadFile(CityURL, cityPath); err != nil {
-			return fmt.Errorf("failed to update city database: %w", err)
+		updates = append(updates, update{CityURL, filepath.Join(s.dataDir, "dbip-city-ipv4.mmdb")}, update{CityURLv6, filepath.Join(s.dataDir, "dbip-city-ipv6.mmdb")})
+	}
+	staged := make([]string, 0, len(updates))
+	cleanup := func(primary error) error {
+		for _, path := range staged {
+			if path == "" {
+				continue
+			}
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				if primary == nil {
+					primary = fmt.Errorf("remove staged GeoIP database %s: %w", path, err)
+				} else {
+					primary = fmt.Errorf("%w (remove staged GeoIP database %s: %v)", primary, path, err)
+				}
+			}
 		}
-
-		cityPathV6 := filepath.Join(s.dataDir, "city-ipv6.mmdb")
-		if err := s.downloadFile(CityURLv6, cityPathV6); err != nil {
-			return fmt.Errorf("failed to update city IPv6 database: %w", err)
+		return primary
+	}
+	for _, item := range updates {
+		stagePath := item.path + ".next"
+		staged = append(staged, stagePath)
+		if err := s.downloadFile(item.url, stagePath); err != nil {
+			return cleanup(fmt.Errorf("failed to update %s: %w", filepath.Base(item.path), err))
 		}
 	}
-
-	return s.openDatabases()
+	if err := s.Close(); err != nil {
+		return cleanup(fmt.Errorf("close current GeoIP databases before update: %w", err))
+	}
+	for i, item := range updates {
+		if err := os.Rename(staged[i], item.path); err != nil {
+			return cleanup(fmt.Errorf("replace %s: %w", filepath.Base(item.path), err))
+		}
+		staged[i] = ""
+	}
+	if err := s.openDatabases(); err != nil {
+		return cleanup(err)
+	}
+	return cleanup(nil)
 }
 
 // LastUpdate returns when databases were last updated
@@ -585,25 +712,42 @@ func (s *GeoIPService) IsEnabled() bool {
 	return s.appConfig.Server.GeoIP.Enabled
 }
 
-// Close closes all database readers
-func (s *GeoIPService) Close() {
+// Close closes all database readers and reports any close failures.
+func (s *GeoIPService) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	var closeErr error
 	if s.asnDB != nil {
-		_ = s.asnDB.Close()
+		if err := s.asnDB.Close(); err != nil {
+			closeErr = fmt.Errorf("close ASN database: %w", err)
+		}
 		s.asnDB = nil
 	}
 	if s.countryDB != nil {
-		_ = s.countryDB.Close()
+		if err := s.countryDB.Close(); err != nil {
+			closeErr = appendCloseError(closeErr, "country", err)
+		}
 		s.countryDB = nil
 	}
 	if s.cityDB != nil {
-		_ = s.cityDB.Close()
+		if err := s.cityDB.Close(); err != nil {
+			closeErr = appendCloseError(closeErr, "city", err)
+		}
 		s.cityDB = nil
 	}
 	if s.cityDBv6 != nil {
-		_ = s.cityDBv6.Close()
+		if err := s.cityDBv6.Close(); err != nil {
+			closeErr = appendCloseError(closeErr, "city IPv6", err)
+		}
 		s.cityDBv6 = nil
 	}
+	return closeErr
+}
+
+func appendCloseError(current error, name string, err error) error {
+	if current == nil {
+		return fmt.Errorf("close %s database: %w", name, err)
+	}
+	return fmt.Errorf("%w; close %s database: %v", current, name, err)
 }

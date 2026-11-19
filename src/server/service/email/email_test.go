@@ -89,6 +89,23 @@ func TestParseTemplate_MultilineBody(t *testing.T) {
 	}
 }
 
+func TestSecurityReportResearcherAcknowledgmentContainsOnlyTrackingIDAndStatusURL(t *testing.T) {
+	svc := newTestEmailService(t)
+	template, err := svc.getTemplate("security_report_researcher_ack")
+	if err != nil {
+		t.Fatalf("get acknowledgment template: %v", err)
+	}
+	_, body := svc.parseTemplate(template)
+	body = svc.applyVars(body, map[string]string{
+		"tracking_id":       "sec_0123456789abcdef",
+		"report_status_url": "https://example.com/server/security/report/sec_0123456789abcdef?token=secret",
+	})
+	want := "Tracking ID: sec_0123456789abcdef\nStatus URL: https://example.com/server/security/report/sec_0123456789abcdef?token=secret"
+	if body != want {
+		t.Fatalf("acknowledgment body = %q, want only tracking ID and status URL %q", body, want)
+	}
+}
+
 // --- applyVars ---
 
 func TestApplyVars_BasicSubstitution(t *testing.T) {

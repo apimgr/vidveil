@@ -6,6 +6,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -18,9 +19,94 @@ import (
 	"github.com/apimgr/vidveil/src/common/authpad"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/database"
+	"github.com/apimgr/vidveil/src/server/service/email"
 	"github.com/apimgr/vidveil/src/server/service/secreport"
 	"github.com/apimgr/vidveil/src/server/service/secret"
 )
+
+type securityReportEmailCall struct {
+	template string
+	to       string
+	vars     map[string]string
+}
+
+type recordingSecurityReportEmailSender struct {
+	calls       []securityReportEmailCall
+	acknowledge error
+	contactErr  error
+}
+
+func (s *recordingSecurityReportEmailSender) Send(templateName, to string, vars map[string]string) error {
+	copied := make(map[string]string, len(vars))
+	for key, value := range vars {
+		copied[key] = value
+	}
+	s.calls = append(s.calls, securityReportEmailCall{template: templateName, to: to, vars: copied})
+	if templateName == "security_report_researcher_ack" {
+		return s.acknowledge
+	}
+	return nil
+}
+
+func (s *recordingSecurityReportEmailSender) SendRaw(to, subject, body string) error {
+	s.calls = append(s.calls, securityReportEmailCall{template: "raw:" + subject, to: to, vars: map[string]string{"body": body}})
+	return nil
+}
+
+func (s *recordingSecurityReportEmailSender) SendContact(to, replyTo, subject, body string) error {
+	s.calls = append(s.calls, securityReportEmailCall{template: "contact", to: to, vars: map[string]string{"reply_to": replyTo, "subject": subject, "body": body}})
+	return s.contactErr
+}
+
+func TestContactSubmissionSendsOneServerRoutedEmail(t *testing.T) {
+	h, _ := newSecurityTestHandler(t)
+	h.appConfig.Server.Pages.Contact.Antispam.MinFillSeconds = 0
+	h.appConfig.Server.Contact.General.Email = "contact@example.test"
+	sender := &recordingSecurityReportEmailSender{}
+	h.SetEmailService(sender)
+	form := url.Values{"name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"Question"}, "message": {"Hello"}}
+	addSimpleCaptcha(t, h, form)
+	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.handleContactSubmit(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("contact submit status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if len(sender.calls) != 1 {
+		t.Fatalf("sent %d contact emails, want exactly one", len(sender.calls))
+	}
+	call := sender.calls[0]
+	if call.to != "contact@example.test" || call.vars["reply_to"] != "alice@example.test" || call.vars["subject"] != "Question" {
+		t.Fatalf("unexpected contact delivery: %#v", call)
+	}
+}
+
+func TestAPIContactDeliveryFailureReleasesRetryState(t *testing.T) {
+	h, _ := newSecurityTestHandler(t)
+	h.appConfig.Server.Pages.Contact.Enabled = true
+	h.appConfig.Server.Contact.General.Email = "contact@example.test"
+	sender := &recordingSecurityReportEmailSender{contactErr: errors.New("smtp unavailable")}
+	h.SetEmailService(sender)
+	form := url.Values{"name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"Question"}, "message": {"Please reply"}}
+	request := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/server/contact", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		response := httptest.NewRecorder()
+		h.APIContact(response, req)
+		return response
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		addSimpleCaptcha(t, h, form)
+		response := request()
+		if response.Code != http.StatusInternalServerError {
+			t.Fatalf("attempt %d status=%d, want 500; body=%s", attempt+1, response.Code, response.Body.String())
+		}
+	}
+	if len(sender.calls) != 2 {
+		t.Fatalf("sent %d attempts, want 2", len(sender.calls))
+	}
+}
 
 // newSecurityTestHandler wires a ServerHandler with a real tempdir sqlite DB
 // (full schema via database.SchemaManager, matching production) and a
@@ -148,6 +234,7 @@ func TestSecurityContactValidationRejectsInvalidEnumsAndEmail(t *testing.T) {
 // handleSecurityReportSubmit accepts a dropdown-selected component value directly.
 func TestHandleSecurityReportSubmit_DropdownComponent_Succeeds(t *testing.T) {
 	h, securityID := newSecurityTestHandler(t)
+	h.SetEmailService(email.NewEmailService(h.appConfig))
 	form := securityFormValues("API", "")
 	addSimpleCaptcha(t, h, form)
 	req := httptest.NewRequest(http.MethodPost, "/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
@@ -159,6 +246,69 @@ func TestHandleSecurityReportSubmit_DropdownComponent_Succeeds(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "Tracking ID") {
 		t.Errorf("handleSecurityReportSubmit dropdown: expected success message with tracking id, got body=%s", rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), "Check your email") {
+		t.Errorf("failed acknowledgment must not promise email delivery, got body=%s", rr.Body.String())
+	}
+}
+
+func TestSecurityReportSendsSingleMaintainerNoticeAndOptionalAcknowledgment(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		acknowledge error
+		wantEmail   bool
+	}{
+		{name: "acknowledgment sent", wantEmail: true},
+		{name: "acknowledgment failure is nonfatal", acknowledge: errors.New("SMTP unavailable")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, securityID := newSecurityTestHandler(t)
+			h.appConfig.Server.Contact.Security.Email = "security@example.com"
+			sender := &recordingSecurityReportEmailSender{acknowledge: tc.acknowledge}
+			h.SetEmailService(sender)
+			form := securityFormValues("API", "")
+			addSimpleCaptcha(t, h, form)
+			req := httptest.NewRequest(http.MethodPost, "/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rr := httptest.NewRecorder()
+			h.ContactPage(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("security report submit status=%d, want 200; body=%s", rr.Code, rr.Body.String())
+			}
+			if len(sender.calls) != 2 {
+				t.Fatalf("email attempts = %d, want one maintainer notice and one acknowledgment", len(sender.calls))
+			}
+			if sender.calls[0].template != "security_report_maintainer" || sender.calls[0].to != "security@example.com" {
+				t.Errorf("maintainer email = %+v", sender.calls[0])
+			}
+			ack := sender.calls[1]
+			if ack.template != "security_report_researcher_ack" || ack.to != "researcher@example.com" {
+				t.Errorf("researcher acknowledgment = %+v", ack)
+			}
+			if len(ack.vars) != 2 || ack.vars["tracking_id"] == "" || !strings.Contains(ack.vars["report_status_url"], "/server/security/report/") {
+				t.Errorf("acknowledgment variables must contain only tracking_id and status URL: %+v", ack.vars)
+			}
+			if got := strings.Contains(rr.Body.String(), "Check your email"); got != tc.wantEmail {
+				t.Errorf("email delivery message present = %t, want %t; body=%s", got, tc.wantEmail, rr.Body.String())
+			}
+		})
+	}
+}
+
+func TestSecurityReportDoesNotSendEmailBeforeCaptchaPasses(t *testing.T) {
+	h, securityID := newSecurityTestHandler(t)
+	sender := &recordingSecurityReportEmailSender{}
+	h.SetEmailService(sender)
+	form := securityFormValues("API", "")
+	req := httptest.NewRequest(http.MethodPost, "/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.ContactPage(rr, req)
+	if len(sender.calls) != 0 {
+		t.Fatalf("email attempts before captcha passed = %d, want 0", len(sender.calls))
+	}
+	if strings.Contains(rr.Body.String(), "Tracking ID") {
+		t.Fatalf("captcha failure unexpectedly created a report: %s", rr.Body.String())
 	}
 }
 
@@ -194,8 +344,8 @@ func TestHandleSecurityReportSubmit_OtherComponentEmpty_Rejected(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ContactPage(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status=%d want 200; body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want 400; body=%s", rr.Code, rr.Body.String())
 	}
 	if !strings.Contains(rr.Body.String(), "complete all required fields") {
 		t.Errorf("expected required-fields error message, got body=%s", rr.Body.String())

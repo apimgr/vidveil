@@ -284,6 +284,11 @@ var (
 		[]string{"limit"},
 	)
 
+	ContactBlockedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "vidveil_contact_blocked_total",
+		Help: "Contact form submissions blocked by antispam reason",
+	}, []string{"reason"})
+
 	// Scheduler metrics per AI.md PART 20 (required when using PART 18 scheduler)
 	SchedulerTasksTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{

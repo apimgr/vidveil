@@ -22,15 +22,12 @@ Override the detected config root with `--config`.
 
 ## MCP and agent discovery
 
-MCP and the generated `llms.txt` document are enabled by default. MCP routes
-use the existing Bearer authentication rules; disabling the feature returns
-404 from all MCP aliases. The discovery document includes endpoint metadata
-from OpenAPI and omits metrics and operator-only actions.
+MCP and the generated `llms.txt` document are always available. MCP routes
+use the existing Bearer authentication rules. The discovery document includes
+endpoint metadata from OpenAPI and omits metrics and operator-only actions.
 
 ```yaml
 server:
-  mcp:
-    enabled: true
   pages:
     about:
       content: ""
@@ -50,11 +47,12 @@ server:
         per_email: 3
         global: 60
         window: 1h
-        max_links: 2
+        max_links: 10
+        review_min_seconds: 2
+        review_max_seconds: 900
         reject_markup: true
         blocked_words: []
         blocked_email_domains: []
-        blocked_link_domains: []
         strikes: 3
         ban_hours: 24
         duplicate_window_hours: 24
@@ -308,8 +306,6 @@ server:
   baseurl: /
   api_version: v1
   mode: production
-  mcp:
-    enabled: true
   pages:
     contact:
       enabled: true
@@ -325,11 +321,12 @@ server:
         per_email: 3
         global: 60
         window: 1h
-        max_links: 2
+        max_links: 10
+        review_min_seconds: 2
+        review_max_seconds: 900
         reject_markup: true
         blocked_words: []
         blocked_email_domains: []
-        blocked_link_domains: []
         strikes: 3
         ban_hours: 24
         duplicate_window_hours: 24
@@ -474,35 +471,26 @@ server:
       - 1e+07
   logs:
     level: info
+    defaults:
+      custom: ""
+      rotate: weekly,50MB
+      keep: none
     debug:
       enabled: false
-      filename: debug.log
       format: text
-      keep: none
-      rotate: monthly
     access:
       enabled: false
-      filename: access.log
       format: apache
-      keep: none
       rotate: monthly
     server:
       enabled: false
-      filename: server.log
       format: text
-      keep: none
-      rotate: weekly,50MB
     error:
       enabled: false
-      filename: error.log
       format: text
-      keep: none
-      rotate: weekly,50MB
     audit:
       enabled: true
-      filename: audit.log
       format: json
-      keep: none
       rotate: daily
       compress: false
       events:
@@ -513,24 +501,14 @@ server:
       include_user_agent: true
     security:
       enabled: true
-      filename: security.log
       format: fail2ban
-      keep: none
-      rotate: weekly,50MB
     auth:
       enabled: true
-      filename: auth.log
       format: syslog
-      keep: none
-      rotate: weekly,50MB
     app:
       enabled: true
-      filename: vidveil.log
       format: logfmt
-      keep: none
-      rotate: weekly,50MB
   rate_limit:
-    enabled: true
     requests: 500
     window: 60
   limits:

@@ -30,7 +30,7 @@ internal IPs, query strings, or stack traces.
 | `GET https://x.scour.li/server/healthz`               | Health, version, build info, uptime.          |
 | `GET https://x.scour.li/api/v1/server/healthz`        | Same data, JSON-only.                         |
 | `GET https://x.scour.li/.well-known/security.txt`     | Machine-readable security contact metadata.   |
-| `GET https://x.scour.li/server/contact`               | Public contact page.                          |
+| `GET https://x.scour.li/server/security`               | Security contacts and reporting guidance.     |
 
 Metrics routes are **internal only** and require a per-service bearer token
 by default. An operator can disable token checks with
@@ -51,13 +51,13 @@ Use the **private** reporting flow:
 
 Please **do not** file a public issue for security problems. Public bug
 reports for vulnerabilities are explicitly discouraged in
-`.github/SECURITY.md` and `/server/contact`.
+`.github/SECURITY.md` and the security overview.
 
 The public security overview is `/server/security`; it mirrors the current
 `/.well-known/security.txt` contacts and links to `/server/security/policy`,
 `/server/security/thanks`, the public key, and the machine-readable file.
-Researchers can submit a coordinated-disclosure report through
-`/server/contact?security_id=...`. A one-shot emailed link opens
+Researchers can open the coordinated-disclosure report form from
+`/server/security`. A one-shot emailed link opens
 `/server/security/report/{tracking_id}` to show report status without exposing
 the report body.
 

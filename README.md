@@ -235,7 +235,6 @@ The root `/healthz` alias is disabled by default.
 | `https://x.scour.li/server/about` | Application description and version |
 | `https://x.scour.li/server/privacy` | Configured privacy policy |
 | `https://x.scour.li/server/dpo` | DPO contact and privacy-policy link |
-| `https://x.scour.li/server/contact` | Public contact form |
 | `https://x.scour.li/server/help` | Application help |
 | `https://x.scour.li/server/terms` | Terms of service |
 | `https://x.scour.li/server/security` | Security contacts and reporting guidance |

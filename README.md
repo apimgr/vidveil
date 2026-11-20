@@ -37,7 +37,7 @@ https://x.scour.li
 | **8 Languages** | English, Arabic, German, Spanish, French, Italian, Japanese, and Chinese |
 | **AI Integration** | OpenAPI-generated MCP tools and configurable `llms.txt` discovery |
 | **Content Restriction** | Geographic warnings/blocks for regions with adult content laws |
-| **Operator Management** | Configure through `server.yml` and the CLI; the protected API supports backup restore |
+| **Operator Management** | Configure through `server.yml`, area files, `secrets.yml`, and the CLI; the protected API supports backup restore |
 | **Single Binary** | No external dependencies, embedded assets |
 | **Docker Ready** | Alpine-based container with tini |
 
@@ -130,6 +130,10 @@ Configuration file location (created on first run):
 | macOS | `~/Library/Application Support/apimgr/vidveil/server.yml` |
 | Windows | `%AppData%\apimgr\vidveil\server.yml` |
 | Docker | `/config/vidveil/server.yml` |
+
+`server.yml` contains node-specific settings. Other settings live in area files
+under `yaml.d/`, and credentials live in `secrets.yml`. Branding, SEO, and
+operator-authored page content are configured in `yaml.d/branding.yml`.
 
 ### Environment Variables
 
@@ -301,8 +305,8 @@ FlyFLV (`!ff`), HQPorner (`!hq`), NonkTube (`!nk`), NubilesPorn (`!np`), PornBox
 
 ### Operator Management
 
-VidVeil has no admin web UI. Operators manage the server through `server.yml`,
-CLI maintenance commands, and operator-token-protected API endpoints. See the
+VidVeil has no admin web UI. Operators manage the server through its config
+files, CLI maintenance commands, and operator-token-protected API endpoints. See the
 [configuration guide](docs/configuration.md), [CLI reference](docs/cli.md),
 the [translation guide](docs/translating.md), and [API reference](docs/api/rest.md).
 

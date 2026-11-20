@@ -240,7 +240,11 @@ func TestDNSCredentialsAreEncryptedOnDiskAndHiddenFromJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}
-	if strings.Contains(string(contents), "sensitive-token-value") || !strings.Contains(string(contents), "enc:v1:") {
+	secrets, err := os.ReadFile(filepath.Join(configDir, "secrets.yml"))
+	if err != nil {
+		t.Fatalf("read secrets: %v", err)
+	}
+	if strings.Contains(string(contents), "sensitive-token-value") || strings.Contains(string(contents), "dns_credentials") || strings.Contains(string(secrets), "sensitive-token-value") || !strings.Contains(string(secrets), "enc:v1:") {
 		t.Fatal("DNS credential was not encrypted at rest")
 	}
 	loaded, _, err := LoadAppConfig(configDir, dataDir)
@@ -266,7 +270,7 @@ func TestPlaintextDNSCredentialsAreAtomicallyProtectedFromDropin(t *testing.T) {
 		t.Fatalf("SaveAppConfig: %v", err)
 	}
 	dropDir := filepath.Join(configDir, "yaml.d")
-	if err := os.Mkdir(dropDir, 0755); err != nil {
+	if err := os.MkdirAll(dropDir, 0700); err != nil {
 		t.Fatalf("create drop-in directory: %v", err)
 	}
 	targetPath := filepath.Join(dropDir, "dns-target.yml")
@@ -284,19 +288,15 @@ func TestPlaintextDNSCredentialsAreAtomicallyProtectedFromDropin(t *testing.T) {
 	if got := loaded.Server.SSL.LetsEncrypt.DNSCredentials["CF_DNS_API_TOKEN"]; got != "plaintext-token" {
 		t.Fatalf("loaded credential = %q", got)
 	}
-	contents, err := os.ReadFile(targetPath)
+	secrets, err := os.ReadFile(filepath.Join(configDir, "secrets.yml"))
 	if err != nil {
-		t.Fatalf("read protected drop-in: %v", err)
+		t.Fatalf("read migrated secrets: %v", err)
 	}
-	info, err := os.Stat(targetPath)
-	if err != nil {
-		t.Fatalf("stat protected drop-in: %v", err)
+	if strings.Contains(string(secrets), "plaintext-token") || !strings.Contains(string(secrets), "enc:v1:") {
+		t.Fatal("plaintext DNS credential was not migrated and encrypted in secrets.yml")
 	}
-	if strings.Contains(string(contents), "plaintext-token") || !strings.Contains(string(contents), "enc:v1:") {
-		t.Fatal("plaintext DNS credential remained in the drop-in")
-	}
-	if got := info.Mode().Perm(); got != 0600 {
-		t.Fatalf("protected drop-in mode = %04o, want 0600", got)
+	if _, err := os.Stat(targetPath); !os.IsNotExist(err) {
+		t.Fatalf("legacy drop-in target still exists after migration: %v", err)
 	}
 }
 

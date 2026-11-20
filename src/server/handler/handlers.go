@@ -2285,6 +2285,7 @@ func (h *SearchHandler) checkI2P(ctx context.Context) string {
 // HealthCheck handles /healthz endpoint with content negotiation
 // Per AI.md PART 13
 func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	r = withOperatorConfig(r, h.appConfig)
 	format := detectResponseFormat(r)
 
 	// Build health response per AI.md PART 13
@@ -2506,23 +2507,31 @@ type HealthzHTMLData struct {
 	// must be populated here too or html/template hard-errors on the missing
 	// field at ExecuteTemplate (unlike a map, a struct has no "zero value" for
 	// an absent field — it's a template execution error, not silent omission).
-	TorEnabled          bool
-	TorRunning          bool
-	OnionAddress        string
-	I2PEnabled          bool
-	I2PRunning          bool
-	I2PAddress          string
-	ThemeColor          string
-	NextTheme           string
-	Robots              string
-	CanonicalURL        string
-	SEOKeywords         string
-	SEOAuthor           string
-	SEOOGImage          string
-	SEOTwitterHandle    string
-	SEOVerification     config.SEOVerificationConfig
-	BrandingDescription string
-	BrandingTagline     string
+	TorEnabled           bool
+	TorRunning           bool
+	OnionAddress         string
+	I2PEnabled           bool
+	I2PRunning           bool
+	I2PAddress           string
+	ThemeColor           string
+	NextTheme            string
+	Robots               string
+	CanonicalURL         string
+	SEOKeywords          string
+	SEOAuthor            string
+	SEOOGImage           string
+	SEOTwitterHandle     string
+	TitleSeparator       string
+	SEOOpenGraphEnabled  bool
+	SEOOpenGraphType     string
+	SEOOpenGraphSiteName string
+	SEOTwitterEnabled    bool
+	SEOTwitterCard       string
+	SEOTwitterCreator    string
+	SEOMetaTags          map[string]string
+	SEOVerification      config.SEOVerificationConfig
+	BrandingDescription  string
+	BrandingTagline      string
 	// Operator-configured logo/favicon per AI.md PART 16 "Image Sources" —
 	// a local path or remote URL; empty falls back to the embedded default.
 	BrandingLogo    string
@@ -2745,6 +2754,20 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	// injection renderTemplate() performs for every other page (handlers.go
 	// renderTemplate, ~line 2835 "Footer onion-address row" / "SEO and branding").
 	if h.appConfig != nil {
+		data.TitleSeparator = h.appConfig.Server.SEO.TitleSeparator
+		data.SEOOpenGraphEnabled = h.appConfig.Server.SEO.OpenGraph.Enabled
+		data.SEOOpenGraphType = h.appConfig.Server.SEO.OpenGraph.Type
+		data.SEOOpenGraphSiteName = h.appConfig.Server.SEO.OpenGraph.SiteName
+		if data.SEOOpenGraphSiteName == "" {
+			data.SEOOpenGraphSiteName = h.appConfig.Server.Branding.Title
+		}
+		data.SEOTwitterEnabled = h.appConfig.Server.SEO.Twitter.Enabled
+		data.SEOTwitterCard = h.appConfig.Server.SEO.Twitter.Card
+		data.SEOTwitterCreator = h.appConfig.Server.SEO.Twitter.Creator
+		data.SEOMetaTags = h.appConfig.Server.SEO.MetaTags
+		if h.appConfig.Server.SEO.NoIndex {
+			data.Robots = "noindex,nofollow"
+		}
 		data.SEOKeywords = strings.Join(h.appConfig.Server.SEO.Keywords, ", ")
 		data.SEOAuthor = h.appConfig.Server.SEO.Author
 		if ogPath := h.brandingAssetURL(h.appConfig.Server.SEO.OGImage, "og-1200x630.png"); ogPath != "" {
@@ -2775,6 +2798,8 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		data.I2PRunning = true
 		data.I2PAddress = h.i2pSvc.Address()
 	}
+	operatorData := map[string]interface{}{"OnionAddress": data.OnionAddress, "I2PAddress": data.I2PAddress}
+	r = withOperatorVariables(r, operatorData)
 
 	// Features — public-safe only; /metrics is internal (PART 20)
 	if h.appConfig != nil {
@@ -2838,6 +2863,8 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		"path": func(value string) string {
 			return templatePath(r, value)
 		},
+		"operatorHTML":              func(name string) template.HTML { return operatorHTML(r, name) },
+		"operatorContentConfigured": func(name string) bool { return operatorContentConfigured(r, name) },
 		"safeHTML": func(s string) template.HTML {
 			return sanitize.HTML(s)
 		},
@@ -4468,6 +4495,7 @@ func (h *SearchHandler) InternalErrorHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, name string, data map[string]interface{}) {
+	r = withOperatorConfig(r, h.appConfig)
 	// Ensure required fields for nav.tmpl
 	if data["ActiveNav"] == nil {
 		data["ActiveNav"] = name
@@ -4627,6 +4655,8 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 		}
 		data["AppURL"] = scheme + "://" + h.appConfig.Server.FQDN
 	}
+	r = withOperatorVariables(r, data)
+	injectSEOData(r, h.appConfig, data)
 
 	// Resolve the request locale so templates can translate via {{ t "key" }}
 	locale := i18n.DefaultLocale
@@ -4664,6 +4694,8 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 		"path": func(value string) string {
 			return templatePath(r, value)
 		},
+		"operatorHTML":              func(name string) template.HTML { return operatorHTML(r, name) },
+		"operatorContentConfigured": func(name string) bool { return operatorContentConfigured(r, name) },
 		// safeHTML sanitizes s through the strict PART 16 allowlist
 		// policy and marks the result safe for template rendering.
 		"safeHTML": func(s string) template.HTML {

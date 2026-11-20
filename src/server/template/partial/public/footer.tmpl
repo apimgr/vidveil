@@ -26,12 +26,16 @@
         <a href="{{ path "/server/help" }}">{{ t "nav.help" }}</a>
     </p>
 
-    {{/* Application branding - {project_version} shown with no "v" prefix per AI.md version rules */}}
-    <p>
-        <a href="https://github.com/apimgr/vidveil" target="_blank">{{ t "footer.made_with" }}</a> &#10084;&#65039;
-        <span>&#8226;</span>
-        <span>{{.Version}}</span>
-    </p>
+    {{/* The operator footer replaces only the default branding block. */}}
+    {{ if operatorContentConfigured "footer" }}
+        {{ operatorHTML "footer" }}
+    {{ else }}
+        <p>
+            <a href="https://github.com/apimgr/vidveil" target="_blank">{{ t "footer.made_with" }}</a> &#10084;&#65039;
+            <span>&#8226;</span>
+            <span>{{.Version}}</span>
+        </p>
+    {{ end }}
 
     {{/* Build stamp */}}
     <p>

@@ -14,11 +14,14 @@
 {{- if .CanonicalURL}}
 <link rel="canonical" href="{{.CanonicalURL}}">
 {{- end}}
-<title>{{.Title}}</title>
+{{- range $name, $content := .SEOMetaTags}}<meta name="{{$name}}" content="{{$content}}">
+{{- end}}
+<title>{{.Title}}{{if .BrandingTagline}}{{.TitleSeparator}}{{.BrandingTagline}}{{end}}</title>
 {{ trackingScript }}
 
+{{- if .SEOOpenGraphEnabled}}
 <!-- OpenGraph -->
-<meta property="og:type" content="website">
+<meta property="og:type" content="{{.SEOOpenGraphType}}">
 <meta property="og:title" content="{{.Title}}">
 {{- if .BrandingDescription}}
 <meta property="og:description" content="{{.BrandingDescription}}">
@@ -26,11 +29,13 @@
 <meta property="og:description" content="Privacy-focused video search engine">
 {{- end}}
 {{- if .SEOOGImage}}<meta property="og:image" content="{{.SEOOGImage}}">{{- end}}
-{{- if .AppURL}}<meta property="og:url" content="{{.AppURL}}">{{- end}}
-{{- if .ProjectName}}<meta property="og:site_name" content="{{.ProjectName}}">{{- end}}
+{{- if .CanonicalURL}}<meta property="og:url" content="{{.CanonicalURL}}">{{- end}}
+{{- if .SEOOpenGraphSiteName}}<meta property="og:site_name" content="{{.SEOOpenGraphSiteName}}">{{- end}}
+{{- end}}
 
+{{- if .SEOTwitterEnabled}}
 <!-- Twitter Card -->
-<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:card" content="{{.SEOTwitterCard}}">
 <meta name="twitter:title" content="{{.Title}}">
 {{- if .BrandingDescription}}
 <meta name="twitter:description" content="{{.BrandingDescription}}">
@@ -39,6 +44,8 @@
 {{- end}}
 {{- if .SEOOGImage}}<meta name="twitter:image" content="{{.SEOOGImage}}">{{- end}}
 {{- if .SEOTwitterHandle}}<meta name="twitter:site" content="{{.SEOTwitterHandle}}">{{- end}}
+{{- if .SEOTwitterCreator}}<meta name="twitter:creator" content="{{.SEOTwitterCreator}}">{{- end}}
+{{- end}}
 
 {{/* Structured data per AI.md PART 16 — application/ld+json is a non-executable
      data island, so CSP script-src 'self' does not block it. */}}

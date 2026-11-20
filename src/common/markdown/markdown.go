@@ -15,6 +15,15 @@ import (
 // ToHTML converts the supported Markdown subset to sanitized HTML.
 // An empty input yields empty output so callers can branch on it in templates.
 func ToHTML(src string) template.HTML {
+	return render(src, false)
+}
+
+// ToDocumentHTML renders Markdown with the broader safe document allowlist.
+func ToDocumentHTML(src string) template.HTML {
+	return render(src, true)
+}
+
+func render(src string, document bool) template.HTML {
 	if strings.TrimSpace(src) == "" {
 		return template.HTML("")
 	}
@@ -67,6 +76,9 @@ func ToHTML(src string) template.HTML {
 	flushPara()
 	flushList()
 
+	if document {
+		return sanitize.Document(b.String())
+	}
 	return sanitize.HTML(b.String())
 }
 

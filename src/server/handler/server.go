@@ -154,6 +154,7 @@ func (h *ServerHandler) SetNotifyDispatcher(d *notify.Dispatcher) {
 
 // renderServerTemplate renders a server page template with common data
 func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Request, templateName string, extraData map[string]interface{}) {
+	r = withOperatorConfig(r, h.appConfig)
 	// Map template names to file paths
 	templateFile := ""
 	switch templateName {
@@ -217,6 +218,8 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		"path": func(value string) string {
 			return templatePath(r, value)
 		},
+		"operatorHTML":              func(name string) template.HTML { return operatorHTML(r, name) },
+		"operatorContentConfigured": func(name string) bool { return operatorContentConfigured(r, name) },
 		// asset appends the version-busting stamp per AI.md PART 9:
 		// {{ asset "/static/css/app.css" }} → /static/css/app.css?v={version}-{commit}
 		"asset": func(path string) string {
@@ -387,6 +390,8 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		}
 		data["ContactFormToken"] = h.issueContactFormToken(r)
 	}
+	r = withOperatorVariables(r, data)
+	injectSEOData(r, h.appConfig, data)
 
 	// Per AI.md PART 30 inject locale + direction for <html lang="" dir="">.
 	injectLocaleData(r, data)

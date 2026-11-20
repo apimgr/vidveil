@@ -354,6 +354,14 @@ func (s *Server) SetBlocklistService(b IPBlocklistChecker) {
 
 // setupMiddleware configures middleware
 func (s *Server) setupMiddleware() {
+	if s.appConfig != nil && s.appConfig.Server.SEO.NoIndex {
+		s.router.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+				next.ServeHTTP(w, r)
+			})
+		})
+	}
 	// Middleware execution order per AI.md PART 5 / PART 16 spec (first Use = first to execute):
 	// 1. URLNormalize → 2. RequestID → 3. PathSecurity → 4. SecurityHeaders →
 	// 5. Allowlist → 6. Blocklist → 7. RateLimit → 8. GeoIP → 10. Logger (innermost)

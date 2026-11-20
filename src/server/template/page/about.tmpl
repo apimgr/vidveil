@@ -53,6 +53,7 @@ docker run -p 64580:80 ghcr.io/apimgr/vidveil</code></pre>
             <p>{{ t "about.legal_desc" }}</p>
             <p>{{ t "about.age_requirement" }}</p>
         </section>
+        {{ operatorHTML "about" }}
     </main>
     {{template "public/footer" .}}
     {{template "public/scripts" .}}

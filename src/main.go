@@ -599,6 +599,10 @@ func run(ctx context.Context) error {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to migrate stored API-token digests: %v\n", err)
 		os.Exit(1)
 	}
+	if err := config.ImportLegacyAppSecrets(migrationMgr.GetDB(), configPath, appConfig); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to import legacy application secrets: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Initialize app secrets per AI.md PART 11
 	// Generates installation_secret, cookie_signing_key, csrf_token_secret on first run
@@ -639,6 +643,12 @@ func run(ctx context.Context) error {
 		logger = &logging.AppLogger{}
 	}
 	defer logger.Close()
+	for _, key := range appConfig.GeneratedSecretKeys {
+		logger.Audit("config.secret_generated", "system", "system", "", "success", map[string]interface{}{"key_name": key})
+	}
+	if appConfig.GeneratedServerToken && os.Getenv("VIDVEIL_SERVER_TOKEN") == "" && os.Getenv("VIDVEIL_TOKEN") == "" {
+		fmt.Printf("Generated server token (shown once): %s\n", appConfig.Server.Token)
+	}
 
 	// Route engine debug logging through the governed AppLogger/debug.log
 	// pipeline (AI.md PART 11) instead of the package's stdlib log.Printf

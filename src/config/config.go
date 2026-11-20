@@ -37,6 +37,8 @@ var Version = "dev"
 // apiVersionPattern validates Server.APIVersion per AI.md PART 14 ({api_version}
 // examples: "v1", "v2"). Lowercase "v" followed by one or more digits.
 var apiVersionPattern = regexp.MustCompile(`^v[0-9]+$`)
+var seoMetaNamePattern = regexp.MustCompile(`^[a-z0-9:_.-]+$`)
+var seoOpenGraphTypePattern = regexp.MustCompile(`^[a-z0-9_.-]{1,64}$`)
 
 // Config holds all application configuration per AI.md spec
 type AppConfig struct {
@@ -48,8 +50,11 @@ type AppConfig struct {
 
 	// Runtime-only state (never serialised to YAML)
 	// Set by ConfigWatcher when port/address changes require a restart.
-	PendingRestart bool     `yaml:"-" json:"-"`
-	RestartReasons []string `yaml:"-" json:"-"`
+	PendingRestart       bool              `yaml:"-" json:"-"`
+	RestartReasons       []string          `yaml:"-" json:"-"`
+	GeneratedSecretKeys  []string          `yaml:"-" json:"-"`
+	GeneratedServerToken bool              `yaml:"-" json:"-"`
+	LegacyAppSecrets     map[string]string `yaml:"-" json:"-"`
 }
 
 // CLIConfig holds server-side companion CLI download settings per AI.md PART 32.
@@ -79,7 +84,60 @@ type ServerBrandingConfig struct {
 	Favicon string `yaml:"favicon"`
 	// RefreshInterval controls the internal scheduler refresh interval for remote images.
 	// Defaults to daily; local image sources are also reprocessed at this interval.
-	RefreshInterval string `yaml:"refresh_interval"`
+	RefreshInterval string                `yaml:"refresh_interval"`
+	Content         BrandingContentConfig `yaml:"content"`
+}
+
+type BrandingContentConfig struct {
+	Header  BrandingPageContent `yaml:"header"`
+	About   BrandingPageContent `yaml:"about"`
+	Privacy BrandingPageContent `yaml:"privacy"`
+	Footer  BrandingPageContent `yaml:"footer"`
+	Terms   BrandingPageContent `yaml:"terms"`
+}
+
+type BrandingPageContent struct {
+	Format string               `yaml:"format"`
+	Body   LocalizedContentBody `yaml:"body"`
+}
+
+type LocalizedContentBody struct {
+	Text   string            `yaml:"-"`
+	Values map[string]string `yaml:"-"`
+}
+
+func (body *LocalizedContentBody) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode {
+		body.Text = node.Value
+		body.Values = nil
+		return nil
+	}
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("content body must be text or a language map")
+	}
+	values := make(map[string]string, len(node.Content)/2)
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i+1].Kind != yaml.ScalarNode {
+			return fmt.Errorf("content body language values must be text")
+		}
+		values[node.Content[i].Value] = node.Content[i+1].Value
+	}
+	body.Text = ""
+	body.Values = values
+	return nil
+}
+
+func (body LocalizedContentBody) Resolve(language string) string {
+	if len(body.Values) == 0 {
+		return body.Text
+	}
+	if value := body.Values[language]; value != "" {
+		return value
+	}
+	if value := body.Values[strings.SplitN(language, "-", 2)[0]]; value != "" {
+		return value
+	}
+	return body.Values["default"]
 }
 
 // ServerConfig holds server-related settings per AI.md
@@ -109,7 +167,7 @@ type ServerConfig struct {
 	Tokens TokensConfig `yaml:"tokens"`
 
 	// Token is the global operator token per AI.md PART 11 ("server.token").
-	// Auto-generated and written to server.yml on first run if absent or empty.
+	// Auto-generated and written to secrets.yml on first run if absent or empty.
 	// Grants full access to every resource and every sensitive server management
 	// operation (PART 5 "Sensitive Operations": restore, mode change, PGP key ops).
 	// Validated by SHA-256-hashing the inbound value and comparing against
@@ -133,7 +191,7 @@ type ServerConfig struct {
 	Notifications NotificationsConfig `yaml:"notifications"`
 
 	// Scheduler
-	Schedule ScheduleConfig `yaml:"schedule"`
+	Schedule ScheduleConfig `yaml:"scheduler"`
 
 	// SSL/TLS
 	SSL SSLConfig `yaml:"ssl"`
@@ -1054,10 +1112,11 @@ type SecurityConfig struct {
 	CVE        CVEConfig        `yaml:"cve"`
 	// EncryptionKey is the canonical 32-byte AES-256-GCM at-rest key (hex-encoded).
 	// Per AI.md PART 11 "Cryptographic Keys": auto-generated on first run and
-	// persisted in server.yml; used for ALL at-rest encryption of sensitive
+	// persisted in secrets.yml; used for ALL at-rest encryption of sensitive
 	// server data (API token hashes, security report bodies as the AES
 	// fallback when no PGP keypair exists, and any future at-rest data).
-	EncryptionKey string `yaml:"encryption_key"`
+	EncryptionKey        string `yaml:"encryption_key"`
+	EncryptionKeyVersion int    `yaml:"encryption_key_version"`
 }
 
 // BlocklistsConfig holds IP/domain blocklist settings per PART 11
@@ -1474,12 +1533,30 @@ type SEOConfig struct {
 	// OGImage is the OpenGraph/Twitter card image URL
 	OGImage string `yaml:"og_image"`
 	// TwitterHandle is the @handle for twitter:site card
-	TwitterHandle string `yaml:"twitter_handle"`
+	TwitterHandle  string            `yaml:"twitter_handle"`
+	TitleSeparator string            `yaml:"title_separator"`
+	MetaTags       map[string]string `yaml:"meta_tags"`
+	Canonical      string            `yaml:"canonical"`
+	NoIndex        bool              `yaml:"noindex"`
+	OpenGraph      OpenGraphConfig   `yaml:"opengraph"`
+	Twitter        TwitterCardConfig `yaml:"twitter"`
 	// Verification holds search engine verification codes
 	Verification SEOVerificationConfig `yaml:"verification"`
 	// Sitemap controls generated sitemap output.
 	Sitemap SEOSitemapConfig `yaml:"sitemap"`
 	Feed    SEOFeedConfig    `yaml:"feed"`
+}
+
+type OpenGraphConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Type     string `yaml:"type"`
+	SiteName string `yaml:"site_name"`
+}
+
+type TwitterCardConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Card    string `yaml:"card"`
+	Creator string `yaml:"creator"`
 }
 
 // CSRFConfig holds CSRF settings per AI.md PART 16 → CSRF Protection
@@ -1799,11 +1876,8 @@ func DefaultAppConfig() *AppConfig {
 				},
 			},
 			Tokens: TokensConfig{MaxLinked: 25, CookieMaxAge: "1y", IdlePurgeDays: 0},
-			Token:  generateToken(32),
+			Token:  defaultBearerToken(),
 			Security: SecurityConfig{
-				// Per AI.md PART 11 "Cryptographic Keys": canonical 32-byte
-				// AES-256-GCM at-rest key, auto-generated on first run and
-				// persisted in server.yml.
 				EncryptionKey: generateToken(32),
 			},
 			Branding: ServerBrandingConfig{
@@ -1815,7 +1889,14 @@ func DefaultAppConfig() *AppConfig {
 				Description:     "Privacy-respecting adult video search",
 				RefreshInterval: "24h",
 			},
-			SEO:     SEOConfig{Sitemap: SEOSitemapConfig{MaxURLs: 50000}, Feed: SEOFeedConfig{MaxItems: 50}},
+			SEO: SEOConfig{
+				TitleSeparator: " - ",
+				MetaTags:       map[string]string{},
+				OpenGraph:      OpenGraphConfig{Enabled: true, Type: "website"},
+				Twitter:        TwitterCardConfig{Enabled: true, Card: "summary_large_image"},
+				Sitemap:        SEOSitemapConfig{MaxURLs: 50000},
+				Feed:           SEOFeedConfig{MaxItems: 50},
+			},
 			User:    "",
 			Group:   "",
 			PIDFile: true,
@@ -2293,15 +2374,22 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		// Create default config
 		cfg := DefaultAppConfig()
+		cfg.Server.Token = ""
+		cfg.Server.Security.EncryptionKey = ""
+		cfg.Server.Security.EncryptionKeyVersion = 0
 
 		// Set paths in config
 		cfg.Server.SSL.CertPath = filepath.Join(paths.Config, "ssl", "certs")
 		cfg.Server.Database.SQLite.Dir = dbDir
 
-		if err := SaveAppConfig(cfg, configPath); err != nil {
+		if err := saveInitialServerConfig(cfg, configPath); err != nil {
 			return nil, "", fmt.Errorf("failed to save default config: %w", err)
 		}
 
+	}
+	legacySecrets, migrationErr := migrateConfigLayout(configPath)
+	if migrationErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: configuration migration skipped: %v\n", migrationErr)
 	}
 
 	// Load existing config
@@ -2309,7 +2397,9 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	if err != nil {
 		if strings.Contains(err.Error(), "yaml:") {
 			fmt.Fprintf(os.Stderr, "Warning: failed to parse %s (%v), using default configuration\n", configPath, err)
-			data, err = marshalYAML(DefaultAppConfig())
+			fallback := DefaultAppConfig()
+			clearGeneratedSecretDefaults(fallback)
+			data, err = marshalYAML(fallback)
 			dropins, overrides = nil, nil
 		}
 		if err != nil {
@@ -2321,12 +2411,27 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	// Per AI.md PART 5: never fail startup on invalid config - warn and use defaults.
 	// Unknown or legacy keys are ignored rather than treated as fatal.
 	cfg := DefaultAppConfig()
+	cfg.Server.Token = ""
+	cfg.Server.Security.EncryptionKey = ""
+	cfg.Server.Security.EncryptionKeyVersion = 0
+	cfg.Server.Metrics.Auth.Tokens = MetricsTokensConfig{}
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	if err := dec.Decode(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to parse %s (%v), using default configuration\n", configPath, err)
 		cfg = DefaultAppConfig()
+		clearGeneratedSecretDefaults(cfg)
+	}
+	cfg.LegacyAppSecrets = legacySecrets
+	if len(cfg.LegacyAppSecrets) == 0 {
+		cfg.LegacyAppSecrets = readLegacySecretsFromBackup(configPath)
+	}
+	if err := ensureGeneratedConfigSecrets(paths.Config, cfg); err != nil {
+		return nil, "", fmt.Errorf("ensure generated config secrets: %w", err)
 	}
 	credentialFiles := append([]string{configPath}, dropins...)
+	if _, err := os.Stat(filepath.Join(paths.Config, "secrets.yml")); err == nil {
+		credentialFiles = append(credentialFiles, filepath.Join(paths.Config, "secrets.yml"))
+	}
 	if err := persistDNSCredentials(credentialFiles, cfg.Server.Security.EncryptionKey); err != nil {
 		return nil, "", fmt.Errorf("protect DNS credentials: %w", err)
 	}
@@ -2363,11 +2468,21 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	return cfg, configPath, nil
 }
 
+func clearGeneratedSecretDefaults(cfg *AppConfig) {
+	if cfg == nil {
+		return
+	}
+	cfg.Server.Token = ""
+	cfg.Server.Security.EncryptionKey = ""
+	cfg.Server.Security.EncryptionKeyVersion = 0
+	cfg.Server.Metrics.Auth.Tokens = MetricsTokensConfig{}
+}
+
 // PeekServerListenConfig reads listen settings from the same merged server.yml
 // and yaml.d configuration used by the full loader. It is safe for early
 // startup address selection and intentionally returns empty values on error.
 func PeekServerListenConfig(configPath string) (address, port string) {
-	data, _, _, err := loadMergedConfig(configPath)
+	data, _, _, err := loadMergedConfigFiles(configPath, false)
 	if err != nil {
 		return "", ""
 	}
@@ -2400,6 +2515,22 @@ func PeekServerListenConfig(configPath string) (address, port string) {
 }
 
 func loadMergedConfig(configPath string) ([]byte, []string, []string, error) {
+	return loadMergedConfigFiles(configPath, true)
+}
+
+func loadMergedConfigFiles(configPath string, includeSecrets bool) ([]byte, []string, []string, error) {
+	baseInfo, err := os.Stat(configPath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("inspect %s: %w", configPath, err)
+	}
+	if !baseInfo.Mode().IsRegular() {
+		return nil, nil, nil, fmt.Errorf("%s must be a regular file", configPath)
+	}
+	if baseInfo.Mode().Perm() != 0600 {
+		if err := os.Chmod(configPath, 0600); err != nil {
+			return nil, nil, nil, fmt.Errorf("secure %s: %w", configPath, err)
+		}
+	}
 	baseData, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("read %s: %w", configPath, err)
@@ -2424,6 +2555,11 @@ func loadMergedConfig(configPath string) ([]byte, []string, []string, error) {
 	dropDir := filepath.Join(filepath.Dir(configPath), "yaml.d")
 	dropInfo, err := os.Lstat(dropDir)
 	if errors.Is(err, os.ErrNotExist) {
+		if includeSecrets {
+			if err := mergeSecretsFile(&merged, filepath.Join(filepath.Dir(configPath), "secrets.yml")); err != nil {
+				return nil, nil, nil, err
+			}
+		}
 		encoded, marshalErr := marshalYAML(&merged)
 		return encoded, nil, nil, marshalErr
 	}
@@ -2432,6 +2568,11 @@ func loadMergedConfig(configPath string) ([]byte, []string, []string, error) {
 	}
 	if dropInfo.Mode()&os.ModeSymlink != 0 || !dropInfo.IsDir() {
 		return nil, nil, nil, fmt.Errorf("%s must be a real directory", dropDir)
+	}
+	if dropInfo.Mode().Perm() != 0700 {
+		if err := os.Chmod(dropDir, 0700); err != nil {
+			return nil, nil, nil, fmt.Errorf("secure %s: %w", dropDir, err)
+		}
 	}
 	entries, err := os.ReadDir(dropDir)
 	if err != nil {
@@ -2467,6 +2608,17 @@ func loadMergedConfig(configPath string) ([]byte, []string, []string, error) {
 		if !info.Mode().IsRegular() {
 			continue
 		}
+		if info.Mode().Perm() != 0600 {
+			if chmodErr := os.Chmod(file, 0600); chmodErr != nil {
+				log.Printf("config: ignoring %s because mode 0600 could not be set: %v", file, chmodErr)
+				continue
+			}
+			info, infoErr = os.Stat(file)
+			if infoErr != nil {
+				log.Printf("config: ignoring %s because its mode could not be verified: %v", file, infoErr)
+				continue
+			}
+		}
 		if info.Mode().Perm()&0022 != 0 {
 			return nil, nil, nil, fmt.Errorf("%s is group or world writable", file)
 		}
@@ -2495,6 +2647,11 @@ func loadMergedConfig(configPath string) ([]byte, []string, []string, error) {
 		mergeYAMLNodes(merged.Content[0], overlay.Content[0])
 		loaded = append(loaded, file)
 	}
+	if includeSecrets {
+		if err := mergeSecretsFile(&merged, filepath.Join(filepath.Dir(configPath), "secrets.yml")); err != nil {
+			return nil, nil, nil, err
+		}
+	}
 	encoded, err := marshalYAML(&merged)
 	keys := make([]string, 0, len(overriddenBy))
 	for key := range overriddenBy {
@@ -2502,6 +2659,50 @@ func loadMergedConfig(configPath string) ([]byte, []string, []string, error) {
 	}
 	sort.Strings(keys)
 	return encoded, loaded, keys, err
+}
+
+func mergeSecretsFile(merged *yaml.Node, secretsPath string) error {
+	linkInfo, linkErr := os.Lstat(secretsPath)
+	if errors.Is(linkErr, os.ErrNotExist) {
+		return nil
+	}
+	if linkErr != nil {
+		return fmt.Errorf("inspect secrets.yml: %w", linkErr)
+	}
+	if linkInfo.Mode()&os.ModeSymlink != 0 || !linkInfo.Mode().IsRegular() {
+		return fmt.Errorf("secrets.yml must be a regular file")
+	}
+	data, err := os.ReadFile(secretsPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read secrets.yml: %w", err)
+	}
+	info, err := os.Stat(secretsPath)
+	if err != nil {
+		return fmt.Errorf("inspect secrets.yml: %w", err)
+	}
+	if info.Mode().Perm() != 0600 {
+		if chmodErr := os.Chmod(secretsPath, 0600); chmodErr != nil {
+			return fmt.Errorf("secrets.yml must have mode 0600: %w", chmodErr)
+		}
+	}
+	var overlay yaml.Node
+	if err := yaml.Unmarshal(data, &overlay); err != nil {
+		return fmt.Errorf("parse secrets.yml: %w", err)
+	}
+	if len(overlay.Content) == 0 {
+		return fmt.Errorf("secrets.yml: empty YAML document")
+	}
+	if err := validateYAMLNode(overlay.Content[0], secretsPath, ""); err != nil {
+		return err
+	}
+	if merged == nil || len(merged.Content) == 0 {
+		return fmt.Errorf("merged configuration is empty")
+	}
+	mergeYAMLNodes(merged.Content[0], overlay.Content[0])
+	return nil
 }
 
 func yamlNodeHasSecrets(node *yaml.Node) bool {
@@ -2632,6 +2833,7 @@ func validateConfig(cfg *AppConfig) {
 		fmt.Fprintf(os.Stderr, "Warning: invalid seo.feed.max_items %d, using default %d\n", cfg.Server.SEO.Feed.MaxItems, defaults.Server.SEO.Feed.MaxItems)
 		cfg.Server.SEO.Feed.MaxItems = defaults.Server.SEO.Feed.MaxItems
 	}
+	validateSEOOptions(&cfg.Server.SEO, defaults.Server.SEO)
 
 	// Validate port (must be valid or use random per PART 8/12)
 	if cfg.Server.Port != "" {
@@ -3044,6 +3246,11 @@ func yamlMapValue(node *yaml.Node, key string) *yaml.Node {
 }
 
 func atomicConfigWrite(path string, data []byte) error {
+	if info, err := os.Lstat(path); err == nil && info.Mode().IsRegular() && info.Mode().Perm() == 0600 {
+		if existing, readErr := os.ReadFile(path); readErr == nil && bytes.Equal(existing, data) {
+			return nil
+		}
+	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return err
@@ -3172,6 +3379,13 @@ func sparseLogsConfig(logs LogsConfig) LogsConfig {
 
 func SaveAppConfig(cfg *AppConfig, path string) (saveErr error) {
 	configToSave := *cfg
+	if len(configToSave.Server.SSL.LetsEncrypt.DNSCredentials) > 0 && configToSave.Server.Security.EncryptionKey == "" {
+		configToSave.Server.Security.EncryptionKey = generateToken(32)
+		configToSave.Server.Security.EncryptionKeyVersion = 1
+		cfg.Server.Security.EncryptionKey = configToSave.Server.Security.EncryptionKey
+		cfg.Server.Security.EncryptionKeyVersion = 1
+		cfg.GeneratedSecretKeys = append(cfg.GeneratedSecretKeys, "server.security.encryption_key")
+	}
 	configToSave.Server.SSL.LetsEncrypt.DNSCredentials = make(map[string]string, len(cfg.Server.SSL.LetsEncrypt.DNSCredentials))
 	for name, value := range cfg.Server.SSL.LetsEncrypt.DNSCredentials {
 		encrypted, encryptErr := encryptDNSCredential(value, cfg.Server.Security.EncryptionKey)
@@ -3181,117 +3395,145 @@ func SaveAppConfig(cfg *AppConfig, path string) (saveErr error) {
 		configToSave.Server.SSL.LetsEncrypt.DNSCredentials[name] = encrypted
 	}
 	configToSave.Server.Logs = sparseLogsConfig(configToSave.Server.Logs)
-	data, err := marshalYAML(&configToSave)
+	return saveConfigLayout(&configToSave, path)
+}
+
+func saveInitialServerConfig(cfg *AppConfig, path string) error {
+	data, err := marshalYAML(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
+		return fmt.Errorf("marshal initial config: %w", err)
 	}
-
-	// Add header comment
-	header := `# =============================================================================
-# Vidveil Configuration
-# =============================================================================
-# This file follows the apimgr AI.md specification
-# Documentation: https://github.com/apimgr/vidveil
-# =============================================================================
-
-`
-	fullData := []byte(header + string(data))
-
-	// Write atomically with the mode required by the current execution mode.
-	// server.yml contains operator tokens, encryption keys, and SMTP credentials.
-	mode := os.FileMode(0600)
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	root, err := decodeConfigMap(data)
 	if err != nil {
-		return fmt.Errorf("failed to create temporary config file: %w", err)
+		return fmt.Errorf("decode initial config: %w", err)
 	}
-	tmpPath := tmp.Name()
-	defer func() {
-		if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
-			if saveErr == nil {
-				saveErr = fmt.Errorf("remove temporary config file: %w", err)
-			} else {
-				saveErr = fmt.Errorf("%w; remove temporary config file: %v", saveErr, err)
-			}
-		}
-	}()
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("failed to set config permissions: %w", err)
+	extractSecretSettings(root)
+	parts, _ := partitionConfig(root, "server.yml")
+	serverData, err := marshalYAML(parts["server.yml"])
+	if err != nil {
+		return fmt.Errorf("encode initial server config: %w", err)
 	}
-	if _, err := tmp.Write(fullData); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("failed to write config: %w", err)
+	if err := atomicConfigWrite(path, append([]byte(serverConfigHeader+"\n"), serverData...)); err != nil {
+		return fmt.Errorf("write initial server config: %w", err)
 	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("failed to sync config: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("failed to close config: %w", err)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("failed to replace config: %w", err)
-	}
-	if err := flattenDNSSettingsFromDropins(filepath.Join(filepath.Dir(path), "yaml.d")); err != nil {
-		return fmt.Errorf("move DNS settings into encrypted base config: %w", err)
-	}
-
 	return nil
 }
 
-func flattenDNSSettingsFromDropins(dropDir string) error {
-	entries, err := os.ReadDir(dropDir)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
+func saveConfigLayout(cfg *AppConfig, path string) error {
+	encoded, err := marshalYAML(cfg)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	for _, entry := range entries {
-		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || (!strings.HasSuffix(entry.Name(), ".yml") && !strings.HasSuffix(entry.Name(), ".yaml")) {
+	root, err := decodeConfigMap(encoded)
+	if err != nil {
+		return fmt.Errorf("failed to prepare config layout: %w", err)
+	}
+	secrets := extractSecretSettings(root)
+	parts, _ := partitionConfig(root, "server.yml")
+	defaults := DefaultAppConfig()
+	defaults.Server.Logs = sparseLogsConfig(defaults.Server.Logs)
+	defaultData, err := marshalYAML(defaults)
+	if err != nil {
+		return fmt.Errorf("prepare default config layout: %w", err)
+	}
+	defaultRoot, err := decodeConfigMap(defaultData)
+	if err != nil {
+		return fmt.Errorf("decode default config layout: %w", err)
+	}
+	extractSecretSettings(defaultRoot)
+	defaultParts, _ := partitionConfig(defaultRoot, "server.yml")
+	configDir := filepath.Dir(path)
+	dropDir := filepath.Join(configDir, "yaml.d")
+	areaFiles := make(map[string][]byte)
+	for _, name := range orderedAreaFiles {
+		area := parts[name]
+		if len(area) == 0 {
 			continue
 		}
-		file := filepath.Join(dropDir, entry.Name())
-		writePath, err := safeConfigDropinTarget(file)
+		data, err := marshalYAML(area)
 		if err != nil {
-			return err
+			return fmt.Errorf("encode %s: %w", name, err)
 		}
-		if writePath == "" {
-			continue
-		}
-		data, err := os.ReadFile(writePath)
-		if err != nil {
-			return err
-		}
-		var doc yaml.Node
-		if err := yaml.Unmarshal(data, &doc); err != nil || len(doc.Content) == 0 {
-			continue
-		}
-		le := yamlMapValue(yamlMapValue(yamlMapValue(doc.Content[0], "server"), "ssl"), "letsencrypt")
-		if le == nil || le.Kind != yaml.MappingNode {
-			continue
-		}
-		changed := false
-		for i := 0; i+1 < len(le.Content); {
-			key := le.Content[i].Value
-			if key == "dns_provider" || key == "dns_credentials" || key == "dns_provider_type" || key == "dns_provider_key" {
-				le.Content = append(le.Content[:i], le.Content[i+2:]...)
-				changed = true
+		areaPath := filepath.Join(dropDir, name)
+		if _, statErr := os.Lstat(areaPath); errors.Is(statErr, os.ErrNotExist) {
+			defaultData, defaultErr := marshalYAML(defaultParts[name])
+			if defaultErr == nil && bytes.Equal(data, defaultData) {
 				continue
 			}
-			i += 2
+		} else if statErr != nil {
+			return fmt.Errorf("inspect %s: %w", areaPath, statErr)
 		}
-		if changed {
-			encoded, err := marshalYAML(&doc)
-			if err != nil {
-				return err
-			}
-			if err := atomicConfigWrite(writePath, encoded); err != nil {
-				return err
+		areaFiles[name] = data
+	}
+	if len(areaFiles) > 0 {
+		if err := os.MkdirAll(dropDir, 0700); err != nil {
+			return fmt.Errorf("create yaml.d: %w", err)
+		}
+		if err := os.Chmod(dropDir, 0700); err != nil {
+			return fmt.Errorf("secure yaml.d: %w", err)
+		}
+		for name, data := range areaFiles {
+			if err := atomicConfigWrite(filepath.Join(dropDir, name), data); err != nil {
+				return fmt.Errorf("write %s: %w", name, err)
 			}
 		}
 	}
+	if len(secrets) > 0 {
+		secretsPath := filepath.Join(configDir, "secrets.yml")
+		existing, readErr := os.ReadFile(secretsPath)
+		secretsExists := readErr == nil
+		if secretsExists {
+			prior, decodeErr := decodeConfigMap(existing)
+			if decodeErr != nil {
+				return fmt.Errorf("parse secrets.yml: %w", decodeErr)
+			}
+			mergeConfigMap(prior, secrets)
+			secrets = prior
+		} else if !errors.Is(readErr, os.ErrNotExist) {
+			return fmt.Errorf("read secrets.yml: %w", readErr)
+		}
+		if secretsExists || hasConfiguredSecret(secrets) {
+			data, err := marshalYAML(secrets)
+			if err != nil {
+				return fmt.Errorf("encode secrets.yml: %w", err)
+			}
+			if err := atomicConfigWrite(secretsPath, data); err != nil {
+				return fmt.Errorf("write secrets.yml: %w", err)
+			}
+		}
+	}
+	serverData, err := marshalYAML(parts["server.yml"])
+	if err != nil {
+		return fmt.Errorf("encode server.yml: %w", err)
+	}
+	if err := atomicConfigWrite(path, append([]byte(serverConfigHeader+"\n"), serverData...)); err != nil {
+		return fmt.Errorf("write server.yml: %w", err)
+	}
 	return nil
+}
+
+func hasConfiguredSecret(value interface{}) bool {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		for _, child := range typed {
+			if hasConfiguredSecret(child) {
+				return true
+			}
+		}
+	case string:
+		return strings.TrimSpace(typed) != ""
+	case int, int64, float64:
+		return fmt.Sprint(typed) != "0"
+	case bool:
+		return typed
+	case []interface{}:
+		for _, child := range typed {
+			if hasConfiguredSecret(child) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Helper functions
@@ -3946,4 +4188,50 @@ func sanitizeSEOVerification(v *SEOVerificationConfig) []string {
 func seoVerifyPattern(pattern, value string) bool {
 	matched, err := regexp.MatchString(pattern, value)
 	return err == nil && matched
+}
+
+func validateSEOOptions(cfg *SEOConfig, defaults SEOConfig) {
+	if cfg == nil {
+		return
+	}
+	if len(cfg.TitleSeparator) > 8 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid seo.title_separator, using default\n")
+		cfg.TitleSeparator = defaults.TitleSeparator
+	}
+	if cfg.Canonical != "" {
+		parsed, err := url.Parse(cfg.Canonical)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			fmt.Fprintf(os.Stderr, "Warning: invalid seo.canonical, using request origin\n")
+			cfg.Canonical = defaults.Canonical
+		}
+	}
+	if len(cfg.MetaTags) > 20 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid seo.meta_tags, using default\n")
+		cfg.MetaTags = defaults.MetaTags
+	} else {
+		for name := range cfg.MetaTags {
+			if !seoMetaNamePattern.MatchString(name) || isReservedSEOMetaName(name) {
+				fmt.Fprintf(os.Stderr, "Warning: invalid seo.meta_tags key, ignoring custom tags\n")
+				cfg.MetaTags = defaults.MetaTags
+				break
+			}
+		}
+	}
+	if cfg.OpenGraph.Type == "" || !seoOpenGraphTypePattern.MatchString(cfg.OpenGraph.Type) {
+		fmt.Fprintf(os.Stderr, "Warning: invalid seo.opengraph.type, using default\n")
+		cfg.OpenGraph.Type = defaults.OpenGraph.Type
+	}
+	if cfg.Twitter.Card != "summary" && cfg.Twitter.Card != "summary_large_image" {
+		fmt.Fprintf(os.Stderr, "Warning: invalid seo.twitter.card, using default\n")
+		cfg.Twitter.Card = defaults.Twitter.Card
+	}
+}
+
+func isReservedSEOMetaName(name string) bool {
+	switch name {
+	case "description", "keywords", "author", "robots", "viewport":
+		return true
+	default:
+		return false
+	}
 }

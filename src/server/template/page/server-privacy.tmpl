@@ -172,6 +172,7 @@
         </section>
         {{ end }}
 
+        {{ operatorHTML "privacy" }}
         <h2>{{ t "privacy.dpo" }}</h2>
         {{ if .DPOEmail }}
         <p>{{ if .DPOName }}{{ .DPOName }} — {{ end }}<a href="mailto:{{ .DPOEmail }}">{{ .DPOEmail }}</a></p>

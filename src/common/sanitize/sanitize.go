@@ -17,6 +17,7 @@ import (
 // script/iframe/frame/object/embed/form/input/button/style/link/meta/base,
 // all event-handler attributes, javascript: URLs, and the style attribute.
 var policy = newPolicy()
+var documentPolicy = newDocumentPolicy()
 
 func newPolicy() *bluemonday.Policy {
 	p := bluemonday.NewPolicy()
@@ -49,6 +50,13 @@ func newPolicy() *bluemonday.Policy {
 	return p
 }
 
+func newDocumentPolicy() *bluemonday.Policy {
+	p := newPolicy()
+	p.AllowElements("table", "thead", "tbody", "tfoot", "tr", "th", "td", "pre", "code", "blockquote", "hr", "dl", "dt", "dd", "sup", "sub")
+	p.AllowAttrs("colspan", "rowspan", "scope").OnElements("th", "td")
+	return p
+}
+
 // HTML sanitizes s through the strict PART 16 allowlist policy and returns
 // it marked safe for html/template rendering. Every byte of the returned
 // value has passed through the allowlist — this is the only sanitizer
@@ -62,4 +70,15 @@ func HTML(s string) template.HTML {
 // e.g. server.web.footer.custom_html).
 func String(s string) string {
 	return policy.Sanitize(s)
+}
+
+// Document sanitizes operator-authored page documents while retaining common
+// structures such as tables, code blocks, quotations, and definition lists.
+func Document(s string) template.HTML {
+	// #nosec G203 -- the document allowlist sanitizes this HTML before rendering.
+	return template.HTML(documentPolicy.Sanitize(s))
+}
+
+func DocumentString(s string) string {
+	return documentPolicy.Sanitize(s)
 }

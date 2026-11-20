@@ -7,7 +7,9 @@
     <div class="prose">
         <h1>{{ t "terms.title" }}</h1>
         <p class="last-updated">{{ tf "terms.last_updated" "date" .BuildDateTime }}</p>
-        {{ if .PageContent }}
+        {{ if operatorContentConfigured "terms" }}
+        {{ operatorHTML "terms" }}
+        {{ else if .PageContent }}
         {{ .PageContent | markdownToHTML }}
         {{ else }}
 

@@ -470,6 +470,28 @@ func TestEngineManager_InitializeEngines_SourceCountAndTierMetadata(t *testing.T
 	}
 }
 
+func TestEngineManager_ListEngines_ReportsVerifiedDataCapabilities(t *testing.T) {
+	m := newTestManager()
+	byName := make(map[string]model.EngineInfo)
+	for _, info := range m.ListEngines() {
+		byName[info.Name] = info
+	}
+	for name, want := range map[string]model.EngineCapabilities{
+		"drtuber":  {HasPreview: true, HasDuration: true},
+		"sunporno": {HasPreview: true, HasDuration: true, HasViews: true},
+		"porntrex": {HasDuration: true, HasViews: true},
+		"pornone":  {HasDuration: true},
+	} {
+		info, ok := byName[name]
+		if !ok || info.Capabilities == nil {
+			t.Fatalf("engine %q or its capabilities missing", name)
+		}
+		if *info.Capabilities != want {
+			t.Errorf("%s capabilities = %+v, want %+v", name, *info.Capabilities, want)
+		}
+	}
+}
+
 func TestEngineManager_EnabledCount_GreaterThanZero(t *testing.T) {
 	m := newTestManager()
 	if m.EnabledCount() == 0 {

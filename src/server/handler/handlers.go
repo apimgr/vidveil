@@ -127,6 +127,7 @@ type TorStatusChecker interface {
 type I2PStatusChecker interface {
 	Enabled() bool
 	IsRunning() bool
+	State() string
 	Status() string
 	Address() string
 	Provider() string
@@ -435,9 +436,16 @@ func (h *SearchHandler) i2pHealthStatus(check string) string {
 		return "disabled"
 	}
 	if check != "ok" {
-		return "error:provider_unhealthy"
+		return "unavailable"
 	}
 	return h.i2pStatus()
+}
+
+func (h *SearchHandler) i2pState() string {
+	if h.i2pSvc == nil {
+		return "disabled"
+	}
+	return h.i2pSvc.State()
 }
 
 func (h *SearchHandler) i2pAddress() string {
@@ -563,10 +571,22 @@ func (h *SearchHandler) getTorStatus() string {
 	}
 	info := h.torSvc.GetInfo()
 	if status, ok := info["status"].(string); ok {
-		return status
+		switch status {
+		case "disabled", "no_tor_binary":
+			return "disabled"
+		case "starting":
+			return "starting"
+		case "connected", "healthy":
+			return "healthy"
+		case "disconnected", "error", "unavailable":
+			return "unavailable"
+		}
 	}
 	if h.torSvc.IsRunning() {
 		return "healthy"
+	}
+	if h.torSvc.IsStarting() {
+		return "starting"
 	}
 	return "disabled"
 }
@@ -2188,6 +2208,7 @@ type I2PInfo struct {
 	Status   string `json:"status"`
 	Hostname string `json:"hostname"`
 	Provider string `json:"provider"`
+	State    string `json:"state"`
 	Address  string `json:"address,omitempty"`
 }
 
@@ -2390,6 +2411,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 					Enabled:  h.i2pSvc != nil && h.i2pSvc.Enabled(),
 					Running:  h.i2pSvc != nil && h.i2pSvc.IsRunning(),
 					Status:   h.i2pHealthStatus(checks["i2p"]),
+					State:    h.i2pState(),
 					Hostname: h.i2pAddress(),
 					Provider: h.i2pProvider(),
 				},
@@ -4268,6 +4290,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 				Enabled:  h.i2pSvc != nil && h.i2pSvc.Enabled(),
 				Running:  h.i2pSvc != nil && h.i2pSvc.IsRunning(),
 				Status:   h.i2pHealthStatus(checks["i2p"]),
+				State:    h.i2pState(),
 				Hostname: h.i2pAddress(),
 				Provider: h.i2pProvider(),
 			},
@@ -5036,12 +5059,8 @@ func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
 			if age < time.Duration(ttlMinutes)*time.Minute {
 				// Serve from disk cache
 				cachedBytes, readErr := os.ReadFile(cacheFile)
-				if readErr == nil {
-					ct := "image/jpeg"
-					// Detect GIF from magic bytes
-					if len(cachedBytes) >= 6 && string(cachedBytes[:6]) == "GIF89a" {
-						ct = "image/gif"
-					}
+				if readErr == nil && isImagePayload(cachedBytes) {
+					ct := http.DetectContentType(cachedBytes)
 					w.Header().Set("ETag", etag)
 					// 24 hours
 					w.Header().Set("Cache-Control", "public, max-age=86400")
@@ -5070,13 +5089,13 @@ func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		SendError(w, CodeServerError, i18n.Translate(i18n.DetectLocale(r), "error.proxy_fetch_failed"))
+		writeThumbnailFallback(w, etag)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		SendError(w, CodeNotFound, i18n.Translate(i18n.DetectLocale(r), "error.proxy_not_found"))
+		writeThumbnailFallback(w, etag)
 		return
 	}
 
@@ -5085,18 +5104,18 @@ func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
 	const maxThumbBytes = 16 * 1024 * 1024
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxThumbBytes))
 	if err != nil {
-		SendError(w, CodeServerError, i18n.Translate(i18n.DetectLocale(r), "error.proxy_fetch_failed"))
+		writeThumbnailFallback(w, etag)
+		return
+	}
+	contentType := http.DetectContentType(body)
+	if !isImagePayload(body) {
+		writeThumbnailFallback(w, etag)
 		return
 	}
 
 	// Re-encode JPEG/PNG as JPEG quality=75 for bandwidth savings (~30-40% reduction).
 	// GIFs are passed through unchanged to preserve animated video previews.
 	// Falls back to original bytes if the image cannot be decoded.
-	contentType := resp.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "image/jpeg"
-	}
-
 	var outputBuf bytes.Buffer
 	reEncoded := false
 	if strings.HasPrefix(contentType, "image/jpeg") ||
@@ -5136,6 +5155,21 @@ func (h *SearchHandler) ProxyThumbnail(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	//nolint:errcheck
 	w.Write(outputBytes)
+}
+
+func isImagePayload(body []byte) bool {
+	return len(body) > 0 && strings.HasPrefix(http.DetectContentType(body), "image/")
+}
+
+// writeThumbnailFallback serves the same embedded placeholder used by the
+// client when an upstream thumbnail is missing or unavailable.
+func writeThumbnailFallback(w http.ResponseWriter, etag string) {
+	const fallback = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none"><rect width="320" height="180" fill="#44475a"/><path d="M128 70L192 110L128 150V70Z" fill="#6272a4"/><text x="160" y="165" text-anchor="middle" fill="#6272a4" font-family="sans-serif" font-size="12">No thumbnail</text></svg>`
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, fallback)
 }
 
 // ProxyVideo proxies external video previews to prevent tracking and avoid CORS

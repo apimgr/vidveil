@@ -43,7 +43,8 @@ type TorService struct {
 	logger *logging.AppLogger
 
 	// bine Tor instance - manages dedicated Tor process
-	torInstance *tor.Tor
+	torInstance    *tor.Tor
+	torStartCancel context.CancelFunc
 
 	// Outbound Tor dialer per PART 31
 	// Used when the server-wide UseNetwork setting routes engine queries through Tor
@@ -201,6 +202,9 @@ func (s *TorService) AllowUserIPForward() bool {
 // Per AI.md PART 31: Uses dedicated Tor process via bine library
 // Auto-enabled if tor binary is found - no enable flag needed
 func (s *TorService) Start(ctx context.Context, serverPort int) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -237,6 +241,10 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 			if err != nil {
 				s.status = TorServiceStatusError
 				return fmt.Errorf("chown tor dir %s: %w", dir, err)
+			}
+			if err := os.Chmod(dir, 0700); err != nil {
+				s.status = TorServiceStatusError
+				return fmt.Errorf("chmod tor dir %s: %w", dir, err)
 			}
 		}
 	}
@@ -318,13 +326,49 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	}
 
 	s.logger.Info("Starting dedicated Tor process...", nil)
-	t, err := tor.Start(ctx, startConf)
+	startupTimeout := 60 * time.Second
+	if s.torConfig != nil && s.torConfig.StartupTimeout > 0 {
+		startupTimeout = time.Duration(s.torConfig.StartupTimeout) * time.Second
+	}
+	startCtx, cancelStart := context.WithCancel(ctx)
+	type torStartResult struct {
+		instance *tor.Tor
+		err      error
+	}
+	startResult := make(chan torStartResult, 1)
+	go func() {
+		instance, startErr := tor.Start(startCtx, startConf)
+		startResult <- torStartResult{instance: instance, err: startErr}
+	}()
+	startupTimer := time.NewTimer(startupTimeout)
+	var started torStartResult
+	select {
+	case started = <-startResult:
+		if !startupTimer.Stop() {
+			select {
+			case <-startupTimer.C:
+			default:
+			}
+		}
+	case <-startupTimer.C:
+		cancelStart()
+		started = <-startResult
+		if started.instance != nil {
+			_ = started.instance.Close()
+		}
+		_ = proxyLn.Close()
+		s.status = TorServiceStatusError
+		return fmt.Errorf("tor startup timed out after %s", startupTimeout)
+	}
+	t, err := started.instance, started.err
 	if err != nil {
+		cancelStart()
 		_ = proxyLn.Close()
 		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to start dedicated tor: %w", err)
 	}
 	s.torInstance = t
+	s.torStartCancel = cancelStart
 
 	// Wait for Tor to bootstrap using configurable timeout (default 180s per PART 31)
 	s.logger.Info("Waiting for Tor to bootstrap...", nil)
@@ -337,7 +381,9 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 
 	if err := t.EnableNetwork(dialCtx, true); err != nil {
 		_ = t.Close()
+		cancelStart()
 		s.torInstance = nil
+		s.torStartCancel = nil
 		_ = proxyLn.Close()
 		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to enable tor network: %w", err)
@@ -351,7 +397,9 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	onionBytes, err := os.ReadFile(hostnamePath)
 	if err != nil {
 		_ = t.Close()
+		cancelStart()
 		s.torInstance = nil
+		s.torStartCancel = nil
 		_ = proxyLn.Close()
 		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to read onion hostname: %w", err)
@@ -490,6 +538,10 @@ func (s *TorService) Stop() error {
 			s.logger.Warn("Error closing Tor", map[string]interface{}{"error": err.Error()})
 		}
 		s.torInstance = nil
+	}
+	if s.torStartCancel != nil {
+		s.torStartCancel()
+		s.torStartCancel = nil
 	}
 
 	// Close the dedicated PROXY-protocol loopback listener the hidden service
@@ -1178,7 +1230,7 @@ func buildTorrc(cfg *config.TorConfig, hsDir string, torBackendPort int, logFile
 	// "auto" = Tor picks available high port at runtime (never saved)
 	var socksConfig string
 	if cfg.UseNetwork {
-		socksConfig = "SocksPort auto"
+		socksConfig = "SocksPort 127.0.0.1:auto\nSocksPolicy accept 127.0.0.1"
 	} else {
 		socksConfig = "SocksPort 0"
 	}

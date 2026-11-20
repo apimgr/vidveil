@@ -100,7 +100,7 @@
             {{$isFav := index $favs .URL}}
             <div class="video-card" role="listitem" data-source="{{.Source}}">
                 <a href="{{.URL}}" {{if $.OpenNewTab}}target="_blank" {{end}}rel="noopener noreferrer nofollow" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
-                    <img src="{{ path "/api/v1/proxy/thumbnails" }}?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">
+                    {{if .Thumbnail}}<img src="{{ path "/api/v1/proxy/thumbnails" }}?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{else}}<img src="{{ path "/static/images/placeholder.svg" }}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{end}}
                     <div class="video-info">
                         <h3 class="video-title">{{.Title}}</h3>
                         <p class="video-meta">

@@ -27,7 +27,8 @@ TESTS_FAILED=0
 # Per PART 13: ALWAYS create org directory first, then use temp directories with org/project structure
 mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
 TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX")
-INSTANCE_NAME="test-${PROJECT_NAME}-$$"
+INSTANCE_SUFFIX="$(printf '%08x' "$(((RANDOM << 15) | RANDOM))")"
+INSTANCE_NAME="${PROJECT_NAME}-${INSTANCE_SUFFIX}"
 trap 'rm -rf "${TEMP_DIR}"; incus delete -f "${INSTANCE_NAME}" 2>/dev/null || true' EXIT
 
 echo "Vidveil Incus Integration Tests (Debian + systemd)"
@@ -66,7 +67,7 @@ go build -buildvcs=false -ldflags '-s -w' -o /output/vidveil ./src
 EOF
 chmod +x "${TEMP_DIR}/build.sh"
 
-docker run --rm \
+docker run --rm --name "${INSTANCE_NAME}-server-build" \
     -v "${PROJECT_ROOT}":/build \
     -v "${TEMP_DIR}":/output \
     -e CGO_ENABLED=0 \
@@ -90,7 +91,7 @@ go build -buildvcs=false -ldflags '-s -w' -o /output/vidveil-cli ./src/client
 EOF
 chmod +x "${TEMP_DIR}/build-cli.sh"
 
-docker run --rm \
+docker run --rm --name "${INSTANCE_NAME}-cli-build" \
     -v "${PROJECT_ROOT}":/build \
     -v "${TEMP_DIR}":/output \
     -e CGO_ENABLED=0 \
@@ -112,9 +113,9 @@ sleep 5
 pass "Incus container launched"
 
 # Step 4: Install dependencies
-info "Installing dependencies (curl)..."
+info "Installing dependencies (curl, Tor, I2P, timezone and CA data)..."
 incus exec "${INSTANCE_NAME}" -- apt-get update -qq 2>&1 | tail -1
-incus exec "${INSTANCE_NAME}" -- apt-get install -y -qq curl 2>&1 | tail -1
+incus exec "${INSTANCE_NAME}" -- apt-get install -y -qq curl tor i2pd tzdata ca-certificates 2>&1 | tail -1
 pass "Dependencies installed"
 
 # Step 5: Install server binary
@@ -159,6 +160,21 @@ else
 fi
 
 # Step 10: Install as systemd service (PART 13 requirement for Incus tests)
+info "Enabling the test-only Tor and I2P services..."
+cat > "${TEMP_DIR}/server.yml" << 'EOF'
+server:
+  i2p:
+    enabled: true
+    bootstrap_timeout: 10m
+    inbound_length: 1
+    outbound_length: 1
+    inbound_quantity: 1
+    outbound_quantity: 1
+EOF
+incus exec "${INSTANCE_NAME}" -- mkdir -p /etc/apimgr/vidveil
+incus file push "${TEMP_DIR}/server.yml" "${INSTANCE_NAME}/etc/apimgr/vidveil/server.yml"
+pass "I2P enabled in isolated Incus test configuration"
+
 info "Installing systemd service..."
 if incus exec "${INSTANCE_NAME}" -- ${PROJECT_NAME} --service --install; then
     pass "Systemd service installed"
@@ -174,9 +190,6 @@ if incus exec "${INSTANCE_NAME}" -- systemctl start ${PROJECT_NAME}; then
 else
     fail "Service start failed"
 fi
-
-# Wait for service to be fully ready
-sleep 8
 
 # Step 12: Check service status
 info "Checking service status..."
@@ -200,6 +213,25 @@ if [ -z "$SERVICE_PORT" ]; then
     SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- grep -oP 'port:\s*["'"'"']?\K[0-9]+' /etc/apimgr/vidveil/server.yml 2>/dev/null || echo "64080")
 fi
 info "Service running on port: ${SERVICE_PORT}"
+
+# Wait for the server plus its isolated Tor and I2P providers to become healthy.
+info "Waiting for Tor and I2P health..."
+OVERLAY_HEALTHY=false
+for _ in $(seq 1 600); do
+    HEALTH_JSON=$(incus exec "${INSTANCE_NAME}" -- curl -q -sS -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/server/healthz" 2>/dev/null || true)
+    if echo "$HEALTH_JSON" | grep -Eo '"tor":\{[^}]*\}' | grep -q '"status":"healthy"' && \
+       echo "$HEALTH_JSON" | grep -Eo '"i2p":\{[^}]*\}' | grep -q '"status":"healthy"'; then
+        OVERLAY_HEALTHY=true
+        break
+    fi
+    sleep 1
+done
+if [ "${OVERLAY_HEALTHY}" = "true" ]; then
+    pass "Tor and I2P providers are healthy"
+else
+    fail "Tor or I2P provider did not become healthy"
+    incus exec "${INSTANCE_NAME}" -- journalctl -u ${PROJECT_NAME} --no-pager -n 80 || true
+fi
 
 # Step 13: Test HTTP endpoints
 # Per AI.md PART 13: /server/healthz is canonical; /healthz is opt-in via config

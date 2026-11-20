@@ -87,6 +87,35 @@ func TestServerHandler_AboutPage_Returns200(t *testing.T) {
 	}
 }
 
+func TestServerHandler_TextPlainPagesSetConvertedContentLength(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := newServerHandler(t)
+	pages := []struct {
+		name string
+		path string
+		h    func(http.ResponseWriter, *http.Request)
+	}{
+		{name: "about", path: "/server/about", h: h.AboutPage},
+		{name: "privacy", path: "/server/privacy", h: h.PrivacyPage},
+		{name: "contact", path: "/server/contact", h: h.ContactPage},
+		{name: "help", path: "/server/help", h: h.HelpPage},
+	}
+	for _, page := range pages {
+		t.Run(page.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, page.path, nil)
+			req.Header.Set("Accept", "text/plain")
+			response := httptest.NewRecorder()
+			page.h(response, req)
+			if response.Code != http.StatusOK {
+				t.Fatalf("%s status = %d, want %d", page.name, response.Code, http.StatusOK)
+			}
+			if got, want := response.Header().Get("Content-Length"), strconv.Itoa(response.Body.Len()); got != want {
+				t.Errorf("%s Content-Length = %q, want %q", page.name, got, want)
+			}
+		})
+	}
+}
+
 func TestServerHandler_AboutPage_PreservesConfiguredBaseURL(t *testing.T) {
 	setRealTemplatesFS(t)
 	cfg := config.DefaultAppConfig()

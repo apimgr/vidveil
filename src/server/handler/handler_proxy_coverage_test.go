@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -35,6 +36,26 @@ func TestProxyThumbnailPreservesPercentEscapesFromQuery(t *testing.T) {
 
 	if rr.Code != http.StatusNotModified {
 		t.Fatalf("ProxyThumbnail status = %d, want %d (ETag %q, body %s)", rr.Code, http.StatusNotModified, rr.Header().Get("ETag"), rr.Body.String())
+	}
+}
+
+func TestThumbnailFallbackIsRenderableImage(t *testing.T) {
+	rr := httptest.NewRecorder()
+	writeThumbnailFallback(rr, `"thumb-etag"`)
+	if rr.Code != http.StatusOK || rr.Header().Get("Content-Type") != "image/svg+xml; charset=utf-8" {
+		t.Fatalf("fallback response status=%d content-type=%q", rr.Code, rr.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(rr.Body.String(), "<svg") {
+		t.Fatal("fallback body does not contain an SVG image")
+	}
+}
+
+func TestIsImagePayloadRejectsCachedHTML(t *testing.T) {
+	if isImagePayload([]byte("<html>upstream error</html>")) {
+		t.Fatal("HTML error body was accepted as an image")
+	}
+	if !isImagePayload(fakeJPEG) {
+		t.Fatal("JPEG payload was rejected")
 	}
 }
 

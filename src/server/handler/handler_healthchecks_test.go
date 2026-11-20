@@ -21,11 +21,24 @@ type fakeI2PChecker struct {
 	enabled bool
 	address string
 	status  string
+	state   string
 	err     error
 }
 
-func (f fakeI2PChecker) Enabled() bool                     { return f.enabled }
-func (f fakeI2PChecker) IsRunning() bool                   { return f.enabled && f.err == nil }
+func (f fakeI2PChecker) Enabled() bool   { return f.enabled }
+func (f fakeI2PChecker) IsRunning() bool { return f.enabled && f.err == nil }
+func (f fakeI2PChecker) State() string {
+	if f.state != "" {
+		return f.state
+	}
+	if !f.enabled {
+		return "disabled"
+	}
+	if f.err != nil {
+		return "error"
+	}
+	return "running"
+}
 func (f fakeI2PChecker) Status() string                    { return f.status }
 func (f fakeI2PChecker) Address() string                   { return f.address }
 func (f fakeI2PChecker) Provider() string                  { return "sam" }
@@ -126,8 +139,11 @@ func TestHealthCheck_EnabledI2PFailureIsUnhealthy(t *testing.T) {
 	if response.Checks.I2P != "error" {
 		t.Errorf("HealthCheck(I2P failure): checks.i2p = %q, want error", response.Checks.I2P)
 	}
-	if response.Features.I2P.Status != "error:provider_unhealthy" {
-		t.Errorf("HealthCheck(I2P failure): features.i2p.status = %q, want error:provider_unhealthy", response.Features.I2P.Status)
+	if response.Features.I2P.Status != "unavailable" {
+		t.Errorf("HealthCheck(I2P failure): features.i2p.status = %q, want unavailable", response.Features.I2P.Status)
+	}
+	if response.Features.I2P.State != "error" {
+		t.Errorf("HealthCheck(I2P failure): features.i2p.state = %q, want error", response.Features.I2P.State)
 	}
 }
 

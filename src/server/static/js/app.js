@@ -3465,7 +3465,8 @@ function renderFavoritesGrid(list) {
         card.setAttribute('data-fav-id', f.id);
         var html = '<a href="' + escapeHtmlUtil(f.url) + '" rel="noopener noreferrer nofollow" aria-label="' +
             escapeHtmlUtil((f.title || untitledLabel) + ' - ' + (f.source || '')) + '">';
-        html += '<img src="/api/v1/proxy/thumbnails?url=' + encodeURIComponent(f.thumbnail || '') + '" alt="' +
+        var favoriteThumb = f.thumbnail ? '/api/v1/proxy/thumbnails?url=' + encodeURIComponent(f.thumbnail) : '/static/images/placeholder.svg';
+        html += '<img src="' + escapeHtmlUtil(favoriteThumb) + '" alt="' +
             escapeHtmlUtil(f.title || untitledLabel) + '" loading="lazy">';
         html += '<div class="video-info"><h3 class="video-title">' + escapeHtmlUtil(f.title || untitledLabel) +
             '</h3><p class="video-source">' + escapeHtmlUtil(f.source || '') + '</p></div></a>';

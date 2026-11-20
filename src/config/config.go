@@ -503,6 +503,9 @@ type TorConfig struct {
 	AllowUserIPForward bool `yaml:"allow_user_ip_forward"`
 
 	// --- Performance Settings ---
+	// Time to wait for Tor's control port during startup (10-300, default 60)
+	StartupTimeout int `yaml:"startup_timeout"`
+
 	// Maximum circuits to keep open (1-128, default 32)
 	MaxCircuits int `yaml:"max_circuits"`
 
@@ -585,7 +588,8 @@ func DefaultTorConfig() TorConfig {
 		// auto-detect
 		Binary: "",
 		// disabled by default, user can enable for privacy
-		UseNetwork: false,
+		UseNetwork:     false,
+		StartupTimeout: 60,
 		// feature available, but user must opt-in via preferences
 		AllowUserIPForward:        true,
 		MaxCircuits:               32,
@@ -2822,6 +2826,7 @@ func collectYAMLOverrides(base, overlay *yaml.Node, prefix string, output *[]str
 // Rule: If config setting is invalid, warn and replace with default. Never fail startup.
 func validateConfig(cfg *AppConfig) {
 	defaults := DefaultAppConfig()
+	validateTorConfig(&cfg.Server.Tor, defaults.Server.Tor)
 	validateI2PConfig(&cfg.Server.I2P, defaults.Server.I2P)
 	validateUpdateChannel(&cfg.Server.Update, defaults.Server.Update)
 	if err := ValidateTracking(&cfg.Server.Tracking); err != nil {
@@ -2929,6 +2934,13 @@ func validateConfig(cfg *AppConfig) {
 	// Validate backup retention settings (warn, don't error - server must start) per AI.md PART 21
 	validateBackupRetention(cfg)
 	validateRestoreConfig(&cfg.Server.Restore, defaults.Server.Restore)
+}
+
+func validateTorConfig(cfg *TorConfig, defaults TorConfig) {
+	if cfg.StartupTimeout < 10 || cfg.StartupTimeout > 300 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid tor.startup_timeout %d, using default %d\n", cfg.StartupTimeout, defaults.StartupTimeout)
+		cfg.StartupTimeout = defaults.StartupTimeout
+	}
 }
 
 func validateUpdateChannel(cfg *UpdateConfig, defaults UpdateConfig) {

@@ -52,7 +52,10 @@ RUN apk upgrade --no-cache \
     curl \
     bash \
     tini \
-    tor
+    tor \
+    i2pd \
+    tzdata \
+    ca-certificates
 
 # NO directory creation - binary handles ALL setup based on env vars
 # This allows users to override CONFIG_DIR, DATA_DIR, etc.
@@ -76,6 +79,8 @@ RUN chmod 755 /usr/local/bin/*
 # MODE is intentionally NOT set here (AI.md PART 26): the binary defaults to
 # production; compose files set MODE explicitly (production/development).
 ENV TZ=America/New_York \
+    I2P_ENABLED=true \
+    VIDVEIL_SERVER_I2P_BOOTSTRAP_TIMEOUT=10m \
     DATABASE_DIR=/data/db/sqlite
 
 # Expose internal port (always 80)

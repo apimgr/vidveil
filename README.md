@@ -33,7 +33,7 @@ https://x.scour.li
 | **Autocomplete** | Bang shortcuts, performer names, and search terms autocomplete |
 | **Related Searches** | Server-generated related search suggestions |
 | **Semantic Search** | AND-based filtering with synonym expansion across 27 categories |
-| **Tor Support** | Built-in Tor hidden service support |
+| **Overlay Access** | Tor hidden service support; I2P eepsite enabled in container images and opt-in on bare-metal and VMs |
 | **8 Languages** | English, Arabic, German, Spanish, French, Italian, Japanese, and Chinese |
 | **AI Integration** | OpenAPI-generated MCP tools and configurable `llms.txt` discovery |
 | **Content Restriction** | Geographic warnings/blocks for regions with adult content laws |

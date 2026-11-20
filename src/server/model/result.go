@@ -112,6 +112,8 @@ type EngineInfo struct {
 type EngineCapabilities struct {
 	HasPreview  bool `json:"has_preview"`
 	HasDownload bool `json:"has_download"`
+	HasDuration bool `json:"has_duration"`
+	HasViews    bool `json:"has_views"`
 }
 
 // EnginesResponse represents the API response for engines list

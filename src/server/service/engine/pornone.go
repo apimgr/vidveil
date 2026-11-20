@@ -13,7 +13,9 @@ type PornOneEngine struct{ *BaseEngine }
 
 // newPornOneEngine creates a new PornOne engine
 func newPornOneEngine(appConfig *config.AppConfig) *PornOneEngine {
-	return &PornOneEngine{NewBaseEngine("pornone", "PornOne", "https://pornone.com", 4, appConfig)}
+	e := &PornOneEngine{NewBaseEngine("pornone", "PornOne", "https://pornone.com", 4, appConfig)}
+	e.SetCapabilities(Capabilities{HasDuration: true, APIType: "html"})
+	return e
 }
 
 // Search performs a search on PornOne

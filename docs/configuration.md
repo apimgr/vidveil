@@ -210,6 +210,8 @@ under the data directory and the backend listener is loopback-only.
 ```yaml
 server:
   i2p:
+    # Opt-in on ordinary hosts; isolated container images and integration
+    # tests enable I2P so the packaged provider is exercised.
     enabled: false
     binary: ""
     sam_address: "127.0.0.1:7656"
@@ -638,6 +640,7 @@ server:
     binary: ""
     use_network: false
     allow_user_ip_forward: true
+    startup_timeout: 60
     max_circuits: 32
     circuit_timeout: 60
     bootstrap_timeout: 180

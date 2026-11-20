@@ -106,7 +106,7 @@ func (e *YouPornEngine) Search(ctx context.Context, query string, page int) ([]m
 		duration, durationSeconds := parser.ParseDuration(durationText)
 
 		// Get views and parse to count - YouPorn uses span.info-views
-		viewsText := parser.CleanText(s.Find("span.info-views, .video-views").First().Text())
+		viewsText := parser.CleanText(s.Find(".info-views, .video-views").First().Text())
 		views, viewsCount := parser.ParseViews(viewsText)
 
 		results = append(results, model.VideoResult{

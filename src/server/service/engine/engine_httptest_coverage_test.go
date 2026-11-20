@@ -7,6 +7,7 @@ package engine
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -341,6 +342,22 @@ func TestTNAFlixEngine_Search_HttpTest(t *testing.T) {
 	e := newTNAFlixEngine(defaultCfg())
 	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
+}
+
+func TestTNAFlixEngine_Search_ExtractsLivePreviewAttribute(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `<div class="col-xs-6 col-md-4"><a href="/v/18" title="TNAFlix Test"><img src="/t.jpg" data-trailer="https://cdn.example/trailer.mp4"></a></div>`)
+	}))
+	defer srv.Close()
+	e := newTNAFlixEngine(defaultCfg())
+	e.baseURL = srv.URL
+	got, err := e.Search(context.Background(), "test", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].PreviewURL != "https://cdn.example/trailer.mp4" {
+		t.Fatalf("Search() = %#v, want one result with trailer preview", got)
+	}
 }
 
 // ── Tube8 ─────────────────────────────────────────────────────────────────────

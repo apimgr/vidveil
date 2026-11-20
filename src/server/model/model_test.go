@@ -387,7 +387,7 @@ func TestEngineInfoConstruction(t *testing.T) {
 }
 
 func TestEngineInfoJSONRoundTrip(t *testing.T) {
-	caps := &EngineCapabilities{HasPreview: true, HasDownload: true}
+	caps := &EngineCapabilities{HasPreview: true, HasDownload: true, HasDuration: true, HasViews: true}
 	original := EngineInfo{
 		Name:         "eng1",
 		DisplayName:  "Engine One",
@@ -420,6 +420,9 @@ func TestEngineInfoJSONRoundTrip(t *testing.T) {
 	}
 	if decoded.Capabilities.HasPreview != caps.HasPreview {
 		t.Errorf("Capabilities.HasPreview: got %v, want %v", decoded.Capabilities.HasPreview, caps.HasPreview)
+	}
+	if decoded.Capabilities.HasDuration != caps.HasDuration || decoded.Capabilities.HasViews != caps.HasViews {
+		t.Errorf("Capabilities duration/views: got %v/%v, want %v/%v", decoded.Capabilities.HasDuration, decoded.Capabilities.HasViews, caps.HasDuration, caps.HasViews)
 	}
 	if decoded.Privacy.RequiresJS != original.Privacy.RequiresJS {
 		t.Errorf("Privacy.RequiresJS: got %v, want %v", decoded.Privacy.RequiresJS, original.Privacy.RequiresJS)

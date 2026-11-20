@@ -106,10 +106,10 @@ func TestOutputEnginesAsCSV(t *testing.T) {
 		return OutputEnginesAsCSV(engineList)
 	})
 
-	if !strings.Contains(outputText, "name,display_name,tier,enabled,has_preview,has_download") {
+	if !strings.Contains(outputText, "name,display_name,tier,enabled,has_preview,has_download,has_duration,has_views") {
 		t.Fatalf("csv output missing engines header:\n%s", outputText)
 	}
-	if !strings.Contains(outputText, "pornhub,PornHub,1,true,true,false") {
+	if !strings.Contains(outputText, "pornhub,PornHub,1,true,true,false,false,false") {
 		t.Fatalf("csv output missing engines row:\n%s", outputText)
 	}
 }

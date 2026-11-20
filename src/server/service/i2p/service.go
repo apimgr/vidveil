@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base32"
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -47,10 +48,12 @@ type Service struct {
 	starting    bool
 	listener    net.Listener
 	provider    Provider
+	state       string
 	address     string
 	process     *exec.Cmd
 	processDone chan struct{}
 	sam         net.Conn
+	forward     net.Conn
 	runCancel   context.CancelFunc
 	parentCtx   context.Context
 }
@@ -71,6 +74,7 @@ func (s *Service) Start(ctx context.Context) error {
 		return nil
 	}
 	s.starting = true
+	s.state = "starting"
 	runCtx, cancel := context.WithCancel(ctx)
 	s.runCancel = cancel
 	s.parentCtx = ctx
@@ -78,11 +82,19 @@ func (s *Service) Start(ctx context.Context) error {
 	failed := func(err error) error {
 		cancel()
 		s.mu.Lock()
+		if s.state != "no_provider" {
+			s.state = "error"
+		}
 		s.runCancel = nil
 		s.parentCtx = nil
 		s.starting = false
 		s.mu.Unlock()
 		return err
+	}
+	provider, binary, err := s.resolveProvider()
+	if err != nil {
+		s.setState("no_provider")
+		return failed(err)
 	}
 	if err := s.ensureDirs(); err != nil {
 		return failed(err)
@@ -91,13 +103,15 @@ func (s *Service) Start(ctx context.Context) error {
 	if err != nil {
 		return failed(err)
 	}
-	if err := s.startProvider(runCtx, port); err != nil {
+	if err := s.startProviderResolved(runCtx, provider, binary, port); err != nil {
 		_ = listener.Close()
+		s.setState("error")
 		return failed(err)
 	}
 	s.mu.Lock()
 	s.listener = listener
 	s.starting = false
+	s.state = "running"
 	s.mu.Unlock()
 	return nil
 }
@@ -105,29 +119,53 @@ func (s *Service) Start(ctx context.Context) error {
 func (s *Service) startProvider(ctx context.Context, port int) error {
 	provider, binary, err := s.resolveProvider()
 	if err != nil {
+		s.setState("no_provider")
 		return err
 	}
+	if err := s.startProviderResolved(ctx, provider, binary, port); err != nil {
+		s.setState("error")
+		return err
+	}
+	return nil
+}
+
+func (s *Service) startProviderResolved(ctx context.Context, provider Provider, binary string, port int) error {
+	s.setState("starting")
 	if s.logger != nil {
 		s.logger.Info("I2P provider selected", map[string]interface{}{"provider": provider})
 	}
-	if provider == ProviderSAM {
-		addr, conn, err := s.startSAM(ctx, port)
+	samAddress := s.cfg.SAMAddress
+	var cmd *exec.Cmd
+	if provider == ProviderI2PD {
+		var err error
+		samAddress, cmd, err = s.startI2PD(ctx, binary)
 		if err != nil {
 			return err
 		}
-		s.mu.Lock()
-		s.provider, s.address, s.sam = provider, addr, conn
-		s.mu.Unlock()
-	} else {
-		addr, cmd, err := s.startI2PD(ctx, binary, port)
-		if err != nil {
-			return err
-		}
-		s.mu.Lock()
-		s.provider, s.address, s.process = provider, addr, cmd
-		s.mu.Unlock()
 	}
+	addr, control, forward, err := s.startSAM(ctx, samAddress, port)
+	if err != nil {
+		if cmd != nil {
+			s.stopStartedProcess(cmd)
+		}
+		return err
+	}
+	s.mu.Lock()
+	s.provider, s.address, s.sam, s.forward, s.process, s.state = provider, addr, control, forward, cmd, "running"
+	s.mu.Unlock()
+	go s.monitorSAMConnection(control)
+	go s.monitorSAMConnection(forward)
 	return nil
+}
+
+func (s *Service) monitorSAMConnection(conn net.Conn) {
+	var probe [1]byte
+	_, _ = conn.Read(probe[:])
+	s.mu.Lock()
+	if s.sam == conn || s.forward == conn {
+		s.state = "error"
+	}
+	s.mu.Unlock()
 }
 
 func (s *Service) resolveProvider() (Provider, string, error) {
@@ -146,8 +184,13 @@ func (s *Service) resolveProvider() (Provider, string, error) {
 	}
 	conn, err := net.DialTimeout("tcp", s.cfg.SAMAddress, 3*time.Second)
 	if err == nil {
+		_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+		if err = samHello(conn); err == nil {
+			_, _ = io.WriteString(conn, "QUIT\n")
+			_ = conn.Close()
+			return ProviderSAM, "", nil
+		}
 		_ = conn.Close()
-		return ProviderSAM, "", nil
 	}
 	return ProviderNone, "", fmt.Errorf("no I2P provider found (i2pd unavailable and SAM %s unreachable)", s.cfg.SAMAddress)
 }
@@ -178,17 +221,112 @@ func newBackendListener() (net.Listener, int, error) {
 		port := 64000 + int(uint32(random[0])<<24|uint32(random[1])<<16|uint32(random[2])<<8|uint32(random[3]))%span
 		listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 		if err == nil {
-			return listener, port, nil
+			accepting, err := newAcceptingListener(listener)
+			if err != nil {
+				_ = listener.Close()
+				return nil, 0, err
+			}
+			return accepting, port, nil
 		}
 	}
 	return nil, 0, fmt.Errorf("unable to allocate I2P backend port")
 }
 
-func (s *Service) startSAM(ctx context.Context, port int) (string, net.Conn, error) {
-	dialer := net.Dialer{Timeout: 5 * time.Second}
-	conn, err := dialer.DialContext(ctx, "tcp", s.cfg.SAMAddress)
+type acceptingListener struct {
+	listener net.Listener
+	accepted chan net.Conn
+	errors   chan error
+	done     chan struct{}
+	pumpDone chan struct{}
+	close    sync.Once
+}
+
+func newAcceptingListener(listener net.Listener) (*acceptingListener, error) {
+	wrapped := &acceptingListener{
+		listener: listener,
+		accepted: make(chan net.Conn, 32),
+		errors:   make(chan error, 1),
+		done:     make(chan struct{}),
+		pumpDone: make(chan struct{}),
+	}
+	go wrapped.acceptLoop()
+	probe, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second)
 	if err != nil {
-		return "", nil, fmt.Errorf("connect to I2P SAM: %w", err)
+		_ = wrapped.Close()
+		return nil, fmt.Errorf("prime I2P backend accept loop: %w", err)
+	}
+	select {
+	case accepted := <-wrapped.accepted:
+		_ = accepted.Close()
+		_ = probe.Close()
+		return wrapped, nil
+	case err := <-wrapped.errors:
+		_ = probe.Close()
+		_ = wrapped.Close()
+		return nil, fmt.Errorf("start I2P backend accept loop: %w", err)
+	case <-time.After(time.Second):
+		_ = probe.Close()
+		_ = wrapped.Close()
+		return nil, errors.New("I2P backend accept loop did not accept its readiness connection")
+	}
+}
+
+func (l *acceptingListener) acceptLoop() {
+	defer close(l.pumpDone)
+	for {
+		conn, err := l.listener.Accept()
+		if err != nil {
+			select {
+			case l.errors <- err:
+			case <-l.done:
+			}
+			return
+		}
+		select {
+		case l.accepted <- conn:
+		case <-l.done:
+			_ = conn.Close()
+			return
+		}
+	}
+}
+
+func (l *acceptingListener) Accept() (net.Conn, error) {
+	select {
+	case conn := <-l.accepted:
+		return conn, nil
+	case err := <-l.errors:
+		return nil, err
+	case <-l.done:
+		return nil, net.ErrClosed
+	}
+}
+
+func (l *acceptingListener) Close() error {
+	var err error
+	l.close.Do(func() {
+		close(l.done)
+		err = l.listener.Close()
+		<-l.pumpDone
+		for {
+			select {
+			case conn := <-l.accepted:
+				_ = conn.Close()
+			default:
+				return
+			}
+		}
+	})
+	return err
+}
+
+func (l *acceptingListener) Addr() net.Addr { return l.listener.Addr() }
+
+func (s *Service) startSAM(ctx context.Context, address string, port int) (string, net.Conn, net.Conn, error) {
+	dialer := net.Dialer{Timeout: 5 * time.Second}
+	conn, err := dialer.DialContext(ctx, "tcp", address)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("connect to I2P SAM: %w", err)
 	}
 	finished := make(chan struct{})
 	go func() {
@@ -201,44 +339,89 @@ func (s *Service) startSAM(ctx context.Context, port int) (string, net.Conn, err
 	defer close(finished)
 	if err := conn.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
 		_ = conn.Close()
-		return "", nil, fmt.Errorf("set I2P SAM deadline: %w", err)
+		return "", nil, nil, fmt.Errorf("set I2P SAM deadline: %w", err)
 	}
 	r := bufio.NewReader(conn)
-	if _, err := io.WriteString(conn, "HELLO VERSION MIN=3.0 MAX=3.3\n"); err != nil {
+	if err := samHelloWithReader(conn, r); err != nil {
 		_ = conn.Close()
-		return "", nil, err
-	}
-	if _, err := readSAMReply(r, "HELLO REPLY"); err != nil {
-		_ = conn.Close()
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	keyPath := filepath.Join(s.dataDir, "i2p", "site", "site-keys.dat")
-	private, public, err := s.loadOrCreateSAMKeys(conn, r, keyPath, s.cfg.SignatureType)
+	private, destination, err := s.loadOrCreateSAMKeys(conn, r, keyPath, s.cfg.SignatureType)
 	if err != nil {
 		_ = conn.Close()
-		return "", nil, err
+		return "", nil, nil, err
 	}
-	if _, err := fmt.Fprintf(conn, "SESSION CREATE STYLE=STREAM ID=vidveil DESTINATION=%s inbound.length=%d outbound.length=%d inbound.quantity=%d outbound.quantity=%d\n", private, s.cfg.InboundLength, s.cfg.OutboundLength, s.cfg.InboundQuantity, s.cfg.OutboundQuantity); err != nil {
+	if err := conn.SetDeadline(time.Now().Add(s.bootstrapTimeout())); err != nil {
 		_ = conn.Close()
-		return "", nil, err
+		return "", nil, nil, err
 	}
-	if _, err := readSAMReply(r, "SESSION STATUS"); err != nil {
-		_ = conn.Close()
-		return "", nil, err
+	s.setState("building")
+	sessionID := fmt.Sprintf("site-%d-%x", os.Getpid(), randomSessionSuffix())
+	command := func(id string) string {
+		return fmt.Sprintf("SESSION CREATE STYLE=STREAM ID=%s DESTINATION=%s i2cp.leaseSetEncType=4 inbound.length=%d outbound.length=%d inbound.quantity=%d outbound.quantity=%d\n", id, private, s.cfg.InboundLength, s.cfg.OutboundLength, s.cfg.InboundQuantity, s.cfg.OutboundQuantity)
 	}
-	if _, err := fmt.Fprintf(conn, "STREAM FORWARD ID=vidveil PORT=%d HOST=127.0.0.1\n", port); err != nil {
+	if _, err := io.WriteString(conn, command(sessionID)); err != nil {
 		_ = conn.Close()
-		return "", nil, err
+		return "", nil, nil, fmt.Errorf("write SESSION CREATE: %w", err)
 	}
-	if _, err := readSAMReply(r, "STREAM STATUS"); err != nil {
+	_, sessionErr := readSAMReply(r, "SESSION STATUS")
+	if sessionErr != nil && strings.Contains(sessionErr.Error(), "DUPLICATED_ID") {
+		sessionID = fmt.Sprintf("site-%d-%x", os.Getpid(), randomSessionSuffix())
+		if _, writeErr := io.WriteString(conn, command(sessionID)); writeErr != nil {
+			_ = conn.Close()
+			return "", nil, nil, fmt.Errorf("retry SESSION CREATE: %w", writeErr)
+		}
+		_, sessionErr = readSAMReply(r, "SESSION STATUS")
+	}
+	if sessionErr != nil {
 		_ = conn.Close()
-		return "", nil, err
+		return "", nil, nil, fmt.Errorf("SESSION CREATE: %w", sessionErr)
 	}
 	if err := conn.SetDeadline(time.Time{}); err != nil {
 		_ = conn.Close()
-		return "", nil, fmt.Errorf("clear I2P SAM deadline: %w", err)
+		return "", nil, nil, err
 	}
-	return b32Address(public), conn, nil
+	forward, err := dialer.DialContext(ctx, "tcp", address)
+	if err != nil {
+		_ = conn.Close()
+		return "", nil, nil, fmt.Errorf("connect I2P SAM forward socket: %w", err)
+	}
+	forwardReader := bufio.NewReader(forward)
+	if err := forward.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		_ = conn.Close()
+		_ = forward.Close()
+		return "", nil, nil, err
+	}
+	if err := samHelloWithReader(forward, forwardReader); err != nil {
+		_ = conn.Close()
+		_ = forward.Close()
+		return "", nil, nil, err
+	}
+	if _, err := fmt.Fprintf(forward, "STREAM FORWARD ID=%s PORT=%d HOST=127.0.0.1 SILENT=true\n", sessionID, port); err != nil {
+		_ = conn.Close()
+		_ = forward.Close()
+		return "", nil, nil, fmt.Errorf("write STREAM FORWARD: %w", err)
+	}
+	if _, err := readSAMReply(forwardReader, "STREAM STATUS"); err != nil {
+		_ = conn.Close()
+		_ = forward.Close()
+		return "", nil, nil, fmt.Errorf("STREAM FORWARD: %w", err)
+	}
+	if err := forward.SetDeadline(time.Time{}); err != nil {
+		_ = conn.Close()
+		_ = forward.Close()
+		return "", nil, nil, fmt.Errorf("clear I2P SAM deadline: %w", err)
+	}
+	return b32Address(destination), conn, forward, nil
+}
+
+func randomSessionSuffix() uint32 {
+	var suffix [4]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return uint32(time.Now().UnixNano())
+	}
+	return binary.BigEndian.Uint32(suffix[:])
 }
 
 func (s *Service) loadOrCreateSAMKeys(conn net.Conn, reader *bufio.Reader, keyPath string, signatureType int) (string, []byte, error) {
@@ -254,13 +437,11 @@ func (s *Service) loadOrCreateSAMKeys(conn net.Conn, reader *bufio.Reader, keyPa
 		if err := os.Chmod(keyPath, 0600); err != nil {
 			return "", nil, fmt.Errorf("secure I2P destination key permissions: %w", err)
 		}
-		parts := strings.Fields(string(data))
-		if len(parts) == 2 {
-			public, err := decodeSAMBase64(parts[1])
-			if err == nil {
-				return parts[0], public, nil
-			}
+		private := strings.TrimSpace(string(data))
+		if destination, err := destinationFromPrivate(private); err == nil {
+			return private, destination, nil
 		}
+		return "", nil, fmt.Errorf("I2P destination key file %s is unparsable", keyPath)
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return "", nil, fmt.Errorf("inspect I2P destination keys: %w", statErr)
 	}
@@ -271,33 +452,85 @@ func (s *Service) loadOrCreateSAMKeys(conn net.Conn, reader *bufio.Reader, keyPa
 	if err != nil {
 		return "", nil, err
 	}
-	private, public := reply["PRIV"], reply["PUB"]
-	if private == "" || public == "" {
-		return "", nil, errors.New("SAM destination response omitted public or private destination")
+	private := reply["PRIV"]
+	if private == "" {
+		return "", nil, errors.New("SAM destination response omitted private destination")
 	}
-	publicBytes, err := decodeSAMBase64(public)
+	destination, err := destinationFromPrivate(private)
 	if err != nil {
-		return "", nil, fmt.Errorf("decode SAM public destination: %w", err)
+		return "", nil, fmt.Errorf("decode SAM private destination: %w", err)
 	}
-	file, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	tmp, err := os.CreateTemp(filepath.Dir(keyPath), ".site-keys-*")
 	if err != nil {
-		return "", nil, fmt.Errorf("create I2P destination key: %w", err)
+		return "", nil, fmt.Errorf("create temporary I2P destination key: %w", err)
 	}
-	_, writeErr := fmt.Fprintln(file, private, public)
-	closeErr := file.Close()
-	if writeErr != nil || closeErr != nil {
-		_ = os.Remove(keyPath)
-		return "", nil, errors.Join(writeErr, closeErr)
+	name := tmp.Name()
+	defer os.Remove(name)
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return "", nil, err
 	}
-	return private, publicBytes, nil
+	_, writeErr := fmt.Fprintln(tmp, private)
+	syncErr := tmp.Sync()
+	closeErr := tmp.Close()
+	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
+		return "", nil, err
+	}
+	if err := os.Rename(name, keyPath); err != nil {
+		return "", nil, fmt.Errorf("persist I2P destination key: %w", err)
+	}
+	return private, destination, nil
 }
 
 func decodeSAMBase64(value string) ([]byte, error) {
 	value = strings.NewReplacer("-", "+", "~", "/").Replace(value)
-	if decoded, err := base64.RawStdEncoding.DecodeString(value); err == nil {
-		return decoded, nil
+	return decodePaddedBase64(value)
+}
+
+func decodePaddedBase64(value string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(value)
+}
+
+func destinationFromPrivate(private string) ([]byte, error) {
+	decoded, err := decodeSAMBase64(private)
+	if err != nil {
+		return nil, err
 	}
-	return base64.RawURLEncoding.DecodeString(value)
+	if len(decoded) < 387 {
+		return nil, errors.New("destination key is shorter than its certificate header")
+	}
+	certLen := int(binary.BigEndian.Uint16(decoded[385:387]))
+	destinationLen := 387 + certLen
+	if destinationLen > len(decoded) {
+		return nil, errors.New("destination key certificate exceeds key length")
+	}
+	return append([]byte(nil), decoded[:destinationLen]...), nil
+}
+
+func samHello(conn net.Conn) error {
+	return samHelloWithReader(conn, bufio.NewReader(conn))
+}
+
+func samHelloWithReader(conn net.Conn, reader *bufio.Reader) error {
+	if _, err := io.WriteString(conn, "HELLO VERSION MIN=3.1 MAX=3.3\n"); err != nil {
+		return fmt.Errorf("write SAM HELLO: %w", err)
+	}
+	reply, err := readSAMReply(reader, "HELLO REPLY")
+	if err != nil {
+		return err
+	}
+	if reply["RESULT"] != "OK" {
+		return errors.New("SAM HELLO rejected; SAM 3.1 or newer is required")
+	}
+	return nil
+}
+
+func (s *Service) bootstrapTimeout() time.Duration {
+	duration, err := time.ParseDuration(s.cfg.BootstrapTimeout)
+	if err != nil || duration < 30*time.Second || duration > 10*time.Minute {
+		return 5 * time.Minute
+	}
+	return duration
 }
 
 func readSAMReply(reader *bufio.Reader, prefix string) (map[string]string, error) {
@@ -307,7 +540,7 @@ func readSAMReply(reader *bufio.Reader, prefix string) (map[string]string, error
 	}
 	fields := strings.Fields(strings.TrimSpace(string(lineBytes)))
 	if len(fields) < 2 || fields[0]+" "+fields[1] != prefix {
-		return nil, fmt.Errorf("unexpected SAM reply %q", strings.TrimSpace(string(lineBytes)))
+		return nil, fmt.Errorf("unexpected SAM reply to %s", prefix)
 	}
 	values := make(map[string]string)
 	for _, field := range fields[2:] {
@@ -327,31 +560,47 @@ func b32Address(destination []byte) string {
 	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(digest[:])) + ".b32.i2p"
 }
 
-func (s *Service) startI2PD(ctx context.Context, binary string, port int) (string, *exec.Cmd, error) {
+func (s *Service) startI2PD(ctx context.Context, binary string) (string, *exec.Cmd, error) {
 	configDir := filepath.Join(s.configDir, "i2p")
 	dataDir := filepath.Join(s.dataDir, "i2p")
-	keysPath := filepath.Join(dataDir, "site", "site-keys.dat")
 	tunnelsPath := filepath.Join(configDir, "tunnels.conf")
-	tunnels := fmt.Sprintf("[site]\ntype = server\nhost = 127.0.0.1\nport = %d\nkeys = %q\ninbound.length = %d\noutbound.length = %d\ninbound.quantity = %d\noutbound.quantity = %d\nsignaturetype = %d\n", port, keysPath, s.cfg.InboundLength, s.cfg.OutboundLength, s.cfg.InboundQuantity, s.cfg.OutboundQuantity, s.cfg.SignatureType)
-	if err := os.WriteFile(tunnelsPath, []byte(tunnels), 0600); err != nil {
+	tunnelsDir := filepath.Join(configDir, "tunnels.d")
+	if err := os.MkdirAll(tunnelsDir, 0700); err != nil {
+		return "", nil, fmt.Errorf("create empty I2P tunnels directory: %w", err)
+	}
+	if err := os.Chmod(tunnelsDir, 0700); err != nil {
+		return "", nil, fmt.Errorf("secure I2P tunnels directory: %w", err)
+	}
+	if err := os.WriteFile(tunnelsPath, nil, 0600); err != nil {
 		return "", nil, fmt.Errorf("write I2P tunnels configuration: %w", err)
 	}
 	if err := os.Chmod(tunnelsPath, 0600); err != nil {
 		return "", nil, fmt.Errorf("secure I2P tunnels configuration: %w", err)
 	}
-	args := []string{"--datadir", dataDir, "--tunconf", tunnelsPath, "--log", "file"}
-	if s.logDir != "" {
-		args = append(args, "--logfile", filepath.Join(s.logDir, "i2pd.log"))
+	portListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", nil, fmt.Errorf("allocate private I2P SAM port: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, binary, args...)
+	samAddress := portListener.Addr().String()
+	_, portText, err := net.SplitHostPort(samAddress)
+	_ = portListener.Close()
+	if err != nil {
+		return "", nil, fmt.Errorf("parse private I2P SAM port: %w", err)
+	}
+	conf := fmt.Sprintf("daemon = false\nipv4 = true\nipv6 = false\nnotransit = true\nfloodfill = false\nlog = file\nlogfile = %s\nloglevel = warn\n[http]\nenabled = false\n[httpproxy]\nenabled = false\n[socksproxy]\nenabled = false\n[sam]\nenabled = true\naddress = 127.0.0.1\nport = %s\n[bob]\nenabled = false\n[i2cp]\nenabled = false\n[i2pcontrol]\nenabled = false\n[upnp]\nenabled = false\n", filepath.Join(s.logDir, "i2pd.log"), portText)
+	confPath := filepath.Join(configDir, "i2pd.conf")
+	pidPath := filepath.Join(dataDir, "i2pd.pid")
+	if err := reapStaleI2PD(binary, confPath, pidPath); err != nil {
+		return "", nil, err
+	}
+	if err := os.WriteFile(confPath, []byte(conf), 0600); err != nil {
+		return "", nil, fmt.Errorf("write I2P router configuration: %w", err)
+	}
+	args := []string{"--conf", confPath, "--tunconf", tunnelsPath, "--tunnelsdir", tunnelsDir, "--datadir", dataDir, "--pidfile", pidPath}
+	cmd := exec.Command(binary, args...)
+	configureI2PDCommand(cmd)
 	if err := cmd.Start(); err != nil {
 		return "", nil, fmt.Errorf("start i2pd: %w", err)
-	}
-	pidPath := filepath.Join(dataDir, "i2pd.pid")
-	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(cmd.Process.Pid)+"\n"), 0600); err != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		return "", nil, fmt.Errorf("write i2pd PID file: %w", err)
 	}
 	done := make(chan struct{})
 	s.mu.Lock()
@@ -359,57 +608,63 @@ func (s *Service) startI2PD(ctx context.Context, binary string, port int) (strin
 	s.mu.Unlock()
 	go func() {
 		_ = cmd.Wait()
-		_ = os.Remove(pidPath)
 		close(done)
 	}()
-	deadline, err := time.ParseDuration(s.cfg.BootstrapTimeout)
-	if err != nil {
-		deadline = 5 * time.Minute
-	}
-	until := time.NewTimer(deadline)
+	until := time.NewTimer(60 * time.Second)
 	defer until.Stop()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			_ = cmd.Process.Signal(os.Interrupt)
-			<-done
+			s.stopStartedProcess(cmd)
 			return "", nil, ctx.Err()
 		case <-until.C:
-			_ = cmd.Process.Signal(os.Interrupt)
-			stopProcess(cmd, done)
-			return "", nil, errors.New("i2pd destination startup timed out")
+			s.stopStartedProcess(cmd)
+			return "", nil, errors.New("i2pd SAM startup timed out")
+		case <-done:
+			return "", nil, errors.New("i2pd process exited during startup; check i2pd.log and data directory permissions")
 		case <-ticker.C:
-			// i2pd publishes the derived address alongside the persisted key.
-			for _, name := range []string{"hostname", "site-keys.dat.hostname"} {
-				if data, readErr := os.ReadFile(filepath.Join(dataDir, "site", name)); readErr == nil {
-					address := strings.TrimSpace(string(data))
-					if strings.HasSuffix(address, ".b32.i2p") {
-						keyInfo, statErr := os.Lstat(keysPath)
-						if statErr != nil || !keyInfo.Mode().IsRegular() {
-							_ = cmd.Process.Signal(os.Interrupt)
-							stopProcess(cmd, done)
-							return "", nil, errors.New("i2pd destination key is not a regular file")
-						}
-						if err := os.Chmod(keysPath, 0600); err != nil {
-							_ = cmd.Process.Signal(os.Interrupt)
-							stopProcess(cmd, done)
-							return "", nil, fmt.Errorf("secure i2pd destination key permissions: %w", err)
-						}
-						return address, cmd, nil
-					}
+			probe, dialErr := net.DialTimeout("tcp", samAddress, time.Second)
+			if dialErr == nil {
+				_ = probe.SetDeadline(time.Now().Add(time.Second))
+				if helloErr := samHello(probe); helloErr == nil {
+					_, _ = io.WriteString(probe, "QUIT\n")
+					_ = probe.Close()
+					return samAddress, cmd, nil
 				}
+				_ = probe.Close()
 			}
 		}
 	}
+}
+
+func (s *Service) stopStartedProcess(cmd *exec.Cmd) {
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	s.mu.RLock()
+	done := s.processDone
+	s.mu.RUnlock()
+	if err := terminateI2PDProcess(cmd); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		_ = cmd.Process.Kill()
+	}
+	if done != nil {
+		stopProcess(cmd, done)
+	}
+	s.mu.Lock()
+	if s.process == cmd {
+		s.process = nil
+		s.processDone = nil
+	}
+	s.mu.Unlock()
 }
 
 func stopProcess(cmd *exec.Cmd, done <-chan struct{}) {
 	select {
 	case <-done:
 		return
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 	}
 	if cmd.Process != nil {
 		_ = cmd.Process.Kill()
@@ -445,10 +700,40 @@ func (s *Service) Status() string {
 	if !s.cfg.Enabled {
 		return "disabled"
 	}
-	if s.IsRunning() {
-		return "healthy"
+	s.mu.RLock()
+	state := s.state
+	s.mu.RUnlock()
+	switch state {
+	case "running":
+		if s.IsRunning() {
+			return "healthy"
+		}
+		return "unavailable"
+	case "starting", "building":
+		return "starting"
+	case "no_provider", "error":
+		return "unavailable"
 	}
-	return "error:no_provider"
+	return "unavailable"
+}
+
+// State reports the detailed I2P startup and provider state.
+func (s *Service) State() string {
+	if !s.cfg.Enabled {
+		return "disabled"
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state == "" {
+		return "no_provider"
+	}
+	return s.state
+}
+
+func (s *Service) setState(state string) {
+	s.mu.Lock()
+	s.state = state
+	s.mu.Unlock()
 }
 
 // CheckHealth verifies that the active provider still owns its destination.
@@ -461,38 +746,46 @@ func (s *Service) CheckHealth(ctx context.Context) error {
 	if s.listener == nil || s.address == "" {
 		return errors.New("I2P eepsite is not running")
 	}
+	if s.state == "error" {
+		return errors.New("I2P SAM session was lost")
+	}
 	if s.provider == ProviderI2PD {
 		if s.processDone == nil {
 			return errors.New("i2pd process state is unavailable")
 		}
 		select {
 		case <-s.processDone:
+			s.state = "error"
 			return errors.New("i2pd process exited")
 		default:
-			return nil
 		}
 	}
-	if s.provider != ProviderSAM || s.sam == nil {
+	if (s.provider != ProviderSAM && s.provider != ProviderI2PD) || s.sam == nil || s.forward == nil {
+		s.state = "error"
 		return errors.New("I2P provider is unavailable")
 	}
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
 		deadline = d
 	}
-	if err := s.sam.SetDeadline(deadline); err != nil {
-		return fmt.Errorf("set SAM health deadline: %w", err)
+	address := s.cfg.SAMAddress
+	if s.provider == ProviderI2PD {
+		address = s.sam.RemoteAddr().String()
 	}
-	defer func() { _ = s.sam.SetDeadline(time.Time{}) }()
-	if _, err := io.WriteString(s.sam, "PING\n"); err != nil {
-		return fmt.Errorf("ping SAM provider: %w", err)
-	}
-	line, err := bufio.NewReader(s.sam).ReadString('\n')
+	probe, err := (&net.Dialer{Timeout: time.Until(deadline)}).DialContext(ctx, "tcp", address)
 	if err != nil {
-		return fmt.Errorf("read SAM health response: %w", err)
+		s.state = "error"
+		return fmt.Errorf("connect I2P SAM health probe: %w", err)
 	}
-	if strings.TrimSpace(line) != "PONG" {
-		return fmt.Errorf("unexpected SAM health response %q", strings.TrimSpace(line))
+	defer probe.Close()
+	if err := probe.SetDeadline(deadline); err != nil {
+		return err
 	}
+	if err := samHello(probe); err != nil {
+		s.state = "error"
+		return fmt.Errorf("I2P SAM health probe failed: %w", err)
+	}
+	_, _ = io.WriteString(probe, "QUIT\n")
 	return nil
 }
 
@@ -560,27 +853,35 @@ func (s *Service) Close() error {
 
 func (s *Service) stopProvider() error {
 	s.mu.Lock()
-	conn, process, processDone, cancel := s.sam, s.process, s.processDone, s.runCancel
-	s.sam, s.process, s.processDone = nil, nil, nil
+	forward, conn, process, processDone, cancel := s.forward, s.sam, s.process, s.processDone, s.runCancel
+	s.forward, s.sam, s.process, s.processDone = nil, nil, nil, nil
 	s.runCancel = nil
 	s.address = ""
 	s.provider = ProviderNone
-	s.mu.Unlock()
-	if cancel != nil {
-		cancel()
+	if s.cfg.Enabled {
+		s.state = "starting"
+	} else {
+		s.state = "disabled"
 	}
+	s.mu.Unlock()
 	var closeErr error
+	if forward != nil {
+		closeErr = errors.Join(closeErr, forward.Close())
+	}
 	if conn != nil {
 		closeErr = errors.Join(closeErr, conn.Close())
 	}
+	if cancel != nil {
+		cancel()
+	}
 	if process != nil && process.Process != nil {
-		if err := process.Process.Signal(os.Interrupt); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		if err := terminateI2PDProcess(process); err != nil && !errors.Is(err, os.ErrProcessDone) {
 			closeErr = errors.Join(closeErr, err)
 		}
 		if processDone != nil {
 			select {
 			case <-processDone:
-			case <-time.After(5 * time.Second):
+			case <-time.After(10 * time.Second):
 				if err := process.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 					closeErr = errors.Join(closeErr, err)
 				}

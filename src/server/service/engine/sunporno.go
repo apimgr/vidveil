@@ -13,7 +13,9 @@ type SunPornoEngine struct{ *BaseEngine }
 
 // newSunPornoEngine creates a new SunPorno engine
 func newSunPornoEngine(appConfig *config.AppConfig) *SunPornoEngine {
-	return &SunPornoEngine{NewBaseEngine("sunporno", "SunPorno", "https://www.sunporno.com", 3, appConfig)}
+	e := &SunPornoEngine{NewBaseEngine("sunporno", "SunPorno", "https://www.sunporno.com", 3, appConfig)}
+	e.SetCapabilities(Capabilities{HasPreview: true, HasDuration: true, HasViews: true, PreviewSource: "data-preview", APIType: "html"})
+	return e
 }
 
 // Search performs a search on SunPorno

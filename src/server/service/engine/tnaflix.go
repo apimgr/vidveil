@@ -23,10 +23,10 @@ func newTNAFlixEngine(appConfig *config.AppConfig) *TNAFlixEngine {
 		HasPreview:    true,
 		HasDownload:   false,
 		HasDuration:   true,
-		HasViews:      true,
+		HasViews:      false,
 		HasRating:     false,
 		HasQuality:    false,
-		PreviewSource: "data-preview",
+		PreviewSource: "data-trailer",
 		APIType:       "html",
 	})
 	return e
@@ -87,9 +87,9 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 		}
 
 		// Get preview URL - TNAFlix may use data-preview, data-video-preview, or rollover attributes
-		previewURL := parser.ExtractAttr(s, "data-preview", "data-video-preview", "data-rollover")
+		previewURL := parser.ExtractAttr(s, "data-trailer", "data-preview", "data-video-preview", "data-rollover")
 		if previewURL == "" {
-			previewURL = parser.ExtractAttr(img, "data-preview", "data-video-preview", "data-rollover")
+			previewURL = parser.ExtractAttr(img, "data-trailer", "data-preview", "data-video-preview", "data-rollover")
 		}
 		if previewURL != "" && !strings.HasPrefix(previewURL, "http") {
 			if strings.HasPrefix(previewURL, "//") {
@@ -104,7 +104,7 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 		duration, durationSeconds := parser.ParseDuration(durationText)
 
 		// Get views
-		viewsText := parser.CleanText(s.Find(".views, .cnt").First().Text())
+		viewsText := parser.CleanText(s.Find(".views, .cnt, .info-views").First().Text())
 		views, viewsCount := parser.ParseViews(viewsText)
 
 		results = append(results, model.VideoResult{

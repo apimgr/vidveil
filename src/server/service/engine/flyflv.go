@@ -13,7 +13,9 @@ type FlyflvEngine struct{ *BaseEngine }
 
 // newFlyflvEngine creates a new Flyflv engine
 func newFlyflvEngine(appConfig *config.AppConfig) *FlyflvEngine {
-	return &FlyflvEngine{NewBaseEngine("flyflv", "Flyflv", "https://www.flyflv.com", 4, appConfig)}
+	e := &FlyflvEngine{NewBaseEngine("flyflv", "Flyflv", "https://www.flyflv.com", 4, appConfig)}
+	e.SetCapabilities(Capabilities{HasDuration: true, APIType: "html"})
+	return e
 }
 
 // Search performs a search on Flyflv

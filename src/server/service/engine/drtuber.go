@@ -13,7 +13,9 @@ type DrTuberEngine struct{ *BaseEngine }
 
 // newDrTuberEngine creates a new DrTuber engine
 func newDrTuberEngine(appConfig *config.AppConfig) *DrTuberEngine {
-	return &DrTuberEngine{NewBaseEngine("drtuber", "DrTuber", "https://www.drtuber.com", 3, appConfig)}
+	e := &DrTuberEngine{NewBaseEngine("drtuber", "DrTuber", "https://www.drtuber.com", 3, appConfig)}
+	e.SetCapabilities(Capabilities{HasPreview: true, HasDuration: true, PreviewSource: "data-webm", APIType: "html"})
+	return e
 }
 
 // Search performs a search on DrTuber

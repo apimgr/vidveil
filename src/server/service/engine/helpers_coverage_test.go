@@ -81,6 +81,31 @@ func TestParseGenericVideoItem_AbsoluteHref(t *testing.T) {
 	}
 }
 
+func TestParseGenericVideoItem_LiveSourceFields(t *testing.T) {
+	tests := []struct {
+		name, html string
+		seconds    int
+		views      int64
+	}{
+		{"DrTuber duration and preview", `<div class="card"><a href="/v/1" title="x" data-webm="https://cdn.example/p.webm"><img data-bestthumb="https://cdn.example/t.jpg"></a><span class="time_thumb">12:34</span></div>`, 754, 0},
+		{"FlyFLV duration and thumbnail", `<div class="card"><a href="/v/2" title="x"><img data-bestthumb="https://cdn.example/t.jpg"></a><span class="movieTime">3:21</span></div>`, 201, 0},
+		{"PornTrex duration and views", `<div class="card"><a href="/v/3" title="x"><img src="https://cdn.example/t.jpg"></a><span class="durations">8:09</span><span class="viewsthumb">1.2K</span></div>`, 489, 1200},
+		{"PornHat metadata", `<div class="card"><a href="/v/4" title="x"><img src="https://cdn.example/t.jpg"></a><ul class="video-meta"><li>10:15</li><li>2 days ago</li><li><i class="fa-eye"></i> 3.4K</li></ul></div>`, 615, 3400},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sel := newSel(tc.html, ".card")
+			got := parseGenericVideoItem(sel, "https://example.com", "test", "Test")
+			if got.DurationSeconds != tc.seconds || got.ViewsCount != tc.views {
+				t.Errorf("got duration=%d views=%d, want duration=%d views=%d", got.DurationSeconds, got.ViewsCount, tc.seconds, tc.views)
+			}
+			if tc.name == "DrTuber duration and preview" && (got.PreviewURL != "https://cdn.example/p.webm" || got.Thumbnail != "https://cdn.example/t.jpg") {
+				t.Errorf("got preview=%q thumbnail=%q", got.PreviewURL, got.Thumbnail)
+			}
+		})
+	}
+}
+
 // Title falls back to img alt when anchor has no title attr.
 func TestParseGenericVideoItem_TitleFromImgAlt(t *testing.T) {
 	sel := newSel(`<div><a href="/v/3"><img alt="Alt Title" src="t.jpg"></a></div>`, "div")

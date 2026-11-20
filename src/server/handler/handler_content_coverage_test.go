@@ -65,6 +65,15 @@ func (t *testTorChecker) GetHTTPClient(_ bool) *http.Client {
 	return &http.Client{Timeout: 10 * time.Second}
 }
 
+type statusTorChecker struct {
+	testTorChecker
+	status string
+}
+
+func (t *statusTorChecker) GetInfo() map[string]interface{} {
+	return map[string]interface{}{"status": t.status}
+}
+
 // newTestHandlerWithEngine creates a SearchHandler with a real (empty) EngineManager.
 func newTestHandlerWithEngine() *SearchHandler {
 	cfg := createTestConfig()
@@ -936,6 +945,31 @@ func TestGetTorStatus_NoStatusInInfo_NotRunning_ReturnsDisabled(t *testing.T) {
 	status := h.getTorStatus()
 	if status != "disabled" {
 		t.Errorf("getTorStatus(no status, not running): got %q, want disabled", status)
+	}
+}
+
+func TestGetTorStatus_NormalizesProviderStates(t *testing.T) {
+	tests := []struct {
+		provider string
+		want     string
+	}{
+		{provider: "disabled", want: "disabled"},
+		{provider: "no_tor_binary", want: "disabled"},
+		{provider: "starting", want: "starting"},
+		{provider: "connected", want: "healthy"},
+		{provider: "disconnected", want: "unavailable"},
+		{provider: "error", want: "unavailable"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			h := &SearchHandler{
+				appConfig: createTestConfig(),
+				torSvc:    &statusTorChecker{status: tt.provider},
+			}
+			if got := h.getTorStatus(); got != tt.want {
+				t.Errorf("getTorStatus(%q) = %q, want %q", tt.provider, got, tt.want)
+			}
+		})
 	}
 }
 

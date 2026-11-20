@@ -28,6 +28,9 @@ func TestDefaultAppConfig(t *testing.T) {
 	if cfg.Server.Tokens.MaxLinked != 25 || cfg.Server.Tokens.CookieMaxAge != "1y" || cfg.Server.Tokens.IdlePurgeDays != 0 {
 		t.Errorf("owner-token defaults = %+v, want max-linked 25, cookie age 1y, and no idle purge", cfg.Server.Tokens)
 	}
+	if cfg.Server.Tor.StartupTimeout != 60 {
+		t.Errorf("tor startup timeout = %d, want 60 seconds", cfg.Server.Tor.StartupTimeout)
+	}
 	if !cfg.Web.LLMS.Enabled || !cfg.Web.LLMS.IncludeEndpoints || cfg.Web.LLMS.IncludeSchemas {
 		t.Errorf("llms.txt defaults = %+v, want enabled/endpoints/no schemas", cfg.Web.LLMS)
 	}
@@ -60,6 +63,22 @@ func TestDefaultAppConfig(t *testing.T) {
 	}
 	if cfg.Server.Pages.Contact.Antispam.MaxLinks != 10 || cfg.Server.Pages.Contact.Antispam.ReviewMinSeconds != 2 || cfg.Server.Pages.Contact.Antispam.ReviewMaxSeconds != 900 {
 		t.Errorf("contact antispam defaults = %+v, want max_links 10 and review window 2..900 seconds", cfg.Server.Pages.Contact.Antispam)
+	}
+}
+
+func TestValidateTorConfigStartupTimeoutRange(t *testing.T) {
+	defaults := DefaultTorConfig()
+	for _, invalid := range []int{0, 9, 301} {
+		cfg := TorConfig{StartupTimeout: invalid}
+		validateTorConfig(&cfg, defaults)
+		if cfg.StartupTimeout != defaults.StartupTimeout {
+			t.Errorf("startup timeout %d normalized to %d, want %d", invalid, cfg.StartupTimeout, defaults.StartupTimeout)
+		}
+	}
+	valid := TorConfig{StartupTimeout: 120}
+	validateTorConfig(&valid, defaults)
+	if valid.StartupTimeout != 120 {
+		t.Errorf("valid startup timeout normalized to %d, want 120", valid.StartupTimeout)
 	}
 }
 

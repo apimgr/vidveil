@@ -13,7 +13,9 @@ type PornTrexEngine struct{ *BaseEngine }
 
 // newPornTrexEngine creates a new PornTrex engine
 func newPornTrexEngine(appConfig *config.AppConfig) *PornTrexEngine {
-	return &PornTrexEngine{NewBaseEngine("porntrex", "PornTrex", "https://www.porntrex.com", 4, appConfig)}
+	e := &PornTrexEngine{NewBaseEngine("porntrex", "PornTrex", "https://www.porntrex.com", 4, appConfig)}
+	e.SetCapabilities(Capabilities{HasDuration: true, HasViews: true, APIType: "html"})
+	return e
 }
 
 // Search performs a search on PornTrex

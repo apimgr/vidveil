@@ -424,9 +424,11 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	accept := r.Header.Get("Accept")
 	if strings.Contains(accept, "text/plain") && !strings.Contains(accept, "text/html") ||
 		isHttpTool(r) && !strings.Contains(accept, "text/html") {
+		text := convertHTMLToText(buf.String(), 80) + "\n"
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Length", strconv.Itoa(len(text)))
 		w.WriteHeader(status)
-		_, _ = w.Write([]byte(convertHTMLToText(buf.String(), 80) + "\n"))
+		_, _ = w.Write([]byte(text))
 		return
 	}
 	w.WriteHeader(status)

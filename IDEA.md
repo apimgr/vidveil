@@ -23,7 +23,7 @@ owner_token:       vidveil_owner_token_ab5213f6
 - Privacy-conscious visitors searching adult video content.
 - Self-hosters who want to operate a private search service.
 - Developers who need a unified video search service.
-- Visitors who access the service through Tor.
+- Visitors who access the service through Tor or I2P.
 
 **Features:**
 - **Video search:** Search across 33 video engines, target engines with bang shortcuts, and receive results as engines respond. Engine availability is best-effort; a failing or rate-limited source must not prevent results from other sources. Search responses use canonical engine names and display names; blank engine selection means all available engines.
@@ -36,7 +36,7 @@ owner_token:       vidveil_owner_token_ab5213f6
 - **Service information:** Visitors can read public information, privacy, help, terms, and security reporting content. Operators can extend the built-in About and Privacy pages, replace Terms and footer branding, and add a localized header fragment; this content is sanitized before display. Search engine metadata and canonical links follow operator SEO settings, and private instances can disable indexing. The report form accepts security reports, terms violations, DMCA notices, and privacy requests; it is not a general support or feedback channel. The service provides REST, GraphQL, Swagger/OpenAPI, and MCP interfaces for supported search and discovery functions.
 - **Contact and security reports:** Contact messages use server-side shape, signed form-time, CAPTCHA, rate, content, and duplicate checks before delivery. Security reports use the shared shape, form-time, CAPTCHA, and rate checks before report creation. Tor and I2P requests use the built-in challenge and do not share a tunnel-wide per-IP submission limit.
 - **Operator control:** Operators configure the service through node settings, area-specific configuration files, a separate secrets file, and command-line tools. There is no browser-based operator administration product.
-- **Privacy network access:** The service supports Tor access. Outbound Tor routing for searches follows the operator’s server-wide `server.tor.use_network` setting. Visitors cannot override it.
+- **Privacy network access:** Tor hidden-service access starts automatically when Tor is installed; outbound Tor routing follows the operator’s server-wide `server.tor.use_network` setting. I2P eepsite hosting is enabled by default in container images and remains opt-in on bare-metal and VM installs. Visitors cannot override either operator setting.
 
 **Guest preferences:** These preferences are cookie-only, read per request, and are never stored server-side. Preference export/import includes every valid `vidveil_pref_*` cookie listed here.
 

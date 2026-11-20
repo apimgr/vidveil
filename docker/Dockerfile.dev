@@ -44,7 +44,10 @@ RUN apk upgrade --no-cache \
     curl \
     bash \
     tini \
-    tor
+    tor \
+    i2pd \
+    tzdata \
+    ca-certificates
 
 COPY --from=builder /app/binary/vidveil /usr/local/bin/vidveil
 COPY docker/rootfs/ /
@@ -55,6 +58,8 @@ RUN chmod 755 /usr/local/bin/*
 ENV MODE=development \
     DEBUG=true \
     TZ=America/New_York \
+    I2P_ENABLED=true \
+    VIDVEIL_SERVER_I2P_BOOTSTRAP_TIMEOUT=10m \
     DATABASE_DIR=/data/db/sqlite
 
 EXPOSE 80

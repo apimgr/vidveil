@@ -125,6 +125,90 @@ jobs:
             manifest:org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
             manifest:org.opencontainers.image.licenses=MIT
 
+      - name: Verify standard image runtime contract and Tor/I2P health
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.COMMIT_ID }}
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE_REF"
+          docker run --rm --name "vidveil-${GITHUB_RUN_ID}-packages" --entrypoint sh "$IMAGE_REF" -c 'for c in bash curl tor i2pd tini; do command -v "$c" || exit 1; done; test -s /etc/ssl/certs/ca-certificates.crt; test -f /usr/share/zoneinfo/America/New_York'
+          docker run -d --name "vidveil-${GITHUB_RUN_ID}-health" -e I2P_ENABLED=true -e VIDVEIL_SERVER_I2P_BOOTSTRAP_TIMEOUT=10m -p 127.0.0.1:18080:80 "$IMAGE_REF"
+          trap 'docker rm -f "vidveil-${GITHUB_RUN_ID}-health" >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 600); do
+            health_json=$(curl -q -sS -H 'Accept: application/json' http://127.0.0.1:18080/server/healthz 2>/dev/null | tr -d '[:space:]' || true)
+            tor_status=$(printf '%s' "$health_json" | grep -Eo '"tor":\{[^}]*\}' | grep -Eo '"status":"[^"]+"' | cut -d '"' -f4 || true)
+            i2p_status=$(printf '%s' "$health_json" | grep -Eo '"i2p":\{[^}]*\}' | grep -Eo '"status":"[^"]+"' | cut -d '"' -f4 || true)
+            if [ "$tor_status" = healthy ] && [ "$i2p_status" = healthy ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Tor or I2P status did not become healthy within its configured startup timeout (last status: $health_json)"
+          exit 1
+
+      - name: Determine tags (Debian)
+        id: debian-tags
+        run: |
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.COMMIT_ID }}-debian"
+          if [[ "${{ env.IS_TAG }}" == "true" ]]; then
+            TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:debian-${{ env.VERSION }}"
+            TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:debian"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push (Debian)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: .
+          file: docker/Dockerfile.debian
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ steps.debian-tags.outputs.tags }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+            BUILD_EPOCH=${{ env.BUILD_EPOCH }}
+            COMMIT_ID=${{ env.COMMIT_ID }}
+          labels: |
+            org.opencontainers.image.title=${{ env.PROJECT_NAME }}
+            org.opencontainers.image.description=${{ env.PROJECT_NAME }} - all-in-one Debian image
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=MIT
+          annotations: |
+            manifest:org.opencontainers.image.title=${{ env.PROJECT_NAME }}
+            manifest:org.opencontainers.image.description=${{ env.PROJECT_NAME }} - all-in-one Debian image
+            manifest:org.opencontainers.image.version=${{ env.VERSION }}
+            manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
+            manifest:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            manifest:org.opencontainers.image.licenses=MIT
+
+      - name: Verify Debian image runtime contract and Tor/I2P health
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.COMMIT_ID }}-debian
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE_REF"
+          docker run --rm --name "vidveil-${GITHUB_RUN_ID}-packages" --entrypoint sh "$IMAGE_REF" -c 'for c in bash curl tor i2pd tini; do command -v "$c" || exit 1; done; test -s /etc/ssl/certs/ca-certificates.crt; test -f /usr/share/zoneinfo/America/New_York'
+          docker run -d --name "vidveil-${GITHUB_RUN_ID}-health" -e I2P_ENABLED=true -e VIDVEIL_SERVER_I2P_BOOTSTRAP_TIMEOUT=10m -p 127.0.0.1:18080:80 "$IMAGE_REF"
+          trap 'docker rm -f "vidveil-${GITHUB_RUN_ID}-health" >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 600); do
+            health_json=$(curl -q -sS -H 'Accept: application/json' http://127.0.0.1:18080/server/healthz 2>/dev/null || true)
+            tor_status=$(printf '%s' "$health_json" | grep -Eo '"tor":\{[^}]*\}' | grep -Eo '"status":"[^"]+"' | cut -d '"' -f4 || true)
+            i2p_status=$(printf '%s' "$health_json" | grep -Eo '"i2p":\{[^}]*\}' | grep -Eo '"status":"[^"]+"' | cut -d '"' -f4 || true)
+            if [ "$tor_status" = healthy ] && [ "$i2p_status" = healthy ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs "vidveil-${GITHUB_RUN_ID}-health" || true
+          echo "Tor or I2P status did not become healthy within its configured startup timeout"
+          exit 1
+
   build-devel:
     runs-on: ubuntu-26.04
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/'))
@@ -203,3 +287,25 @@ jobs:
             manifest:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             manifest:org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
             manifest:org.opencontainers.image.licenses=MIT
+
+      - name: Verify devel image runtime contract and Tor/I2P health
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:devel
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE_REF"
+          docker run --rm --name "vidveil-${GITHUB_RUN_ID}-packages" --entrypoint sh "$IMAGE_REF" -c 'for c in bash curl tor i2pd tini; do command -v "$c" || exit 1; done; test -s /etc/ssl/certs/ca-certificates.crt; test -f /usr/share/zoneinfo/America/New_York'
+          docker run -d --name "vidveil-${GITHUB_RUN_ID}-health" -e I2P_ENABLED=true -e VIDVEIL_SERVER_I2P_BOOTSTRAP_TIMEOUT=10m -p 127.0.0.1:18080:80 "$IMAGE_REF"
+          trap 'docker rm -f "vidveil-${GITHUB_RUN_ID}-health" >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 600); do
+            health_json=$(curl -q -sS -H 'Accept: application/json' http://127.0.0.1:18080/server/healthz 2>/dev/null || true)
+            tor_status=$(printf '%s' "$health_json" | grep -Eo '"tor":\{[^}]*\}' | grep -Eo '"status":"[^"]+"' | cut -d '"' -f4 || true)
+            i2p_status=$(printf '%s' "$health_json" | grep -Eo '"i2p":\{[^}]*\}' | grep -Eo '"status":"[^"]+"' | cut -d '"' -f4 || true)
+            if [ "$tor_status" = healthy ] && [ "$i2p_status" = healthy ]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs "vidveil-${GITHUB_RUN_ID}-health" || true
+          echo "Tor or I2P status did not become healthy within its configured startup timeout"
+          exit 1

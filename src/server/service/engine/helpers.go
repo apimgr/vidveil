@@ -250,7 +250,7 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 
 	// Find thumbnail
 	img := s.Find("img").First()
-	r.Thumbnail = parser.ExtractAttr(img, "data-src", "data-original-src", "data-lazy-src", "data-original", "src")
+	r.Thumbnail = parser.ExtractAttr(img, "data-src", "data-original-src", "data-lazy-src", "data-original", "data-bestthumb", "data-thumb", "data-poster", "src")
 	if r.Thumbnail == "" {
 		if srcset := parser.ExtractAttr(img, "data-srcset", "srcset"); srcset != "" {
 			r.Thumbnail = strings.TrimSpace(strings.Split(srcset, ",")[0])
@@ -306,6 +306,8 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 		".thumb-icon.video-duration",
 		// PornTrex / PornHat / similar platforms
 		".item-time", ".time-badge", ".card-time",
+		// Live source markup: DrTuber, FlyFLV, PornTrex, and PornOne.
+		".time_thumb", ".movieTime", ".durations", ".durlabel",
 		".video__duration", ".vid-duration", ".label-duration",
 		// 4tube / Fux / PornerBros (share a codebase)
 		"var.time", "var.thumb_time", "strong.time", ".thumb_time",
@@ -328,6 +330,21 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 			}
 		}
 	}
+	// PornHat stores duration, upload date, and views in separate metadata
+	// items; only the item without an eye icon or date label is a duration.
+	if r.DurationSeconds == 0 {
+		s.Find(".video-meta li").EachWithBreak(func(_ int, item *goquery.Selection) bool {
+			text := parser.CleanText(item.Text())
+			if text == "" || item.Find(".fa-eye").Length() > 0 || strings.Contains(strings.ToLower(text), "ago") {
+				return true
+			}
+			if duration, seconds := parser.ParseDuration(text); seconds > 0 {
+				r.Duration, r.DurationSeconds = duration, seconds
+				return false
+			}
+			return true
+		})
+	}
 	// Also check data attributes on the container element itself
 	if r.DurationSeconds == 0 {
 		for _, attr := range []string{"data-duration", "data-seconds", "data-length"} {
@@ -345,6 +362,8 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 		".views", ".view", ".cnt", "span.views", ".video-views",
 		".video__views", ".thumb__views", ".meta-views", ".stats",
 		".view-count", ".viewCount", ".video-count", ".added-views",
+		// Live source markup: Tube8/YouPorn and PornTrex.
+		".info-views", ".viewsthumb",
 	}
 	for _, sel := range viewsSelectors {
 		if v := s.Find(sel).First(); v.Length() > 0 {
@@ -354,6 +373,17 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 				break
 			}
 		}
+	}
+	// PornHat puts view totals in the list item marked by an eye icon, beside
+	// a separate duration and upload-date item in the same metadata list.
+	if r.ViewsCount == 0 {
+		s.Find(".video-meta li").EachWithBreak(func(_ int, item *goquery.Selection) bool {
+			if item.Find(".fa-eye").Length() == 0 {
+				return true
+			}
+			r.Views, r.ViewsCount = parser.ParseViews(parser.CleanText(item.Text()))
+			return false
+		})
 	}
 
 	// Find rating - common selectors

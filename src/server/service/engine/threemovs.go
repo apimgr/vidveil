@@ -13,7 +13,9 @@ type ThreeMovsEngine struct{ *BaseEngine }
 
 // newThreeMovsEngine creates a new 3Movs engine
 func newThreeMovsEngine(appConfig *config.AppConfig) *ThreeMovsEngine {
-	return &ThreeMovsEngine{NewBaseEngine("3movs", "3Movs", "https://www.3movs.com", 6, appConfig)}
+	e := &ThreeMovsEngine{NewBaseEngine("3movs", "3Movs", "https://www.3movs.com", 6, appConfig)}
+	e.SetCapabilities(Capabilities{HasPreview: true, HasDuration: true, PreviewSource: "data-preview", APIType: "html"})
+	return e
 }
 
 // Search performs a search on 3Movs

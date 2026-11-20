@@ -71,8 +71,8 @@ func TestBuildTorrc_UseNetworkEnablesSocks(t *testing.T) {
 	cfg := config.DefaultTorConfig()
 	cfg.UseNetwork = true
 	got := buildTorrc(&cfg, "/tmp/hs", 64500, "/tmp/log/tor.log")
-	if !strings.Contains(got, "SocksPort auto") {
-		t.Errorf("buildTorrc with UseNetwork=true: expected SocksPort auto, got:\n%s", got)
+	if !strings.Contains(got, "SocksPort 127.0.0.1:auto") || !strings.Contains(got, "SocksPolicy accept 127.0.0.1") {
+		t.Errorf("buildTorrc with UseNetwork=true: expected loopback-only SOCKS listener and policy, got:\n%s", got)
 	}
 }
 

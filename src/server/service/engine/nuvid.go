@@ -13,7 +13,9 @@ type NuvidEngine struct{ *BaseEngine }
 
 // newNuvidEngine creates a new Nuvid engine
 func newNuvidEngine(appConfig *config.AppConfig) *NuvidEngine {
-	return &NuvidEngine{NewBaseEngine("nuvid", "Nuvid", "https://www.nuvid.com", 3, appConfig)}
+	e := &NuvidEngine{NewBaseEngine("nuvid", "Nuvid", "https://www.nuvid.com", 3, appConfig)}
+	e.SetCapabilities(Capabilities{HasPreview: true, HasDuration: true, PreviewSource: "data-webm", APIType: "html"})
+	return e
 }
 
 // Search performs a search on Nuvid

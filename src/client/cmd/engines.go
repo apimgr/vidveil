@@ -29,10 +29,12 @@ var (
 
 // EngineCapabilities represents an engine's optional capabilities
 // Per AI.md PART 1: Type names MUST be specific
-// Per IDEA.md's EngineCapabilities struct: {"has_preview","has_download"}
+// Per IDEA.md's EngineCapabilities struct.
 type EngineCapabilities struct {
 	HasPreview  bool `json:"has_preview"`
 	HasDownload bool `json:"has_download"`
+	HasDuration bool `json:"has_duration"`
+	HasViews    bool `json:"has_views"`
 }
 
 // EngineInfo represents engine information from the server
@@ -194,11 +196,13 @@ func OutputEnginesAsCSV(engines []EngineInfo) error {
 			fmt.Sprintf("%t", engine.Enabled),
 			fmt.Sprintf("%t", engine.hasPreview()),
 			fmt.Sprintf("%t", engine.hasDownload()),
+			fmt.Sprintf("%t", engine.Capabilities != nil && engine.Capabilities.HasDuration),
+			fmt.Sprintf("%t", engine.Capabilities != nil && engine.Capabilities.HasViews),
 		})
 	}
 
 	return outputDataAsCSV(
-		[]string{"name", "display_name", "tier", "enabled", "has_preview", "has_download"},
+		[]string{"name", "display_name", "tier", "enabled", "has_preview", "has_download", "has_duration", "has_views"},
 		csvRows,
 	)
 }
@@ -224,10 +228,10 @@ func OutputEnginesAsTable(engines []EngineInfo, showDetails bool) error {
 
 	// Header
 	if showDetails {
-		if _, err := fmt.Fprintf(tableWriter, "NAME\tTIER\tSTATUS\tPREVIEW\tDOWNLOAD\n"); err != nil {
+		if _, err := fmt.Fprintf(tableWriter, "NAME\tTIER\tSTATUS\tPREVIEW\tDOWNLOAD\tDURATION\tVIEWS\n"); err != nil {
 			return fmt.Errorf("write engines table header: %w", err)
 		}
-		if _, err := fmt.Fprintf(tableWriter, "----\t----\t------\t-------\t--------\n"); err != nil {
+		if _, err := fmt.Fprintf(tableWriter, "----\t----\t------\t-------\t--------\t--------\t-----\n"); err != nil {
 			return fmt.Errorf("write engines table separator: %w", err)
 		}
 	} else {
@@ -250,14 +254,22 @@ func OutputEnginesAsTable(engines []EngineInfo, showDetails bool) error {
 		if showDetails {
 			preview := EngineDataNotAvail
 			download := EngineDataNotAvail
+			duration := EngineDataNotAvail
+			views := EngineDataNotAvail
 			if engine.hasPreview() {
 				preview = EngineDataYes
 			}
 			if engine.hasDownload() {
 				download = EngineDataYes
 			}
-			if _, err := fmt.Fprintf(tableWriter, "%s\t%d\t%s\t%s\t%s\n",
-				engine.DisplayName, engine.Tier, status, preview, download); err != nil {
+			if engine.Capabilities != nil && engine.Capabilities.HasDuration {
+				duration = EngineDataYes
+			}
+			if engine.Capabilities != nil && engine.Capabilities.HasViews {
+				views = EngineDataYes
+			}
+			if _, err := fmt.Fprintf(tableWriter, "%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
+				engine.DisplayName, engine.Tier, status, preview, download, duration, views); err != nil {
 				return fmt.Errorf("write engine row: %w", err)
 			}
 		} else {

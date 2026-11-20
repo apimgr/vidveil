@@ -12,6 +12,10 @@ DOCKER_PROJECT_ORG="apimgr"
 # Frozen on-disk identity (AI.md PART 25/29) — used for tempdir naming only,
 # distinct from DOCKER_PROJECT_NAME (the compiled binary's actual filename)
 DOCKER_INTERNAL_NAME="vidveil"
+DOCKER_TEST_SUFFIX="$(printf '%08x' "$(((RANDOM << 15) | RANDOM))")"
+DOCKER_CONTRACT_IMAGE="vidveil:docker-contract-${DOCKER_TEST_SUFFIX}"
+DOCKER_IMAGE_CHECK_CONTAINER="vidveil-${DOCKER_TEST_SUFFIX}-image-check"
+DOCKER_TEST_CONTAINER="vidveil-${DOCKER_TEST_SUFFIX}-test"
 
 # Colors
 DOCKER_RED='\033[0;31m'
@@ -28,7 +32,7 @@ DOCKER_TESTS_FAILED=0
 # NEVER use project directory or bare /tmp
 mkdir -p "${TMPDIR:-/tmp}/${DOCKER_PROJECT_ORG}"
 DOCKER_TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${DOCKER_PROJECT_ORG}/${DOCKER_INTERNAL_NAME}-XXXXXX")
-trap 'rm -rf "${DOCKER_TEMP_DIR}"; docker rm -f vidveil-test 2>/dev/null || true' EXIT
+trap 'rm -rf "${DOCKER_TEMP_DIR}"; docker rm -f "${DOCKER_TEST_CONTAINER}" "${DOCKER_IMAGE_CHECK_CONTAINER}" 2>/dev/null || true; docker image rm "${DOCKER_CONTRACT_IMAGE}" 2>/dev/null || true' EXIT
 
 echo "Vidveil Docker Integration Tests"
 echo "================================="
@@ -62,7 +66,7 @@ __test_endpoint() {
     local response
     local status
 
-    response=$(docker exec vidveil-test curl -q -LSs -w "\n%{http_code}" -X "${method}" "http://localhost:8080${endpoint}" 2>/dev/null || echo "000")
+    response=$(docker exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs -w "\n%{http_code}" -X "${method}" "http://localhost:8080${endpoint}" 2>/dev/null || echo "000")
     status=$(printf '%s\n' "$response" | tail -n1)
 
     if [ "$status" = "$expected_status" ]; then
@@ -85,7 +89,7 @@ go build -buildvcs=false -ldflags '-s -w' -o /output/vidveil ./src
 EOF
 chmod +x "${DOCKER_TEMP_DIR}/build.sh"
 
-docker run --rm \
+docker run --rm --name "vidveil-${DOCKER_TEST_SUFFIX}-server-build" \
     -v "${DOCKER_PROJECT_ROOT}":/build \
     -v "${DOCKER_TEMP_DIR}":/output \
     -e CGO_ENABLED=0 \
@@ -109,7 +113,7 @@ go build -buildvcs=false -ldflags '-s -w' -o /output/vidveil-cli ./src/client
 EOF
 chmod +x "${DOCKER_TEMP_DIR}/build-cli.sh"
 
-docker run --rm \
+docker run --rm --name "vidveil-${DOCKER_TEST_SUFFIX}-cli-build" \
     -v "${DOCKER_PROJECT_ROOT}":/build \
     -v "${DOCKER_TEMP_DIR}":/output \
     -e CGO_ENABLED=0 \
@@ -126,7 +130,7 @@ __pass "CLI binary built successfully"
 # Step 3: Test server binary info
 __info "Testing server binary..."
 # Capture full output first to avoid SIGPIPE from `| head -1` with pipefail
-VERSION_OUT=$(docker run --rm -v "${DOCKER_TEMP_DIR}":/app alpine:latest /app/${DOCKER_PROJECT_NAME} --version 2>&1 || true)
+VERSION_OUT=$(docker run --rm --name "vidveil-${DOCKER_TEST_SUFFIX}-version" -v "${DOCKER_TEMP_DIR}":/app alpine:latest /app/${DOCKER_PROJECT_NAME} --version 2>&1 || true)
 VERSION=$(printf '%s\n' "$VERSION_OUT" | head -1)
 if [ -n "$VERSION" ]; then
     __pass "Server version check: $VERSION"
@@ -137,7 +141,7 @@ fi
 # Step 4: Binary rename test (per AI.md PART 7: binary renames itself gracefully)
 __info "Testing binary rename behavior..."
 cp "${DOCKER_TEMP_DIR}/${DOCKER_PROJECT_NAME}" "${DOCKER_TEMP_DIR}/myveil"
-RENAMED_HELP_OUT=$(docker run --rm -v "${DOCKER_TEMP_DIR}":/app alpine:latest /app/myveil --help 2>&1 || true)
+RENAMED_HELP_OUT=$(docker run --rm --name "vidveil-${DOCKER_TEST_SUFFIX}-rename" -v "${DOCKER_TEMP_DIR}":/app alpine:latest /app/myveil --help 2>&1 || true)
 RENAMED_HELP=$(printf '%s\n' "$RENAMED_HELP_OUT" | head -5)
 if grep -qi -- "myveil" <<< "$RENAMED_HELP"; then
     __pass "Binary rename: --help shows new name"
@@ -148,7 +152,7 @@ rm -f "${DOCKER_TEMP_DIR}/myveil"
 
 # Step 5: Test CLI binary info
 __info "Testing CLI binary..."
-CLI_VERSION_OUT=$(docker run --rm -v "${DOCKER_TEMP_DIR}":/app alpine:latest /app/vidveil-cli --version 2>&1 || true)
+CLI_VERSION_OUT=$(docker run --rm --name "vidveil-${DOCKER_TEST_SUFFIX}-cli-version" -v "${DOCKER_TEMP_DIR}":/app alpine:latest /app/vidveil-cli --version 2>&1 || true)
 CLI_VERSION=$(printf '%s\n' "$CLI_VERSION_OUT" | head -1)
 if [ -n "$CLI_VERSION" ]; then
     __pass "CLI version check: $CLI_VERSION"
@@ -156,16 +160,72 @@ else
     __fail "CLI version check failed"
 fi
 
-# Step 6: Start server in Docker container per PART 29
+# Step 6: Build and verify the shipped Alpine image contract per PART 26.
+__info "Building standard Docker image for runtime contract checks..."
+if docker build -f "${DOCKER_PROJECT_ROOT}/docker/Dockerfile" -t "${DOCKER_CONTRACT_IMAGE}" "${DOCKER_PROJECT_ROOT}"; then
+    __pass "Standard Docker image built"
+else
+    __fail "Standard Docker image build failed"
+    exit 1
+fi
+
+if docker run --rm --name "vidveil-${DOCKER_TEST_SUFFIX}-packages" --entrypoint sh "${DOCKER_CONTRACT_IMAGE}" -c 'for c in bash curl tor i2pd tini; do command -v "$c" || exit 1; done; test -s /etc/ssl/certs/ca-certificates.crt; test -f /usr/share/zoneinfo/America/New_York'; then
+    __pass "Image runtime packages, CA bundle, and timezone data"
+else
+    __fail "Image runtime package contract"
+fi
+
+mkdir -p "${DOCKER_TEMP_DIR}/image-config/vidveil"
+cat > "${DOCKER_TEMP_DIR}/image-config/vidveil/server.yml" << 'EOF'
+server:
+  tor:
+    startup_timeout: 60
+    bootstrap_timeout: 30
+  i2p:
+    enabled: true
+    bootstrap_timeout: 10m
+    inbound_length: 1
+    outbound_length: 1
+    inbound_quantity: 1
+    outbound_quantity: 1
+EOF
+docker run -d \
+    --name "${DOCKER_IMAGE_CHECK_CONTAINER}" \
+    -v "${DOCKER_TEMP_DIR}/image-config:/config" \
+    -v "${DOCKER_TEMP_DIR}/image-data:/data" \
+    -e MODE=development \
+    "${DOCKER_CONTRACT_IMAGE}"
+__info "Waiting for the shipped image Tor and I2P health status..."
+IMAGE_TOR_READY=false
+IMAGE_I2P_READY=false
+for _ in $(seq 1 600); do
+    HEALTH_JSON=$(docker exec "${DOCKER_IMAGE_CHECK_CONTAINER}" curl -q -sS -H 'Accept: application/json' http://localhost/server/healthz 2>/dev/null | tr -d '[:space:]' || true)
+    if printf '%s' "$HEALTH_JSON" | grep -Eo '"tor":\{[^}]*\}' | grep -q '"status":"healthy"'; then
+        IMAGE_TOR_READY=true
+    fi
+    if printf '%s' "$HEALTH_JSON" | grep -Eo '"i2p":\{[^}]*\}' | grep -q '"status":"healthy"'; then
+        IMAGE_I2P_READY=true
+    fi
+    if [ "${IMAGE_TOR_READY}" = "true" ] && [ "${IMAGE_I2P_READY}" = "true" ]; then break; fi
+    sleep 1
+done
+if [ "${IMAGE_TOR_READY}" = "true" ] && [ "${IMAGE_I2P_READY}" = "true" ]; then
+    __pass "Shipped image Tor and I2P health are healthy"
+else
+	__fail "Shipped image Tor or I2P health did not become healthy within its startup timeout (last status: ${HEALTH_JSON:-unavailable})"
+fi
+docker rm -f "${DOCKER_IMAGE_CHECK_CONTAINER}" >/dev/null 2>&1 || true
+
+# Step 7: Start the binary in a Docker test container per PART 29
 __info "Starting vidveil server..."
 docker run -d \
-    --name vidveil-test \
+    --name "${DOCKER_TEST_CONTAINER}" \
     -v "${DOCKER_TEMP_DIR}":/app \
     -v "${DOCKER_TEMP_DIR}/config":/config \
     -v "${DOCKER_TEMP_DIR}/data":/data \
     -p 8080:8080 \
     alpine:latest \
-    sh -c "apk add --no-cache curl bash file jq >/dev/null 2>&1 && /app/${DOCKER_PROJECT_NAME} --address 0.0.0.0 --port 8080 --mode development --config /config --data /data"
+    sh -c "apk add --no-cache curl bash file jq tor i2pd tzdata ca-certificates >/dev/null 2>&1 && /app/${DOCKER_PROJECT_NAME} --address 0.0.0.0 --port 8080 --mode development --config /config --data /data"
 
 sleep 3
 
@@ -176,7 +236,7 @@ __info "Waiting for server to be ready..."
 DOCKER_RETRIES=60
 DOCKER_SERVER_READY=false
 while [ "$DOCKER_RETRIES" -gt 0 ]; do
-    if docker exec vidveil-test curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:8080/server/healthz" 2>/dev/null | grep -q -- "200"; then
+    if docker exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:8080/server/healthz" 2>/dev/null | grep -q -- "200"; then
         DOCKER_SERVER_READY=true
         break
     fi
@@ -185,7 +245,7 @@ while [ "$DOCKER_RETRIES" -gt 0 ]; do
 done
 if [ "$DOCKER_SERVER_READY" != "true" ]; then
     echo -e "${DOCKER_RED}x Server did not become ready within 60 seconds${DOCKER_NC}"
-    docker logs vidveil-test 2>&1 || true
+    docker logs "${DOCKER_TEST_CONTAINER}" 2>&1 || true
     exit 1
 fi
 
@@ -210,7 +270,7 @@ __test_endpoint GET "/api/healthz" "200" "API unversioned health alias"
 __test_endpoint GET "/api/autodiscover" "200" "API autodiscover"
 
 # Engine detail — use a known engine or expect 404 gracefully
-ENGINE_STATUS=$(docker exec vidveil-test curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:8080/api/v1/engines/google" 2>/dev/null || echo "000")
+ENGINE_STATUS=$(docker exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:8080/api/v1/engines/google" 2>/dev/null || echo "000")
 if [ "$ENGINE_STATUS" = "200" ] || [ "$ENGINE_STATUS" = "404" ]; then
     __pass "Engine detail endpoint reachable (HTTP $ENGINE_STATUS)"
 else
@@ -233,7 +293,7 @@ __test_endpoint GET "/humans.txt" "200" "humans.txt"
 __test_endpoint GET "/sitemap.xml" "200" "sitemap.xml"
 __test_endpoint GET "/.well-known/security.txt" "200" "security.txt"
 # pgp-key.asc returns 404 until a PGP keypair is generated (per AI.md PART 11)
-PGP_STATUS=$(docker exec vidveil-test curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:8080/.well-known/pgp-key.asc" 2>/dev/null || echo "000")
+PGP_STATUS=$(docker exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:8080/.well-known/pgp-key.asc" 2>/dev/null || echo "000")
 if [ "$PGP_STATUS" = "200" ] || [ "$PGP_STATUS" = "404" ]; then
     __pass "pgp-key.asc (HTTP $PGP_STATUS)"
 else
@@ -257,7 +317,7 @@ __test_endpoint GET "/offline.html" "200" "Offline page"
 
 # Step 12: Test SSE streaming
 __info "Testing SSE streaming endpoint..."
-SSE_OUTPUT=$(docker exec vidveil-test timeout 10 curl -q -LSsfN -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search?q=test" 2>/dev/null || true)
+SSE_OUTPUT=$(docker exec "${DOCKER_TEST_CONTAINER}" timeout 10 curl -q -LSsfN -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search?q=test" 2>/dev/null || true)
 
 if grep -qE -- "(data:|event:)" <<< "$SSE_OUTPUT"; then
     __pass "SSE streaming - SSE format correct"
@@ -275,14 +335,14 @@ else
     __info "SSE streaming - done message not received (engines may have timed out)"
 fi
 
-SSE_BANG=$(docker exec vidveil-test timeout 5 curl -q -LSsfN -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search?q=!ph+test" 2>/dev/null || true)
+SSE_BANG=$(docker exec "${DOCKER_TEST_CONTAINER}" timeout 5 curl -q -LSsfN -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search?q=!ph+test" 2>/dev/null || true)
 if grep -q -- "data:" <<< "$SSE_BANG"; then
     __pass "SSE streaming - with bang shortcuts"
 else
     __fail "SSE streaming - bang shortcuts not working"
 fi
 
-SSE_ERROR=$(docker exec vidveil-test curl -q -LSs -w "\n%{http_code}" -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search" 2>/dev/null)
+SSE_ERROR=$(docker exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs -w "\n%{http_code}" -H "Accept: text/event-stream" "http://localhost:8080/api/v1/search" 2>/dev/null)
 SSE_STATUS=$(printf '%s\n' "$SSE_ERROR" | tail -n1)
 if [ "$SSE_STATUS" = "400" ]; then
     __pass "SSE streaming - missing query error (HTTP 400)"
@@ -297,10 +357,10 @@ __test_endpoint GET "/api/v1/search" "400" "Search without query 400"
 
 # Step 14: Test batch search (POST)
 __info "Testing POST endpoints..."
-CSRF_TOKEN=$(docker exec vidveil-test curl -q -LSsf -D - -o /dev/null \
+CSRF_TOKEN=$(docker exec "${DOCKER_TEST_CONTAINER}" curl -q -LSsf -D - -o /dev/null \
     "http://localhost:8080/server/healthz" 2>/dev/null \
     | sed -n 's/^Set-Cookie: csrf_token=\([^;]*\).*/\1/ip' | tr -d '\r')
-BATCH_STATUS=$(docker exec vidveil-test curl -q -LSs -o /dev/null -w "%{http_code}" -X POST \
+BATCH_STATUS=$(docker exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs -o /dev/null -w "%{http_code}" -X POST \
     -H "Content-Type: application/json" \
     -H "Cookie: csrf_token=${CSRF_TOKEN}" \
     -H "X-CSRF-Token: ${CSRF_TOKEN}" \
@@ -314,25 +374,25 @@ fi
 
 # Step 15: Test comprehensive content negotiation (PART 28 — ALL routes ALL headers)
 __info "Running comprehensive content negotiation tests..."
-EXEC_PREFIX="docker exec vidveil-test" BASE_URL="http://localhost:8080" "${DOCKER_SCRIPT_DIR}/test_content_negotiation.sh" || DOCKER_TESTS_FAILED=$((DOCKER_TESTS_FAILED + 1))
+EXEC_PREFIX="docker exec ${DOCKER_TEST_CONTAINER}" BASE_URL="http://localhost:8080" "${DOCKER_SCRIPT_DIR}/test_content_negotiation.sh" || DOCKER_TESTS_FAILED=$((DOCKER_TESTS_FAILED + 1))
 
 # Step 16: Test shell completions (PART 8 - built into binary)
 __info "Testing shell completions..."
-BASH_COMPL=$(docker exec vidveil-test /app/${DOCKER_PROJECT_NAME} --shell completions bash 2>&1 || true)
+BASH_COMPL=$(docker exec "${DOCKER_TEST_CONTAINER}" /app/${DOCKER_PROJECT_NAME} --shell completions bash 2>&1 || true)
 if grep -q -- "complete" <<< "$BASH_COMPL" || grep -q -- "_vidveil" <<< "$BASH_COMPL"; then
     __pass "Shell completions: bash"
 else
     __fail "Shell completions: bash"
 fi
 
-ZSH_COMPL=$(docker exec vidveil-test /app/${DOCKER_PROJECT_NAME} --shell completions zsh 2>&1 || true)
+ZSH_COMPL=$(docker exec "${DOCKER_TEST_CONTAINER}" /app/${DOCKER_PROJECT_NAME} --shell completions zsh 2>&1 || true)
 if grep -q -- "compdef" <<< "$ZSH_COMPL" || grep -q -- "_vidveil" <<< "$ZSH_COMPL"; then
     __pass "Shell completions: zsh"
 else
     __fail "Shell completions: zsh"
 fi
 
-FISH_COMPL=$(docker exec vidveil-test /app/${DOCKER_PROJECT_NAME} --shell completions fish 2>&1 || true)
+FISH_COMPL=$(docker exec "${DOCKER_TEST_CONTAINER}" /app/${DOCKER_PROJECT_NAME} --shell completions fish 2>&1 || true)
 if grep -q -- "complete.*vidveil" <<< "$FISH_COMPL"; then
     __pass "Shell completions: fish"
 else

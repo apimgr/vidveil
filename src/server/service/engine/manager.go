@@ -1009,6 +1009,8 @@ func (m *EngineManager) ListEngines() []model.EngineInfo {
 			Capabilities: &model.EngineCapabilities{
 				HasPreview:  caps.HasPreview,
 				HasDownload: caps.HasDownload,
+				HasDuration: caps.HasDuration,
+				HasViews:    caps.HasViews,
 			},
 			Privacy: getEnginePrivacyScore(engine.Name()),
 		})
@@ -1035,6 +1037,8 @@ func (m *EngineManager) ListEnginesWithHealth() []model.EngineHealthInfo {
 				Capabilities: &model.EngineCapabilities{
 					HasPreview:  caps.HasPreview,
 					HasDownload: caps.HasDownload,
+					HasDuration: caps.HasDuration,
+					HasViews:    caps.HasViews,
 				},
 				Privacy: getEnginePrivacyScore(eng.Name()),
 			},

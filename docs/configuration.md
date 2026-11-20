@@ -637,7 +637,6 @@ server:
   tor:
     binary: ""
     use_network: false
-    allow_user_preference: true
     allow_user_ip_forward: true
     max_circuits: 32
     circuit_timeout: 60

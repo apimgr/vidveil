@@ -36,7 +36,7 @@ owner_token:       vidveil_owner_token_ab5213f6
 - **Service information:** Visitors can read public information, privacy, help, and security reporting content. The report form accepts security reports, terms violations, DMCA notices, and privacy requests; it is not a general support or feedback channel. The service provides REST, GraphQL, Swagger/OpenAPI, and MCP interfaces for supported search and discovery functions.
 - **Contact and security reports:** Contact messages use server-side shape, signed form-time, CAPTCHA, rate, content, and duplicate checks before delivery. Security reports use the shared shape, form-time, CAPTCHA, and rate checks before report creation. Tor and I2P requests use the built-in challenge and do not share a tunnel-wide per-IP submission limit.
 - **Operator control:** Operators configure the service through its configuration file and command-line tools. There is no browser-based operator administration product.
-- **Privacy network access:** The service supports Tor access. Tor use for searches can be selected by a visitor where enabled.
+- **Privacy network access:** The service supports Tor access. Outbound Tor routing for searches follows the operator’s server-wide `server.tor.use_network` setting. Visitors cannot override it.
 
 **Guest preferences:** These preferences are cookie-only, read per request, and are never stored server-side. Preference export/import includes every valid `vidveil_pref_*` cookie listed here.
 
@@ -56,7 +56,6 @@ owner_token:       vidveil_owner_token_ab5213f6
 | `vidveil_pref_min_duration` | `0`, `60`, `180`, `300`, `600`, `1200`, `1800` seconds | `600` | Included |
 | `vidveil_pref_max_history` | `0`, `10`, `25`, `50`, `100`; `0` means unlimited | `0` | Included |
 | `vidveil_pref_auto_clear_history` | `0`, `1`, `7`, `30` days; `0` means never | `0` | Included |
-| `vidveil_pref_use_tor` | `0`, `1` | `0` | Included |
 | `vidveil_pref_engines_selected` | `1` means an explicit selection is active | Unset; all enabled engines | Included |
 | `vidveil_pref_engines` | `none` or a compact `b`-prefixed hexadecimal registry fingerprint and engine-selection bitset (at most 64 characters) | Unset; all enabled engines | Included |
 

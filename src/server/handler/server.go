@@ -56,6 +56,7 @@ type ServerHandler struct {
 	contactSeen      []contactDedup
 	contactStrikes   map[string][]time.Time
 	contactBans      map[string]time.Time
+	pathMatches      func(string) bool
 }
 
 // SecurityReportEmailSender sends the maintainer notice and optional researcher acknowledgment.
@@ -66,25 +67,6 @@ type SecurityReportEmailSender interface {
 
 type contactEmailSender interface {
 	SendContact(to, replyTo, subject, body string) error
-}
-
-func (h *ServerHandler) sendGeneralContactEmail(name, email, subject, message string) error {
-	sender, ok := h.emailSvc.(contactEmailSender)
-	if !ok {
-		return fmt.Errorf("contact email sender is unavailable")
-	}
-	to := strings.TrimSpace(h.appConfig.Server.Contact.General.Email)
-	if to == "" {
-		to = strings.TrimSpace(h.appConfig.Server.Contact.Admin.Email)
-	}
-	if to == "" {
-		return fmt.Errorf("contact email recipient is unavailable")
-	}
-	body := fmt.Sprintf("Name: %s\nEmail: %s\n\n%s", name, email, message)
-	if err := sender.SendContact(to, email, subject, body); err != nil {
-		return err
-	}
-	return nil
 }
 
 // NewServerHandler creates a new server handler
@@ -394,6 +376,11 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	}
 	contactEnabled, _ := data["ContactEnabled"].(bool)
 	securityMode, _ := data["SecurityMode"].(bool)
+	if templateName == "server-contact" {
+		if _, exists := data["FormValues"]; !exists {
+			data["FormValues"] = contactFormValues(r)
+		}
+	}
 	if templateName == "server-contact" && (contactEnabled || securityMode) {
 		for key, value := range h.captchaTemplateData(r) {
 			data[key] = value
@@ -422,6 +409,9 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	// Set headers and write buffered response
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	if templateName == "server-contact" {
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	}
 	status := http.StatusOK
 	if configuredStatus, ok := data["HTTPStatus"].(int); ok && configuredStatus >= 400 && configuredStatus <= 599 {
 		status = configuredStatus
@@ -558,50 +548,14 @@ func (h *ServerHandler) CCPASubmit(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/server/privacy#ccpa-opt-out", http.StatusSeeOther)
 }
 
-// ContactPage renders /server/contact web page. Per AI.md PART 11
-// "/server/contact?security_id={id} — Mode Switch": a valid, current-or-
-// previous-window security_id switches the form into coordinated-disclosure
-// mode; an invalid/expired one silently falls back to the standard form.
+// SetPathMatcher wires the application's router for local reported-URL checks.
+func (h *ServerHandler) SetPathMatcher(matches func(string) bool) {
+	h.pathMatches = matches
+}
+
+// ContactPage renders the report form. A valid security_id selects security mode.
 func (h *ServerHandler) ContactPage(w http.ResponseWriter, r *http.Request) {
-	securityID := h.securityIDFromRequest(r)
-	securityMode := false
-	if securityID != "" {
-		if h.validSecurityID(r, securityID) {
-			securityMode = true
-		} else {
-			h.logSecurityEvent("security.security_id_invalid", r, map[string]interface{}{"supplied_id": securityID})
-			securityID = ""
-		}
-	}
-
-	if r.Method == http.MethodPost {
-		if !securityMode && !h.appConfig.Server.Pages.Contact.Enabled {
-			http.NotFound(w, r)
-			return
-		}
-		if securityMode {
-			h.handleSecurityReportSubmit(w, r, securityID)
-			return
-		}
-		h.handleContactSubmit(w, r)
-		return
-	}
-
-	if securityMode {
-		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
-			"SecurityMode":          true,
-			"SecurityID":            securityID,
-			"DefaultDisclosureDays": h.defaultDisclosureDays(),
-			"Components":            h.securityComponentOptions(),
-		})
-		return
-	}
-
-	// Show contact form - contact form always available
-	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
-		"ContactEnabled": h.appConfig.Server.Pages.Contact.Enabled,
-		"AbuseEmail":     h.publicAbuseEmail(),
-	})
+	h.contactPageWorkflow(w, r)
 }
 
 // securityIDFromRequest reads the security_id from the query string (used by
@@ -760,101 +714,6 @@ func contactFieldLengthError(name, email, subject, message string) string {
 	return ""
 }
 
-// handleContactSubmit handles a non-security /server/contact submission and
-// dispatches it to the general contact role per AI.md PART 12.
-func (h *ServerHandler) handleContactSubmit(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, contactBodyLimit)
-	if err := r.ParseForm(); err != nil {
-		w = withResponseStatus(w, http.StatusBadRequest)
-		h.renderContactError(w, r, "Invalid form submission.")
-		return
-	}
-	if h.contactIsBanned(r) {
-		h.contactBlock(r, "banned")
-		writeContactBanned(w, false)
-		return
-	}
-	if reason := h.contactShapeError(r, false); reason != "" {
-		h.contactBlock(r, reason)
-		w = withResponseStatus(w, http.StatusBadRequest)
-		h.renderContactError(w, r, "Invalid form submission.")
-		return
-	}
-	if h.contactHoneypotFilled(r) {
-		if h.contactBlock(r, "honeypot") {
-			writeContactBanned(w, false)
-			return
-		}
-		h.renderContactSuccess(w, r)
-		return
-	}
-	if !h.validContactFormToken(r) {
-		h.contactFormFailure(w, r, "fill_time", false)
-		return
-	}
-	if !h.verifyCaptcha(r) {
-		h.contactFormFailure(w, r, "captcha", false)
-		return
-	}
-
-	name := strings.TrimSpace(r.FormValue("name"))
-	email := strings.TrimSpace(r.FormValue("email"))
-	subject := strings.TrimSpace(r.FormValue("subject"))
-	message := strings.TrimSpace(r.FormValue("message"))
-
-	if name == "" || email == "" || subject == "" || message == "" || strings.ContainsAny(name+subject, "\r\n") {
-		w = withResponseStatus(w, http.StatusBadRequest)
-		h.renderContactError(w, r, "Please provide your name, a valid email address, a subject, and a message.")
-		return
-	}
-	if _, err := mail.ParseAddress(email); err != nil {
-		w = withResponseStatus(w, http.StatusBadRequest)
-		h.renderContactError(w, r, "Please provide a valid email address.")
-		return
-	}
-	if field := contactFieldLengthError(name, email, subject, message); field != "" {
-		w = withResponseStatus(w, http.StatusBadRequest)
-		h.renderContactError(w, r, "The "+field+" field is too long. Please shorten it and try again.")
-		return
-	}
-	if reason := h.contactContentError(r); reason != "" {
-		h.contactFormFailure(w, r, reason, false)
-		return
-	}
-	if reason := h.contactRateError(r); reason != "" {
-		h.contactFormFailure(w, r, reason, false)
-		return
-	}
-	if h.duplicateContact(r) {
-		h.releaseContactRate(r)
-		if h.contactBlock(r, "duplicate") {
-			writeContactBanned(w, false)
-			return
-		}
-		h.renderContactSuccess(w, r)
-		return
-	}
-
-	if err := h.sendGeneralContactEmail(name, email, subject, message); err != nil {
-		h.releaseContactRate(r)
-		h.forgetContactDuplicate(r)
-		log.Printf("contact notification: delivery failed")
-		w = withResponseStatus(w, http.StatusServiceUnavailable)
-		h.renderContactError(w, r, "We could not send your message. Please try again later.")
-		return
-	}
-	if h.notifyDispatcher != nil {
-		body := fmt.Sprintf("Name: %s\nEmail: %s\n\n%s", name, email, message)
-		h.notifyDispatcher.Send(r.Context(), notify.RoleGeneral, notify.Payload{
-			Event:    "contact.general",
-			Subject:  subject,
-			Body:     body,
-			Severity: notify.SeverityInfo,
-		})
-	}
-	h.renderContactSuccess(w, r)
-}
-
 // renderContactSuccess renders the standard contact-form acknowledgment.
 func (h *ServerHandler) renderContactSuccess(w http.ResponseWriter, r *http.Request) {
 	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
@@ -870,6 +729,8 @@ func (h *ServerHandler) renderContactError(w http.ResponseWriter, r *http.Reques
 	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 		"ContactEnabled": true,
 		"AbuseEmail":     h.publicAbuseEmail(),
+		"Robots":         "noindex,nofollow",
+		"FormValues":     contactFormValues(r),
 		"Message":        msg,
 		"MessageType":    "error",
 	})
@@ -877,8 +738,10 @@ func (h *ServerHandler) renderContactError(w http.ResponseWriter, r *http.Reques
 
 func (h *ServerHandler) renderSecurityContactFeedback(w http.ResponseWriter, r *http.Request, securityID, msg, messageType string) {
 	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
-		"SecurityMode": true, "SecurityID": securityID, "DefaultDisclosureDays": h.defaultDisclosureDays(),
-		"Components": h.securityComponentOptions(), "Message": msg, "MessageType": messageType,
+		"ContactEnabled": true, "SecurityMode": true, "SecurityID": securityID,
+		"DefaultDisclosureDays": h.defaultDisclosureDays(), "Components": h.securityComponentOptions(),
+		"Robots": "noindex,nofollow", "FormValues": contactFormValues(r),
+		"Message": msg, "MessageType": messageType,
 	})
 }
 
@@ -893,7 +756,7 @@ func (h *ServerHandler) renderContactFailure(w http.ResponseWriter, r *http.Requ
 // HelpPage renders /server/help web page
 func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 	h.renderServerTemplate(w, r, "server-help", map[string]interface{}{
-		"MCPEnabled": h.appConfig.Server.MCP.Enabled,
+		"MCPEnabled": true,
 	})
 }
 
@@ -920,6 +783,19 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		})
 		return
 	}
+	if h.contactOriginError(r) {
+		h.contactBlock(r, "origin")
+		h.renderSecurityContactFeedback(w, r, securityID, "Please submit the form from this site.", "error")
+		return
+	}
+	step := strings.TrimSpace(r.FormValue("step"))
+	if step == "" {
+		step = "submit"
+	}
+	if step == "edit" {
+		h.renderSecurityContactFeedback(w, r, securityID, "", "")
+		return
+	}
 	if h.contactIsBanned(r) {
 		h.contactBlock(r, "banned")
 		writeContactBanned(w, false)
@@ -931,17 +807,18 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		h.renderSecurityContactFeedback(w, r, securityID, "Invalid form submission.", "error")
 		return
 	}
-	if h.contactHoneypotFilled(r) {
+	flags := ""
+	if step == "submit" && h.contactHoneypotFilled(r) {
+		flags = "d"
 		if h.contactBlock(r, "honeypot") {
 			writeContactBanned(w, false)
 			return
 		}
-		h.renderSecurityContactFeedback(w, r, securityID, "Thank you — your security report was received.", "success")
-		return
-	}
-	if !h.validContactFormToken(r) {
-		h.contactFormFailure(w, r, "fill_time", false)
-		return
+	} else if step == "submit" {
+		if reason := h.contactFormTokenFailure(r); reason != "" {
+			h.contactFormFailure(w, r, reason, false)
+			return
+		}
 	}
 	if field := securityContactLengthError(r); field != "" {
 		w = withResponseStatus(w, http.StatusBadRequest)
@@ -961,12 +838,32 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		})
 		return
 	}
-	if !h.verifyCaptcha(r) {
+	if step == "submit" && flags == "" && !h.verifyCaptcha(r) {
 		h.contactFormFailure(w, r, "captcha", false)
 		return
 	}
-	if reason := h.contactRateError(r); reason != "" {
-		h.contactFormFailure(w, r, reason, false)
+	if step == "confirm" {
+		var valid bool
+		flags, valid = h.validContactReviewToken(r)
+		if !valid || r.FormValue("confirmed") != "true" {
+			h.contactBlock(r, "review")
+			token := h.issueContactReviewToken(r, "")
+			h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
+				"ContactEnabled": true, "SecurityMode": true, "SecurityID": securityID,
+				"DefaultDisclosureDays": h.defaultDisclosureDays(), "Components": h.securityComponentOptions(),
+				"Robots": "noindex,nofollow", "FormValues": contactFormValues(r),
+				"ReviewMode": token != "", "ReviewToken": token,
+				"Message": "Please read the details and confirm.", "MessageType": "error",
+			})
+			return
+		}
+	} else if step != "submit" {
+		h.renderSecurityContactFeedback(w, r, securityID, "Invalid form submission.", "error")
+		return
+	}
+	rateReason := h.checkContactRate(r, step == "confirm")
+	if rateReason != "" {
+		h.contactFormFailure(w, r, rateReason, false)
 		return
 	}
 
@@ -989,6 +886,24 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 			"Message":               "Please complete all required fields, including the coordinated disclosure agreement.",
 			"MessageType":           "error",
 		})
+		return
+	}
+	if step == "submit" {
+		token := h.issueContactReviewToken(r, flags)
+		if token == "" {
+			h.renderSecurityContactFeedback(w, r, securityID, "We could not process your report. Please try again later.", "error")
+			return
+		}
+		h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
+			"ContactEnabled": true, "SecurityMode": true, "SecurityID": securityID,
+			"DefaultDisclosureDays": h.defaultDisclosureDays(), "Components": h.securityComponentOptions(),
+			"Robots": "noindex,nofollow", "FormValues": contactFormValues(r),
+			"ReviewMode": true, "ReviewToken": token,
+		})
+		return
+	}
+	if flags == "d" {
+		h.renderSecurityContactFeedback(w, r, securityID, "Thank you — your security report was received.", "success")
 		return
 	}
 
@@ -1132,10 +1047,12 @@ func (h *ServerHandler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 	if reportURL := h.appConfig.Web.Security.ReportURL; reportURL != "" {
 		contacts = append(contacts, reportURL)
 	}
-	if h.secretsMgr != nil {
+	var securityContactURL string
+	if h.appConfig.Server.Pages.Contact.Enabled && h.secretsMgr != nil {
 		if secret, err := h.secretsMgr.GetInstallationSecret(r.Context()); err == nil {
 			id := secreport.GenerateSecurityID(secret, time.Now())
-			contacts = append(contacts, urlvar.BuildURL(r, "/server/contact")+"?security_id="+id)
+			securityContactURL = urlvar.BuildURL(r, "/server/contact") + "?security_id=" + id
+			contacts = append(contacts, securityContactURL)
 		}
 	}
 	mailto := h.appConfig.Web.Security.Contact
@@ -1148,10 +1065,18 @@ func (h *ServerHandler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 	contacts = append(contacts, "mailto:"+strings.TrimPrefix(mailto, "mailto:"))
 
 	h.renderServerTemplate(w, r, "server-security", map[string]interface{}{
-		"Contacts":       contacts,
-		"Expires":        h.appConfig.Web.Security.Expires,
-		"HasPGPKey":      h.appConfig.Web.Security.PublishPGPKey,
-		"DisclosureDays": h.defaultDisclosureDays(),
+		"Contacts":           contacts,
+		"Expires":            h.appConfig.Web.Security.Expires,
+		"HasPGPKey":          h.appConfig.Web.Security.PublishPGPKey,
+		"DisclosureDays":     h.defaultDisclosureDays(),
+		"ContactEnabled":     h.appConfig.Server.Pages.Contact.Enabled,
+		"SecurityContactURL": securityContactURL,
+		"ContactReportURL": func() string {
+			if h.appConfig.Server.Pages.Contact.Enabled {
+				return urlvar.BuildURL(r, "/server/contact")
+			}
+			return ""
+		}(),
 	})
 }
 
@@ -1384,176 +1309,9 @@ func (h *ServerHandler) APIPrivacy(w http.ResponseWriter, r *http.Request) {
 // APIContact handles POST {api_version}/server/contact
 // Per AI.md PART 9: error codes must use standard constants from response.go.
 func (h *ServerHandler) APIContact(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		w.Header().Set("Cache-Control", "no-store")
-		securityMode := false
-		if id := h.securityIDFromRequest(r); id != "" {
-			securityMode = h.validSecurityID(r, id)
-		}
-		if !securityMode && !h.appConfig.Server.Pages.Contact.Enabled {
-			SendError(w, CodeNotFound, MsgNotFound)
-			return
-		}
-		fields := []map[string]interface{}{
-			{"name": "name", "type": "text", "required": true, "max_length": 100},
-			{"name": "email", "type": "email", "required": true, "max_length": 254},
-			{"name": "subject", "type": "text", "required": true, "max_length": 200},
-			{"name": "message", "type": "textarea", "required": true, "max_length": 5000},
-			{"name": "website", "type": "text", "required": false, "hidden": true, "max_length": 200},
-			{"name": "form_token", "type": "hidden", "required": true, "max_length": 100},
-		}
-		if securityMode {
-			fields = []map[string]interface{}{
-				{"name": "name", "type": "text", "required": true, "max_length": 100},
-				{"name": "email", "type": "email", "required": true, "max_length": 254},
-				{"name": "researcher_gpg", "type": "text_or_url", "required": false, "max_length": 16384, "max_length_when": []map[string]interface{}{{"prefix": "https://", "max_length": 2048}}},
-				{"name": "component", "type": "select_or_text", "required": true, "max_length": 255},
-				{"name": "endpoint", "type": "text", "required": false, "max_length": 2048},
-				{"name": "severity", "type": "enum", "required": true, "max_length": nil},
-				{"name": "summary", "type": "text", "required": true, "max_length": 200},
-				{"name": "steps", "type": "textarea", "required": true, "max_length": 10000},
-				{"name": "impact", "type": "textarea", "required": true, "max_length": 5000},
-				{"name": "suggested_fix", "type": "textarea", "required": false, "max_length": 5000},
-				{"name": "cve_requested", "type": "checkbox", "required": false, "max_length": nil},
-				{"name": "disclosure_days", "type": "number", "required": false, "max_length": nil},
-				{"name": "credit_preference", "type": "enum", "required": true, "max_length": nil},
-				{"name": "credit_handle", "type": "text", "required": false, "required_when": map[string]string{"field": "credit_preference", "equals": "handle"}, "max_length": 100},
-				{"name": "disclosure_agreement", "type": "checkbox", "required": true, "max_length": nil},
-				{"name": "website", "type": "text", "required": false, "hidden": true, "max_length": 200},
-				{"name": "form_token", "type": "hidden", "required": true, "max_length": 100},
-			}
-		}
-		captcha := h.apiCaptchaDescriptor(r)
-		WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "data": map[string]interface{}{
-			"fields":       fields,
-			"captcha":      captcha,
-			"form_token":   h.issueContactFormToken(r),
-			"security_url": urlvar.BuildURL(r, "/server/security"),
-			"abuse_email":  h.publicAbuseEmail(),
-		}})
-		return
-	}
-	if r.Method != http.MethodPost {
-		SendError(w, CodeMethodNotAllowed, MsgMethodNotAllowed)
-		return
-	}
-
-	r.Body = http.MaxBytesReader(w, r.Body, contactBodyLimit)
-	if err := r.ParseForm(); err != nil {
-		SendError(w, CodeBadRequest, "Invalid form data")
-		return
-	}
-	if h.contactIsBanned(r) {
-		h.contactBlock(r, "banned")
-		writeContactBanned(w, true)
-		return
-	}
-	securityID := h.securityIDFromRequest(r)
-	if securityID != "" {
-		if h.validSecurityID(r, securityID) {
-			if reason := h.contactShapeError(r, true); reason != "" {
-				h.contactBlock(r, reason)
-				WriteJSON(w, http.StatusBadRequest, APIResponse{OK: false, Error: CodeValidation, Message: "Invalid form data", Details: map[string]interface{}{"field": "form"}})
-				return
-			}
-			if h.contactHoneypotFilled(r) {
-				if h.contactBlock(r, "honeypot") {
-					writeContactBanned(w, true)
-					return
-				}
-				SendOK(w, map[string]interface{}{"tracking_id": ""})
-				return
-			}
-			if !h.validContactFormToken(r) {
-				h.contactFormFailure(w, r, "fill_time", true)
-				return
-			}
-			if !h.verifyCaptcha(r) {
-				h.contactFormFailure(w, r, "captcha", true)
-				return
-			}
-			h.apiSecurityReportSubmit(w, r, securityID)
-			return
-		}
-		h.logSecurityEvent("security.security_id_invalid", r, map[string]interface{}{"supplied_id": securityID})
-	}
-	if !h.appConfig.Server.Pages.Contact.Enabled {
-		SendError(w, CodeNotFound, MsgNotFound)
-		return
-	}
-	if reason := h.contactShapeError(r, false); reason != "" {
-		h.contactBlock(r, reason)
-		WriteJSON(w, http.StatusBadRequest, APIResponse{OK: false, Error: CodeValidation, Message: "Invalid form data", Details: map[string]interface{}{"field": "form"}})
-		return
-	}
-	if h.contactHoneypotFilled(r) {
-		if h.contactBlock(r, "honeypot") {
-			writeContactBanned(w, true)
-			return
-		}
-		SendOK(w, map[string]interface{}{"message": "Message received successfully"})
-		return
-	}
-	if !h.validContactFormToken(r) {
-		h.contactFormFailure(w, r, "fill_time", true)
-		return
-	}
-	if !h.verifyCaptcha(r) {
-		h.contactFormFailure(w, r, "captcha", true)
-		return
-	}
-
-	name := strings.TrimSpace(r.FormValue("name"))
-	email := strings.TrimSpace(r.FormValue("email"))
-	subject := strings.TrimSpace(r.FormValue("subject"))
-	message := strings.TrimSpace(r.FormValue("message"))
-	if name == "" || subject == "" || message == "" || strings.ContainsAny(name+subject, "\r\n") {
-		SendError(w, CodeValidation, "Name, subject, and message are required")
-		return
-	}
-	if _, err := mail.ParseAddress(email); err != nil {
-		SendError(w, CodeValidation, "A valid email address is required")
-		return
-	}
-	if field := contactFieldLengthError(name, email, subject, message); field != "" {
-		SendError(w, CodeValidation, "The "+field+" field is too long")
-		return
-	}
-	if reason := h.contactContentError(r); reason != "" {
-		h.contactFormFailure(w, r, reason, true)
-		return
-	}
-	if reason := h.contactRateError(r); reason != "" {
-		h.contactFormFailure(w, r, reason, true)
-		return
-	}
-	if h.duplicateContact(r) {
-		if h.contactBlock(r, "duplicate") {
-			writeContactBanned(w, true)
-			return
-		}
-		SendOK(w, map[string]interface{}{"message": "Message received successfully"})
-		return
-	}
-	if err := h.sendGeneralContactEmail(name, email, subject, message); err != nil {
-		h.releaseContactRate(r)
-		h.forgetContactDuplicate(r)
-		log.Printf("contact notification: delivery failed")
-		SendError(w, CodeServerError, "Unable to send message")
-		return
-	}
-	if h.notifyDispatcher != nil {
-		h.notifyDispatcher.Send(r.Context(), notify.RoleGeneral, notify.Payload{
-			Event: "contact.general", Subject: subject,
-			Body:     fmt.Sprintf("Name: %s\nEmail: %s\n\n%s", name, email, message),
-			Severity: notify.SeverityInfo,
-		})
-	}
-	SendOK(w, map[string]interface{}{"message": "Message received successfully"})
+	h.apiContactWorkflow(w, r)
 }
 
-// apiSecurityReportSubmit implements the Submission Flow of AI.md PART 11
-// for POST /api/{api_version}/server/contact with a valid security_id.
 func (h *ServerHandler) apiSecurityReportSubmit(w http.ResponseWriter, r *http.Request, securityID string) {
 	if field := securityContactLengthError(r); field != "" {
 		SendError(w, CodeValidation, "Field is too long: "+field)

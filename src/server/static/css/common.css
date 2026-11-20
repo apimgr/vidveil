@@ -5373,3 +5373,40 @@ a:focus-visible {
     overflow-wrap: anywhere;
     word-break: break-all;
 }
+
+.contact-review {
+    position: fixed;
+    z-index: 1000;
+    top: 50%;
+    left: 50%;
+    width: min(92vw, 40rem);
+    max-height: 86vh;
+    overflow-y: auto;
+    transform: translate(-50%, -50%);
+    padding: 1.5rem;
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-xl);
+}
+
+.contact-review::before {
+    position: fixed;
+    z-index: -1;
+    content: "";
+    inset: -100vh -100vw;
+    background: rgb(0 0 0 / 65%);
+}
+
+.contact-review-email {
+    overflow-wrap: anywhere;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.contact-review form {
+    display: grid;
+    gap: 1rem;
+    margin-block-start: 1rem;
+}

@@ -676,6 +676,28 @@ func TestSearchStream_SameSession_DedupsAcrossPages(t *testing.T) {
 	}
 }
 
+func TestSearchWithOperators_DedupsOnlyResultsReturnedInPage(t *testing.T) {
+	results := make([]model.VideoResult, 0, 60)
+	for i := 0; i < 60; i++ {
+		results = append(results, validResult(
+			fmt.Sprintf("pregnant lesbian teen %016x %016x", uint64(i)*0x9e3779b97f4a7c15, uint64(i)*0xbf58476d1ce4e5b9+0x94d049bb133111eb),
+			fmt.Sprintf("https://example.com/page-window/%02d", i),
+		))
+	}
+	m := newMgrWithMock("mock-page-window", results, nil, true)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	page1 := m.SearchWithOperators(ctx, "pregnant lesbian teen", 1, nil, nil, nil, nil, false, "page-window-session", 50, ResultFilterOptions{})
+	if got := len(page1.Data.Results); got != 50 {
+		t.Fatalf("page 1 result count = %d, want 50", got)
+	}
+	page2 := m.SearchWithOperators(ctx, "pregnant lesbian teen", 2, nil, nil, nil, nil, false, "page-window-session", 50, ResultFilterOptions{})
+	if got := len(page2.Data.Results); got != 10 {
+		t.Fatalf("page 2 result count = %d, want the 10 results not returned on page 1", got)
+	}
+}
+
 func TestSearchStream_DifferentSession_NotDeduped(t *testing.T) {
 	results := []model.VideoResult{
 		validResult("pregnant lesbian teen one", "https://example.com/dup1"),

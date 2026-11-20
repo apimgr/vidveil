@@ -509,7 +509,7 @@ func (h *SearchHandler) getProxyClient(timeout time.Duration) *http.Client {
 // built-in search engines. Proxy endpoints accept only these app-owned sources.
 var proxyHostSuffixes = []string{
 	"3movs.com", "4tube.com", "alphaporno.com", "anyporn.com", "c1.ttcache.com",
-	"dl.xnxx.com", "drtuber.com", "empflix.com", "eporner.com", "flyflv.com",
+	"dl.xnxx.com", "drtst.com", "drtuber.com", "empflix.com", "eporner.com", "flyflv.com",
 	"fux.com", "gotporn.com", "hellporno.com", "hqporner.com", "lovehomeporn.com",
 	"motherless.com", "nonktube.com", "nvdst.com", "nubiles-porn.com", "nuvid.com", "pornbox.com",
 	"pornerbros.com", "pornflip.com", "pornhat.com", "pornhd.com", "pornhub.com",
@@ -1522,22 +1522,6 @@ func requestPreviewFirst(r *http.Request) bool {
 	return preferenceCookieValue(r, previewFirstCookieName, "1") == "1"
 }
 
-func withRequestTorPreference(ctx context.Context, r *http.Request) context.Context {
-	if useTor := requestTorPreference(r); useTor != nil {
-		return engine.WithTorPref(ctx, useTor)
-	}
-	return ctx
-}
-
-func requestTorPreference(r *http.Request) *bool {
-	value := preferenceCookieValue(r, "vidveil_pref_use_tor", "")
-	if value != "0" && value != "1" {
-		return nil
-	}
-	useTor := value == "1"
-	return &useTor
-}
-
 func requestShowAIContent(r *http.Request) bool {
 	if values, ok := r.URL.Query()["show_ai"]; ok && len(values) > 0 {
 		return values[len(values)-1] == "1"
@@ -1546,7 +1530,6 @@ func requestShowAIContent(r *http.Request) bool {
 }
 
 func withRequestSearchPreferences(ctx context.Context, r *http.Request) context.Context {
-	ctx = withRequestTorPreference(ctx, r)
 	return engine.WithShowAIContent(ctx, requestShowAIContent(r))
 }
 
@@ -3008,7 +2991,7 @@ func (h *SearchHandler) SecurityTxt(w http.ResponseWriter, r *http.Request) {
 		contacts = append(contacts, reportURL)
 	}
 
-	if h.secretsMgr != nil {
+	if h.appConfig.Server.Pages.Contact.Enabled && h.secretsMgr != nil {
 		if secret, err := h.secretsMgr.GetInstallationSecret(r.Context()); err == nil {
 			id := secreport.GenerateSecurityID(secret, time.Now())
 			contactURL := urlvar.BuildURL(r, "/server/contact") + "?security_id=" + id
@@ -3159,12 +3142,8 @@ func (h *SearchHandler) LlmsTxt(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&b, "## API\n")
 	fmt.Fprintf(&b, "Base URL: %s\n", apiBase)
 	fmt.Fprintf(&b, "Authentication: Bearer token for protected endpoints\n")
-	if h.appConfig.Server.RateLimit.Enabled {
-		fmt.Fprintf(&b, "Rate limit: %d requests/minute\n", perMinute)
-	}
-	if h.appConfig.Server.MCP.Enabled {
-		fmt.Fprintf(&b, "MCP: %s (Streamable HTTP; same Bearer token as the API)\n", urlvar.BuildURL(r, "/mcp"))
-	}
+	fmt.Fprintf(&b, "Rate limit: %d requests/minute\n", perMinute)
+	fmt.Fprintf(&b, "MCP: %s (Streamable HTTP; same Bearer token as the API)\n", urlvar.BuildURL(r, "/mcp"))
 	fmt.Fprintln(&b)
 
 	if h.appConfig.Web.LLMS.IncludeEndpoints {
@@ -3261,7 +3240,6 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 		{path: "/server/about", changefreq: "weekly", priority: "0.8"},
 		{path: "/server/privacy", changefreq: "weekly", priority: "0.8"},
 		{path: "/server/dpo", changefreq: "weekly", priority: "0.8"},
-		{path: "/server/contact", changefreq: "weekly", priority: "0.8"},
 		{path: "/server/help", changefreq: "weekly", priority: "0.8"},
 		{path: "/server/terms", changefreq: "weekly", priority: "0.8"},
 		{path: "/server/security", changefreq: "weekly", priority: "0.8"},
@@ -3473,12 +3451,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 	// sets never collide; ?nocache=1 bypasses the cache.
 	skipCache := r.URL.Query().Get("nocache") == "1"
 	cacheKey := cache.CacheKey(searchQuery, page, engineNames)
-	torPreference := requestTorPreference(r)
-	torKey := "inherit"
-	if torPreference != nil {
-		torKey = strconv.FormatBool(*torPreference)
-	}
-	cacheKey += fmt.Sprintf("|filters:%d:%d:%d:%s|ai:%t|tor:%s|preview:%t|results:%d", filterOpts.MinQuality, filterOpts.UserMinDuration, filterOpts.MaxDuration, filterOpts.SortBy, showAI, torKey, previewFirst, resultsPerPage)
+	cacheKey += fmt.Sprintf("|filters:%d:%d:%d:%s|ai:%t|preview:%t|results:%d", filterOpts.MinQuality, filterOpts.UserMinDuration, filterOpts.MaxDuration, filterOpts.SortBy, showAI, previewFirst, resultsPerPage)
 	if len(parsed.Exclusions) > 0 {
 		sortedExclusions := append([]string(nil), parsed.Exclusions...)
 		sort.Strings(sortedExclusions)

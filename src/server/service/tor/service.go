@@ -46,7 +46,7 @@ type TorService struct {
 	torInstance *tor.Tor
 
 	// Outbound Tor dialer per PART 31
-	// Used when UseNetwork is enabled (or AllowUserPreference is true) to route engine queries through Tor
+	// Used when the server-wide UseNetwork setting routes engine queries through Tor
 	dialer *tor.Dialer
 
 	// Hidden service state — the .onion key/hostname are generated and
@@ -147,39 +147,6 @@ func (s *TorService) SetLogDir(dir string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.logDir = dir
-}
-
-// AllowUserPreference returns true if users are allowed to override the server's Tor outbound setting
-// Per PART 31: When true, users can set their own Tor preference via cookie
-func (s *TorService) AllowUserPreference() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.torConfig != nil && s.torConfig.AllowUserPreference
-}
-
-// ShouldUseTor determines if Tor network should be used for a given request
-// based on server config and optional user preference override per PART 31
-// userPref: nil = inherit server setting, true = always use Tor, false = never use Tor
-func (s *TorService) ShouldUseTor(userPref *bool) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.torConfig == nil {
-		return false
-	}
-
-	// If user preferences not allowed, always use server setting
-	if !s.torConfig.AllowUserPreference {
-		return s.torConfig.UseNetwork
-	}
-
-	// User has no preference set — inherit server default
-	if userPref == nil {
-		return s.torConfig.UseNetwork
-	}
-
-	// User preference overrides server setting
-	return *userPref
 }
 
 // GetHTTPClient returns an HTTP client, optionally routed through Tor
@@ -408,9 +375,8 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	// Per AI.md PART 31 file table: write {data_dir}/tor/tor.pid (0600)
 	s.writePIDFile(t)
 
-	// Initialize outbound dialer if UseNetwork is enabled OR AllowUserPreference is true (per PART 31)
-	// Dialer is needed when either: server routes all outbound through Tor, OR users can opt-in
-	if s.torConfig != nil && (s.torConfig.UseNetwork || s.torConfig.AllowUserPreference) {
+	// Initialize the outbound dialer only when server-wide Tor routing is enabled.
+	if s.torConfig != nil && s.torConfig.UseNetwork {
 		dialer, err := t.Dialer(ctx, nil)
 		if err != nil {
 			s.logger.Warn("Failed to create Tor dialer for outbound connections", map[string]interface{}{
@@ -1208,10 +1174,10 @@ func buildTorrc(cfg *config.TorConfig, hsDir string, torBackendPort int, logFile
 		*cfg = config.DefaultTorConfig()
 	}
 
-	// SocksPort: enabled when outbound routing is needed (server-wide or per-user)
+	// SocksPort is enabled only for server-wide outbound routing.
 	// "auto" = Tor picks available high port at runtime (never saved)
 	var socksConfig string
-	if cfg.UseNetwork || cfg.AllowUserPreference {
+	if cfg.UseNetwork {
 		socksConfig = "SocksPort auto"
 	} else {
 		socksConfig = "SocksPort 0"

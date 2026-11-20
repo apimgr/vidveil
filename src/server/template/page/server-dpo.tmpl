@@ -13,7 +13,7 @@
         <p>{{ t "dpo.no_email" }}</p>
         {{ end }}
         <p><a href="{{ .PrivacyURL }}">{{ t "dpo.privacy_policy" }}</a></p>
-        <p><a href="{{ .ContactURL }}">{{ t "dpo.contact_form" }}</a></p>
+        <p><a href="{{ path "/server/security" }}">{{ t "security.title" }}</a></p>
     </div>
 </div>
 {{end}}

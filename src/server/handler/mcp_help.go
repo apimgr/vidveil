@@ -30,13 +30,8 @@ type mcpHelpAuth struct {
 	Scheme string `json:"scheme"`
 }
 
-// HelpMCPPage renders MCP connection guidance when the endpoint is enabled.
+// HelpMCPPage renders MCP connection guidance for the always-enabled endpoint.
 func (h *ServerHandler) HelpMCPPage(w http.ResponseWriter, r *http.Request) {
-	if !h.appConfig.Server.MCP.Enabled {
-		http.NotFound(w, r)
-		return
-	}
-
 	tools := mcpAnonymousTools(h.appConfig, r)
 	canonical := h.appConfig.APIBasePath() + "/server/mcp"
 	h.renderServerTemplate(w, r, "server-help-mcp", map[string]interface{}{
@@ -51,11 +46,6 @@ func (h *ServerHandler) HelpMCPPage(w http.ResponseWriter, r *http.Request) {
 
 // APIHelpMCP returns connection metadata and the live anonymous tool list.
 func (h *ServerHandler) APIHelpMCP(w http.ResponseWriter, r *http.Request) {
-	if !h.appConfig.Server.MCP.Enabled {
-		http.NotFound(w, r)
-		return
-	}
-
 	canonical := h.appConfig.APIBasePath() + "/server/mcp"
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,

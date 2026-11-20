@@ -29,6 +29,93 @@ func TestContactFormTokenRejectsForgery(t *testing.T) {
 	}
 }
 
+func TestContactFormTokenIsSingleUse(t *testing.T) {
+	h, _ := newSecurityTestHandler(t)
+	h.appConfig.Server.Pages.Contact.Antispam.MinFillSeconds = 0
+	r := httpRequestForContact()
+	token := h.issueContactFormToken(r)
+	if token == "" {
+		t.Fatal("expected form token")
+	}
+	r.Form.Set("form_token", token)
+	if got := h.contactFormTokenFailure(r); got != "" {
+		t.Fatalf("first token validation = %q, want empty", got)
+	}
+	if got := h.contactFormTokenFailure(r); got != "replay" {
+		t.Fatalf("reused token validation = %q, want replay", got)
+	}
+}
+
+func TestContactReviewTokenBindsFieldsAndIsSingleUse(t *testing.T) {
+	h, _ := newSecurityTestHandler(t)
+	h.appConfig.Server.Pages.Contact.Antispam.ReviewMinSeconds = 0
+	r := httpRequestForContact()
+	r.Form = url.Values{"type": {"privacy"}, "name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"Privacy request"}, "message": {"Please export my data"}, "request_kind": {"export"}}
+	token := h.issueContactReviewToken(r, "")
+	if token == "" {
+		t.Fatal("expected review token")
+	}
+	r.Form.Set("step", "confirm")
+	r.Form.Set("review_token", token)
+	r.Form.Set("confirmed", "true")
+	flags, ok := h.validContactReviewToken(r)
+	if !ok || flags != "" {
+		t.Fatalf("valid review token = (%q, %v), want (empty, true)", flags, ok)
+	}
+	r.Form.Set("review_token", token)
+	if _, ok := h.validContactReviewToken(r); ok {
+		t.Fatal("reused review token was accepted")
+	}
+}
+
+func TestContactReviewTokenRejectsChangedField(t *testing.T) {
+	h, _ := newSecurityTestHandler(t)
+	h.appConfig.Server.Pages.Contact.Antispam.ReviewMinSeconds = 0
+	r := httpRequestForContact()
+	r.Form = url.Values{"type": {"privacy"}, "name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"Privacy request"}, "message": {"Please export my data"}, "request_kind": {"export"}}
+	token := h.issueContactReviewToken(r, "")
+	r.Form.Set("step", "confirm")
+	r.Form.Set("review_token", token)
+	r.Form.Set("message", "Please delete my data")
+	if _, ok := h.validContactReviewToken(r); ok {
+		t.Fatal("review token was accepted after a field changed")
+	}
+}
+
+func TestContactOriginRequiresSameOriginEvidence(t *testing.T) {
+	h := NewServerHandler(nil)
+	same := httptest.NewRequest(http.MethodPost, "https://vidveil.example/server/contact", strings.NewReader(""))
+	same.Header.Set("Origin", contactRequestOrigin(same))
+	same.Header.Set("Sec-Fetch-Site", "same-origin")
+	if h.contactOriginError(same) {
+		t.Fatal("same-origin browser request was rejected")
+	}
+	if !sameContactOrigin("https://vidveil.example", "https://vidveil.example/") {
+		t.Fatal("sameContactOrigin rejected matching origins")
+	}
+	cross := httptest.NewRequest(http.MethodPost, "https://vidveil.example/server/contact", strings.NewReader(""))
+	cross.Header.Set("Origin", "https://attacker.example")
+	if !h.contactOriginError(cross) {
+		t.Fatal("cross-origin request was accepted")
+	}
+	missing := httptest.NewRequest(http.MethodPost, "https://vidveil.example/server/contact", strings.NewReader(""))
+	if !h.contactOriginError(missing) {
+		t.Fatal("request without origin evidence was accepted")
+	}
+}
+
+func TestContactLinksMustUseAnApplicationHost(t *testing.T) {
+	h := NewServerHandler(nil)
+	h.appConfig.Server.FQDN = "vidveil.example"
+	r := httptest.NewRequest(http.MethodPost, "https://vidveil.example/server/contact", nil)
+	if !h.allowedContactLinkHost(r, "vidveil.example") {
+		t.Fatal("application host was rejected")
+	}
+	if h.allowedContactLinkHost(r, "attacker.example") {
+		t.Fatal("external host was accepted")
+	}
+}
+
 func TestContactRateLimitAndDuplicateSuppression(t *testing.T) {
 	h := NewServerHandler(nil)
 	h.appConfig.Server.Pages.Contact.Antispam.PerIP = 3

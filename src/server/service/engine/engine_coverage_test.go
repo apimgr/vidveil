@@ -58,9 +58,6 @@ func TestContextKeyConstants_NonEmpty(t *testing.T) {
 	if ForwardIPContextKey == "" {
 		t.Error("ForwardIPContextKey must not be empty")
 	}
-	if TorPrefContextKey == "" {
-		t.Error("TorPrefContextKey must not be empty")
-	}
 }
 
 // ── ParseBangs – branches not yet exercised by engines_test.go ───────────────

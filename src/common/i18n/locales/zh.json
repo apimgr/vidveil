@@ -724,7 +724,6 @@
   "prefs.thumbnail_size": "缩略图大小",
   "prefs.title": "偏好设置",
   "prefs.unlimited": "无限",
-  "prefs.use_tor": "所有搜索都使用 Tor（需要 Tor 正在运行）",
   "prefs.video_preview": "视频预览",
   "privacy.analytics_none": "此服务未配置分析功能。",
   "privacy.browser_only": "仅存储在您的浏览器中",

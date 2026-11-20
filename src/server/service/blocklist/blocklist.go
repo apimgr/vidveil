@@ -35,7 +35,7 @@ type BlocklistService struct {
 func NewBlocklistService(appConfig *config.AppConfig) *BlocklistService {
 	// Get data directory per PART 4 (OS-Specific Paths)
 	paths := config.GetAppPaths("", "")
-	dataDir := filepath.Join(paths.Config, "security", "blocklists")
+	dataDir := filepath.Join(paths.Data, "security", "blocklists")
 
 	return &BlocklistService{
 		appConfig: appConfig,

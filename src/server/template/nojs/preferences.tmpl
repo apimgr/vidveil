@@ -120,8 +120,6 @@
                         {{ t "prefs.proxy_thumbnails_locked" }}
                     </label>
                 </div>
-                <input type="hidden" name="vidveil_pref_use_tor" value="0">
-                <label><input type="checkbox" name="vidveil_pref_use_tor" value="1"{{if eq (index .Prefs "use_tor") "1"}} checked{{end}}> {{ t "prefs.use_tor" }}</label>
             </section>
 
             <section>

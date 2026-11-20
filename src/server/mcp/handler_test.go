@@ -59,9 +59,8 @@ func TestHandlerServesStatelessOpenAPITools(t *testing.T) {
 	}
 }
 
-func TestHandlerDisabledAndOriginValidation(t *testing.T) {
+func TestHandlerOriginValidation(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	cfg.Server.MCP.Enabled = false
 	handler := OriginMiddleware(cfg, Handler(cfg, http.NotFoundHandler(), nil))
 	request := httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{}`))
 	request.Header.Set("Origin", "https://attacker.example")
@@ -71,11 +70,13 @@ func TestHandlerDisabledAndOriginValidation(t *testing.T) {
 		t.Fatalf("foreign origin status = %d, want 403", response.Code)
 	}
 
-	request = httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{}`))
+	request = httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json, text/event-stream")
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusNotFound {
-		t.Fatalf("disabled MCP status = %d, want 404", response.Code)
+	if response.Code != http.StatusOK {
+		t.Fatalf("MCP without a foreign origin status = %d, want 200: %s", response.Code, response.Body.String())
 	}
 }
 

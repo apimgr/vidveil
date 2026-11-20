@@ -23,9 +23,6 @@ func newTestService(t *testing.T) *TorService {
 	return NewTorService(t.TempDir(), nil)
 }
 
-// boolPtr returns a pointer to the given bool — helper for ShouldUseTor tests.
-func boolPtr(b bool) *bool { return &b }
-
 // ---- NewTorService ----
 
 func TestNewTorServiceNonNil(t *testing.T) {
@@ -97,90 +94,6 @@ func TestSetConfigDirStoresDir(t *testing.T) {
 	s.mu.RUnlock()
 	if got != dir {
 		t.Errorf("configDir = %q, want %q", got, dir)
-	}
-}
-
-// ---- AllowUserPreference ----
-
-func TestAllowUserPreferenceNilConfigReturnsFalse(t *testing.T) {
-	s := newTestService(t)
-	if s.AllowUserPreference() {
-		t.Error("AllowUserPreference should be false when torConfig is nil")
-	}
-}
-
-func TestAllowUserPreferenceFalseReturnsFalse(t *testing.T) {
-	s := newTestService(t)
-	s.SetConfig(&config.TorConfig{AllowUserPreference: false})
-	if s.AllowUserPreference() {
-		t.Error("AllowUserPreference should be false when config has AllowUserPreference=false")
-	}
-}
-
-func TestAllowUserPreferenceTrueReturnsTrue(t *testing.T) {
-	s := newTestService(t)
-	s.SetConfig(&config.TorConfig{AllowUserPreference: true})
-	if !s.AllowUserPreference() {
-		t.Error("AllowUserPreference should be true when config has AllowUserPreference=true")
-	}
-}
-
-// ---- ShouldUseTor ----
-
-func TestShouldUseTorNilConfigReturnsFalse(t *testing.T) {
-	s := newTestService(t)
-	if s.ShouldUseTor(nil) {
-		t.Error("ShouldUseTor should be false when torConfig is nil")
-	}
-}
-
-func TestShouldUseTorUseNetworkFalseNoUserPrefReturnsFalse(t *testing.T) {
-	s := newTestService(t)
-	s.SetConfig(&config.TorConfig{UseNetwork: false, AllowUserPreference: false})
-	if s.ShouldUseTor(nil) {
-		t.Error("ShouldUseTor should be false: UseNetwork=false, AllowUserPreference=false, no user pref")
-	}
-}
-
-func TestShouldUseTorUseNetworkTrueNoUserPrefReturnsTrue(t *testing.T) {
-	s := newTestService(t)
-	s.SetConfig(&config.TorConfig{UseNetwork: true, AllowUserPreference: false})
-	if !s.ShouldUseTor(nil) {
-		t.Error("ShouldUseTor should be true: UseNetwork=true, AllowUserPreference=false, no user pref")
-	}
-}
-
-func TestShouldUseTorUserPrefIgnoredWhenNotAllowed(t *testing.T) {
-	s := newTestService(t)
-	s.SetConfig(&config.TorConfig{UseNetwork: false, AllowUserPreference: false})
-	// Even with userPref=true, server setting must win
-	if s.ShouldUseTor(boolPtr(true)) {
-		t.Error("ShouldUseTor should be false: AllowUserPreference=false blocks user override")
-	}
-}
-
-func TestShouldUseTorInheritServerWhenUserPrefNil(t *testing.T) {
-	s := newTestService(t)
-	s.SetConfig(&config.TorConfig{UseNetwork: false, AllowUserPreference: true})
-	// user pref nil → inherit server (false)
-	if s.ShouldUseTor(nil) {
-		t.Error("ShouldUseTor should be false: AllowUserPreference=true, nil user pref, UseNetwork=false")
-	}
-}
-
-func TestShouldUseTorUserPrefTrueOverridesServerFalse(t *testing.T) {
-	s := newTestService(t)
-	s.SetConfig(&config.TorConfig{UseNetwork: false, AllowUserPreference: true})
-	if !s.ShouldUseTor(boolPtr(true)) {
-		t.Error("ShouldUseTor should be true: user override=true beats UseNetwork=false")
-	}
-}
-
-func TestShouldUseTorUserPrefFalseOverridesServerTrue(t *testing.T) {
-	s := newTestService(t)
-	s.SetConfig(&config.TorConfig{UseNetwork: true, AllowUserPreference: true})
-	if s.ShouldUseTor(boolPtr(false)) {
-		t.Error("ShouldUseTor should be false: user override=false beats UseNetwork=true")
 	}
 }
 

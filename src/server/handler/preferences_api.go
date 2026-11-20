@@ -97,7 +97,6 @@ func validatePreference(name, value string) (string, bool) {
 		"vidveil_pref_min_duration":       setOf("0", "60", "180", "300", "600", "1200", "1800"),
 		"vidveil_pref_max_history":        setOf("0", "10", "25", "50", "100"),
 		"vidveil_pref_auto_clear_history": setOf("0", "1", "7", "30"),
-		"vidveil_pref_use_tor":            setOf("0", "1"),
 	}
 	if allowed, documented := enums[name]; documented {
 		_, ok := allowed[value]

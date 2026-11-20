@@ -417,11 +417,6 @@ collect:
 				if isDupTitle {
 					continue
 				}
-				// Cross-page dedup: skip results already returned on an
-				// earlier page of the same search session
-				if m.sessionDedup.CheckAndMark(sessionID, normalizedURL, normalizedTitle) {
-					continue
-				}
 				// Mark as seen
 				seenURLs[normalizedURL] = true
 				if normalizedTitle != "" {
@@ -465,16 +460,23 @@ collect:
 		allResults = sortResultsPreviewFirst(allResults)
 	}
 
-	// Slice to the requested page window so the returned data array never
-	// exceeds resultsPerPage, per AI.md PART 14 pagination contract ("data"
-	// array size must respect "limit"). Cross-page duplicates across
-	// successive calls are already removed above via m.sessionDedup, so this
-	// window is the next resultsPerPage NEW items for this session.
+	// Mark only the result window returned to the caller. Marking every
+	// collected candidate before slicing would consume the entire upstream
+	// page on page 1, making the next request appear empty while the UI still
+	// reports a larger aggregate result count.
 	total := len(allResults)
 	pages := (total + resultsPerPage - 1) / resultsPerPage
-	pageResults := allResults
-	if resultsPerPage > 0 && total > resultsPerPage {
-		pageResults = allResults[:resultsPerPage]
+	pageResults := make([]model.VideoResult, 0, resultsPerPage)
+	for _, result := range allResults {
+		normalizedURL := normalizeURL(result.URL)
+		normalizedTitle := normalizeTitle(result.Title)
+		if m.sessionDedup.CheckAndMark(sessionID, normalizedURL, normalizedTitle) {
+			continue
+		}
+		pageResults = append(pageResults, result)
+		if len(pageResults) >= resultsPerPage {
+			break
+		}
 	}
 
 	// Build response

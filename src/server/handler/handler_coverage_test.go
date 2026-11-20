@@ -742,14 +742,11 @@ func TestAPIContact_PostMissingFields(t *testing.T) {
 func TestAPIContact_PostValid(t *testing.T) {
 	h, _ := newSecurityTestHandler(t)
 	h.appConfig.Server.Pages.Contact.Enabled = true
-	h.SetEmailService(&recordingSecurityReportEmailSender{})
-	form := url.Values{"name": {"Alice"}, "email": {"a@b.com"}, "subject": {"hello"}, "message": {"world"}}
-	addSimpleCaptcha(t, h, form)
-	body := strings.NewReader(form.Encode())
-	req := httptest.NewRequest("POST", "/api/v1/server/contact", body)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	h.APIContact(rr, req)
+	h.appConfig.Server.Contact.General.Email = "contact@example.test"
+	sender := &recordingSecurityReportEmailSender{}
+	h.SetEmailService(sender)
+	form := url.Values{"name": {"Alice"}, "email": {"a@b.com"}, "subject": {"hello"}, "message": {"world"}, "type": {"privacy"}, "request_kind": {"export"}}
+	rr := submitAPIContactConfirmation(t, h, "/api/v1/server/contact", form)
 	if rr.Code != http.StatusOK {
 		t.Errorf("APIContact POST valid status = %d, want %d", rr.Code, http.StatusOK)
 	}

@@ -79,20 +79,9 @@ func TestBuildTorrc_UseNetworkEnablesSocks(t *testing.T) {
 func TestBuildTorrc_NoNetworkDisablesSocks(t *testing.T) {
 	cfg := config.DefaultTorConfig()
 	cfg.UseNetwork = false
-	cfg.AllowUserPreference = false
 	got := buildTorrc(&cfg, "/tmp/hs", 64500, "/tmp/log/tor.log")
 	if !strings.Contains(got, "SocksPort 0") {
 		t.Errorf("buildTorrc with UseNetwork=false: expected SocksPort 0, got:\n%s", got)
-	}
-}
-
-func TestBuildTorrc_AllowUserPreferenceEnablesSocks(t *testing.T) {
-	cfg := config.DefaultTorConfig()
-	cfg.UseNetwork = false
-	cfg.AllowUserPreference = true
-	got := buildTorrc(&cfg, "/tmp/hs", 64500, "/tmp/log/tor.log")
-	if !strings.Contains(got, "SocksPort auto") {
-		t.Errorf("buildTorrc with AllowUserPreference=true: expected SocksPort auto, got:\n%s", got)
 	}
 }
 

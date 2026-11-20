@@ -34,23 +34,22 @@ func TestHelpMCPPageRendersResolvedConnectionGuide(t *testing.T) {
 	}
 }
 
-func TestHelpMCPPageAndAPIHideWhenDisabled(t *testing.T) {
+func TestHelpMCPPageAndAPIAlwaysAvailable(t *testing.T) {
 	setRealTemplatesFS(t)
 	h := newServerHandler(t)
-	h.appConfig.Server.MCP.Enabled = false
 
 	page := httptest.NewRecorder()
 	pageRequest := httptest.NewRequest(http.MethodGet, "/server/help/mcp", nil)
 	pageRequest.Header.Set("User-Agent", "Mozilla/5.0")
 	h.HelpMCPPage(page, pageRequest)
-	if page.Code != http.StatusNotFound {
-		t.Errorf("HelpMCPPage status = %d, want %d", page.Code, http.StatusNotFound)
+	if page.Code != http.StatusOK {
+		t.Errorf("HelpMCPPage status = %d, want %d", page.Code, http.StatusOK)
 	}
 
 	api := httptest.NewRecorder()
 	h.APIHelpMCP(api, httptest.NewRequest(http.MethodGet, "/api/v1/server/help/mcp", nil))
-	if api.Code != http.StatusNotFound {
-		t.Errorf("APIHelpMCP status = %d, want %d", api.Code, http.StatusNotFound)
+	if api.Code != http.StatusOK {
+		t.Errorf("APIHelpMCP status = %d, want %d", api.Code, http.StatusOK)
 	}
 
 	help := httptest.NewRecorder()
@@ -60,8 +59,8 @@ func TestHelpMCPPageAndAPIHideWhenDisabled(t *testing.T) {
 	if help.Code != http.StatusOK {
 		t.Fatalf("HelpPage status = %d, want %d", help.Code, http.StatusOK)
 	}
-	if strings.Contains(help.Body.String(), "/server/help/mcp") {
-		t.Error("HelpPage should hide the MCP guide link when MCP is disabled")
+	if !strings.Contains(help.Body.String(), "/server/help/mcp") {
+		t.Error("HelpPage should expose the MCP guide link because MCP is always available")
 	}
 }
 

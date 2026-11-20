@@ -84,7 +84,6 @@ func TestPreferencesPage_RendersSavedAppPreferenceCookies(t *testing.T) {
 	for name, value := range map[string]string{
 		"vidveil_pref_max_history":        "25",
 		"vidveil_pref_auto_clear_history": "7",
-		"vidveil_pref_use_tor":            "1",
 	} {
 		req.AddCookie(&http.Cookie{Name: name, Value: value})
 	}
@@ -97,7 +96,6 @@ func TestPreferencesPage_RendersSavedAppPreferenceCookies(t *testing.T) {
 	for _, expected := range []string{
 		`<option value="25" selected>25</option>`,
 		`<option value="7" selected>After 7 days</option>`,
-		`id="use-tor" name="vidveil_pref_use_tor" value="1" checked`,
 		`<input type="checkbox" checked disabled>`,
 	} {
 		if !strings.Contains(rr.Body.String(), expected) {

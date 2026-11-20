@@ -6,10 +6,12 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -64,12 +66,8 @@ func TestContactSubmissionSendsOneServerRoutedEmail(t *testing.T) {
 	h.appConfig.Server.Contact.General.Email = "contact@example.test"
 	sender := &recordingSecurityReportEmailSender{}
 	h.SetEmailService(sender)
-	form := url.Values{"name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"Question"}, "message": {"Hello"}}
-	addSimpleCaptcha(t, h, form)
-	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	h.handleContactSubmit(rr, req)
+	form := url.Values{"name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"Question"}, "message": {"Hello"}, "type": {"privacy"}, "request_kind": {"export"}}
+	rr := submitAndConfirmHTMLContact(t, h, "/server/contact", form)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("contact submit status=%d body=%s", rr.Code, rr.Body.String())
 	}
@@ -86,19 +84,12 @@ func TestAPIContactDeliveryFailureReleasesRetryState(t *testing.T) {
 	h, _ := newSecurityTestHandler(t)
 	h.appConfig.Server.Pages.Contact.Enabled = true
 	h.appConfig.Server.Contact.General.Email = "contact@example.test"
+	h.appConfig.Server.Pages.Contact.Antispam.ReviewMinSeconds = 0
 	sender := &recordingSecurityReportEmailSender{contactErr: errors.New("smtp unavailable")}
 	h.SetEmailService(sender)
-	form := url.Values{"name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"Question"}, "message": {"Please reply"}}
-	request := func() *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/server/contact", strings.NewReader(form.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		response := httptest.NewRecorder()
-		h.APIContact(response, req)
-		return response
-	}
 	for attempt := 0; attempt < 2; attempt++ {
-		addSimpleCaptcha(t, h, form)
-		response := request()
+		form := url.Values{"name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"Question"}, "message": {"Please reply"}, "type": {"privacy"}, "request_kind": {"export"}}
+		response := submitAPIContactConfirmation(t, h, "/api/v1/server/contact", form)
 		if response.Code != http.StatusInternalServerError {
 			t.Fatalf("attempt %d status=%d, want 500; body=%s", attempt+1, response.Code, response.Body.String())
 		}
@@ -106,6 +97,39 @@ func TestAPIContactDeliveryFailureReleasesRetryState(t *testing.T) {
 	if len(sender.calls) != 2 {
 		t.Fatalf("sent %d attempts, want 2", len(sender.calls))
 	}
+}
+
+func submitAPIContactConfirmation(t *testing.T, h *ServerHandler, path string, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+	h.appConfig.Server.Pages.Contact.Antispam.ReviewMinSeconds = 0
+	addSimpleCaptcha(t, h, form)
+	form.Set("step", "submit")
+	submit := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+	submit.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	submitResponse := httptest.NewRecorder()
+	h.APIContact(submitResponse, submit)
+	if submitResponse.Code != http.StatusOK {
+		t.Fatalf("review step status=%d body=%s", submitResponse.Code, submitResponse.Body.String())
+	}
+	var envelope struct {
+		Data struct {
+			ReviewToken string `json:"review_token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(submitResponse.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode review response: %v", err)
+	}
+	if envelope.Data.ReviewToken == "" {
+		t.Fatalf("review response missing token: %s", submitResponse.Body.String())
+	}
+	form.Set("step", "confirm")
+	form.Set("confirmed", "true")
+	form.Set("review_token", envelope.Data.ReviewToken)
+	confirm := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+	confirm.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+	h.APIContact(response, confirm)
+	return response
 }
 
 // newSecurityTestHandler wires a ServerHandler with a real tempdir sqlite DB
@@ -236,11 +260,7 @@ func TestHandleSecurityReportSubmit_DropdownComponent_Succeeds(t *testing.T) {
 	h, securityID := newSecurityTestHandler(t)
 	h.SetEmailService(email.NewEmailService(h.appConfig))
 	form := securityFormValues("API", "")
-	addSimpleCaptcha(t, h, form)
-	req := httptest.NewRequest(http.MethodPost, "/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	h.ContactPage(rr, req)
+	rr := submitAndConfirmHTMLContact(t, h, "/server/contact?security_id="+securityID, form)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("handleSecurityReportSubmit dropdown: status=%d want 200; body=%s", rr.Code, rr.Body.String())
 	}
@@ -267,11 +287,7 @@ func TestSecurityReportSendsSingleMaintainerNoticeAndOptionalAcknowledgment(t *t
 			sender := &recordingSecurityReportEmailSender{acknowledge: tc.acknowledge}
 			h.SetEmailService(sender)
 			form := securityFormValues("API", "")
-			addSimpleCaptcha(t, h, form)
-			req := httptest.NewRequest(http.MethodPost, "/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			rr := httptest.NewRecorder()
-			h.ContactPage(rr, req)
+			rr := submitAndConfirmHTMLContact(t, h, "/server/contact?security_id="+securityID, form)
 			if rr.Code != http.StatusOK {
 				t.Fatalf("security report submit status=%d, want 200; body=%s", rr.Code, rr.Body.String())
 			}
@@ -302,6 +318,7 @@ func TestSecurityReportDoesNotSendEmailBeforeCaptchaPasses(t *testing.T) {
 	form := securityFormValues("API", "")
 	req := httptest.NewRequest(http.MethodPost, "/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addContactOriginEvidence(req)
 	rr := httptest.NewRecorder()
 	h.ContactPage(rr, req)
 	if len(sender.calls) != 0 {
@@ -316,11 +333,7 @@ func TestSecurityReportDoesNotSendEmailBeforeCaptchaPasses(t *testing.T) {
 func TestHandleSecurityReportSubmit_OtherComponent_UsesFreeTextFallback(t *testing.T) {
 	h, securityID := newSecurityTestHandler(t)
 	form := securityFormValues("other", "Custom Engine Plugin")
-	addSimpleCaptcha(t, h, form)
-	req := httptest.NewRequest(http.MethodPost, "/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	h.ContactPage(rr, req)
+	rr := submitAndConfirmHTMLContact(t, h, "/server/contact?security_id="+securityID, form)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("handleSecurityReportSubmit other: status=%d want 200; body=%s", rr.Code, rr.Body.String())
 	}
@@ -342,6 +355,7 @@ func TestHandleSecurityReportSubmit_OtherComponentEmpty_Rejected(t *testing.T) {
 	addSimpleCaptcha(t, h, form)
 	req := httptest.NewRequest(http.MethodPost, "/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addContactOriginEvidence(req)
 	rr := httptest.NewRecorder()
 	h.ContactPage(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -356,11 +370,7 @@ func TestHandleSecurityReportSubmit_OtherComponentEmpty_Rejected(t *testing.T) {
 func TestAPIContact_SecurityMode_OtherComponent_UsesFreeTextFallback(t *testing.T) {
 	h, securityID := newSecurityTestHandler(t)
 	form := securityFormValues("other", "Bespoke Backend Service")
-	addSimpleCaptcha(t, h, form)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/server/contact?security_id="+securityID, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	h.APIContact(rr, req)
+	rr := submitAPIContactConfirmation(t, h, "/api/v1/server/contact?security_id="+securityID, form)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("APIContact security mode: status=%d want 200; body=%s", rr.Code, rr.Body.String())
 	}
@@ -443,4 +453,39 @@ func TestSecurityReportStatusPage(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("valid tracking id/token: status=%d want 200; body=%s", rr.Code, rr.Body.String())
 	}
+}
+
+func addContactOriginEvidence(req *http.Request) {
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Origin", contactRequestOrigin(req))
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+}
+
+func submitAndConfirmHTMLContact(t *testing.T, h *ServerHandler, path string, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+	h.appConfig.Server.Pages.Contact.Antispam.ReviewMinSeconds = 0
+	addSimpleCaptcha(t, h, form)
+	form.Set("step", "submit")
+	submit := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+	submit.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addContactOriginEvidence(submit)
+	submitResponse := httptest.NewRecorder()
+	h.ContactPage(submitResponse, submit)
+	if submitResponse.Code != http.StatusOK {
+		t.Fatalf("review step status=%d body=%s", submitResponse.Code, submitResponse.Body.String())
+	}
+	reviewToken := regexp.MustCompile(`name="review_token" value="([^"]+)"`).FindSubmatch(submitResponse.Body.Bytes())
+	if len(reviewToken) != 2 {
+		t.Fatalf("review response did not contain a token: %s", submitResponse.Body.String())
+	}
+	form.Set("step", "confirm")
+	form.Set("confirmed", "true")
+	form.Set("review_token", string(reviewToken[1]))
+	confirm := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+	confirm.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addContactOriginEvidence(confirm)
+	response := httptest.NewRecorder()
+	h.ContactPage(response, confirm)
+	return response
 }

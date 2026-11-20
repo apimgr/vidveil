@@ -16,7 +16,6 @@ import (
 func createTestConfig() *config.AppConfig {
 	return &config.AppConfig{
 		Server: config.ServerConfig{
-			MCP: config.MCPConfig{Enabled: true},
 			Branding: config.ServerBrandingConfig{
 				Title:       "Test Vidveil",
 				Description: "Test Description",

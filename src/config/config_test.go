@@ -22,9 +22,6 @@ func TestDefaultAppConfig(t *testing.T) {
 	if cfg.Server.Mode != "production" {
 		t.Errorf("Expected mode 'production', got '%s'", cfg.Server.Mode)
 	}
-	if !cfg.Server.MCP.Enabled {
-		t.Error("MCP should be enabled by default per AI.md PART 11")
-	}
 	if cfg.Server.Pages.Help.MCP == "" {
 		t.Error("VidVeil MCP project help should be populated from IDEA.md")
 	}
@@ -61,6 +58,9 @@ func TestDefaultAppConfig(t *testing.T) {
 	if cfg.Search.ResultsPerPage != 50 {
 		t.Errorf("Expected 50 results per page, got %d", cfg.Search.ResultsPerPage)
 	}
+	if cfg.Server.Pages.Contact.Antispam.MaxLinks != 10 || cfg.Server.Pages.Contact.Antispam.ReviewMinSeconds != 2 || cfg.Server.Pages.Contact.Antispam.ReviewMaxSeconds != 900 {
+		t.Errorf("contact antispam defaults = %+v, want max_links 10 and review window 2..900 seconds", cfg.Server.Pages.Contact.Antispam)
+	}
 }
 
 func TestNormalizeUpdateChannel(t *testing.T) {
@@ -92,9 +92,6 @@ func TestMCPAndLLMSConfigKeys(t *testing.T) {
 	if err := yaml.Unmarshal(contents, cfg); err != nil {
 		t.Fatalf("unmarshal config: %v", err)
 	}
-	if cfg.Server.MCP.Enabled {
-		t.Fatal("server.mcp.enabled was not read")
-	}
 	if cfg.Server.Pages.Help.MCP != "Project MCP help from config" {
 		t.Fatalf("server.pages.help.mcp = %q", cfg.Server.Pages.Help.MCP)
 	}
@@ -103,6 +100,53 @@ func TestMCPAndLLMSConfigKeys(t *testing.T) {
 	}
 	if cfg.Web.APIContact != "api@example.test" || len(cfg.Web.LLMS.CustomSections) != 1 {
 		t.Fatalf("web contact/sections = %q / %#v", cfg.Web.APIContact, cfg.Web.LLMS.CustomSections)
+	}
+	encoded, err := marshalYAML(cfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if strings.Contains(string(encoded), "\n  mcp:\n    enabled:") {
+		t.Fatal("server.mcp.enabled remains configurable")
+	}
+}
+
+func TestLogsDefaultsInheritanceAndSparseYAML(t *testing.T) {
+	var cfg AppConfig
+	contents := []byte("server:\n  logs:\n    defaults:\n      custom: '{time} {level} {msg}'\n      rotate: daily\n      keep: 7d\n    access:\n      format: apache\n    audit:\n      enabled: true\n      format: json\n      rotate: monthly\n")
+	if err := yaml.Unmarshal(contents, &cfg); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	if cfg.Server.Logs.Server.Rotate != "daily" || cfg.Server.Logs.Server.Keep != "7d" || cfg.Server.Logs.Server.Custom != "{time} {level} {msg}" {
+		t.Fatalf("inherited server log defaults = %+v", cfg.Server.Logs.Server)
+	}
+	if cfg.Server.Logs.Access.Rotate != "daily" || cfg.Server.Logs.Audit.Rotate != "monthly" || cfg.Server.Logs.Audit.Keep != "7d" {
+		t.Fatalf("audit log defaults = %+v, want explicit monthly rotation and inherited retention", cfg.Server.Logs.Audit)
+	}
+	if cfg.Server.Logs.Server.Filename != "server.log" {
+		t.Fatalf("server log filename = %q, want derived server.log", cfg.Server.Logs.Server.Filename)
+	}
+
+	encoded, err := marshalYAML(map[string]any{"server": map[string]any{"logs": map[string]any{"defaults": map[string]string{"rotate": "weekly,50MB"}}}})
+	if err != nil {
+		t.Fatalf("marshal YAML: %v", err)
+	}
+	if !strings.Contains(string(encoded), "\n  logs:\n    defaults:\n      rotate:") {
+		t.Fatalf("YAML does not use two-space nesting:\n%s", encoded)
+	}
+
+	defaults := sparseLogsConfig(DefaultAppConfig().Server.Logs)
+	if defaults.Debug.Filename != "" || defaults.Server.Filename != "" || defaults.App.Filename != "" {
+		t.Fatal("generated log configuration repeats filenames instead of deriving them")
+	}
+	if defaults.Server.Rotate != "" || defaults.Server.Keep != "" || defaults.Access.Rotate != "monthly" || defaults.Audit.Rotate != "daily" {
+		t.Fatalf("generated log overrides = server:%+v access:%+v audit:%+v", defaults.Server, defaults.Access, defaults.Audit)
+	}
+
+	customLog := filepath.Join(t.TempDir(), "audit-custom.jsonl")
+	logs := DefaultAppConfig().Server.Logs
+	logs.Audit.Filename = customLog
+	if got := sparseLogsConfig(logs).Audit.Filename; got != customLog {
+		t.Fatalf("custom audit filename = %q, want %q", got, customLog)
 	}
 }
 

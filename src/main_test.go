@@ -1449,21 +1449,40 @@ func TestPeekServerListenConfigReadsOnlyScalarServerFields(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(contents), 0600); err != nil {
 		t.Fatal(err)
 	}
-	address, port := peekServerListenConfig(configPath)
+	address, port := config.PeekServerListenConfig(configPath)
 	if address != "[::]" || port != "8080" {
-		t.Fatalf("peekServerListenConfig() = (%q, %q), want ([::], 8080)", address, port)
+		t.Fatalf("PeekServerListenConfig() = (%q, %q), want ([::], 8080)", address, port)
+	}
+}
+
+func TestPeekServerListenConfigMergesYAMLDOverrides(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "server.yml")
+	if err := os.WriteFile(configPath, []byte("server:\n  address: '[::]'\n  port: 8080\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dropDir := filepath.Join(root, "yaml.d")
+	if err := os.Mkdir(dropDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dropDir, "10-listen.yml"), []byte("server:\n  port: 8181\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	address, port := config.PeekServerListenConfig(configPath)
+	if address != "[::]" || port != "8181" {
+		t.Fatalf("PeekServerListenConfig() = (%q, %q), want merged ([::], 8181)", address, port)
 	}
 }
 
 func TestPeekServerListenConfigIgnoresMissingAndNonScalarValues(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "server.yml")
-	if address, port := peekServerListenConfig(configPath); address != "" || port != "" {
+	if address, port := config.PeekServerListenConfig(configPath); address != "" || port != "" {
 		t.Fatalf("missing config peek = (%q, %q), want empty values", address, port)
 	}
 	if err := os.WriteFile(configPath, []byte("server:\n  address: [::]\n  port: {value: 8080}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if address, port := peekServerListenConfig(configPath); address != "" || port != "" {
+	if address, port := config.PeekServerListenConfig(configPath); address != "" || port != "" {
 		t.Fatalf("non-scalar config peek = (%q, %q), want empty values", address, port)
 	}
 }

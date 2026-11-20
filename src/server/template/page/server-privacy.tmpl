@@ -176,12 +176,12 @@
         {{ if .DPOEmail }}
         <p>{{ if .DPOName }}{{ .DPOName }} — {{ end }}<a href="mailto:{{ .DPOEmail }}">{{ .DPOEmail }}</a></p>
         {{ else }}
-        <p>{{ t "dpo.no_email" }} <a href="{{ path "/server/contact" }}">{{ t "dpo.contact_form" }}</a>.</p>
+        <p>{{ t "dpo.no_email" }} <a href="{{ path "/server/security" }}">{{ t "security.title" }}</a>.</p>
         {{ end }}
         <p><a href="{{ path "/server/dpo" }}">{{ t "dpo.title" }}</a></p>
 
         <h2>{{ t "privacy.questions" }}</h2>
-        <p>{{ t "privacy.questions_prefix" }} <a href="{{ path "/server/contact" }}">{{ t "privacy.contact_link" }}</a>.</p>
+        <p>{{ t "privacy.questions_prefix" }} <a href="{{ path "/server/security" }}">{{ t "security.title" }}</a>.</p>
         {{ end }}
     </div>
 </div>

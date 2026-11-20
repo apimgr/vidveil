@@ -315,13 +315,6 @@ func TestServer_MCPAliasesShareStatelessEndpoint(t *testing.T) {
 			t.Errorf("MCP operator tool visibility with %s = %t, want %t", credential.name, listed, credential.want)
 		}
 	}
-	s.appConfig.Server.MCP.Enabled = false
-	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{}`))
-	rr := httptest.NewRecorder()
-	s.router.ServeHTTP(rr, req)
-	if rr.Code != http.StatusNotFound {
-		t.Errorf("disabled MCP status = %d, want 404", rr.Code)
-	}
 }
 
 func TestServer_GuestPreferenceAPIUsesCanonicalRoutesWithoutCSRF(t *testing.T) {

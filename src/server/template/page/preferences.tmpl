@@ -220,14 +220,6 @@
             <section>
                 <h2>{{ t "prefs.privacy" }}</h2>
                 <div class="form-group">
-                    <label class="toggle">
-                        <input type="hidden" name="vidveil_pref_use_tor" value="0">
-                        <input type="checkbox" id="use-tor" name="vidveil_pref_use_tor" value="1"{{if eq (index .Prefs "use_tor") "1"}} checked{{end}}>
-                        <span class="slider"></span>
-                        <span class="toggle-label">{{ t "prefs.use_tor" }}</span>
-                    </label>
-                </div>
-                <div class="form-group">
                     <label>
                         <input type="checkbox" checked disabled>
                         {{ t "prefs.proxy_thumbnails_locked" }}

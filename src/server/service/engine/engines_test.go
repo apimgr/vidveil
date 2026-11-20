@@ -528,50 +528,6 @@ func TestGetUserIPFromContext_EmptyContext(t *testing.T) {
 	}
 }
 
-// Context key tests: WithTorPref / GetTorPrefFromContext
-
-func TestWithTorPref_TrueValue(t *testing.T) {
-	ctx := context.Background()
-	val := true
-	ctx = WithTorPref(ctx, &val)
-	pref := GetTorPrefFromContext(ctx)
-	if pref == nil {
-		t.Fatal("GetTorPrefFromContext: expected non-nil *bool when pref was set")
-	}
-	if *pref != true {
-		t.Errorf("GetTorPrefFromContext: got %v, want true", *pref)
-	}
-}
-
-func TestWithTorPref_FalseValue(t *testing.T) {
-	ctx := context.Background()
-	val := false
-	ctx = WithTorPref(ctx, &val)
-	pref := GetTorPrefFromContext(ctx)
-	if pref == nil {
-		t.Fatal("GetTorPrefFromContext: expected non-nil *bool when pref was set to false")
-	}
-	if *pref != false {
-		t.Errorf("GetTorPrefFromContext: got %v, want false", *pref)
-	}
-}
-
-func TestWithTorPref_Nil(t *testing.T) {
-	ctx := context.Background()
-	ctx = WithTorPref(ctx, nil)
-	pref := GetTorPrefFromContext(ctx)
-	if pref != nil {
-		t.Errorf("GetTorPrefFromContext: got %v, want nil when set with nil", pref)
-	}
-}
-
-func TestGetTorPrefFromContext_EmptyContext(t *testing.T) {
-	pref := GetTorPrefFromContext(context.Background())
-	if pref != nil {
-		t.Errorf("GetTorPrefFromContext: got %v, want nil on empty context", pref)
-	}
-}
-
 // GenerateResultID tests
 
 func TestGenerateResultID_NonEmpty(t *testing.T) {

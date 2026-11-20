@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -134,6 +135,41 @@ type MigrationManager interface {
 	GetDB() *sql.DB
 }
 
+func permissionsPolicyHeader() string {
+	locked := map[string]bool{
+		"accelerometer": false, "ambient-light-sensor": false, "battery": false,
+		"camera": false, "display-capture": false, "geolocation": false,
+		"gyroscope": false, "hid": false, "idle-detection": false,
+		"magnetometer": false, "microphone": false, "midi": false,
+		"screen-wake-lock": false, "serial": false, "usb": false,
+		"xr-spatial-tracking": false,
+	}
+	features := make(map[string]string, len(locked)+11)
+	for feature, used := range locked {
+		value := "()"
+		if used {
+			value = "(self)"
+		}
+		features[feature] = value
+	}
+	for _, feature := range []string{"attribution-reporting", "browsing-topics", "interest-cohort"} {
+		features[feature] = "()"
+	}
+	for _, feature := range []string{"autoplay", "encrypted-media", "fullscreen", "payment", "picture-in-picture", "publickey-credentials-get", "storage-access", "web-share"} {
+		features[feature] = "(self)"
+	}
+	names := make([]string, 0, len(features))
+	for feature := range features {
+		names = append(names, feature)
+	}
+	sort.Strings(names)
+	parts := make([]string, 0, len(names))
+	for _, feature := range names {
+		parts = append(parts, feature+"="+features[feature])
+	}
+	return strings.Join(parts, ", ")
+}
+
 // NewServer creates a new server instance
 func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr *engine.EngineManager, migrationMgr MigrationManager, sched *scheduler.Scheduler, logger *logging.AppLogger) *Server {
 	// Set templates filesystem for handlers
@@ -141,7 +177,7 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 
 	// Create rate limiter per PART 12
 	limiter := ratelimit.NewRateLimiter(
-		appConfig.Server.RateLimit.Enabled,
+		true,
 		appConfig.Server.RateLimit.Requests,
 		appConfig.Server.RateLimit.Window,
 	)
@@ -379,17 +415,7 @@ func (s *Server) setupMiddleware() {
 				}
 				w.Header().Set(headerName, s.buildCSPHeader(r))
 			}
-			// Permissions-Policy per PART 11 spec defaults
-			w.Header().Set("Permissions-Policy",
-				"accelerometer=(), ambient-light-sensor=(), battery=(), camera=(), "+
-					"display-capture=(), geolocation=(), gyroscope=(), hid=(), "+
-					"idle-detection=(), magnetometer=(), microphone=(), midi=(), "+
-					"screen-wake-lock=(), serial=(), usb=(), xr-spatial-tracking=(), "+
-					"attribution-reporting=(), browsing-topics=(), interest-cohort=(), "+
-					"autoplay=(self), encrypted-media=(self), fullscreen=(self), "+
-					"payment=(self), picture-in-picture=(self), "+
-					"publickey-credentials-get=(self), storage-access=(self), web-share=(self)",
-			)
+			w.Header().Set("Permissions-Policy", permissionsPolicyHeader())
 			// HSTS per PART 11 — max-age=63072000 (2 years), includeSubDomains, preload
 			if s.appConfig.Server.SSL.Enabled && !urlvar.GlobalResolver().IsOverlayRequest(r) {
 				w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
@@ -771,6 +797,9 @@ func requestLogMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(ww, r)
+		if ww.Status() >= http.StatusOK && ww.Status() < http.StatusMultipleChoices && successfulHealthPath(r.URL.Path) {
+			return
+		}
 
 		scheme := "http"
 		if r.TLS != nil {
@@ -798,6 +827,13 @@ func requestLogMiddleware(next http.Handler) http.Handler {
 			time.Since(start), source,
 		)
 	})
+}
+
+func successfulHealthPath(path string) bool {
+	for _, suffix := range []string{".json", ".txt"} {
+		path = strings.TrimSuffix(path, suffix)
+	}
+	return path == "/healthz" || strings.HasSuffix(path, "/healthz")
 }
 
 // onionLocationMiddleware adds the Onion-Location header on clearnet HTML responses
@@ -1345,6 +1381,14 @@ func (s *Server) setupRoutes() {
 
 	// Custom 404 handler per AI.md PART 14
 	s.router.NotFound(h.NotFoundHandler)
+	server.SetPathMatcher(func(path string) bool {
+		for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodHead} {
+			if s.router.Match(chi.NewRouteContext(), method, path) {
+				return true
+			}
+		}
+		return false
+	})
 }
 
 func (s *Server) notifyScheduledTaskFailure(task scheduler.ScheduledTask, history scheduler.TaskHistory) {

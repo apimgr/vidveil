@@ -102,9 +102,6 @@ type ServerConfig struct {
 	// Can be overridden by MODE env var or --mode CLI flag
 	Mode string `yaml:"mode"`
 
-	// MCP controls the Streamable HTTP MCP endpoint per AI.md PART 11.
-	MCP MCPConfig `yaml:"mcp"`
-
 	// Pages holds configurable Markdown appended to server help pages per AI.md PART 16.
 	Pages ServerPagesConfig `yaml:"pages"`
 
@@ -214,11 +211,6 @@ type ServerConfig struct {
 	Privacy PrivacyConfig `yaml:"privacy"`
 }
 
-// MCPConfig controls exposure of the API through Model Context Protocol.
-type MCPConfig struct {
-	Enabled bool `yaml:"enabled"`
-}
-
 type ServerPagesConfig struct {
 	About   ServerPageContentConfig  `yaml:"about"`
 	Privacy ServerPageContentConfig  `yaml:"privacy"`
@@ -249,10 +241,11 @@ type ContactAntispamConfig struct {
 	Global               int      `yaml:"global"`
 	Window               string   `yaml:"window"`
 	MaxLinks             int      `yaml:"max_links"`
+	ReviewMinSeconds     int      `yaml:"review_min_seconds"`
+	ReviewMaxSeconds     int      `yaml:"review_max_seconds"`
 	RejectMarkup         bool     `yaml:"reject_markup"`
 	BlockedWords         []string `yaml:"blocked_words"`
 	BlockedEmailDomains  []string `yaml:"blocked_email_domains"`
-	BlockedLinkDomains   []string `yaml:"blocked_link_domains"`
 	Strikes              int      `yaml:"strikes"`
 	BanHours             int      `yaml:"ban_hours"`
 	DuplicateWindowHours int      `yaml:"duplicate_window_hours"`
@@ -445,10 +438,6 @@ type TorConfig struct {
 	// Per PART 31: Particularly relevant for VidVeil to anonymize search queries
 	UseNetwork bool `yaml:"use_network"`
 
-	// Allow users to set their own Tor network preference (override server default)
-	// Per PART 31: Users can set via cookie to always use Tor, never use Tor, or inherit server default
-	AllowUserPreference bool `yaml:"allow_user_preference"`
-
 	// Allow users to opt-in to forwarding their IP address to video sites
 	// When enabled, users can set a preference (via cookie) to include their IP
 	// in X-Forwarded-For header - useful for geo-targeted content
@@ -539,8 +528,6 @@ func DefaultTorConfig() TorConfig {
 		Binary: "",
 		// disabled by default, user can enable for privacy
 		UseNetwork: false,
-		// allow users to override outbound Tor routing per PART 31
-		AllowUserPreference: true,
 		// feature available, but user must opt-in via preferences
 		AllowUserIPForward:        true,
 		MaxCircuits:               32,
@@ -754,10 +741,11 @@ type ContentRestrictionConfig struct {
 
 // LogsConfig holds logging settings per AI.md PART 11
 type LogsConfig struct {
-	Level  string          `yaml:"level"`
-	Debug  DebugLogConfig  `yaml:"debug"`
-	Access AccessLogConfig `yaml:"access"`
-	Server ServerLogConfig `yaml:"server"`
+	Level    string            `yaml:"level"`
+	Defaults LogDefaultsConfig `yaml:"defaults"`
+	Debug    DebugLogConfig    `yaml:"debug"`
+	Access   AccessLogConfig   `yaml:"access"`
+	Server   ServerLogConfig   `yaml:"server"`
 	// AI.md PART 11: error.log
 	Error    ErrorLogConfig    `yaml:"error"`
 	Audit    AuditLogConfig    `yaml:"audit"`
@@ -768,40 +756,153 @@ type LogsConfig struct {
 	App AppLogConfig `yaml:"app"`
 }
 
+// LogDefaultsConfig supplies the inherited custom format, rotation, and
+// retention policy for each log kind.
+type LogDefaultsConfig struct {
+	Custom string `yaml:"custom"`
+	Rotate string `yaml:"rotate"`
+	Keep   string `yaml:"keep"`
+}
+
+func (logs *LogsConfig) UnmarshalYAML(node *yaml.Node) error {
+	type plainLogs LogsConfig
+	defaults := plainLogs(defaultLogsConfig())
+	if err := node.Decode(&defaults); err != nil {
+		return err
+	}
+	resolved := LogsConfig(defaults)
+	if yamlMapValue(yamlMapValue(node, "defaults"), "rotate") != nil {
+		if yamlMapValue(yamlMapValue(node, "debug"), "rotate") == nil {
+			resolved.Debug.Rotate = ""
+		}
+		if yamlMapValue(yamlMapValue(node, "access"), "rotate") == nil {
+			resolved.Access.Rotate = ""
+		}
+		if yamlMapValue(yamlMapValue(node, "server"), "rotate") == nil {
+			resolved.Server.Rotate = ""
+		}
+		if yamlMapValue(yamlMapValue(node, "error"), "rotate") == nil {
+			resolved.Error.Rotate = ""
+		}
+		if yamlMapValue(yamlMapValue(node, "audit"), "rotate") == nil {
+			resolved.Audit.Rotate = ""
+		}
+		if yamlMapValue(yamlMapValue(node, "security"), "rotate") == nil {
+			resolved.Security.Rotate = ""
+		}
+		if yamlMapValue(yamlMapValue(node, "auth"), "rotate") == nil {
+			resolved.Auth.Rotate = ""
+		}
+		if yamlMapValue(yamlMapValue(node, "app"), "rotate") == nil {
+			resolved.App.Rotate = ""
+		}
+	}
+	applyLogDefaults(&resolved)
+	*logs = resolved
+	return nil
+}
+
+func defaultLogsConfig() LogsConfig {
+	return LogsConfig{
+		Level:    "info",
+		Defaults: LogDefaultsConfig{Rotate: "weekly,50MB", Keep: "none"},
+		Debug:    DebugLogConfig{Format: "text"},
+		Access:   AccessLogConfig{Format: "apache", Rotate: "monthly"},
+		Server:   ServerLogConfig{Format: "text"},
+		Error:    ErrorLogConfig{Format: "text"},
+		Audit: AuditLogConfig{Enabled: true, Format: "json", Rotate: "daily", Events: AuditLogEventsConfig{
+			Configuration: true, Security: true, Backup: true, Server: true,
+		}, IncludeUserAgent: true},
+		Security: SecurityLogConfig{Enabled: true, Format: "fail2ban"},
+		Auth:     AuthLogConfig{Enabled: true, Format: "syslog"},
+		App:      AppLogConfig{Enabled: true, Format: "logfmt"},
+	}
+}
+
+func applyLogDefaults(logs *LogsConfig) {
+	apply := func(custom, keep, rotate *string) {
+		if *custom == "" {
+			*custom = logs.Defaults.Custom
+		}
+		if *keep == "" {
+			*keep = logs.Defaults.Keep
+		}
+		if *rotate == "" {
+			*rotate = logs.Defaults.Rotate
+		}
+	}
+	apply(&logs.Debug.Custom, &logs.Debug.Keep, &logs.Debug.Rotate)
+	apply(&logs.Access.Custom, &logs.Access.Keep, &logs.Access.Rotate)
+	apply(&logs.Server.Custom, &logs.Server.Keep, &logs.Server.Rotate)
+	apply(&logs.Error.Custom, &logs.Error.Keep, &logs.Error.Rotate)
+	apply(&logs.Audit.Custom, &logs.Audit.Keep, &logs.Audit.Rotate)
+	apply(&logs.Security.Custom, &logs.Security.Keep, &logs.Security.Rotate)
+	apply(&logs.Auth.Custom, &logs.Auth.Keep, &logs.Auth.Rotate)
+	apply(&logs.App.Custom, &logs.App.Keep, &logs.App.Rotate)
+	if logs.Debug.Filename == "" {
+		logs.Debug.Filename = "debug.log"
+	}
+	if logs.Access.Filename == "" {
+		logs.Access.Filename = "access.log"
+	}
+	if logs.Server.Filename == "" {
+		logs.Server.Filename = "server.log"
+	}
+	if logs.Error.Filename == "" {
+		logs.Error.Filename = "error.log"
+	}
+	if logs.Audit.Filename == "" {
+		logs.Audit.Filename = "audit.log"
+	}
+	if logs.Security.Filename == "" {
+		logs.Security.Filename = "security.log"
+	}
+	if logs.Auth.Filename == "" {
+		logs.Auth.Filename = "auth.log"
+	}
+	if logs.App.Filename == "" {
+		logs.App.Filename = "vidveil.log"
+	}
+}
+
 // DebugLogConfig holds debug log settings
 type DebugLogConfig struct {
 	Enabled  bool   `yaml:"enabled"`
-	Filename string `yaml:"filename"`
+	Filename string `yaml:"filename,omitempty"`
 	Format   string `yaml:"format"`
-	Keep     string `yaml:"keep"`
-	Rotate   string `yaml:"rotate"`
+	Custom   string `yaml:"custom,omitempty"`
+	Keep     string `yaml:"keep,omitempty"`
+	Rotate   string `yaml:"rotate,omitempty"`
 }
 
 // AccessLogConfig holds access log settings
 type AccessLogConfig struct {
 	Enabled  bool   `yaml:"enabled"`
-	Filename string `yaml:"filename"`
+	Filename string `yaml:"filename,omitempty"`
 	Format   string `yaml:"format"`
-	Keep     string `yaml:"keep"`
-	Rotate   string `yaml:"rotate"`
+	Custom   string `yaml:"custom,omitempty"`
+	Keep     string `yaml:"keep,omitempty"`
+	Rotate   string `yaml:"rotate,omitempty"`
 }
 
 // ServerLogConfig holds server log settings
 type ServerLogConfig struct {
 	Enabled  bool   `yaml:"enabled"`
-	Filename string `yaml:"filename"`
+	Filename string `yaml:"filename,omitempty"`
 	Format   string `yaml:"format"`
-	Keep     string `yaml:"keep"`
-	Rotate   string `yaml:"rotate"`
+	Custom   string `yaml:"custom,omitempty"`
+	Keep     string `yaml:"keep,omitempty"`
+	Rotate   string `yaml:"rotate,omitempty"`
 }
 
 // ErrorLogConfig holds error log settings per AI.md PART 11
 type ErrorLogConfig struct {
 	Enabled  bool   `yaml:"enabled"`
-	Filename string `yaml:"filename"`
+	Filename string `yaml:"filename,omitempty"`
 	Format   string `yaml:"format"`
-	Keep     string `yaml:"keep"`
-	Rotate   string `yaml:"rotate"`
+	Custom   string `yaml:"custom,omitempty"`
+	Keep     string `yaml:"keep,omitempty"`
+	Rotate   string `yaml:"rotate,omitempty"`
 }
 
 // AuditLogEventsConfig controls which event categories are written to audit.log
@@ -815,10 +916,11 @@ type AuditLogEventsConfig struct {
 // AuditLogConfig holds audit log settings per AI.md PART 11
 type AuditLogConfig struct {
 	Enabled          bool                 `yaml:"enabled"`
-	Filename         string               `yaml:"filename"`
+	Filename         string               `yaml:"filename,omitempty"`
 	Format           string               `yaml:"format"`
-	Keep             string               `yaml:"keep"`
-	Rotate           string               `yaml:"rotate"`
+	Custom           string               `yaml:"custom,omitempty"`
+	Keep             string               `yaml:"keep,omitempty"`
+	Rotate           string               `yaml:"rotate,omitempty"`
 	Compress         bool                 `yaml:"compress"`
 	Events           AuditLogEventsConfig `yaml:"events"`
 	IncludeUserAgent bool                 `yaml:"include_user_agent"`
@@ -827,21 +929,23 @@ type AuditLogConfig struct {
 // SecurityLogConfig holds security log settings
 type SecurityLogConfig struct {
 	Enabled  bool   `yaml:"enabled"`
-	Filename string `yaml:"filename"`
+	Filename string `yaml:"filename,omitempty"`
 	Format   string `yaml:"format"`
-	Keep     string `yaml:"keep"`
-	Rotate   string `yaml:"rotate"`
+	Custom   string `yaml:"custom,omitempty"`
+	Keep     string `yaml:"keep,omitempty"`
+	Rotate   string `yaml:"rotate,omitempty"`
 }
 
 // AuthLogConfig holds authentication log settings per AI.md PART 11
 // Default format: syslog (RFC 3164) for Fail2ban/SIEM integration
 type AuthLogConfig struct {
 	Enabled  bool   `yaml:"enabled"`
-	Filename string `yaml:"filename"`
+	Filename string `yaml:"filename,omitempty"`
 	// Format: syslog (default), json
 	Format string `yaml:"format"`
-	Keep   string `yaml:"keep"`
-	Rotate string `yaml:"rotate"`
+	Custom string `yaml:"custom,omitempty"`
+	Keep   string `yaml:"keep,omitempty"`
+	Rotate string `yaml:"rotate,omitempty"`
 }
 
 // AppLogConfig holds general application log settings per AI.md PART 11
@@ -849,18 +953,18 @@ type AuthLogConfig struct {
 // Also known as {project_name}.log
 type AppLogConfig struct {
 	Enabled  bool   `yaml:"enabled"`
-	Filename string `yaml:"filename"`
+	Filename string `yaml:"filename,omitempty"`
 	// Format: logfmt (default), json
 	Format string `yaml:"format"`
-	Keep   string `yaml:"keep"`
-	Rotate string `yaml:"rotate"`
+	Custom string `yaml:"custom,omitempty"`
+	Keep   string `yaml:"keep,omitempty"`
+	Rotate string `yaml:"rotate,omitempty"`
 }
 
 // RateLimitConfig holds rate limiting settings
 type RateLimitConfig struct {
-	Enabled  bool `yaml:"enabled"`
-	Requests int  `yaml:"requests"`
-	Window   int  `yaml:"window"`
+	Requests int `yaml:"requests"`
+	Window   int `yaml:"window"`
 }
 
 // LimitsConfig holds request limit settings
@@ -1679,13 +1783,13 @@ func DefaultAppConfig() *AppConfig {
 			BaseURL:    "/",
 			APIVersion: defaultAPIVersion,
 			Mode:       "production",
-			MCP:        MCPConfig{Enabled: true},
 			Pages: ServerPagesConfig{
 				Contact: ServerContactPagesConfig{
 					Enabled: true, Captcha: "simple", SuccessMessage: "Thank you for your message. We'll respond soon.",
 					Antispam: ContactAntispamConfig{
 						Honeypot: true, MinFillSeconds: 3, MaxAgeSeconds: 43200,
-						PerIP: 5, PerEmail: 3, Global: 60, Window: "1h", MaxLinks: 2,
+						PerIP: 5, PerEmail: 3, Global: 60, Window: "1h", MaxLinks: 10,
+						ReviewMinSeconds: 2, ReviewMaxSeconds: 900,
 						RejectMarkup: true, Strikes: 3, BanHours: 24, DuplicateWindowHours: 24,
 					},
 				},
@@ -1796,12 +1900,17 @@ func DefaultAppConfig() *AppConfig {
 			},
 			Logs: LogsConfig{
 				Level: "info",
+				Defaults: LogDefaultsConfig{
+					Custom: "",
+					Keep:   "none",
+					Rotate: "weekly,50MB",
+				},
 				Debug: DebugLogConfig{
 					Enabled:  false,
 					Filename: "debug.log",
 					Format:   "text",
 					Keep:     "none",
-					Rotate:   "monthly",
+					Rotate:   "weekly,50MB",
 				},
 				Access: AccessLogConfig{
 					Filename: "access.log",
@@ -1862,7 +1971,6 @@ func DefaultAppConfig() *AppConfig {
 				},
 			},
 			RateLimit: RateLimitConfig{
-				Enabled:  true,
 				Requests: 500,
 				Window:   60,
 			},
@@ -2201,7 +2309,7 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	if err != nil {
 		if strings.Contains(err.Error(), "yaml:") {
 			fmt.Fprintf(os.Stderr, "Warning: failed to parse %s (%v), using default configuration\n", configPath, err)
-			data, err = yaml.Marshal(DefaultAppConfig())
+			data, err = marshalYAML(DefaultAppConfig())
 			dropins, overrides = nil, nil
 		}
 		if err != nil {
@@ -2255,6 +2363,42 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	return cfg, configPath, nil
 }
 
+// PeekServerListenConfig reads listen settings from the same merged server.yml
+// and yaml.d configuration used by the full loader. It is safe for early
+// startup address selection and intentionally returns empty values on error.
+func PeekServerListenConfig(configPath string) (address, port string) {
+	data, _, _, err := loadMergedConfig(configPath)
+	if err != nil {
+		return "", ""
+	}
+	var document yaml.Node
+	if yaml.Unmarshal(data, &document) != nil || len(document.Content) == 0 {
+		return "", ""
+	}
+	lookup := func(node *yaml.Node, key string) *yaml.Node {
+		if node == nil || node.Kind != yaml.MappingNode {
+			return nil
+		}
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			if node.Content[i].Value == key {
+				return node.Content[i+1]
+			}
+		}
+		return nil
+	}
+	serverNode := lookup(document.Content[0], "server")
+	if serverNode == nil || serverNode.Kind != yaml.MappingNode {
+		return "", ""
+	}
+	if value := lookup(serverNode, "address"); value != nil && value.Kind == yaml.ScalarNode {
+		address = value.Value
+	}
+	if value := lookup(serverNode, "port"); value != nil && value.Kind == yaml.ScalarNode {
+		port = value.Value
+	}
+	return address, port
+}
+
 func loadMergedConfig(configPath string) ([]byte, []string, []string, error) {
 	baseData, err := os.ReadFile(configPath)
 	if err != nil {
@@ -2280,7 +2424,7 @@ func loadMergedConfig(configPath string) ([]byte, []string, []string, error) {
 	dropDir := filepath.Join(filepath.Dir(configPath), "yaml.d")
 	dropInfo, err := os.Lstat(dropDir)
 	if errors.Is(err, os.ErrNotExist) {
-		encoded, marshalErr := yaml.Marshal(&merged)
+		encoded, marshalErr := marshalYAML(&merged)
 		return encoded, nil, nil, marshalErr
 	}
 	if err != nil {
@@ -2351,7 +2495,7 @@ func loadMergedConfig(configPath string) ([]byte, []string, []string, error) {
 		mergeYAMLNodes(merged.Content[0], overlay.Content[0])
 		loaded = append(loaded, file)
 	}
-	encoded, err := yaml.Marshal(&merged)
+	encoded, err := marshalYAML(&merged)
 	keys := make([]string, 0, len(overriddenBy))
 	for key := range overriddenBy {
 		keys = append(keys, key+" ("+overriddenBy[key]+")")
@@ -2846,7 +2990,7 @@ func persistDNSCredentials(files []string, key string) error {
 		if !changed {
 			continue
 		}
-		encoded, err := yaml.Marshal(&doc)
+		encoded, err := marshalYAML(&doc)
 		if err != nil {
 			return err
 		}
@@ -2924,6 +3068,108 @@ func atomicConfigWrite(path string, data []byte) error {
 	return os.Rename(tmpPath, path)
 }
 
+func marshalYAML(value interface{}) ([]byte, error) {
+	var output bytes.Buffer
+	encoder := yaml.NewEncoder(&output)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(value); err != nil {
+		return nil, err
+	}
+	if err := encoder.Close(); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
+func sparseLogsConfig(logs LogsConfig) LogsConfig {
+	clearDerivedFilename := func(filename *string, defaultName string) {
+		if filepath.Clean(*filename) == defaultName {
+			*filename = ""
+		}
+	}
+	clearDerivedFilename(&logs.Debug.Filename, "debug.log")
+	clearDerivedFilename(&logs.Access.Filename, "access.log")
+	clearDerivedFilename(&logs.Server.Filename, "server.log")
+	clearDerivedFilename(&logs.Error.Filename, "error.log")
+	clearDerivedFilename(&logs.Audit.Filename, "audit.log")
+	clearDerivedFilename(&logs.Security.Filename, "security.log")
+	clearDerivedFilename(&logs.Auth.Filename, "auth.log")
+	clearDerivedFilename(&logs.App.Filename, "vidveil.log")
+	if logs.Debug.Custom == logs.Defaults.Custom {
+		logs.Debug.Custom = ""
+	}
+	if logs.Access.Custom == logs.Defaults.Custom {
+		logs.Access.Custom = ""
+	}
+	if logs.Server.Custom == logs.Defaults.Custom {
+		logs.Server.Custom = ""
+	}
+	if logs.Error.Custom == logs.Defaults.Custom {
+		logs.Error.Custom = ""
+	}
+	if logs.Audit.Custom == logs.Defaults.Custom {
+		logs.Audit.Custom = ""
+	}
+	if logs.Security.Custom == logs.Defaults.Custom {
+		logs.Security.Custom = ""
+	}
+	if logs.Auth.Custom == logs.Defaults.Custom {
+		logs.Auth.Custom = ""
+	}
+	if logs.App.Custom == logs.Defaults.Custom {
+		logs.App.Custom = ""
+	}
+	if logs.Debug.Keep == logs.Defaults.Keep {
+		logs.Debug.Keep = ""
+	}
+	if logs.Access.Keep == logs.Defaults.Keep {
+		logs.Access.Keep = ""
+	}
+	if logs.Server.Keep == logs.Defaults.Keep {
+		logs.Server.Keep = ""
+	}
+	if logs.Error.Keep == logs.Defaults.Keep {
+		logs.Error.Keep = ""
+	}
+	if logs.Audit.Keep == logs.Defaults.Keep {
+		logs.Audit.Keep = ""
+	}
+	if logs.Security.Keep == logs.Defaults.Keep {
+		logs.Security.Keep = ""
+	}
+	if logs.Auth.Keep == logs.Defaults.Keep {
+		logs.Auth.Keep = ""
+	}
+	if logs.App.Keep == logs.Defaults.Keep {
+		logs.App.Keep = ""
+	}
+	if logs.Debug.Rotate == logs.Defaults.Rotate {
+		logs.Debug.Rotate = ""
+	}
+	if logs.Access.Rotate == logs.Defaults.Rotate {
+		logs.Access.Rotate = ""
+	}
+	if logs.Server.Rotate == logs.Defaults.Rotate {
+		logs.Server.Rotate = ""
+	}
+	if logs.Error.Rotate == logs.Defaults.Rotate {
+		logs.Error.Rotate = ""
+	}
+	if logs.Audit.Rotate == logs.Defaults.Rotate {
+		logs.Audit.Rotate = ""
+	}
+	if logs.Security.Rotate == logs.Defaults.Rotate {
+		logs.Security.Rotate = ""
+	}
+	if logs.Auth.Rotate == logs.Defaults.Rotate {
+		logs.Auth.Rotate = ""
+	}
+	if logs.App.Rotate == logs.Defaults.Rotate {
+		logs.App.Rotate = ""
+	}
+	return logs
+}
+
 func SaveAppConfig(cfg *AppConfig, path string) (saveErr error) {
 	configToSave := *cfg
 	configToSave.Server.SSL.LetsEncrypt.DNSCredentials = make(map[string]string, len(cfg.Server.SSL.LetsEncrypt.DNSCredentials))
@@ -2934,7 +3180,8 @@ func SaveAppConfig(cfg *AppConfig, path string) (saveErr error) {
 		}
 		configToSave.Server.SSL.LetsEncrypt.DNSCredentials[name] = encrypted
 	}
-	data, err := yaml.Marshal(&configToSave)
+	configToSave.Server.Logs = sparseLogsConfig(configToSave.Server.Logs)
+	data, err := marshalYAML(&configToSave)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -3035,7 +3282,7 @@ func flattenDNSSettingsFromDropins(dropDir string) error {
 			i += 2
 		}
 		if changed {
-			encoded, err := yaml.Marshal(&doc)
+			encoded, err := marshalYAML(&doc)
 			if err != nil {
 				return err
 			}

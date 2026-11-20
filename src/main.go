@@ -336,7 +336,7 @@ func run(ctx context.Context) error {
 	if peekConfigDir == "" {
 		peekConfigDir = pathpkg.GetDefaultConfigDir(pathpkg.IsPrivilegedMode())
 	}
-	peekAddress, peekPort := peekServerListenConfig(filepath.Join(peekConfigDir, "server.yml"))
+	peekAddress, peekPort := config.PeekServerListenConfig(filepath.Join(peekConfigDir, "server.yml"))
 	if address == "" {
 		address = peekAddress
 	}
@@ -1282,41 +1282,6 @@ tor CMD                                - Tor management (run tor help for detail
 
 Run '%s <command> help' for detailed help on any command.
 `, binaryName, version.GetVersion(), binaryName, binaryName)
-}
-
-func peekServerListenConfig(configPath string) (address, port string) {
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return "", ""
-	}
-	var document yaml.Node
-	if yaml.Unmarshal(data, &document) != nil || len(document.Content) == 0 {
-		return "", ""
-	}
-	root := document.Content[0]
-	serverNode := yamlMappingValue(root, "server")
-	if serverNode == nil || serverNode.Kind != yaml.MappingNode {
-		return "", ""
-	}
-	if value := yamlMappingValue(serverNode, "address"); value != nil && value.Kind == yaml.ScalarNode {
-		address = value.Value
-	}
-	if value := yamlMappingValue(serverNode, "port"); value != nil && value.Kind == yaml.ScalarNode {
-		port = value.Value
-	}
-	return address, port
-}
-
-func yamlMappingValue(node *yaml.Node, key string) *yaml.Node {
-	if node == nil || node.Kind != yaml.MappingNode {
-		return nil
-	}
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		if node.Content[i].Value == key {
-			return node.Content[i+1]
-		}
-	}
-	return nil
 }
 
 func printVersion() {

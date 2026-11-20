@@ -165,7 +165,7 @@ func TestServerHandler_DPOPage_FallsBackToGeneralContact(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("DPOPage: status=%d want 200; body=%s", rr.Code, rr.Body.String())
 	}
-	if !strings.Contains(rr.Body.String(), "privacy@example.invalid") || !strings.Contains(rr.Body.String(), `href="/server/privacy"`) || !strings.Contains(rr.Body.String(), `href="/server/contact"`) || strings.Contains(rr.Body.String(), "admin@example.invalid") {
+	if !strings.Contains(rr.Body.String(), "privacy@example.invalid") || !strings.Contains(rr.Body.String(), `href="/server/privacy"`) || strings.Contains(rr.Body.String(), "admin@example.invalid") {
 		t.Errorf("DPOPage did not apply the configured fallback safely: %s", rr.Body.String())
 	}
 }
@@ -180,7 +180,7 @@ func TestServerHandler_DPOPageWithoutContactShowsOnlyContactForm(t *testing.T) {
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	rr := httptest.NewRecorder()
 	h.DPOPage(rr, req)
-	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "/server/contact") {
+	if rr.Code != http.StatusOK || strings.Contains(rr.Body.String(), "admin@example.invalid") || strings.Contains(rr.Body.String(), `href="/server/contact"`) || !strings.Contains(rr.Body.String(), "No DPO email address is configured") {
 		t.Errorf("DPOPage without contact: status=%d body=%s", rr.Code, rr.Body.String())
 	}
 	if strings.Contains(rr.Body.String(), "admin@example.invalid") {
@@ -315,17 +315,18 @@ func TestRenderServerTemplate_UnknownTemplate_Returns500(t *testing.T) {
 	}
 }
 
-// ContactPage POST routes to handleContactSubmit and renders a success response.
+// ContactPage POST validates the report and renders the review step.
 func TestServerHandler_ContactPage_POST_Returns200(t *testing.T) {
 	setRealTemplatesFS(t)
 	h, _ := newSecurityTestHandler(t)
 	h.appConfig.Server.Pages.Contact.Antispam.MinFillSeconds = 0
 	h.appConfig.Server.Contact.General.Email = "contact@example.test"
 	h.SetEmailService(&recordingSecurityReportEmailSender{})
-	form := url.Values{"name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"hello"}, "message": {"world"}}
+	form := url.Values{"name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"hello"}, "message": {"world"}, "type": {"privacy"}, "request_kind": {"export"}}
 	addSimpleCaptcha(t, h, form)
 	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addContactOriginEvidence(req)
 	rr := httptest.NewRecorder()
 	h.ContactPage(rr, req)
 	if rr.Code != http.StatusOK {
@@ -357,12 +358,8 @@ func TestServerHandler_ContactSubmit_DispatchesGeneral(t *testing.T) {
 	}
 	h.SetNotifyDispatcher(notify.New(contact, "vidveil", "1.0.0", ts.URL))
 
-	form := url.Values{"name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"hello"}, "message": {"world"}}
-	addSimpleCaptcha(t, h, form)
-	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	h.ContactPage(rr, req)
+	form := url.Values{"name": {"Alice"}, "email": {"alice@example.test"}, "subject": {"hello"}, "message": {"world"}, "type": {"privacy"}, "request_kind": {"export"}}
+	rr := submitAndConfirmHTMLContact(t, h, "/server/contact", form)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("ContactSubmit: status=%d want 200; body=%s", rr.Code, rr.Body.String())
 	}
@@ -399,6 +396,7 @@ func TestServerHandler_ContactSubmit_MissingFieldsError(t *testing.T) {
 	form := simpleCaptchaFormValues(t, h, httptest.NewRequest(http.MethodGet, "/server/contact", nil)) + "&subject=hello"
 	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addContactOriginEvidence(req)
 	rr := httptest.NewRecorder()
 	h.ContactPage(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -434,11 +432,8 @@ func TestServerHandler_ContactSubmit_HoneypotSilentlySucceeds(t *testing.T) {
 	}
 	h.SetNotifyDispatcher(notify.New(contact, "vidveil", "1.0.0", ts.URL))
 
-	form := url.Values{"name": {"Bot"}, "email": {"bot@example.test"}, "subject": {"hello"}, "message": {"world"}, "website": {"iamabot"}}
-	req := httptest.NewRequest(http.MethodPost, "/server/contact", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	h.ContactPage(rr, req)
+	form := url.Values{"name": {"Bot"}, "email": {"bot@example.test"}, "subject": {"hello"}, "message": {"world"}, "type": {"privacy"}, "request_kind": {"export"}, "website": {"iamabot"}}
+	rr := submitAndConfirmHTMLContact(t, h, "/server/contact", form)
 	if !strings.Contains(rr.Body.String(), "Thank you") {
 		t.Errorf("Honeypot: expected success page; body=%s", rr.Body.String())
 	}

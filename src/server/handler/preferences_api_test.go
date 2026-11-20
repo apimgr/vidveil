@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -9,33 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-
-	"github.com/apimgr/vidveil/src/server/service/engine"
 )
-
-func TestWithRequestTorPreferenceUsesAppCookie(t *testing.T) {
-	for _, test := range []struct {
-		value string
-		want  *bool
-	}{
-		{value: "1", want: boolPointer(true)},
-		{value: "0", want: boolPointer(false)},
-		{value: "invalid", want: nil},
-	} {
-		r := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
-		r.AddCookie(&http.Cookie{Name: "vidveil_pref_use_tor", Value: test.value})
-		got := engine.GetTorPrefFromContext(withRequestTorPreference(context.Background(), r))
-		if test.want == nil {
-			if got != nil {
-				t.Errorf("cookie %q produced Tor preference %v, want inherited nil", test.value, *got)
-			}
-			continue
-		}
-		if got == nil || *got != *test.want {
-			t.Errorf("cookie %q produced Tor preference %v, want %v", test.value, got, *test.want)
-		}
-	}
-}
 
 func TestRequestSearchPreferencesHonorCookiesAndExplicitQueryValues(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test", nil)
@@ -69,8 +42,6 @@ func TestRequestSearchPreferencesHonorCookiesAndExplicitQueryValues(t *testing.T
 		t.Fatalf("explicit query filters were overridden by cookies: %#v", filters)
 	}
 }
-
-func boolPointer(value bool) *bool { return &value }
 
 func TestPreferencesImportDirectValuesOverrideCodeAndSetsCookieContract(t *testing.T) {
 	h := newRenderTestHandler()

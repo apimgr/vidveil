@@ -797,7 +797,6 @@ func TestLlmsTxt_ServesDiscoveryFile(t *testing.T) {
 
 func TestLlmsTxt_RateLimitShownWhenEnabled(t *testing.T) {
 	cfg := createTestConfig()
-	cfg.Server.RateLimit.Enabled = true
 	cfg.Server.RateLimit.Requests = 60
 	cfg.Server.RateLimit.Window = 60
 	h := NewSearchHandler(cfg, nil)
@@ -816,7 +815,6 @@ func TestLlmsTxt_RateLimitShownWhenEnabled(t *testing.T) {
 
 func TestLlmsTxt_ConfigurableSectionsAndMCP(t *testing.T) {
 	cfg := createTestConfig()
-	cfg.Server.MCP.Enabled = true
 	cfg.Web.APIContact = "api@example.test"
 	cfg.Web.LLMS.CustomSections = []string{"## Integration\nUse the API directly."}
 	h := NewSearchHandler(cfg, nil)

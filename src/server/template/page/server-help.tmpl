@@ -164,7 +164,7 @@ curl "{{.BaseURL}}{{.APIBase}}/search.txt?q=sunset"</code></pre>
         <p>{{ t "help.ts_tor_a" }}</p>
 
         <h2>{{ t "help.need_more_help" }}</h2>
-        <p>{{ t "help.need_more_help_body_1" }} <a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">{{ t "help.github_link" }}</a> {{ t "help.need_more_help_body_2" }} <a href="{{ path "/server/contact" }}">{{ t "help.contact_link" }}</a>.</p>
+        <p>{{ t "help.need_more_help_body_1" }} <a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">{{ t "help.github_link" }}</a> {{ t "help.need_more_help_body_2" }} <a href="{{ path "/server/security" }}">{{ t "security.title" }}</a>.</p>
         {{ with .PageContent }}<section class="page-custom-content">{{ . | markdownToHTML }}</section>{{ end }}
     </div>
 </div>

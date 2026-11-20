@@ -66,13 +66,7 @@ func Handler(cfg *config.AppConfig, api http.Handler, isOperator OperatorAuthori
 		}
 		return server
 	}, &sdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true, DisableLocalhostProtection: true})
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if cfg == nil || !cfg.Server.MCP.Enabled {
-			http.NotFound(w, r)
-			return
-		}
-		streamable.ServeHTTP(w, r)
-	})
+	return streamable
 }
 
 // OriginMiddleware rejects foreign browser origins while allowing the request's

@@ -33,7 +33,7 @@ Access preferences at `https://x.scour.li/server/preferences`.
 
 - **Max History**: Unlimited, 10, 25, 50, or 100 items
 - **Auto-Clear History**: Never, 1 day, 7 days, or 30 days
-- **Import/Export**: Export or import search history and favorites
+- **Import/Export**: Export or import browser-local search history and server-side favorites
 
 ### Privacy
 

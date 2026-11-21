@@ -2,8 +2,9 @@
 
 VidVeil is intentionally narrow: it is a privacy-respecting meta search
 engine that aggregates results from upstream video sites. It does not act
-as an identity provider, does not host user accounts, and does not persist
-search history.
+as an identity provider, does not host user accounts, and does not keep
+per-visitor search history on the server. The visitor's search-history list
+is stored in the browser; privacy-filtered queries may appear in public feeds.
 
 This page describes the small set of external dependencies VidVeil does
 talk to, plus the integration surfaces it exposes for clients.

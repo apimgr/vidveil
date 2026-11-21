@@ -2,7 +2,7 @@
 
 **Privacy-respecting adult video meta search engine**
 
-Vidveil aggregates results from adult video sites without user accounts or server-side search history. Search history is not retained. Configured access logs may include request paths, IP addresses, and other request metadata; custom formats can include query strings. Optional analytics require operator configuration and visitor consent.
+Vidveil aggregates results from adult video sites without user accounts or server-side per-visitor search history. The search-history list is stored in the visitor's browser. Privacy-filtered query text and timestamps may also appear in public recent-search feeds. Configured access logs may include request paths, IP addresses, and other request metadata; custom formats can include query strings. Optional analytics require operator configuration and visitor consent.
 
 ## Quick Start
 

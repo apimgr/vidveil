@@ -8,10 +8,12 @@ vulnerabilities.
 
 VidVeil is internet-facing by default and assumes hostile traffic.
 
-- Search queries are processed in-flight and are not retained as search
-  history. Access logs can include request paths, client IP addresses, and
-  other metadata; custom formats can include query strings. Optional analytics
-  require operator configuration and visitor consent.
+- The search-history list is stored in the visitor's browser; the server does
+  not maintain per-visitor search history. Privacy-filtered query text and
+  timestamps may appear in public recent-search feeds. Access logs can include
+  request paths, client IP addresses, and other metadata; custom formats can
+  include query strings. Optional analytics require operator configuration
+  and visitor consent.
 - The server **does not** store user accounts. There is no registration,
   no profiles, and no server-side search history.
 - Operators manage configuration through `server.yml`, the CLI, and

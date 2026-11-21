@@ -7,7 +7,7 @@
 
 ## About
 
-Privacy-respecting meta search for adult video content. Search queries are processed in-flight and are not retained as search history. Configured access logs may include request paths, IP addresses, and other request metadata; custom formats can include query strings. Optional analytics run only when configured by the operator and after visitor consent. Aggregates results from 33 video sites with bang shortcuts for targeted searches.
+Privacy-respecting meta search for adult video content. The search-history list is stored in your browser, not as per-visitor history on the server. Privacy-filtered query text and timestamps may appear in public recent-search feeds. Configured access logs may include request paths, IP addresses, and other request metadata; custom formats can include query strings. Optional analytics run only when configured by the operator and after visitor consent. Aggregates results from 33 video sites with bang shortcuts for targeted searches.
 
 ## Official Site
 
@@ -21,7 +21,7 @@ https://x.scour.li
 
 | Feature | Description |
 |---------|-------------|
-| **Privacy First** | Search history is not retained; configured access logs may include request metadata and custom formats can include query strings; optional analytics require operator configuration and visitor consent |
+| **Privacy First** | Search history stays in the visitor's browser; the server has no per-visitor history, though filtered queries may appear in public feeds; configured logs may include request metadata and custom formats can include query strings; optional analytics require operator configuration and visitor consent |
 | **33 Engines** | Aggregates results from 33 adult video sites |
 | **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
 | **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |

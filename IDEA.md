@@ -27,7 +27,7 @@ owner_token:       vidveil_owner_token_ab5213f6
 
 **Features:**
 - **Video search:** Search across 33 video engines, target engines with bang shortcuts, and receive results as engines respond. Engine availability is best-effort; a failing or rate-limited source must not prevent results from other sources. Search responses use canonical engine names and display names; blank engine selection means all available engines.
-- **Result discovery:** Refine searches with autocomplete, related searches, source selection, duration and quality filters, sorting, and pagination. The server applies preferences, filtering, sorting, and pagination, and reports the aggregate count collected from responding sources rather than only the displayed page. Upstream sites do not consistently expose all-pages hit counts, so this count covers the results returned for the requested upstream page. When a playable video preview is unavailable, use the result thumbnail as the visual preview. Search history is a visitor-controlled convenience and is not retained as a durable server-side history; recent-search entries differing only by case or whitespace are deduplicated.
+- **Result discovery:** Refine searches with autocomplete, related searches, source selection, duration and quality filters, sorting, and pagination. The server applies preferences, filtering, sorting, and pagination, and reports the aggregate count collected from responding sources rather than only the displayed page. Upstream sites do not consistently expose all-pages hit counts, so this count covers the results returned for the requested upstream page. When a playable video preview is unavailable, use the result thumbnail as the visual preview. The visitor's search-history list is stored in browser `localStorage`, not as a server-side per-visitor history; privacy-filtered recent queries may separately appear in public Atom/RSS feeds. Recent-search entries differing only by case or whitespace are deduplicated.
 - **Privacy:** Proxy thumbnails through VidVeil, provide optional analytics only with visitor consent, and disclose that access logs may contain request metadata. Public Atom and RSS feeds may include only privacy-filtered query text and timestamps; entries are bounded and are not retained across server restarts.
 - **Private favorites:** Visitors can save, organize, export, import, and clear favorites. REST imports accept the exported array or an object containing a `favorites` array. Favorites belong to an anonymous owner, are unique by result URL for that owner, and remain private to that owner. A visitor can manage their own favorites without creating a conventional account.
 - **Owner token management:** Owners can restore access to their resources and manage their own primary and linked tokens. A linked token can be used for automation without sharing the primary token.
@@ -63,7 +63,7 @@ Older per-engine cookies named `vidveil_pref_engine_{name}` accept `0` or `1` an
 
 **Non-goals:**
 - Named user accounts, social profiles, organizations, or multi-tenant workspaces.
-- Durable server-side search history or persistent storage of search results. Short-lived result caching is an operational behavior defined by AI.md and does not create a search-history feature.
+- Server-side per-visitor search history or persistent storage of search results. The search-history convenience is stored in the visitor's browser. Short-lived result caching and privacy-filtered public recent-search feeds are separate operational behaviors defined by AI.md.
 - Paid plans, premium features, or advertising-based targeting.
 - A guarantee that any third-party video site remains available or returns complete results.
 
@@ -80,7 +80,7 @@ There are no conventional user accounts. Possession of an owner's valid token id
 
 - **Video result:** A result has an engine-specific identity, title, source link, thumbnail, source name, and available descriptive metadata such as duration, views, quality, publication date, tags, performer, preview, or download information.
 - **Engine:** A searchable source has a name, display name, availability, and supported search or media capabilities. The engines API reports `has_preview`, `has_download`, `has_duration`, and `has_views` capability flags. VidVeil includes 33 active engines; individual sources can become unavailable.
-- **Search:** A visitor's query and its results are transient service data. Search terms that pass the required privacy filters may appear as query text and timestamps in bounded public Atom and RSS feeds. The service does not provide durable server-side search history.
+- **Search:** A visitor's search-history list is stored in that visitor's browser, not on the server as per-visitor history. Search terms that pass the required privacy filters may appear as query text and timestamps in bounded public Atom and RSS feeds. Queries and results are otherwise transient service data.
 - **Favorite:** A visitor-owned saved result can include its source link, title, thumbnail, source, and creation time. Favorites are private to their anonymous owner and persist until that owner removes them or the service data is removed.
 - **Owner token:** A credential grants access to one anonymous owner's private resources. Primary and linked tokens have distinct management roles; tokens are sensitive and must not be exposed in public output.
 - **Visitor preference:** Appearance, language, and search preferences belong to the visitor's browser and are not tied to a named account.
@@ -133,7 +133,7 @@ The service must limit the risk of correlating visitors with searches, leaking v
 |----------|-----------------|
 | No conventional user accounts or public profiles | Named accounts would create an unnecessary identity layer for a privacy-focused search service. |
 | Anonymous owner tokens protect private favorites and token management | Visitors need continuity for private resources without registering a named account. |
-| Search history is not retained durably by the service | Persistent search history would increase the amount of sensitive visitor data held by the service. |
+| Search history is stored in the visitor's browser, not as server-side per-visitor history | Persistent per-visitor history would increase the amount of sensitive visitor data held by the service. |
 | Recent-search feeds include only privacy-filtered queries and are bounded | A public feed can support discovery without exposing queries that fail the required privacy checks or retaining the feed across restarts. |
 | Thumbnails are served through VidVeil | Direct requests to third-party thumbnail hosts would expose visitor network information. |
 | AI-generated content is filtered by default | Visitors should not be shown such results unless they choose to enable them. |

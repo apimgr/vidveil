@@ -608,11 +608,23 @@ func (h *ServerHandler) contactShapeError(r *http.Request, security bool) string
 		"g-recaptcha-response": true, "h-captcha-response": true, "captcha_response": true,
 		"website": true, "security_id": true, "step": true, "review_token": true,
 		"confirmed": true, "name": true, "email": true, "subject": true, "message": true,
-		"type": true, "reported_url": true, "reason": true, "copyrighted_work": true,
-		"good_faith": true, "accuracy": true, "signature": true, "request_kind": true,
+		"type": true,
 	}
 	if security {
 		for _, field := range []string{"researcher_gpg", "component", "component_other", "endpoint", "severity", "summary", "steps", "impact", "suggested_fix", "cve_requested", "disclosure_days", "credit_preference", "credit_handle", "disclosure_agreement"} {
+			allowed[field] = true
+		}
+	} else {
+		fieldsByType := map[string][]string{
+			"abuse":   {"reported_url", "reason"},
+			"dmca":    {"reported_url", "copyrighted_work", "good_faith", "accuracy", "signature"},
+			"privacy": {"request_kind"},
+		}
+		fields, ok := fieldsByType[strings.TrimSpace(r.FormValue("type"))]
+		if !ok {
+			return "shape"
+		}
+		for _, field := range fields {
 			allowed[field] = true
 		}
 	}

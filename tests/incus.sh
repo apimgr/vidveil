@@ -28,7 +28,7 @@ TESTS_FAILED=0
 mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
 TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX")
 INSTANCE_SUFFIX="$(printf '%08x' "$(((RANDOM << 15) | RANDOM))")"
-INSTANCE_NAME="${PROJECT_NAME}-${INSTANCE_SUFFIX}"
+INSTANCE_NAME="test-${PROJECT_NAME}-${INSTANCE_SUFFIX}"
 trap 'rm -rf "${TEMP_DIR}"; incus delete -f "${INSTANCE_NAME}" 2>/dev/null || true' EXIT
 
 echo "Vidveil Incus Integration Tests (Debian + systemd)"
@@ -160,20 +160,13 @@ else
 fi
 
 # Step 10: Install as systemd service (PART 13 requirement for Incus tests)
-info "Enabling the test-only Tor and I2P services..."
+info "Configuring the test-only Tor service..."
 cat > "${TEMP_DIR}/server.yml" << 'EOF'
-server:
-  i2p:
-    enabled: true
-    bootstrap_timeout: 10m
-    inbound_length: 1
-    outbound_length: 1
-    inbound_quantity: 1
-    outbound_quantity: 1
+server: {}
 EOF
 incus exec "${INSTANCE_NAME}" -- mkdir -p /etc/apimgr/vidveil
 incus file push "${TEMP_DIR}/server.yml" "${INSTANCE_NAME}/etc/apimgr/vidveil/server.yml"
-pass "I2P enabled in isolated Incus test configuration"
+pass "Default I2P setting retained in Incus test configuration"
 
 info "Installing systemd service..."
 if incus exec "${INSTANCE_NAME}" -- ${PROJECT_NAME} --service --install; then
@@ -201,24 +194,71 @@ else
     incus exec "${INSTANCE_NAME}" -- journalctl -u ${PROJECT_NAME} --no-pager -n 80 || true
 fi
 
-# Detect port from service logs (random 64xxx per AI.md PART 5)
+# Detect the public service listener (random 64xxx per AI.md PART 5).
 info "Detecting service port..."
-# Try IPv6 format [::]:PORT first, then IPv4 0.0.0.0:PORT
-SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- journalctl -u ${PROJECT_NAME} --no-pager -n 50 2>/dev/null | grep -oP 'Listening on (\[::\]:|[0-9.]+:)\K[0-9]+' | tail -1 || echo "")
+# Service readiness can lag behind systemd's active state. Retry until its
+# wildcard listener exists; Tor and I2P backend listeners are loopback-only.
+SERVICE_PORT=""
+for _ in $(seq 1 30); do
+    SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- sh -c "ss -H -tlnp | awk 'index(\$4, \"*:\")==1 && /vidveil/ {split(\$4, address, \":\"); print address[2]; exit}'" 2>/dev/null || true)
+    if [ -z "$SERVICE_PORT" ]; then
+        SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- journalctl -u "${PROJECT_NAME}" --no-pager -n 50 2>/dev/null | grep -oP 'Listening on (\[::\]:|[0-9.]+:)\K[0-9]+' | tail -1 || true)
+    fi
+    if [ -n "$SERVICE_PORT" ] && incus exec "${INSTANCE_NAME}" -- curl -q -fsS "http://localhost:${SERVICE_PORT}/server/healthz" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
 if [ -z "$SERVICE_PORT" ]; then
-    SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- ss -tlnp 2>/dev/null | grep vidveil | grep -oP ':\K[0-9]+' | head -1 || echo "")
-fi
-if [ -z "$SERVICE_PORT" ]; then
-    # Fall back to reading config file
-    SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- grep -oP 'port:\s*["'"'"']?\K[0-9]+' /etc/apimgr/vidveil/server.yml 2>/dev/null || echo "64080")
+    fail "Could not detect the server's public listener port"
+    SERVICE_PORT="64080"
 fi
 info "Service running on port: ${SERVICE_PORT}"
 
-# Wait for the server plus its isolated Tor and I2P providers to become healthy.
+# Incus runs a full systemd service container, which follows the bare-host
+# opt-in default. The Docker application-container test covers its enabled
+# computed default; this test enables I2P explicitly for the provider check.
+info "Checking that I2P remains opt-in in the Incus system container..."
+HEALTH_JSON=""
+for _ in $(seq 1 30); do
+    HEALTH_JSON=$(incus exec "${INSTANCE_NAME}" -- curl -q -sS -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/server/healthz" 2>/dev/null | tr -d '[:space:]' || true)
+    if printf '%s' "$HEALTH_JSON" | grep -Eo '"i2p":\{[^}]*\}' | grep -q '"enabled":false.*"status":"disabled"'; then
+        break
+    fi
+    sleep 1
+done
+if printf '%s' "$HEALTH_JSON" | grep -Eo '"i2p":\{[^}]*\}' | grep -q '"enabled":false.*"status":"disabled"'; then
+    pass "I2P is opt-in by default in the Incus system container"
+else
+    fail "I2P was not disabled by default (status: ${HEALTH_JSON:-unavailable})"
+fi
+
+info "Opting in to I2P through a configuration drop-in..."
+cat > "${TEMP_DIR}/50-i2p.yml" << 'EOF'
+server:
+  i2p:
+    enabled: true
+    bootstrap_timeout: 10m
+    inbound_length: 1
+    outbound_length: 1
+    inbound_quantity: 1
+    outbound_quantity: 1
+EOF
+incus exec "${INSTANCE_NAME}" -- mkdir -p /etc/apimgr/vidveil/yaml.d
+incus file push "${TEMP_DIR}/50-i2p.yml" "${INSTANCE_NAME}/etc/apimgr/vidveil/yaml.d/50-i2p.yml"
+incus exec "${INSTANCE_NAME}" -- systemctl restart "${PROJECT_NAME}"
+
+# Wait for the server plus its isolated Tor and opted-in I2P providers to become healthy.
 info "Waiting for Tor and I2P health..."
 OVERLAY_HEALTHY=false
 for _ in $(seq 1 600); do
-    HEALTH_JSON=$(incus exec "${INSTANCE_NAME}" -- curl -q -sS -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/server/healthz" 2>/dev/null || true)
+    # Restarting can select a new random service port. Refresh it from the
+    # latest service startup log before probing the health endpoint.
+    CURRENT_PORT=$(incus exec "${INSTANCE_NAME}" -- journalctl -u "${PROJECT_NAME}" --no-pager -n 30 2>/dev/null | grep -oP 'Listening on (\[::\]:|[0-9.]+:)\K[0-9]+' | tail -1 || true)
+    if [ -n "$CURRENT_PORT" ]; then
+        SERVICE_PORT="$CURRENT_PORT"
+    fi
+    HEALTH_JSON=$(incus exec "${INSTANCE_NAME}" -- curl -q -sS -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/server/healthz" 2>/dev/null | tr -d '[:space:]' || true)
     if echo "$HEALTH_JSON" | grep -Eo '"tor":\{[^}]*\}' | grep -q '"status":"healthy"' && \
        echo "$HEALTH_JSON" | grep -Eo '"i2p":\{[^}]*\}' | grep -q '"status":"healthy"'; then
         OVERLAY_HEALTHY=true

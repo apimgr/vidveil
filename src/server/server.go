@@ -137,8 +137,8 @@ type MigrationManager interface {
 
 func permissionsPolicyHeader() string {
 	locked := map[string]bool{
-		"accelerometer": false, "ambient-light-sensor": false, "battery": false,
-		"camera": false, "display-capture": false, "geolocation": false,
+		"accelerometer": false,
+		"camera":        false, "display-capture": false, "geolocation": false,
 		"gyroscope": false, "hid": false, "idle-detection": false,
 		"magnetometer": false, "microphone": false, "midi": false,
 		"screen-wake-lock": false, "serial": false, "usb": false,
@@ -152,10 +152,10 @@ func permissionsPolicyHeader() string {
 		}
 		features[feature] = value
 	}
-	for _, feature := range []string{"attribution-reporting", "browsing-topics", "interest-cohort"} {
+	for _, feature := range []string{"attribution-reporting", "browsing-topics"} {
 		features[feature] = "()"
 	}
-	for _, feature := range []string{"autoplay", "encrypted-media", "fullscreen", "payment", "picture-in-picture", "publickey-credentials-get", "storage-access", "web-share"} {
+	for _, feature := range []string{"autoplay", "encrypted-media", "fullscreen", "payment", "picture-in-picture", "publickey-credentials-get", "storage-access"} {
 		features[feature] = "(self)"
 	}
 	names := make([]string, 0, len(features))

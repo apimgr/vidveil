@@ -88,7 +88,7 @@ func (r *URLResolver) isTorRequest(req *http.Request) bool {
 	return matchesOnionAddress(r.RequestHost(req), cfg.Server.Tor.OnionAddress)
 }
 
-// isI2PRequest recognizes only the app-managed destination when opt-in I2P is active.
+// isI2PRequest recognizes only the app-managed destination when I2P is active.
 func (r *URLResolver) isI2PRequest(req *http.Request) bool {
 	if req == nil {
 		return false

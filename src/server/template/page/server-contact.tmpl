@@ -137,7 +137,7 @@
             </div>
             {{ if eq .CaptchaType "simple" }}
             <div class="form-group">
-                <label class="form-label" for="captcha_answer">{{ t "contact.captcha_question" }}: {{ .CaptchaQuestion }}</label>
+                <label class="form-label" for="captcha_answer">{{ t "contact.captcha_question" }} (required): {{ .CaptchaQuestion }}</label>
                 <input class="form-input" type="hidden" name="captcha_id" value="{{ .CaptchaID }}">
                 <input class="form-input" type="number" id="captcha_answer" name="captcha_answer" required inputmode="numeric">
             </div>
@@ -146,7 +146,7 @@
             <script async defer src="https://www.google.com/recaptcha/api.js"></script>
             <noscript>
                 <div class="form-group">
-                    <label class="form-label" for="captcha_fallback_answer">{{ t "contact.captcha_question" }}: {{ .CaptchaFallbackQuestion }}</label>
+                    <label class="form-label" for="captcha_fallback_answer">{{ t "contact.captcha_question" }} (required): {{ .CaptchaFallbackQuestion }}</label>
                     <input class="form-input" type="hidden" name="captcha_id" value="{{ .CaptchaFallbackID }}">
                     <input class="form-input" type="number" id="captcha_fallback_answer" name="captcha_answer" required inputmode="numeric">
                 </div>
@@ -156,7 +156,7 @@
             <script async defer src="https://js.hcaptcha.com/1/api.js"></script>
             <noscript>
                 <div class="form-group">
-                    <label class="form-label" for="captcha_fallback_answer">{{ t "contact.captcha_question" }}: {{ .CaptchaFallbackQuestion }}</label>
+                    <label class="form-label" for="captcha_fallback_answer">{{ t "contact.captcha_question" }} (required): {{ .CaptchaFallbackQuestion }}</label>
                     <input class="form-input" type="hidden" name="captcha_id" value="{{ .CaptchaFallbackID }}">
                     <input class="form-input" type="number" id="captcha_fallback_answer" name="captcha_answer" required inputmode="numeric">
                 </div>
@@ -167,7 +167,16 @@
         {{end}}
         {{else}}
         {{if .ContactEnabled}}
-        <h2>{{ t "contact.form_title" }}</h2>
+        {{if .ContactType}}
+        {{if eq .ContactType "abuse"}}<h2>Report abuse</h2>{{else if eq .ContactType "dmca"}}<h2>Send a DMCA notice</h2>{{else}}<h2>Make a privacy request</h2>{{end}}
+        {{else}}
+        <h2>Choose a report type</h2>
+        <ul>
+            {{range .ContactTypes}}
+            <li>{{if eq . "abuse"}}<a href="{{ path "/server/contact" }}?type=abuse">Report abuse</a>{{else if eq . "dmca"}}<a href="{{ path "/server/contact" }}?type=dmca">Send a DMCA notice</a>{{else if eq . "privacy"}}<a href="{{ path "/server/contact" }}?type=privacy">Make a privacy request</a>{{else if eq . "security"}}<a href="{{ path "/server/contact" }}?type=security&amp;security_id={{$.SecurityID}}">Report a security vulnerability</a>{{end}}</li>
+            {{end}}
+        </ul>
+        {{end}}
         {{if .ReviewMode}}
         <section class="contact-review" aria-labelledby="contact-review-title">
             <h3 id="contact-review-title">Review your report</h3>
@@ -191,77 +200,70 @@
             </form>
         </section>
         {{else}}
+        {{if .ContactType}}
         <form method="POST" action="{{ path "/server/contact" }}" class="preferences-form">
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
             <input type="hidden" name="form_token" value="{{.ContactFormToken}}">
             <input type="hidden" name="step" value="submit">
+            <input type="hidden" name="type" value="{{.ContactType}}">
             <div style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden" aria-hidden="true">
                 <label for="website">Leave this field empty</label>
                 <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
             </div>
             <div class="form-group">
-                <label class="form-label" for="name">{{ t "contact.label_name" }}</label>
+                <label class="form-label" for="name">{{ t "contact.label_name" }} (required)</label>
                 <input class="form-input" type="text" id="name" name="name" required maxlength="100" value="{{index .FormValues "name"}}">
             </div>
             <div class="form-group">
-                <label class="form-label" for="email">{{ t "contact.label_email" }}</label>
+                <label class="form-label" for="email">{{ t "contact.label_email" }} (required)</label>
                 <input class="form-input" type="email" id="email" name="email" required maxlength="254" placeholder="{{ t "contact.placeholder_email" }}" value="{{index .FormValues "email"}}">
             </div>
+            {{if eq .ContactType "abuse"}}
             <div class="form-group">
-                <label class="form-label" for="subject">{{ t "contact.label_subject" }}</label>
+                <label class="form-label" for="reported_url">Reported URL (required)</label>
+                <input class="form-input" type="url" id="reported_url" name="reported_url" required maxlength="2048" value="{{index .FormValues "reported_url"}}">
+                <p>A page on this site, for example https://{{.FQDN}}/...</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="reason">Reason (required)</label>
+                <select class="form-input" id="reason" name="reason" required>
+                    <option value="illegal_content">Illegal content</option><option value="terms_violation">Terms violation</option><option value="harassment">Harassment</option><option value="malware_phishing">Malware or phishing</option><option value="other">Other</option>
+                </select>
+            </div>
+            {{else if eq .ContactType "dmca"}}
+            <div class="form-group">
+                <label class="form-label" for="reported_url">Reported URL (required)</label>
+                <input class="form-input" type="url" id="reported_url" name="reported_url" required maxlength="2048" value="{{index .FormValues "reported_url"}}">
+                <p>A page on this site, for example https://{{.FQDN}}/...</p>
+            </div>
+            <div class="form-group"><label class="form-label" for="copyrighted_work">Copyrighted work (required)</label><textarea class="form-input" id="copyrighted_work" name="copyrighted_work" required maxlength="2000" rows="3">{{index .FormValues "copyrighted_work"}}</textarea></div>
+            <div class="form-group"><label class="form-label"><input type="checkbox" name="good_faith" value="true" required> I have a good-faith belief that this use is not authorized by the copyright owner, its agent or the law (required)</label></div>
+            <div class="form-group"><label class="form-label"><input type="checkbox" name="accuracy" value="true" required> The information is accurate and, under penalty of perjury, I am the owner or authorized to act for the owner (required)</label></div>
+            <div class="form-group">
+                <label class="form-label" for="signature">Signature (required)</label>
+                <input class="form-input" type="text" id="signature" name="signature" required maxlength="100" value="{{index .FormValues "signature"}}">
+            </div>
+            {{else}}
+            <div class="form-group">
+                <label class="form-label" for="request_kind">Request kind (required)</label>
+                <select class="form-input" id="request_kind" name="request_kind" required>
+                    <option value="access">Access</option><option value="export">Export</option><option value="deletion">Deletion</option><option value="correction">Correction</option><option value="opt_out">Opt out</option><option value="other">Other</option>
+                </select>
+            </div>
+            {{end}}
+            <div class="form-group">
+                <label class="form-label" for="subject">{{ t "contact.label_subject" }} (required)</label>
                 <input class="form-input" aria-describedby="subject-error" aria-invalid="false" type="text" id="subject" name="subject" required maxlength="200" placeholder="{{ t "contact.placeholder_subject" }}" value="{{index .FormValues "subject"}}">
                 <p id="subject-error" class="field-error" role="alert" hidden></p>
             </div>
             <div class="form-group">
-                <label class="form-label" for="message">{{ t "contact.label_message" }}</label>
+                <label class="form-label" for="message">{{ t "contact.label_message" }} (required)</label>
                 <textarea class="form-input" aria-describedby="message-error" aria-invalid="false" id="message" name="message" required maxlength="5000" rows="5" placeholder="{{ t "contact.placeholder_message" }}">{{index .FormValues "message"}}</textarea>
                 <p id="message-error" class="field-error" role="alert" hidden></p>
             </div>
-            <div class="form-group">
-                <label class="form-label" for="type">Type</label>
-                <select class="form-input" id="type" name="type" required>
-                    <option value="abuse"{{if eq (index .FormValues "type") "abuse"}} selected{{end}}>Abuse / terms violation</option>
-                    <option value="dmca"{{if eq (index .FormValues "type") "dmca"}} selected{{end}}>DMCA notice</option>
-                    <option value="privacy"{{if eq (index .FormValues "type") "privacy"}} selected{{end}}>Privacy request</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="reported_url">Reported URL (required for abuse or DMCA)</label>
-                <input class="form-input" type="url" id="reported_url" name="reported_url" maxlength="2048" value="{{index .FormValues "reported_url"}}">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="reason">Reason (required for abuse)</label>
-                <select class="form-input" id="reason" name="reason">
-                    <option value="">Select a reason</option>
-                    <option value="illegal_content">Illegal content</option>
-                    <option value="terms_violation">Terms violation</option>
-                    <option value="harassment">Harassment</option>
-                    <option value="malware_phishing">Malware or phishing</option>
-                    <option value="other">Other</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="copyrighted_work">Copyrighted work (required for DMCA)</label>
-                <textarea class="form-input" id="copyrighted_work" name="copyrighted_work" maxlength="2000" rows="3"></textarea>
-            </div>
-            <div class="form-group"><label class="form-label"><input type="checkbox" name="good_faith" value="true"> I have a good-faith belief that this use is not authorized by the copyright owner, its agent or the law.</label></div>
-            <div class="form-group"><label class="form-label"><input type="checkbox" name="accuracy" value="true"> The information is accurate and, under penalty of perjury, I am the owner or authorized to act for the owner.</label></div>
-            <div class="form-group">
-                <label class="form-label" for="signature">Signature (required for DMCA)</label>
-                <input class="form-input" type="text" id="signature" name="signature" maxlength="100">
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="request_kind">Privacy request kind (required for privacy)</label>
-                <select class="form-input" id="request_kind" name="request_kind">
-                    <option value="">Select a request</option>
-                    <option value="access">Access</option><option value="export">Export</option>
-                    <option value="deletion">Deletion</option><option value="correction">Correction</option>
-                    <option value="opt_out">Opt out</option><option value="other">Other</option>
-                </select>
-            </div>
             {{ if eq .CaptchaType "simple" }}
             <div class="form-group">
-                <label class="form-label" for="captcha_answer">{{ t "contact.captcha_question" }}: {{ .CaptchaQuestion }}</label>
+                <label class="form-label" for="captcha_answer">{{ t "contact.captcha_question" }} (required): {{ .CaptchaQuestion }}</label>
                 <input class="form-input" type="hidden" name="captcha_id" value="{{ .CaptchaID }}">
                 <input class="form-input" type="number" id="captcha_answer" name="captcha_answer" required inputmode="numeric">
             </div>
@@ -270,7 +272,7 @@
             <script async defer src="https://www.google.com/recaptcha/api.js"></script>
             <noscript>
                 <div class="form-group">
-                    <label class="form-label" for="captcha_fallback_answer">{{ t "contact.captcha_question" }}: {{ .CaptchaFallbackQuestion }}</label>
+                    <label class="form-label" for="captcha_fallback_answer">{{ t "contact.captcha_question" }} (required): {{ .CaptchaFallbackQuestion }}</label>
                     <input class="form-input" type="hidden" name="captcha_id" value="{{ .CaptchaFallbackID }}">
                     <input class="form-input" type="number" id="captcha_fallback_answer" name="captcha_answer" required inputmode="numeric">
                 </div>
@@ -280,7 +282,7 @@
             <script async defer src="https://js.hcaptcha.com/1/api.js"></script>
             <noscript>
                 <div class="form-group">
-                    <label class="form-label" for="captcha_fallback_answer">{{ t "contact.captcha_question" }}: {{ .CaptchaFallbackQuestion }}</label>
+                    <label class="form-label" for="captcha_fallback_answer">{{ t "contact.captcha_question" }} (required): {{ .CaptchaFallbackQuestion }}</label>
                     <input class="form-input" type="hidden" name="captcha_id" value="{{ .CaptchaFallbackID }}">
                     <input class="form-input" type="number" id="captcha_fallback_answer" name="captcha_answer" required inputmode="numeric">
                 </div>
@@ -288,12 +290,11 @@
             {{ end }}
             <button type="submit" class="search-button" data-loading-text="{{ t "action.sending" }}">{{ t "contact.submit_message" }}</button>
         </form>
+        {{else}}
         {{end}}
         {{end}}
-        <h2>Security Issues</h2>
-        <p>To report a security vulnerability, consult our security policy at <a href="{{ path "/server/security" }}">/server/security</a>.</p>
-        <h2>Abuse Reports</h2>
-        <p>To report abusive content or a terms violation, choose the type Abuse above. To send a DMCA notice, choose the type DMCA.{{if .AbuseEmail}} Or email <a href="mailto:{{.AbuseEmail}}">{{.AbuseEmail}}</a>.{{end}}</p>
+        <p>To report a security vulnerability, see <a href="{{ path "/server/security" }}">/server/security</a>.</p>
+        {{end}}
     </div>
 </div>
 {{end}}

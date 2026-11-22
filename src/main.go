@@ -79,6 +79,18 @@ func buildEpoch() int64 {
 	return n
 }
 
+func formatServerStartupTime(started time.Time) string {
+	zone := os.Getenv("TZ")
+	if zone == "" {
+		zone = "America/New_York"
+	}
+	location, err := time.LoadLocation(zone)
+	if err != nil {
+		location = time.Local
+	}
+	return started.In(location).Format("January 02, 2006 at 15:04:05 MST")
+}
+
 func init() {
 	// Derive BuildDate from the embedded BuildEpoch per AI.md PART 25.
 	if n := buildEpoch(); n > 0 {
@@ -336,7 +348,7 @@ func run(ctx context.Context) error {
 	if peekConfigDir == "" {
 		peekConfigDir = pathpkg.GetDefaultConfigDir(pathpkg.IsPrivilegedMode())
 	}
-	peekAddress, peekPort := config.PeekServerListenConfig(filepath.Join(peekConfigDir, "server.yml"))
+	peekAddress, peekPort, peekDaemonize := config.PeekServerStartupConfig(filepath.Join(peekConfigDir, "server.yml"))
 	if address == "" {
 		address = peekAddress
 	}
@@ -442,7 +454,9 @@ func run(ctx context.Context) error {
 				// Per AI.md PART 21: no --password flag; the password is prompted
 				// interactively, so only a non-flag operand is taken here.
 				maintArg := ""
-				if len(rest) > 1 && !strings.HasPrefix(rest[1], "--") {
+				if rest[0] == "data" && len(rest) > 1 {
+					maintArg = strings.Join(rest[1:], " ")
+				} else if len(rest) > 1 && !strings.HasPrefix(rest[1], "--") {
 					maintArg = rest[1]
 				}
 				handleMaintenanceCommand(rest[0], maintArg, configDir, dataDir)
@@ -461,8 +475,9 @@ func run(ctx context.Context) error {
 	})
 	mode.InitializeAppModeWithDebugOverride(modeStr, debug, debugFlagSet)
 
-	// Handle daemon mode per AI.md PART 8
-	if daemon {
+	// Manual daemonization happens before privileged sockets are bound. Service
+	// commands return above, and container runtimes must supervise the process.
+	if !system.IsRunningInContainer() && system.ShouldDaemonize(false, daemon, peekDaemonize) {
 		if err := daemonpkg.Daemonize(); err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to daemonize: %v\n", err)
 			os.Exit(1)
@@ -476,8 +491,14 @@ func run(ctx context.Context) error {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load configuration: %v\n", err)
 		os.Exit(1)
 	}
-	if *i2pF {
-		appConfig.Server.I2P.Enabled = true
+	i2pFlagSet := false
+	fs.Visit(func(parsed *flag.Flag) {
+		if parsed.Name == "i2p" {
+			i2pFlagSet = true
+		}
+	})
+	if i2pFlagSet {
+		appConfig.Server.I2P.Enabled = *i2pF
 	}
 
 	// Get paths early so we can override log directory
@@ -1127,6 +1148,7 @@ func run(ctx context.Context) error {
 			AppMode:   appConfig.Server.Mode,
 			Debug:     mode.IsDebugEnabled(),
 			URLs:      []string{displayURL},
+			StartedAt: formatServerStartupTime(time.Now()),
 			ShowSetup: isFirstRun,
 		})
 
@@ -1135,7 +1157,6 @@ func run(ctx context.Context) error {
 		}
 
 		// Log INFO lines per AI.md PART 11
-		fmt.Printf("[INFO] Server started successfully\n")
 		fmt.Printf("[INFO] Listening on %s\n", listenAddr)
 		if smtpInfo != "" {
 			fmt.Printf("[INFO] SMTP configured: %s\n", smtpInfo)
@@ -2070,12 +2091,25 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 			fmt.Printf("   Usage: %s --maintenance compliance report\n", binaryName)
 			os.Exit(1)
 		}
+		if err := authorizeSensitiveOperation(configDir, dataDir); err != nil {
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" "+err.Error())
+			os.Exit(1)
+		}
 		appConfig, _, err := config.LoadAppConfig(configDir, dataDir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load configuration: %v\n", err)
 			os.Exit(1)
 		}
-		printComplianceReport(appConfig)
+		requestID, err := newDataRequestID()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to create report ID: %v\n", err)
+			os.Exit(1)
+		}
+		if err := emitDataAudit(configDir, dataDir, "compliance.report_generated", requestID, map[string]interface{}{"report_type": "compliance"}); err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to audit compliance report: %v\n", err)
+			os.Exit(1)
+		}
+		printComplianceReport(appConfig, config.GetAppPaths(configDir, dataDir).Data)
 
 	case "pgp":
 		// Per AI.md PART 12 "GPG Keypair Management": keypair actions run through
@@ -2117,8 +2151,10 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
   %s --maintenance secret rotate <n>  Rotate installation_secret or encryption_key
   %s --maintenance token list         List active API tokens (prefix + resource)
   %s --maintenance token revoke <pfx> Revoke a specific API token by prefix
-  %s --maintenance data export        Export all stored personal data (GDPR)
-  %s --maintenance data delete        Delete stored personal data (GDPR erasure)
+  %s --maintenance data export --owner <prefix> [--output FILE]
+                                      Export one owner's data (GDPR)
+  %s --maintenance data delete --owner <prefix> [--yes]
+                                      Delete one owner's data (GDPR erasure)
   %s --maintenance setup              Show configuration instructions
 
 PGP actions (AI.md PART 12 "GPG Keypair Management"):
@@ -3003,14 +3039,30 @@ func loadInstallationSecret(dataDir string) ([]byte, error) {
 // a compliance summary"). Compliance is configured entirely in server.yml, so the
 // report reflects the live config: which standards are enabled and the operational
 // controls those toggles activate.
-func printComplianceReport(appConfig *config.AppConfig) {
+func printComplianceReport(appConfig *config.AppConfig, dataDirs ...string) {
 	c := appConfig.Server.Compliance
 	enabled := c.EnabledStandards()
+	dataDir := ""
+	if len(dataDirs) > 0 {
+		dataDir = dataDirs[0]
+	}
 
 	fmt.Println("Compliance Report")
 	fmt.Println("=================")
 	fmt.Printf("Application: %s\n", appConfig.Server.Branding.Title)
-	fmt.Printf("Generated:   %s\n\n", time.Now().UTC().Format(time.RFC3339))
+	fmt.Printf("Generated:   %s\n", time.Now().Format("January 02, 2006 at 15:04:05 MST"))
+
+	if dataDir != "" {
+		printComplianceDataSummary(dataDir, appConfig)
+	}
+	fmt.Println("\nStandards:")
+	for _, standard := range c.Standards() {
+		state := "disabled"
+		if standard.Enabled {
+			state = "enabled"
+		}
+		fmt.Printf("  %s: %s\n", strings.ToUpper(standard.Key), state)
+	}
 
 	if len(enabled) == 0 {
 		fmt.Println("Compliance mode: DISABLED")
@@ -3021,19 +3073,6 @@ func printComplianceReport(appConfig *config.AppConfig) {
 	}
 
 	fmt.Println("Compliance mode: ENABLED")
-	fmt.Println("\nEnabled standards:")
-	for _, s := range c.Standards() {
-		if s.Enabled {
-			fmt.Printf("  [x] %s\n", s.Name)
-		}
-	}
-	fmt.Println("\nDisabled standards:")
-	for _, s := range c.Standards() {
-		if !s.Enabled {
-			fmt.Printf("  [ ] %s\n", s.Name)
-		}
-	}
-
 	fmt.Println("\nActive controls (derived from enabled standards):")
 	fmt.Println("  - Backup encryption is MANDATORY (--maintenance backup requires a password)")
 	if c.GDPR || c.CCPA || c.LGPD {
@@ -3041,6 +3080,63 @@ func printComplianceReport(appConfig *config.AppConfig) {
 	}
 	fmt.Println("  - Audit logging active for compliance.* events")
 	fmt.Println("\nCompliance is configured in server.yml under server.compliance.")
+}
+
+func printComplianceDataSummary(dataDir string, appConfig *config.AppConfig) {
+	paths := config.GetAppPaths("", dataDir)
+	dbPath := filepath.Join(config.GetDatabaseDir(paths.Data), "server.db")
+	counts := map[string]string{"owners": "unavailable", "resources": "unavailable", "active tokens": "unavailable", "open security reports": "unavailable", "compliance events (30 days)": "unavailable"}
+	if _, err := os.Stat(dbPath); err == nil {
+		if db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro"); err == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			queries := map[string]string{
+				"owners":                      "SELECT COUNT(*) FROM owners",
+				"resources":                   "SELECT COUNT(*) FROM favorites",
+				"active tokens":               "SELECT COUNT(*) FROM api_tokens WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > CAST(strftime('%s','now') AS INTEGER))",
+				"open security reports":       "SELECT COUNT(*) FROM security_reports WHERE status NOT IN ('closed','resolved','disclosed')",
+				"compliance events (30 days)": "SELECT COUNT(*) FROM audit_log WHERE action LIKE 'compliance.%' AND timestamp >= datetime('now','-30 days')",
+			}
+			for label, query := range queries {
+				var count int64
+				if err := db.QueryRowContext(ctx, query).Scan(&count); err == nil {
+					counts[label] = strconv.FormatInt(count, 10)
+				}
+			}
+			cancel()
+			_ = db.Close()
+		}
+	}
+	fmt.Println("\nData summary:")
+	for _, label := range []string{"owners", "resources", "active tokens", "open security reports", "compliance events (30 days)"} {
+		fmt.Printf("  %s: %s\n", label, counts[label])
+	}
+	retention := appConfig.Server.Privacy.Retention.Period
+	if retention == "" {
+		retention = "not configured"
+	}
+	fmt.Printf("Retention period: %s\n", retention)
+	backupRetention := appConfig.Server.Backup.Retention
+	fmt.Printf("Backup retention: daily=%d, weekly=%d, monthly=%d, yearly=%d, max_total_size=%s\n",
+		backupRetention.MaxBackups, backupRetention.KeepWeekly, backupRetention.KeepMonthly,
+		backupRetention.KeepYearly, backupRetention.MaxTotalSize)
+	backupDir := paths.Backup
+	lastBackup := "never"
+	if entries, err := os.ReadDir(backupDir); err == nil {
+		var newest time.Time
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasPrefix(entry.Name(), "vidveil_backup_") {
+				continue
+			}
+			info, err := entry.Info()
+			if err == nil && info.ModTime().After(newest) {
+				newest = info.ModTime()
+			}
+		}
+		if !newest.IsZero() {
+			lastBackup = newest.Format("January 02, 2006 at 15:04:05 MST")
+		}
+	}
+	fmt.Printf("Last backup: %s\n", lastBackup)
 }
 
 // isDBFirstRun returns true if the settings table has no rows, indicating first run.

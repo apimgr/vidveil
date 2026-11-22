@@ -37,6 +37,7 @@ jobs:
           echo "build_epoch=$(date -u +%s)" >> "$GITEA_OUTPUT"
 
   build:
+    if: gitea.event_name == 'schedule' || (gitea.ref == 'refs/heads/main' || gitea.ref == 'refs/heads/master')
     needs: [version]
     runs-on: ubuntu-latest
     container:

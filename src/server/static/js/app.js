@@ -3827,7 +3827,8 @@ document.addEventListener('error', function(e) {
             document.getElementById('max-history').value = prefs.maxHistory;
             document.getElementById('auto-clear-history').value = prefs.autoClearHistory;
 
-            document.getElementById('use-tor').checked = prefs.useTor;
+            var torPreference = document.getElementById('use-tor');
+            if (torPreference) torPreference.checked = prefs.useTor;
 
         }
 

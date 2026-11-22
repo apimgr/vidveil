@@ -25,6 +25,7 @@ import (
 	"time"
 
 	paths "github.com/apimgr/vidveil/src/paths"
+	"github.com/apimgr/vidveil/src/server/service/system"
 	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
 )
@@ -177,9 +178,9 @@ type ServerConfig struct {
 	// Application branding per AI.md PART 16
 	Branding ServerBrandingConfig `yaml:"branding"`
 
-	// System user/group
-	User  string `yaml:"user"`
-	Group string `yaml:"group"`
+	// Daemonize is honored only for a manual start. Service managers and
+	// containers keep the server in the foreground.
+	Daemonize bool `yaml:"daemonize"`
 
 	// PID file
 	PIDFile bool `yaml:"pidfile"`
@@ -247,7 +248,7 @@ type ServerConfig struct {
 	// Tor (PART 31) - Hidden service and outbound network settings
 	Tor TorConfig `yaml:"tor"`
 
-	// I2P (PART 31.2) - opt-in eepsite provider settings; disabled by default.
+	// I2P (PART 31.2) - eepsite provider settings; default depends on runtime.
 	I2P I2PConfig `yaml:"i2p"`
 
 	// Healthz (PART 13) - Optional root-level alias for /server/healthz
@@ -553,7 +554,7 @@ type TorConfig struct {
 	ContactEmail string `yaml:"contact_email"`
 }
 
-// I2PConfig configures the opt-in I2P eepsite provider per AI.md PART 31.2.
+// I2PConfig configures the I2P eepsite provider per AI.md PART 31.2.
 type I2PConfig struct {
 	Enabled          bool   `yaml:"enabled"`
 	Binary           string `yaml:"binary"`
@@ -568,7 +569,8 @@ type I2PConfig struct {
 	Address          string `yaml:"-" json:"-"`
 }
 
-// DefaultI2PConfig returns the PART 31.2 defaults, with the service disabled.
+// DefaultI2PConfig returns the PART 31.2 settings with I2P disabled. The
+// application config enables it by default only in an application container.
 func DefaultI2PConfig() I2PConfig {
 	return I2PConfig{
 		SAMAddress:       "127.0.0.1:7656",
@@ -1901,8 +1903,6 @@ func DefaultAppConfig() *AppConfig {
 				Sitemap:        SEOSitemapConfig{MaxURLs: 50000},
 				Feed:           SEOFeedConfig{MaxItems: 50},
 			},
-			User:    "",
-			Group:   "",
 			PIDFile: true,
 			Contact: ContactConfig{
 				Admin: ContactRoleConfig{
@@ -2170,7 +2170,11 @@ func DefaultAppConfig() *AppConfig {
 			// Hidden service auto-enabled if tor binary found
 			// Outbound network disabled by default - can be enabled for privacy
 			Tor: DefaultTorConfig(),
-			I2P: DefaultI2PConfig(),
+			I2P: func() I2PConfig {
+				cfg := DefaultI2PConfig()
+				cfg.Enabled = system.IsApplicationContainer()
+				return cfg
+			}(),
 			// Update settings per AI.md PART 22
 			// Branch: stable by default; auto_install: false (notify-only); defer_days: 0
 			Update: UpdateConfig{
@@ -2486,13 +2490,21 @@ func clearGeneratedSecretDefaults(cfg *AppConfig) {
 // and yaml.d configuration used by the full loader. It is safe for early
 // startup address selection and intentionally returns empty values on error.
 func PeekServerListenConfig(configPath string) (address, port string) {
+	address, port, _ = PeekServerStartupConfig(configPath)
+	return address, port
+}
+
+// PeekServerStartupConfig reads the listen settings and daemonize flag from
+// the merged server configuration for startup decisions made before loading
+// the complete application config.
+func PeekServerStartupConfig(configPath string) (address, port string, daemonize bool) {
 	data, _, _, err := loadMergedConfigFiles(configPath, false)
 	if err != nil {
-		return "", ""
+		return "", "", false
 	}
 	var document yaml.Node
 	if yaml.Unmarshal(data, &document) != nil || len(document.Content) == 0 {
-		return "", ""
+		return "", "", false
 	}
 	lookup := func(node *yaml.Node, key string) *yaml.Node {
 		if node == nil || node.Kind != yaml.MappingNode {
@@ -2507,7 +2519,7 @@ func PeekServerListenConfig(configPath string) (address, port string) {
 	}
 	serverNode := lookup(document.Content[0], "server")
 	if serverNode == nil || serverNode.Kind != yaml.MappingNode {
-		return "", ""
+		return "", "", false
 	}
 	if value := lookup(serverNode, "address"); value != nil && value.Kind == yaml.ScalarNode {
 		address = value.Value
@@ -2515,7 +2527,10 @@ func PeekServerListenConfig(configPath string) (address, port string) {
 	if value := lookup(serverNode, "port"); value != nil && value.Kind == yaml.ScalarNode {
 		port = value.Value
 	}
-	return address, port
+	if value := lookup(serverNode, "daemonize"); value != nil && value.Kind == yaml.ScalarNode {
+		daemonize = strings.EqualFold(value.Value, "true")
+	}
+	return address, port, daemonize
 }
 
 func loadMergedConfig(configPath string) ([]byte, []string, []string, error) {

@@ -35,6 +35,13 @@ func (h *ServerHandler) contactPageWorkflow(w http.ResponseWriter, r *http.Reque
 		"ContactEnabled": true,
 		"AbuseEmail":     h.publicAbuseEmail(),
 		"Robots":         "noindex,nofollow",
+		"ContactTypes":   h.contactTypes(securityMode),
+	}
+	_, fqdn, _ := urlvar.GetURLVars(r)
+	data["FQDN"] = fqdn
+	contactType := strings.TrimSpace(r.URL.Query().Get("type"))
+	if containsString(h.contactTypes(securityMode), contactType) {
+		data["ContactType"] = contactType
 	}
 	if securityMode {
 		data["SecurityMode"] = true
@@ -43,6 +50,23 @@ func (h *ServerHandler) contactPageWorkflow(w http.ResponseWriter, r *http.Reque
 		data["Components"] = h.securityComponentOptions()
 	}
 	h.renderServerTemplate(w, r, "server-contact", data)
+}
+
+func (h *ServerHandler) contactTypes(securityMode bool) []string {
+	types := []string{"abuse", "dmca", "privacy"}
+	if securityMode {
+		types = append(types, "security")
+	}
+	return types
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func contactSecurityIDHash(id string) string { return shortContactDigest(id) }
@@ -398,6 +422,11 @@ func securityContactAPIFields() []map[string]interface{} {
 }
 
 func (h *ServerHandler) renderContactFormValues(w http.ResponseWriter, r *http.Request, reviewToken, message string) {
+	contactType := strings.TrimSpace(r.FormValue("type"))
+	if !containsString(h.contactTypes(false), contactType) {
+		contactType = ""
+	}
+	_, fqdn, _ := urlvar.GetURLVars(r)
 	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 		"ContactEnabled": true,
 		"AbuseEmail":     h.publicAbuseEmail(),
@@ -407,6 +436,9 @@ func (h *ServerHandler) renderContactFormValues(w http.ResponseWriter, r *http.R
 		"FormValues":     contactFormValues(r),
 		"Message":        message,
 		"MessageType":    "error",
+		"ContactType":    contactType,
+		"ContactTypes":   h.contactTypes(false),
+		"FQDN":           fqdn,
 	})
 }
 

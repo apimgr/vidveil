@@ -28,11 +28,7 @@ jobs:
       - name: Compute version
         id: set
         run: |
-          if [ -f release.txt ]; then
-            echo "version=$(cat release.txt)" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=$(date -u +%Y%m%d%H%M%S)-beta" >> "$GITHUB_OUTPUT"
-          fi
+          echo "version=$(date -u +%Y%m%d%H%M%S)-beta" >> "$GITHUB_OUTPUT"
           echo "commit_id=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
           echo "build_epoch=$(date -u +%s)" >> "$GITHUB_OUTPUT"
 

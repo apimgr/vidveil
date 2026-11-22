@@ -3,6 +3,7 @@ package main
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,7 +11,8 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/database"
 )
 
-func TestReadTableForExportUsesCurrentSchema(t *testing.T) {
+func newDataTestDB(t *testing.T) *database.SchemaManager {
+	t.Helper()
 	mgr, err := database.NewSchemaManager(filepath.Join(t.TempDir(), "server.db"))
 	if err != nil {
 		t.Fatalf("NewSchemaManager: %v", err)
@@ -19,13 +21,109 @@ func TestReadTableForExportUsesCurrentSchema(t *testing.T) {
 	if err := mgr.EnsureSchema(); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}
+	return mgr
+}
 
-	for _, table := range exportableTables {
-		t.Run(table, func(t *testing.T) {
-			if _, err := readTableForExport(mgr.GetDB(), table); err != nil {
-				t.Fatalf("readTableForExport: %v", err)
-			}
-		})
+func TestReadOwnerFavoritesIsScopedToOwner(t *testing.T) {
+	mgr := newDataTestDB(t)
+	db := mgr.GetDB()
+	for _, owner := range []string{"owner-a", "owner-b"} {
+		if _, err := db.Exec(`INSERT INTO owners (id) VALUES (?)`, owner); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`INSERT INTO favorites (owner_id, visitor_id, url, title) VALUES (?, ?, ?, ?)`, owner, owner, "https://example.test/"+owner, owner); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, err := readOwnerFavorites(db, "owner-a")
+	if err != nil {
+		t.Fatalf("readOwnerFavorites: %v", err)
+	}
+	if len(rows) != 1 || rows[0]["title"] != "owner-a" {
+		t.Fatalf("owner favorites = %#v, want only owner-a's favorite", rows)
+	}
+	if _, exists := rows[0]["owner_id"]; exists {
+		t.Fatal("favorite export contains an implementation-only owner_id field")
+	}
+}
+
+func TestResolveOwnerIDByUniqueTokenPrefix(t *testing.T) {
+	mgr := newDataTestDB(t)
+	db := mgr.GetDB()
+	for _, owner := range []string{"owner-a", "owner-b"} {
+		if _, err := db.Exec(`INSERT INTO owners (id) VALUES (?)`, owner); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, token := range []struct{ owner, prefix string }{{"owner-a", "tok_abc123"}, {"owner-b", "tok_def456"}} {
+		if _, err := db.Exec(`INSERT INTO api_tokens (owner_id, token_hash, token_prefix, resource_type, resource_id) VALUES (?, ?, ?, 'favorite', ?)`, token.owner, "hash-"+token.owner, token.prefix, token.owner); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := resolveOwnerID(db, "tok_abc")
+	if err != nil || got != "owner-a" {
+		t.Fatalf("resolveOwnerID() = (%q, %v), want (owner-a, nil)", got, err)
+	}
+	if _, err := resolveOwnerID(db, "tok_"); err == nil {
+		t.Fatal("ambiguous token prefix unexpectedly resolved")
+	}
+}
+
+func TestOwnerTokenExportContainsNoCredentialMaterial(t *testing.T) {
+	mgr := newDataTestDB(t)
+	db := mgr.GetDB()
+	if _, err := db.Exec(`INSERT INTO owners (id) VALUES ('owner-a')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO api_tokens (owner_id, token_hash, token_prefix, token_enc, resource_type, resource_id) VALUES ('owner-a', 'secret-hash', 'tok_abc123', 'secret-token', 'favorite', '1')`); err != nil {
+		t.Fatal(err)
+	}
+	tokens, err := readOwnerTokens(db, "owner-a")
+	if err != nil {
+		t.Fatalf("readOwnerTokens: %v", err)
+	}
+	encoded, err := json.Marshal(tokens)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"secret-hash", "secret-token", "token_hash", "token_enc"} {
+		if strings.Contains(string(encoded), secret) {
+			t.Errorf("token export contains sensitive value %q: %s", secret, encoded)
+		}
+	}
+}
+
+func TestDeleteOwnerResourcesOnlyDeletesSelectedOwner(t *testing.T) {
+	mgr := newDataTestDB(t)
+	db := mgr.GetDB()
+	for _, owner := range []string{"owner-a", "owner-b"} {
+		if _, err := db.Exec(`INSERT INTO owners (id) VALUES (?)`, owner); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`INSERT INTO favorites (owner_id, visitor_id, url, title) VALUES (?, ?, ?, ?)`, owner, owner, "https://example.test/"+owner, owner); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := deleteOwnerResources(t.Context(), tx, "owner-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("deleted count = %d, want 1", count)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	var remaining int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM favorites`).Scan(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 1 {
+		t.Fatalf("remaining favorites = %d, want owner's other row to remain", remaining)
 	}
 }
 
@@ -49,34 +147,12 @@ func TestNewDataRequestIDIsUniqueHex(t *testing.T) {
 	}
 }
 
-func TestAuditLogUserIDAnonymizedWithMarker(t *testing.T) {
-	for _, rule := range anonymizations {
-		if rule.table == "audit_log" && rule.column == "user_id" {
-			if rule.replacement != redactedMarker {
-				t.Errorf("audit_log.user_id replacement = %q, want %q", rule.replacement, redactedMarker)
-			}
-			return
-		}
+func TestExportTableQueryOnlyAllowsOwnerResources(t *testing.T) {
+	query, ok := exportTableQuery("favorites")
+	if !ok || !strings.Contains(query, "WHERE owner_id = ?") {
+		t.Fatalf("favorites query = (%q, %t), want owner-scoped query", query, ok)
 	}
-	t.Fatal("missing audit_log.user_id anonymization rule")
-}
-
-func TestExportTableQueryOmitsSensitiveColumns(t *testing.T) {
-	for _, table := range exportableTables {
-		query, ok := exportTableQuery(table)
-		if !ok {
-			t.Fatalf("exportTableQuery(%q) missing query", table)
-		}
-		if strings.Contains(query, "*") {
-			t.Errorf("exportTableQuery(%q) uses wildcard columns", table)
-		}
-	}
-	for _, table := range []string{"security_reports", "api_tokens"} {
-		query, _ := exportTableQuery(table)
-		for _, secretColumn := range []string{"encrypted_body", "token_hash", "token_enc"} {
-			if strings.Contains(query, secretColumn) {
-				t.Errorf("exportTableQuery(%q) includes sensitive column %q", table, secretColumn)
-			}
-		}
+	if _, ok := exportTableQuery("api_tokens"); ok {
+		t.Fatal("token table must not be exported through generic resource queries")
 	}
 }

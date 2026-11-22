@@ -27,11 +27,7 @@ jobs:
       - name: Compute version
         id: set
         run: |
-          if [ -f release.txt ]; then
-            VERSION="$(cat release.txt)"
-          else
-            VERSION="$(date -u +"%Y%m%d%H%M%S")-beta"
-          fi
+          VERSION="$(date -u +"%Y%m%d%H%M%S")-beta"
           echo "version=$VERSION" >> "$GITEA_OUTPUT"
           echo "commit_id=$(git rev-parse --short=7 HEAD)" >> "$GITEA_OUTPUT"
           echo "build_epoch=$(date -u +%s)" >> "$GITEA_OUTPUT"

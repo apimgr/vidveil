@@ -1453,6 +1453,32 @@ func IsRunningInContainer() bool {
 	return false
 }
 
+// IsApplicationContainer distinguishes supervised application containers from
+// system containers such as Incus, which may share a host I2P router.
+func IsApplicationContainer() bool {
+	for _, marker := range []string{"/.dockerenv", "/run/.containerenv"} {
+		if _, err := os.Stat(marker); err == nil {
+			return true
+		}
+	}
+	if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
+		return true
+	}
+	containerType := strings.ToLower(strings.TrimSpace(os.Getenv("container")))
+	if containerType != "" && containerType != "lxc" && containerType != "lxd" && containerType != "systemd-nspawn" {
+		return true
+	}
+	switch getParentProcessName() {
+	case "tini", "dumb-init", "s6-svscan", "runsv", "runsvdir", "catatonit", "vidveil":
+		return true
+	}
+	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+		content := string(data)
+		return strings.Contains(content, "docker") || strings.Contains(content, "kubepods")
+	}
+	return false
+}
+
 // getParentProcessName returns the name of the parent process per AI.md PART 8 7827-7843
 func getParentProcessName() string {
 	ppid := os.Getppid()
@@ -1473,11 +1499,6 @@ func getParentProcessName() string {
 
 // DetectServiceManager returns the active service manager per AI.md PART 23
 func DetectServiceManager() string {
-	// Check for container environment first
-	if IsRunningInContainer() {
-		return "container"
-	}
-
 	// Check parent process / init system
 	ppid := os.Getppid()
 
@@ -1490,6 +1511,20 @@ func DetectServiceManager() string {
 	// Also check INVOCATION_ID (set by systemd)
 	if os.Getenv("INVOCATION_ID") != "" {
 		return "systemd"
+	}
+	if os.Getenv("RC_SVCNAME") != "" {
+		return "openrc"
+	}
+	if ppid == 1 {
+		if _, err := os.Stat("/run/openrc"); err == nil {
+			return "openrc"
+		}
+	}
+
+	// A system container with a working init uses that init system. Only
+	// application containers without systemd/OpenRC are treated as containers.
+	if IsRunningInContainer() {
+		return "container"
 	}
 
 	// launchd: macOS with PPID=1
@@ -1529,7 +1564,7 @@ func ShouldDaemonize(isServiceStart bool, daemonFlag bool, configDaemonize bool)
 	if isServiceStart {
 		// Service start - detect manager and ignore config
 		switch DetectServiceManager() {
-		case "systemd", "launchd", "runit", "s6", "docker", "container":
+		case "systemd", "openrc", "launchd", "runit", "s6", "docker", "container":
 			// Always foreground
 			return false
 		case "sysv", "rcd":

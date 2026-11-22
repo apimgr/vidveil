@@ -583,6 +583,7 @@ pipeline {
                         docker buildx build \
                             -f docker/Dockerfile.dev \
                             --platform linux/amd64,linux/arm64 \
+                            --build-arg VERSION="${VERSION}" \
                             --build-arg COMMIT_ID="${COMMIT_ID}" \
                             --build-arg BUILD_DATE="${BUILD_DATE}" \
                             --build-arg BUILD_EPOCH="${BUILD_EPOCH}" \
@@ -592,6 +593,7 @@ pipeline {
                             --label "org.opencontainers.image.base.name=alpine" \
                             --label "org.opencontainers.image.description=${PROJECT_NAME} - development image (alpine, debug mode)" \
                             --label "org.opencontainers.image.licenses=MIT" \
+                            --label "org.opencontainers.image.version=${VERSION}" \
                             --label "org.opencontainers.image.created=${BUILD_DATE}" \
                             --label "org.opencontainers.image.revision=${COMMIT_ID}" \
                             --label "org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \
@@ -603,6 +605,7 @@ pipeline {
                             --annotation "manifest:org.opencontainers.image.base.name=alpine" \
                             --annotation "manifest:org.opencontainers.image.description=${PROJECT_NAME} - development image (alpine, debug mode)" \
                             --annotation "manifest:org.opencontainers.image.licenses=MIT" \
+                            --annotation "manifest:org.opencontainers.image.version=${VERSION}" \
                             --annotation "manifest:org.opencontainers.image.created=${BUILD_DATE}" \
                             --annotation "manifest:org.opencontainers.image.revision=${COMMIT_ID}" \
                             --annotation "manifest:org.opencontainers.image.url=https://${GIT_FQDN}/${PROJECT_ORG}/${INTERNAL_NAME}" \

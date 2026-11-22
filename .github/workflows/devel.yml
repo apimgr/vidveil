@@ -40,6 +40,7 @@ jobs:
           echo "build_epoch=$(date -u +%s)" >> "$GITHUB_OUTPUT"
 
   build:
+    if: github.event_name == 'schedule' || (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     needs: [version]
     runs-on: ubuntu-26.04
     container:

@@ -14,8 +14,8 @@ DOCKER_PROJECT_ORG="apimgr"
 DOCKER_INTERNAL_NAME="vidveil"
 DOCKER_TEST_SUFFIX="$(printf '%08x' "$(((RANDOM << 15) | RANDOM))")"
 DOCKER_CONTRACT_IMAGE="vidveil:docker-contract-${DOCKER_TEST_SUFFIX}"
-DOCKER_IMAGE_CHECK_CONTAINER="vidveil-${DOCKER_TEST_SUFFIX}-image-check"
-DOCKER_TEST_CONTAINER="vidveil-${DOCKER_TEST_SUFFIX}-test"
+DOCKER_IMAGE_CHECK_CONTAINER="test-vidveil-${DOCKER_TEST_SUFFIX}-image-check"
+DOCKER_TEST_CONTAINER="test-vidveil-${DOCKER_TEST_SUFFIX}-app"
 
 # Colors
 DOCKER_RED='\033[0;31m'
@@ -89,7 +89,7 @@ go build -buildvcs=false -ldflags '-s -w' -o /output/vidveil ./src
 EOF
 chmod +x "${DOCKER_TEMP_DIR}/build.sh"
 
-docker run --rm --name "vidveil-${DOCKER_TEST_SUFFIX}-server-build" \
+docker run --rm --name "test-vidveil-${DOCKER_TEST_SUFFIX}-server-build" \
     -v "${DOCKER_PROJECT_ROOT}":/build \
     -v "${DOCKER_TEMP_DIR}":/output \
     -e CGO_ENABLED=0 \
@@ -113,7 +113,7 @@ go build -buildvcs=false -ldflags '-s -w' -o /output/vidveil-cli ./src/client
 EOF
 chmod +x "${DOCKER_TEMP_DIR}/build-cli.sh"
 
-docker run --rm --name "vidveil-${DOCKER_TEST_SUFFIX}-cli-build" \
+docker run --rm --name "test-vidveil-${DOCKER_TEST_SUFFIX}-cli-build" \
     -v "${DOCKER_PROJECT_ROOT}":/build \
     -v "${DOCKER_TEMP_DIR}":/output \
     -e CGO_ENABLED=0 \
@@ -130,7 +130,7 @@ __pass "CLI binary built successfully"
 # Step 3: Test server binary info
 __info "Testing server binary..."
 # Capture full output first to avoid SIGPIPE from `| head -1` with pipefail
-VERSION_OUT=$(docker run --rm --name "vidveil-${DOCKER_TEST_SUFFIX}-version" -v "${DOCKER_TEMP_DIR}":/app alpine:latest /app/${DOCKER_PROJECT_NAME} --version 2>&1 || true)
+VERSION_OUT=$(docker run --rm --name "test-vidveil-${DOCKER_TEST_SUFFIX}-version" -v "${DOCKER_TEMP_DIR}":/app alpine:latest /app/${DOCKER_PROJECT_NAME} --version 2>&1 || true)
 VERSION=$(printf '%s\n' "$VERSION_OUT" | head -1)
 if [ -n "$VERSION" ]; then
     __pass "Server version check: $VERSION"
@@ -141,7 +141,7 @@ fi
 # Step 4: Binary rename test (per AI.md PART 7: binary renames itself gracefully)
 __info "Testing binary rename behavior..."
 cp "${DOCKER_TEMP_DIR}/${DOCKER_PROJECT_NAME}" "${DOCKER_TEMP_DIR}/myveil"
-RENAMED_HELP_OUT=$(docker run --rm --name "vidveil-${DOCKER_TEST_SUFFIX}-rename" -v "${DOCKER_TEMP_DIR}":/app alpine:latest /app/myveil --help 2>&1 || true)
+RENAMED_HELP_OUT=$(docker run --rm --name "test-vidveil-${DOCKER_TEST_SUFFIX}-rename" -v "${DOCKER_TEMP_DIR}":/app alpine:latest /app/myveil --help 2>&1 || true)
 RENAMED_HELP=$(printf '%s\n' "$RENAMED_HELP_OUT" | head -5)
 if grep -qi -- "myveil" <<< "$RENAMED_HELP"; then
     __pass "Binary rename: --help shows new name"
@@ -152,7 +152,7 @@ rm -f "${DOCKER_TEMP_DIR}/myveil"
 
 # Step 5: Test CLI binary info
 __info "Testing CLI binary..."
-CLI_VERSION_OUT=$(docker run --rm --name "vidveil-${DOCKER_TEST_SUFFIX}-cli-version" -v "${DOCKER_TEMP_DIR}":/app alpine:latest /app/vidveil-cli --version 2>&1 || true)
+CLI_VERSION_OUT=$(docker run --rm --name "test-vidveil-${DOCKER_TEST_SUFFIX}-cli-version" -v "${DOCKER_TEMP_DIR}":/app alpine:latest /app/vidveil-cli --version 2>&1 || true)
 CLI_VERSION=$(printf '%s\n' "$CLI_VERSION_OUT" | head -1)
 if [ -n "$CLI_VERSION" ]; then
     __pass "CLI version check: $CLI_VERSION"
@@ -169,7 +169,7 @@ else
     exit 1
 fi
 
-if docker run --rm --name "vidveil-${DOCKER_TEST_SUFFIX}-packages" --entrypoint sh "${DOCKER_CONTRACT_IMAGE}" -c 'for c in bash curl tor i2pd tini; do command -v "$c" || exit 1; done; test -s /etc/ssl/certs/ca-certificates.crt; test -f /usr/share/zoneinfo/America/New_York'; then
+if docker run --rm --name "test-vidveil-${DOCKER_TEST_SUFFIX}-packages" --entrypoint sh "${DOCKER_CONTRACT_IMAGE}" -c 'for c in bash curl tor i2pd tini; do command -v "$c" || exit 1; done; test -s /etc/ssl/certs/ca-certificates.crt; test -f /usr/share/zoneinfo/America/New_York'; then
     __pass "Image runtime packages, CA bundle, and timezone data"
 else
     __fail "Image runtime package contract"
@@ -182,7 +182,6 @@ server:
     startup_timeout: 60
     bootstrap_timeout: 30
   i2p:
-    enabled: true
     bootstrap_timeout: 10m
     inbound_length: 1
     outbound_length: 1

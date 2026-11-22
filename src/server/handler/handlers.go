@@ -2201,7 +2201,7 @@ type TorInfo struct {
 }
 
 // I2PInfo is the I2P eepsite block of FeaturesInfo per AI.md PART 31.2.
-// I2P is opt-in and off by default.
+// I2P's default depends on the runtime; the configured enabled state is shown.
 type I2PInfo struct {
 	Enabled  bool   `json:"enabled"`
 	Running  bool   `json:"running"`

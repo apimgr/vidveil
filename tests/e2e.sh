@@ -14,9 +14,9 @@ E2E_INTERNAL_NAME="vidveil"
 E2E_GO_IMAGE="casjaysdev/go:latest"
 E2E_CHROME_IMAGE="chromedp/headless-shell:latest"
 E2E_RUN_ID="$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
-E2E_NETWORK="${E2E_PROJECT_NAME}-e2e-${E2E_RUN_ID}"
-E2E_CHROME_CONTAINER="${E2E_PROJECT_NAME}-e2e-chrome-${E2E_RUN_ID}"
-E2E_GO_CONTAINER="${E2E_PROJECT_NAME}-e2e-runner-${E2E_RUN_ID}"
+E2E_NETWORK="test-${E2E_PROJECT_NAME}-e2e-${E2E_RUN_ID}"
+E2E_CHROME_CONTAINER="test-${E2E_PROJECT_NAME}-e2e-chrome-${E2E_RUN_ID}"
+E2E_GO_CONTAINER="test-${E2E_PROJECT_NAME}-e2e-runner-${E2E_RUN_ID}"
 E2E_TEST_FILTER="${E2E_TEST_FILTER:-}"
 
 # Failure artifacts and caches live outside the project tree (AI.md PART 29)

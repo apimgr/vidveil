@@ -14,8 +14,8 @@ ifeq ($(INTERNAL_NAME),)
 INTERNAL_NAME := $(PROJECTNAME)
 endif
 
-# Version precedence: release.txt (wins if it exists) > VERSION env var > devel fallback
-VERSION := $(shell cat release.txt 2>/dev/null || echo "$${VERSION:-devel}")
+# Local version precedence: explicit VERSION environment override > non-empty release.txt > short Git commit id > devel outside Git.
+VERSION ?= $(shell value="$$(tr -d '[:space:]' < release.txt 2>/dev/null)"; if [ -n "$$value" ]; then printf '%s' "$$value"; else git rev-parse --short=7 HEAD 2>/dev/null || printf devel; fi)
 
 # Build info — BUILD_EPOCH is the single captured time source (AI.md PART 25)
 # Unix build timestamp (seconds, UTC) — embedded via -ldflags; BuildDate is derived from it at process start

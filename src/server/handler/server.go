@@ -733,11 +733,19 @@ func (h *ServerHandler) renderContactSuccess(w http.ResponseWriter, r *http.Requ
 
 // renderContactError re-renders the contact form with a validation error.
 func (h *ServerHandler) renderContactError(w http.ResponseWriter, r *http.Request, msg string) {
+	_, fqdn, _ := urlvar.GetURLVars(r)
+	contactType := r.FormValue("type")
+	if !containsString(h.contactTypes(false), contactType) {
+		contactType = ""
+	}
 	h.renderServerTemplate(w, r, "server-contact", map[string]interface{}{
 		"ContactEnabled": true,
 		"AbuseEmail":     h.publicAbuseEmail(),
 		"Robots":         "noindex,nofollow",
 		"FormValues":     contactFormValues(r),
+		"ContactType":    contactType,
+		"ContactTypes":   h.contactTypes(false),
+		"FQDN":           fqdn,
 		"Message":        msg,
 		"MessageType":    "error",
 	})
@@ -1178,7 +1186,7 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 		"description": h.appConfig.Server.Branding.Description,
 		"version":     version.GetVersion(),
 		"features": []string{
-			"Search history is not retained; optional analytics require configuration and consent",
+			"Search history is stored in the visitor's browser, not as per-visitor history on the server; privacy-filtered queries may appear in public feeds",
 			"Meta-search across 33 adult video engines with bang shortcuts",
 			"Real-time SSE streaming as each engine responds",
 			"Thumbnail proxy so source sites never see your IP",

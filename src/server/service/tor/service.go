@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// AI.md PART 31: Embedded Tor Hidden Service Support using bine
+// AI.md PART 31: Dedicated Tor process with bine control protocol support
 package tor
 
 import (
@@ -24,12 +24,13 @@ import (
 	"crypto/sha3"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/logging"
-	"github.com/cretz/bine/tor"
+	"github.com/cretz/bine/control"
 	"github.com/pires/go-proxyproto"
+	"golang.org/x/net/proxy"
 )
 
-// TorService represents the embedded Tor hidden service per AI.md PART 31
-// Uses github.com/cretz/bine for dedicated Tor process management
+// TorService represents the dedicated Tor hidden service per AI.md PART 31
+// The server owns the Tor child process and uses bine only for control protocol.
 // Supports both hidden service hosting AND outbound network routing
 type TorService struct {
 	cfg *TorServiceConfig
@@ -42,13 +43,13 @@ type TorService struct {
 	logDir string
 	logger *logging.AppLogger
 
-	// bine Tor instance - manages dedicated Tor process
-	torInstance    *tor.Tor
-	torStartCancel context.CancelFunc
+	// The server owns the dedicated Tor child and its authenticated control connection.
+	torProcess *torProcess
+	torControl *control.Conn
 
 	// Outbound Tor dialer per PART 31
 	// Used when the server-wide UseNetwork setting routes engine queries through Tor
-	dialer *tor.Dialer
+	dialer proxy.ContextDialer
 
 	// Hidden service state — the .onion key/hostname are generated and
 	// persisted by Tor itself under {data_dir}/tor/site (HiddenServiceDir);
@@ -198,8 +199,8 @@ func (s *TorService) AllowUserIPForward() bool {
 	return s.torConfig != nil && s.torConfig.AllowUserIPForward
 }
 
-// Start initializes the Tor hidden service using bine
-// Per AI.md PART 31: Uses dedicated Tor process via bine library
+// Start initializes the Tor hidden service using its own dedicated process.
+// Per AI.md PART 31: bine is used only for the Tor control protocol.
 // Auto-enabled if tor binary is found - no enable flag needed
 func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	if ctx == nil {
@@ -301,74 +302,19 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	}
 	s.logger.Info("Regenerated torrc", map[string]interface{}{"path": torrcFile, "backend_port": torBackendPort})
 
-	// Start dedicated Tor process using bine
-	// Per AI.md: Start OUR OWN Tor process - completely separate from system Tor
-	// Per AI.md PART 31: Tor startup/runtime errors = WARN (server continues without Tor)
-	startConf := &tor.StartConf{
-		// Our own data directory - isolated from system Tor
-		DataDir: torDataDir,
-
-		// Use custom torrc (declares the hidden service, controls SocksPort, etc.)
-		// bine manages ControlPort automatically via TCP auto (bine v0.2.0 limitation)
-		TorrcFile: torrcFile,
-
-		// torrc controls SocksPort — disable bine's automatic SocksPort
-		NoAutoSocksPort: true,
-
-		// Use found Tor binary
-		ExePath: torPath,
-
-		// NoHush=false means bine adds --hush flag to reduce Tor output
-		NoHush: false,
-
-		// Discard Tor debug output during normal operation
-		DebugWriter: io.Discard,
-	}
-
 	s.logger.Info("Starting dedicated Tor process...", nil)
 	startupTimeout := 60 * time.Second
 	if s.torConfig != nil && s.torConfig.StartupTimeout > 0 {
 		startupTimeout = time.Duration(s.torConfig.StartupTimeout) * time.Second
 	}
-	startCtx, cancelStart := context.WithCancel(ctx)
-	type torStartResult struct {
-		instance *tor.Tor
-		err      error
-	}
-	startResult := make(chan torStartResult, 1)
-	go func() {
-		instance, startErr := tor.Start(startCtx, startConf)
-		startResult <- torStartResult{instance: instance, err: startErr}
-	}()
-	startupTimer := time.NewTimer(startupTimeout)
-	var started torStartResult
-	select {
-	case started = <-startResult:
-		if !startupTimer.Stop() {
-			select {
-			case <-startupTimer.C:
-			default:
-			}
-		}
-	case <-startupTimer.C:
-		cancelStart()
-		started = <-startResult
-		if started.instance != nil {
-			_ = started.instance.Close()
-		}
-		_ = proxyLn.Close()
-		s.status = TorServiceStatusError
-		return fmt.Errorf("tor startup timed out after %s", startupTimeout)
-	}
-	t, err := started.instance, started.err
+	process, controlConn, eventControl, err := startTorProcess(ctx, torPath, torrcFile, torDataDir, startupTimeout)
 	if err != nil {
-		cancelStart()
 		_ = proxyLn.Close()
 		s.status = TorServiceStatusError
 		return fmt.Errorf("failed to start dedicated tor: %w", err)
 	}
-	s.torInstance = t
-	s.torStartCancel = cancelStart
+	s.torProcess = process
+	s.torControl = controlConn
 
 	// Wait for Tor to bootstrap using configurable timeout (default 180s per PART 31)
 	s.logger.Info("Waiting for Tor to bootstrap...", nil)
@@ -379,14 +325,20 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	dialCtx, cancel := context.WithTimeout(ctx, bootstrapTimeout)
 	defer cancel()
 
-	if err := t.EnableNetwork(dialCtx, true); err != nil {
-		_ = t.Close()
-		cancelStart()
-		s.torInstance = nil
-		s.torStartCancel = nil
+	events, eventCancel, err := bootstrapTor(controlConn, eventControl)
+	process.eventCancel = eventCancel
+	if err == nil {
+		err = waitBootstrap(dialCtx, controlConn, events, func(reason string) {
+			s.logger.Debug("Tor bootstrap reported a warning", map[string]interface{}{"reason": reason})
+		})
+	}
+	if err != nil {
+		_ = stopTor(process)
+		s.torProcess = nil
+		s.torControl = nil
 		_ = proxyLn.Close()
 		s.status = TorServiceStatusError
-		return fmt.Errorf("failed to enable tor network: %w", err)
+		return fmt.Errorf("failed to bootstrap tor: %w: %s", err, process.output.String())
 	}
 
 	// The hidden service is declared entirely via torrc (HiddenServiceDir/
@@ -394,17 +346,27 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	// and persists the v3 ed25519 key + hostname under siteDir once the
 	// network is enabled and the service is published. Read it back here.
 	hostnamePath := filepath.Join(siteDir, "hostname")
-	onionBytes, err := os.ReadFile(hostnamePath)
+	onionAddress, err := waitHostname(dialCtx, hostnamePath)
 	if err != nil {
-		_ = t.Close()
-		cancelStart()
-		s.torInstance = nil
-		s.torStartCancel = nil
+		_ = stopTor(process)
+		s.torProcess = nil
+		s.torControl = nil
 		_ = proxyLn.Close()
 		s.status = TorServiceStatusError
-		return fmt.Errorf("failed to read onion hostname: %w", err)
+		return fmt.Errorf("failed waiting for onion hostname: %w: %s", err, process.output.String())
 	}
-	s.onionAddress = strings.TrimSpace(string(onionBytes))
+	s.onionAddress = onionAddress
+
+	// Descriptor publication follows bootstrap asynchronously. A timeout or
+	// failed publication is diagnostic only; the hostname is already valid.
+	uploadCtx, uploadCancel := context.WithTimeout(ctx, 60*time.Second)
+	err = waitDescriptorUpload(uploadCtx, events, onionAddress, func(reason string) {
+		s.logger.Warn("Tor hidden service descriptor upload failed", map[string]interface{}{"reason": reason})
+	})
+	uploadCancel()
+	if err != nil {
+		s.logger.Warn("Tor hidden service descriptor upload was not confirmed", map[string]interface{}{"error": err.Error()})
+	}
 
 	// Best-effort: load the Tor-generated key pair from disk purely for
 	// display (GetPublicKeyHex); never fatal if this fails.
@@ -421,18 +383,24 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	})
 
 	// Per AI.md PART 31 file table: write {data_dir}/tor/tor.pid (0600)
-	s.writePIDFile(t)
+	s.writePIDFile(process.cmd.Process.Pid)
 
 	// Initialize the outbound dialer only when server-wide Tor routing is enabled.
 	if s.torConfig != nil && s.torConfig.UseNetwork {
-		dialer, err := t.Dialer(ctx, nil)
+		socksAddress, err := socksListener(controlConn)
+		var dialer proxy.Dialer
+		if err == nil {
+			dialer, err = proxy.SOCKS5("tcp", socksAddress, nil, proxy.Direct)
+		}
 		if err != nil {
 			s.logger.Warn("Failed to create Tor dialer for outbound connections", map[string]interface{}{
 				"error": err.Error(),
 			})
 			// Continue without outbound - hidden service still works
 		} else {
-			s.dialer = dialer
+			if contextDialer, ok := dialer.(proxy.ContextDialer); ok {
+				s.dialer = contextDialer
+			}
 			if s.torConfig.UseNetwork {
 				s.logger.Info("Tor outbound network enabled - engine queries will be anonymized", nil)
 			} else {
@@ -450,17 +418,9 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 
 // writePIDFile queries the Tor control port for the process PID and writes it
 // to {data_dir}/tor/tor.pid per AI.md PART 31 file table (permissions 0600)
-func (s *TorService) writePIDFile(t *tor.Tor) {
-	kvs, err := t.Control.GetInfo("process/pid")
-	if err != nil || len(kvs) == 0 || kvs[0].Val == "" {
-		if s.logger != nil {
-			s.logger.Warn("Could not determine Tor PID for tor.pid", nil)
-		}
-		return
-	}
-
+func (s *TorService) writePIDFile(pid int) {
 	pidPath := filepath.Join(s.dataDir, "tor.pid")
-	if err := os.WriteFile(pidPath, []byte(kvs[0].Val+"\n"), 0600); err != nil {
+	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", pid)), 0600); err != nil {
 		if s.logger != nil {
 			s.logger.Warn("Failed to write tor.pid", map[string]interface{}{"error": err.Error()})
 		}
@@ -478,16 +438,17 @@ func (s *TorService) monitorProcess() {
 			return
 		case <-ticker.C:
 			s.mu.RLock()
-			torInst := s.torInstance
+			controlConn := s.torControl
+			process := s.torProcess
 			status := s.status
 			s.mu.RUnlock()
 
-			if torInst == nil || status != TorServiceStatusConnected {
+			if process == nil || controlConn == nil || status != TorServiceStatusConnected {
 				continue
 			}
 
 			// Check if Tor is still responsive via control connection
-			if _, err := torInst.Control.GetInfo("version"); err != nil {
+			if _, err := controlConn.GetInfo("version"); err != nil {
 				s.logger.Warn("Tor process unresponsive, restarting...", map[string]interface{}{"error": err.Error()})
 
 				// Attempt restart
@@ -532,17 +493,15 @@ func (s *TorService) Stop() error {
 	}
 
 	// Close dedicated Tor process (also tears down the hidden service)
-	if s.torInstance != nil {
+	if s.torProcess != nil {
 		s.logger.Info("Shutting down dedicated Tor process...", nil)
-		if err := s.torInstance.Close(); err != nil {
+		if err := stopTor(s.torProcess); err != nil {
 			s.logger.Warn("Error closing Tor", map[string]interface{}{"error": err.Error()})
 		}
-		s.torInstance = nil
+		s.torProcess = nil
+		s.torControl = nil
 	}
-	if s.torStartCancel != nil {
-		s.torStartCancel()
-		s.torStartCancel = nil
-	}
+	s.dialer = nil
 
 	// Close the dedicated PROXY-protocol loopback listener the hidden service
 	// forwarded to; never persisted, so it is fully torn down on every stop.
@@ -741,7 +700,7 @@ func (s *TorService) IsEnabled() bool {
 func (s *TorService) IsRunning() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.torInstance != nil && s.status == TorServiceStatusConnected
+	return s.torProcess != nil && s.status == TorServiceStatusConnected
 }
 
 // IsStarting returns whether Tor is still bootstrapping (not yet connected)
@@ -1151,7 +1110,7 @@ func (s *TorService) TestConnection() *TestConnectionResult {
 	}
 
 	// Check if Tor instance is active
-	if s.torInstance == nil {
+	if s.torProcess == nil {
 		result.Message = "Tor process is not running"
 		return result
 	}
@@ -1268,8 +1227,14 @@ AccountingMax %s`, cfg.MaxMonthlyBandwidth)
 # ControlPort uses 127.0.0.1:auto — never a fixed/default control port
 # ============================================================
 
+# Isolated runtime directory, control-port discovery and cookie authentication
+DataDirectory %s
 # Control port: always localhost auto, never a fixed/default port
 ControlPort 127.0.0.1:auto
+ControlPortWriteToFile %s
+CookieAuthentication 1
+DisableNetwork 1
+__OwningControllerProcess %d
 
 # SOCKS port: 0 = hidden service only; auto = also enable outbound
 # NEVER uses default port 9050 — runtime detection only
@@ -1314,6 +1279,9 @@ FetchDirInfoExtraEarly 1
 # Security hardening
 DisableDebuggerAttachment 1
 `,
+		filepath.Dir(hsDir),
+		filepath.Join(filepath.Dir(hsDir), "control_port"),
+		os.Getpid(),
 		socksConfig,
 		safeLogging,
 		logConfig,

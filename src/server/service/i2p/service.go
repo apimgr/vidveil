@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Package i2p manages the opt-in I2P eepsite provider described in AI.md PART 31.2.
+// Package i2p manages the I2P eepsite provider described in AI.md PART 31.2.
 package i2p
 
 import (

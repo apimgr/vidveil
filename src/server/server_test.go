@@ -13,6 +13,20 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
+func TestPermissionsPolicyOmitsUnsupportedFeatures(t *testing.T) {
+	header := permissionsPolicyHeader()
+	for _, feature := range []string{"ambient-light-sensor", "battery", "web-share", "interest-cohort"} {
+		if strings.Contains(header, feature+"=") {
+			t.Errorf("Permissions-Policy contains unsupported feature %q: %s", feature, header)
+		}
+	}
+	for _, feature := range []string{"camera=()", "geolocation=()", "fullscreen=(self)"} {
+		if !strings.Contains(header, feature) {
+			t.Errorf("Permissions-Policy missing %q: %s", feature, header)
+		}
+	}
+}
+
 // --- GetTemplatesFS ---
 
 // TestGetTemplatesFS_NonEmpty verifies the embedded FS is non-zero.

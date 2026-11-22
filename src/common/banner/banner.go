@@ -16,9 +16,10 @@ type BannerConfig struct {
 	AppName string
 	Version string
 	// AppMode is "production" or "development"
-	AppMode string
-	Debug   bool
-	URLs    []string
+	AppMode   string
+	Debug     bool
+	URLs      []string
+	StartedAt string
 	// ShowSetup indicates whether to show setup token (server only, first run)
 	ShowSetup  bool
 	SetupToken string
@@ -51,7 +52,10 @@ func printStartupBannerFull(cfg BannerConfig) {
 	printStartupBannerAppModeLine(cfg.AppMode, cfg.Debug, true)
 	fmt.Println()
 	for _, url := range cfg.URLs {
-		fmt.Printf("  %s %s\n", terminal.GlobeIcon(), url)
+		fmt.Printf("  %s Listening on %s\n", terminal.GlobeIcon(), url)
+	}
+	if cfg.StartedAt != "" {
+		fmt.Printf("  ✓ Server started on %s\n", cfg.StartedAt)
 	}
 	// Setup token for first run
 	if cfg.ShowSetup && cfg.SetupToken != "" {
@@ -68,7 +72,10 @@ func printStartupBannerCompact(cfg BannerConfig) {
 	fmt.Printf("%s %s v%s\n", terminal.RocketIcon(), cfg.AppName, cfg.Version)
 	printStartupBannerAppModeLine(cfg.AppMode, cfg.Debug, true)
 	for _, url := range cfg.URLs {
-		fmt.Printf("%s %s\n", terminal.GlobeIcon(), url)
+		fmt.Printf("%s Listening on %s\n", terminal.GlobeIcon(), url)
+	}
+	if cfg.StartedAt != "" {
+		fmt.Printf("✓ Server started on %s\n", cfg.StartedAt)
 	}
 	if cfg.ShowSetup && cfg.SetupToken != "" {
 		fmt.Printf("%s Setup: %s\n", terminal.KeyIcon(), cfg.SetupToken)
@@ -80,7 +87,10 @@ func printStartupBannerCompact(cfg BannerConfig) {
 func printStartupBannerMinimal(cfg BannerConfig) {
 	fmt.Printf("%s %s\n", cfg.AppName, cfg.Version)
 	for _, url := range cfg.URLs {
-		fmt.Println(extractHostPort(url))
+		fmt.Printf("Listening on %s\n", url)
+	}
+	if cfg.StartedAt != "" {
+		fmt.Printf("Started: %s\n", cfg.StartedAt)
 	}
 }
 
@@ -88,9 +98,12 @@ func printStartupBannerMinimal(cfg BannerConfig) {
 // Per AI.md PART 7 and PART 8
 func printStartupBannerMicro(cfg BannerConfig) {
 	if len(cfg.URLs) > 0 {
-		fmt.Printf("%s %s\n", cfg.AppName, extractHostPort(cfg.URLs[0]))
+		fmt.Printf("%s Listening on %s\n", cfg.AppName, cfg.URLs[0])
 	} else {
 		fmt.Println(cfg.AppName)
+	}
+	if cfg.StartedAt != "" {
+		fmt.Printf("Started: %s\n", cfg.StartedAt)
 	}
 }
 

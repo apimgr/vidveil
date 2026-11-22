@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -306,7 +307,7 @@ func TestExternalCaptchaHasNoJavaScriptFallback(t *testing.T) {
 	cfg.Server.Pages.Contact.CaptchaSiteKey = "public-site-key"
 	cfg.Server.Pages.Contact.CaptchaSecretKey = "private-secret-key"
 	h := NewServerHandler(cfg)
-	request := httptest.NewRequest(http.MethodGet, "/server/contact", nil)
+	request := httptest.NewRequest(http.MethodGet, "/server/contact?type=abuse", nil)
 	request.Header.Set("User-Agent", "Mozilla/5.0")
 	response := httptest.NewRecorder()
 	h.ContactPage(response, request)
@@ -331,6 +332,67 @@ func TestServerHandler_ContactPage_GET_Returns200(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("ContactPage GET: status=%d want 200; body=%s", rr.Code, rr.Body.String())
 	}
+}
+
+func TestServerHandler_ContactPage_RendersTypeSpecificForms(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := newServerHandler(t)
+	chooser := httptest.NewRecorder()
+	chooserRequest := httptest.NewRequest(http.MethodGet, "/server/contact", nil)
+	chooserRequest.Header.Set("User-Agent", "Mozilla/5.0")
+	h.ContactPage(chooser, chooserRequest)
+	chooserContent := contactProse(chooser.Body.String())
+	if chooser.Code != http.StatusOK || regexp.MustCompile(`name="[^"]+"`).MatchString(chooserContent) {
+		t.Fatalf("contact chooser must have no form fields: status=%d body=%s", chooser.Code, chooser.Body.String())
+	}
+
+	fieldPattern := regexp.MustCompile(`name="([^"]+)"`)
+	for _, test := range []struct {
+		typeName string
+		fields   []string
+		absent   []string
+	}{
+		{"abuse", []string{"name", "email", "type", "reported_url", "reason", "subject", "message"}, []string{"copyrighted_work", "good_faith", "accuracy", "signature", "request_kind"}},
+		{"dmca", []string{"name", "email", "type", "reported_url", "copyrighted_work", "good_faith", "accuracy", "signature", "subject", "message"}, []string{"reason", "request_kind"}},
+		{"privacy", []string{"name", "email", "type", "request_kind", "subject", "message"}, []string{"reported_url", "reason", "copyrighted_work", "good_faith", "accuracy", "signature"}},
+	} {
+		t.Run(test.typeName, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, "/server/contact?type="+test.typeName, nil)
+			request.Header.Set("User-Agent", "Mozilla/5.0")
+			h.ContactPage(response, request)
+			body := contactProse(response.Body.String())
+			if response.Code != http.StatusOK {
+				t.Fatalf("type form status=%d body=%s", response.Code, body)
+			}
+			fields := map[string]bool{}
+			for _, match := range fieldPattern.FindAllStringSubmatch(body, -1) {
+				fields[match[1]] = true
+			}
+			for _, name := range test.fields {
+				if !fields[name] {
+					t.Errorf("type form is missing field %q", name)
+				}
+			}
+			for _, name := range test.absent {
+				if fields[name] {
+					t.Errorf("type form unexpectedly includes field %q", name)
+				}
+			}
+		})
+	}
+}
+
+func contactProse(body string) string {
+	start := strings.Index(body, `<div class="prose">`)
+	if start < 0 {
+		return body
+	}
+	body = body[start:]
+	if end := strings.Index(body, "</div>\n</div>"); end >= 0 {
+		return body[:end]
+	}
+	return body
 }
 
 func TestRenderServerTemplate_UnknownTemplate_Returns500(t *testing.T) {

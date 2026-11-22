@@ -331,8 +331,8 @@ build:devel:
       dotenv: release.env
     expire_in: 7 days
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master")'
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"'
 
 sbom:release:
   image: ${BUILD_IMAGE}
@@ -374,8 +374,8 @@ sbom:devel:
       - ${PROJECT_NAME}-${RELEASE_VERSION}-sbom.cdx.json
     expire_in: 7 days
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master")'
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"'
 
 release:
   stage: release
@@ -526,8 +526,8 @@ release:devel:
         - name: "sha512.txt"
           url: "${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/raw/sha512.txt"
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master")'
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"'
 
 docker:build:
   stage: docker
@@ -619,7 +619,7 @@ docker:devel:
       COMMIT_ID="$(git rev-parse --short=7 HEAD)"
       BUILD_EPOCH="$(date -u +%s)"
       BUILD_DATE="$(date -u -d @${BUILD_EPOCH} +"%a %b %d, %Y at %H:%M:%S %Z")"
-      VERSION="devel"
+      VERSION="${COMMIT_ID}"
 
       docker buildx build \
         --platform linux/amd64,linux/arm64 \
@@ -662,5 +662,5 @@ docker:devel:
         -f docker/Dockerfile.dev \
         -t ${CI_REGISTRY_IMAGE}:devel .
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_COMMIT_BRANCH
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master")'
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"'

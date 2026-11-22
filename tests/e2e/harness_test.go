@@ -172,6 +172,8 @@ func (st *suite) start() error {
   mode: development
   scheduler:
     enabled: false
+  i2p:
+    enabled: false
   rate_limit:
     enabled: false
   update:

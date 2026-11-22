@@ -275,7 +275,7 @@ func partitionConfig(root map[string]interface{}, source string) (map[string]map
 
 func serverAreaFile(name string) string {
 	switch name {
-	case "port", "address", "fqdn", "mode", "api_version", "baseurl", "user", "group", "pidfile", "daemonize", "debug", "database", "cache", "ssl", "trusted_proxies", "cluster":
+	case "port", "address", "fqdn", "mode", "api_version", "baseurl", "pidfile", "daemonize", "debug", "database", "cache", "ssl", "trusted_proxies", "cluster":
 		return "server.yml"
 	case "cors", "csrf", "url_detection", "compression", "healthz", "i18n":
 		return "web.yml"

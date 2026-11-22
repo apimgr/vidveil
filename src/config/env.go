@@ -26,7 +26,7 @@ func applyEnvOverrides(cfg *AppConfig) {
 	applyI2PEnabled(cfg)
 }
 
-// applyI2PEnabled supports the documented unprefixed opt-in variable while
+// applyI2PEnabled supports the documented unprefixed operator override while
 // preserving the standard project-prefixed overrides as higher priority.
 func applyI2PEnabled(cfg *AppConfig) {
 	if cfg == nil {

@@ -1455,6 +1455,25 @@ func TestPeekServerListenConfigReadsOnlyScalarServerFields(t *testing.T) {
 	}
 }
 
+func TestFormatServerStartupTimeUsesConfiguredTimezone(t *testing.T) {
+	t.Setenv("TZ", "America/New_York")
+	started := time.Date(2025, time.January, 15, 14, 0, 0, 0, time.UTC)
+	if got, want := formatServerStartupTime(started), "January 15, 2025 at 09:00:00 EST"; got != want {
+		t.Fatalf("formatServerStartupTime() = %q, want %q", got, want)
+	}
+}
+
+func TestPeekServerStartupConfigReadsDaemonize(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "server.yml")
+	if err := os.WriteFile(configPath, []byte("server:\n  address: '[::]'\n  port: 8080\n  daemonize: true\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	address, port, daemonize := config.PeekServerStartupConfig(configPath)
+	if address != "[::]" || port != "8080" || !daemonize {
+		t.Fatalf("PeekServerStartupConfig() = (%q, %q, %t), want ([::], 8080, true)", address, port, daemonize)
+	}
+}
+
 func TestPeekServerListenConfigMergesYAMLDOverrides(t *testing.T) {
 	root := t.TempDir()
 	configPath := filepath.Join(root, "server.yml")

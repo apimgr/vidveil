@@ -7,7 +7,7 @@
 
 ## About
 
-Privacy-respecting meta search for adult video content. The search-history list is stored in your browser, not as per-visitor history on the server. Privacy-filtered query text and timestamps may appear in public recent-search feeds. Configured access logs may include request paths, IP addresses, and other request metadata; custom formats can include query strings. Optional analytics run only when configured by the operator and after visitor consent. Aggregates results from 33 video sites with bang shortcuts for targeted searches.
+Privacy-respecting meta search for adult video content. The search-history list is stored in your browser, not as per-visitor history on the server. Privacy-filtered query text and timestamps may appear in public recent-search feeds. Configured access logs may include request paths, IP addresses, and other request metadata; custom formats can include query strings. Optional analytics run only when configured by the operator and after visitor consent. Aggregates results from 27 registered video engines by default, with bang shortcuts for targeted searches.
 
 ## Official Site
 
@@ -22,7 +22,7 @@ https://x.scour.li
 | Feature | Description |
 |---------|-------------|
 | **Privacy First** | Search history stays in the visitor's browser; the server has no per-visitor history, though filtered queries may appear in public feeds; configured logs may include request metadata and custom formats can include query strings; optional analytics require operator configuration and visitor consent |
-| **33 Engines** | Aggregates results from 33 adult video sites |
+| **27 Engines** | Aggregates results from 27 registered adult video sites by default |
 | **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
 | **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |
 | **SSE Streaming** | Real-time result streaming as engines respond |
@@ -274,7 +274,7 @@ Use bang shortcuts to search specific engines:
 
 **Multiple bangs**: `!ph !rt amateur` searches both PornHub and RedTube.
 
-**Full list**: See `https://x.scour.li/api/v1/bangs` for all 66 engine shortcuts (short code and full name for each of the 33 engines).
+**Full list**: See `https://x.scour.li/api/v1/bangs` for bang shortcuts for the 27 registered engines.
 
 ### Supported Engines
 
@@ -297,11 +297,11 @@ Use bang shortcuts to search specific engines:
 
 #### Tier 3 - Additional Sites
 
-3Movs (`!3m`), AlphaPorno (`!ap`), AnyPorn (`!any`), DrTuber (`!dt`), HellPorno (`!hp`), LoveHomePorn (`!lhp`), Nuvid (`!nv`), PornFlip (`!pf`), PornTube (`!pt`), SunPorno (`!sp`), TNAFlix (`!tna`), TXXX (`!tx`), XXXYMovies (`!xxxy`), YouJizz (`!yj`)
+3Movs (`!3m`), AlphaPorno (`!ap`), AnyPorn (`!any`), DrTuber (`!dt`), LoveHomePorn (`!lhp`), Nuvid (`!nv`), PornFlip (`!pf`), SunPorno (`!sp`), TNAFlix (`!tna`), XXXYMovies (`!xxxy`), YouJizz (`!yj`)
 
 #### Tier 4 - Specialty Sites
 
-FlyFLV (`!ff`), HQPorner (`!hq`), NonkTube (`!nk`), NubilesPorn (`!np`), PornBox (`!pbox`), PornHat (`!phat`), PornOne (`!p1`), PornTop (`!ptop`), PornTrex (`!ptrex`), Tube8 (`!t8`), VJAV (`!vj`), XBabe (`!xb`)
+FlyFLV (`!ff`), HQPorner (`!hq`), NubilesPorn (`!np`), PornHat (`!phat`), PornOne (`!p1`), PornTop (`!ptop`), PornTrex (`!ptrex`), Tube8 (`!t8`), XBabe (`!xb`)
 
 ### Operator Management
 

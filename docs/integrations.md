@@ -32,7 +32,7 @@ not features left pending implementation from the current `AI.md`.
 
 | Direction | Target                                        | Purpose                                                                 | Failure mode                              |
 |-----------|-----------------------------------------------|-------------------------------------------------------------------------|-------------------------------------------|
-| Outbound  | The 33 upstream video search sites            | Fan-out search at request time. Results stream back via SSE.            | Per-engine timeout; partial results returned. |
+| Outbound  | The 27 registered upstream video search sites  | Fan-out search at request time. Results stream back via SSE.            | Per-engine timeout; partial results returned. |
 | Outbound  | Let's Encrypt ACME (`acme-v02.api.letsencrypt.org`) | TLS certificate issuance and renewal when ACME is enabled.              | Falls back to existing cert; alerts admin. |
 | Outbound  | GeoIP / blocklist / CVE feeds (configurable)  | Periodic refresh by the internal scheduler.                             | Last good DB stays in place; next refresh retries. |
 | Outbound  | GitHub Releases for `apimgr/vidveil`            | Scheduled update checks and CLI release metadata; CLI downloads are proxied on request. | Existing version remains installed; failed checks/downloads report an error. |

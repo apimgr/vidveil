@@ -202,16 +202,18 @@ Vidveil auto-enables the built-in Tor hidden service when a compatible `tor` bin
 
 ## I2P
 
-The I2P eepsite is opt-in and stays disabled unless `server.i2p.enabled`,
-`I2P_ENABLED`, or `--i2p` enables it. The server prefers a dedicated `i2pd`
-process and falls back to a reachable SAM bridge. Its destination key is stored
-under the data directory and the backend listener is loopback-only.
+The I2P eepsite is enabled by default in an application container and disabled
+by default on bare-metal, VM, and system-container installs. An explicit
+`server.i2p.enabled`, `I2P_ENABLED`, or `--i2p` setting overrides that default.
+The server prefers a dedicated `i2pd` process and falls back to a reachable
+SAM bridge. Its destination key is stored under the data directory and the
+backend listener is loopback-only.
 
 ```yaml
 server:
   i2p:
-    # Opt-in on ordinary hosts; isolated container images and integration
-    # tests enable I2P so the packaged provider is exercised.
+    # This example explicitly disables I2P; omit this key to use the
+    # container-aware default (on in app containers, off elsewhere).
     enabled: false
     binary: ""
     sam_address: "127.0.0.1:7656"
@@ -261,7 +263,7 @@ challenge.
 | `HOSTNAME` | Fallback FQDN when `DOMAIN` is unset; also the node id for distributed cache locks |
 | `TZ` | Time zone for scheduler timestamps (any IANA zone, e.g. `America/New_York`) |
 | `CACHE_URL` | External cache connection string; sets `server.cache.url` and promotes the cache type from `memory` to `valkey` so it is actually used. Ignored when `VIDVEIL_SERVER_CACHE_URL` or `VIDVEIL_CACHE_URL` is set |
-| `I2P_ENABLED` | Opt in to the I2P eepsite; project-prefixed `VIDVEIL_SERVER_I2P_ENABLED` and `VIDVEIL_I2P_ENABLED` take precedence |
+| `I2P_ENABLED` | Set the I2P eepsite state; project-prefixed `VIDVEIL_SERVER_I2P_ENABLED` and `VIDVEIL_I2P_ENABLED` take precedence over this variable and config defaults |
 
 Set `server.baseurl` or `BASEURL` when the reverse proxy publishes VidVeil
 under a path such as `/app`. Server-rendered navigation, forms, and assets
@@ -349,9 +351,8 @@ server:
     logo: ""
     favicon: ""
     refresh_interval: 24h
-  user: ""
-  group: ""
   pidfile: true
+  daemonize: false
   contact:
     admin:
       email: admin@<detected host>
@@ -655,6 +656,7 @@ server:
     onion_address: ""
     contact_email: ""
   i2p:
+    # This example explicitly disables I2P; omit the key for the runtime default.
     enabled: false
     binary: ""
     sam_address: 127.0.0.1:7656

@@ -386,14 +386,11 @@ var femaleOnlyTerms = []string{
 // malePresenceWords are tokens in a result's metadata that strongly indicate
 // a biological male participant, contradicting female-only queries.
 // "strapon", "dildo", "strap-on" are intentionally excluded — they appear in
-// lesbian content and must NOT trigger this filter.
-// Ultra-generic single words ("male", "man", "men", "guy", "guys", "husband",
-// "dude") were intentionally removed — scraped tags/ad/nav boilerplate
-// trips them constantly with no actual male performer present, which was
-// zeroing out results for common compound queries (e.g. "lesbian teen").
-// Explicit/anatomical and relationship-specific terms are kept since they
-// carry unambiguous signal.
+// lesbian content and must NOT trigger this filter. Generic male terms are
+// included because they are meaningful when present in a result title or
+// performer name; scraped description and tag boilerplate is not inspected.
 var malePresenceWords = []string{
+	"male", "man", "men", "guy", "guys", "dude", "dudes", "husband", "husbands",
 	"cock", "cocks", "dick", "dicks", "penis",
 	"bbc",
 	"dad", "daddy", "father", "son", "brother",

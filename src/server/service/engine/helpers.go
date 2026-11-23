@@ -54,6 +54,19 @@ func resolveSourceURL(baseURL, value string) string {
 	return base.ResolveReference(ref).String()
 }
 
+func isValidVideoURL(value string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed == nil || !parsed.IsAbs() || parsed.Host == "" || parsed.User != nil {
+		return false
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+		return true
+	default:
+		return false
+	}
+}
+
 // genericSearch performs a generic search using common patterns
 func genericSearch(ctx context.Context, e *BaseEngine, url, selector string) ([]model.VideoResult, error) {
 	return genericSearchWithPageValidation(ctx, e, url, selector, false)
@@ -221,6 +234,9 @@ func parseGenericVideoItem(s *goquery.Selection, baseURL, sourceName, sourceDisp
 		return r
 	}
 	r.URL = resolveSourceURL(baseURL, href)
+	if !isValidVideoURL(r.URL) {
+		return model.VideoResult{}
+	}
 
 	// Find title - try multiple patterns
 	r.Title = parser.ExtractAttr(link, "title")

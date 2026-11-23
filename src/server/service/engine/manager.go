@@ -29,8 +29,10 @@ type EngineManager struct {
 	// cache for related/suggested search terms. Per-instance (not package
 	// global) so background validation goroutines only ever mutate the cache of
 	// the manager that spawned them — matching the sessionDedup pattern above.
-	relatedTermMu    sync.Mutex
-	relatedTermCache map[string]relatedTermStatus
+	relatedTermMu        sync.Mutex
+	relatedTermCache     map[string]relatedTermStatus
+	relatedTermInFlight  map[string]bool
+	relatedValidationSem chan struct{}
 	// searchSem bounds how many SearchWithOperators fan-outs may run at once
 	// (sized from Search.ConcurrentRequests). See searchSem acquisition in
 	// SearchWithOperators for why this exists.
@@ -48,11 +50,13 @@ func NewEngineManager(appConfig *config.AppConfig) *EngineManager {
 		capacity = appConfig.Search.ConcurrentRequests
 	}
 	return &EngineManager{
-		engines:          make(map[string]SearchEngine),
-		appConfig:        appConfig,
-		sessionDedup:     NewSessionDedupStore(),
-		relatedTermCache: make(map[string]relatedTermStatus),
-		searchSem:        make(chan struct{}, capacity),
+		engines:              make(map[string]SearchEngine),
+		appConfig:            appConfig,
+		sessionDedup:         NewSessionDedupStore(),
+		relatedTermCache:     make(map[string]relatedTermStatus),
+		relatedTermInFlight:  make(map[string]bool),
+		relatedValidationSem: make(chan struct{}, 2),
+		searchSem:            make(chan struct{}, capacity),
 	}
 }
 
@@ -90,18 +94,15 @@ func (m *EngineManager) InitializeEngines() {
 	m.engines["youporn"] = newYouPornEngine(m.appConfig)
 	// pornmd removed - site returns HTTP 403 Cloudflare challenge (no bypass)
 
-	// Tier 3 - Additional Sites (all tiers enabled by default per IDEA.md)
+	// Tier 3 - Additional Sites
 	// 4tube removed - site returns HTTP 403 Cloudflare challenge (no bypass)
 	// fux removed - site returns HTTP 403 Cloudflare challenge (no bypass)
-	m.engines["porntube"] = newPornTubeEngine(m.appConfig)
 	m.engines["youjizz"] = newYouJizzEngine(m.appConfig)
 	m.engines["sunporno"] = newSunPornoEngine(m.appConfig)
-	m.engines["txxx"] = newTxxxEngine(m.appConfig)
 	m.engines["nuvid"] = newNuvidEngine(m.appConfig)
 	m.engines["tnaflix"] = newTNAFlixEngine(m.appConfig)
 	m.engines["drtuber"] = newDrTuberEngine(m.appConfig)
 	// empflix removed - site returns HTTP 403 Cloudflare challenge (no bypass)
-	m.engines["hellporno"] = newHellPornoEngine(m.appConfig)
 	m.engines["alphaporno"] = newAlphaPornoEngine(m.appConfig)
 	m.engines["pornflip"] = newPornFlipEngine(m.appConfig)
 	// gotporn removed - site returns HTTP 403 Cloudflare challenge (no bypass)
@@ -110,9 +111,7 @@ func (m *EngineManager) InitializeEngines() {
 
 	// Tier 4 - Additional yt-dlp supported sites
 	// pornerbros removed - site returns HTTP 403 Cloudflare challenge (no bypass)
-	m.engines["nonktube"] = newNonkTubeEngine(m.appConfig)
 	m.engines["nubilesporn"] = newNubilesPornEngine(m.appConfig)
-	m.engines["pornbox"] = newPornboxEngine(m.appConfig)
 	m.engines["porntop"] = newPornTopEngine(m.appConfig)
 	// pornotube removed - site returns HTTP 410 Gone (dead)
 	// vporn removed - site inaccessible (geo-blocked/Cloudflare)
@@ -122,7 +121,6 @@ func (m *EngineManager) InitializeEngines() {
 	m.engines["pornhat"] = newPornHatEngine(m.appConfig)
 	m.engines["porntrex"] = newPornTrexEngine(m.appConfig)
 	m.engines["hqporner"] = newHqpornerEngine(m.appConfig)
-	m.engines["vjav"] = newVJAVEngine(m.appConfig)
 	m.engines["flyflv"] = newFlyflvEngine(m.appConfig)
 	m.engines["tube8"] = newTube8Engine(m.appConfig)
 
@@ -170,6 +168,44 @@ func (m *EngineManager) applyConfig() {
 // search never resurface a result already returned on an earlier page.
 func (m *EngineManager) Search(ctx context.Context, query string, page int, engineNames []string, sessionID string) *model.SearchResponse {
 	return m.SearchWithOperators(ctx, query, page, engineNames, nil, nil, nil, false, sessionID, 0, ResultFilterOptions{})
+}
+
+func (m *EngineManager) currentBangMapping() map[string]string {
+	if m == nil {
+		return BangMapping
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	available := make(map[string]bool, len(m.engines))
+	for name, e := range m.engines {
+		if e.IsAvailable() {
+			available[name] = true
+		}
+	}
+
+	mapping := make(map[string]string)
+	for bang, name := range BangMapping {
+		if available[name] {
+			mapping[bang] = name
+		}
+	}
+	return mapping
+}
+
+// ParseBangs resolves shortcuts only for engines that are currently available.
+func (m *EngineManager) ParseBangs(query string) ParsedQuery {
+	return parseBangs(query, m.currentBangMapping())
+}
+
+// ListBangs returns shortcuts only for engines that are currently available.
+func (m *EngineManager) ListBangs() []BangInfo {
+	return listBangs(m.currentBangMapping())
+}
+
+// AutocompleteBangs suggests shortcuts only for engines that are currently available.
+func (m *EngineManager) AutocompleteBangs(prefix string) []AutocompleteSuggestion {
+	return autocomplete(prefix, m.currentBangMapping())
 }
 
 // ResultFilterOptions carries the server-authoritative result-shaping filters
@@ -367,6 +403,9 @@ collect:
 			// Filter results by thumbnail validity, minimum duration, term matching, and deduplicate
 			for _, r := range result.results {
 				normalizeResultSource(&r, result.engine, engine)
+				if !isValidVideoURL(r.URL) {
+					continue
+				}
 				// Skip results with empty/invalid thumbnails
 				if !isValidThumbnail(r.Thumbnail) {
 					continue
@@ -1337,6 +1376,10 @@ func (m *EngineManager) DebugSearch(ctx context.Context, query string, page int)
 					}
 				}
 
+				if !isValidVideoURL(r.URL) {
+					continue
+				}
+
 				// Step 1: Thumbnail filter
 				if !isValidThumbnail(r.Thumbnail) {
 					continue
@@ -1791,6 +1834,9 @@ func (m *EngineManager) SearchStreamWithOperators(ctx context.Context, query str
 				accepted := make([]model.VideoResult, 0, len(results))
 				for _, r := range results {
 					normalizeResultSource(&r, e.Name(), e)
+					if !isValidVideoURL(r.URL) {
+						continue
+					}
 					// Skip results with empty/invalid thumbnails
 					if !isValidThumbnail(r.Thumbnail) {
 						continue

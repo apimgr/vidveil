@@ -13,7 +13,9 @@ type AnyPornEngine struct{ *BaseEngine }
 
 // newAnyPornEngine creates a new AnyPorn engine
 func newAnyPornEngine(appConfig *config.AppConfig) *AnyPornEngine {
-	return &AnyPornEngine{NewBaseEngine("anyporn", "AnyPorn", "https://www.anyporn.com", 5, appConfig)}
+	e := &AnyPornEngine{NewBaseEngine("anyporn", "AnyPorn", "https://www.anyporn.com", 5, appConfig)}
+	e.SetCapabilities(Capabilities{HasPreview: true, APIType: "html"})
+	return e
 }
 
 // Search performs a search on AnyPorn

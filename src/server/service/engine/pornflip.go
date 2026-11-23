@@ -13,7 +13,9 @@ type PornFlipEngine struct{ *BaseEngine }
 
 // newPornFlipEngine creates a new PornFlip engine
 func newPornFlipEngine(appConfig *config.AppConfig) *PornFlipEngine {
-	return &PornFlipEngine{NewBaseEngine("pornflip", "PornFlip", "https://www.pornflip.com", 3, appConfig)}
+	e := &PornFlipEngine{NewBaseEngine("pornflip", "PornFlip", "https://www.pornflip.com", 3, appConfig)}
+	e.SetCapabilities(Capabilities{HasDuration: true, APIType: "html"})
+	return e
 }
 
 // Search performs a search on PornFlip

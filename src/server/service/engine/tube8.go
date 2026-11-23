@@ -14,7 +14,7 @@ type Tube8Engine struct{ *BaseEngine }
 // newTube8Engine creates a new Tube8 engine
 func newTube8Engine(appConfig *config.AppConfig) *Tube8Engine {
 	e := &Tube8Engine{NewBaseEngine("tube8", "Tube8", "https://www.tube8.com", 4, appConfig)}
-	e.SetCapabilities(Capabilities{HasDuration: true, HasViews: true, APIType: "html"})
+	e.SetCapabilities(Capabilities{HasPreview: true, HasDuration: true, HasViews: true, APIType: "html"})
 	return e
 }
 

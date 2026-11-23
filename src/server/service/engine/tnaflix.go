@@ -23,7 +23,7 @@ func newTNAFlixEngine(appConfig *config.AppConfig) *TNAFlixEngine {
 		HasPreview:    true,
 		HasDownload:   false,
 		HasDuration:   true,
-		HasViews:      false,
+		HasViews:      true,
 		HasRating:     false,
 		HasQuality:    false,
 		PreviewSource: "data-trailer",
@@ -86,8 +86,11 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 			}
 		}
 
-		// Get preview URL - TNAFlix may use data-preview, data-video-preview, or rollover attributes
-		previewURL := parser.ExtractAttr(s, "data-trailer", "data-preview", "data-video-preview", "data-rollover")
+		// TNAFlix places data-trailer on the video link in current search results.
+		previewURL := parser.ExtractAttr(link, "data-trailer", "data-preview", "data-video-preview", "data-rollover")
+		if previewURL == "" {
+			previewURL = parser.ExtractAttr(s, "data-trailer", "data-preview", "data-video-preview", "data-rollover")
+		}
 		if previewURL == "" {
 			previewURL = parser.ExtractAttr(img, "data-trailer", "data-preview", "data-video-preview", "data-rollover")
 		}
@@ -106,6 +109,19 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 		// Get views
 		viewsText := parser.CleanText(s.Find(".views, .cnt, .info-views").First().Text())
 		views, viewsCount := parser.ParseViews(viewsText)
+		if viewsCount == 0 {
+			eye := s.Find(".icon-eye").First()
+			if eye.Length() > 0 {
+				views, viewsCount = parser.ParseViews(parser.CleanText(eye.Parent().Text()))
+			}
+		}
+
+		// TNAFlix uses /p/ links for performers and /c/ links for categories.
+		var performer string
+		s.Find("a[href^='/p/']").EachWithBreak(func(_ int, link *goquery.Selection) bool {
+			performer = parser.CleanText(link.Text())
+			return performer == ""
+		})
 
 		results = append(results, model.VideoResult{
 			ID:              GenerateResultID(href, e.Name()),
@@ -117,6 +133,7 @@ func (e *TNAFlixEngine) Search(ctx context.Context, query string, page int) ([]m
 			DurationSeconds: durationSeconds,
 			Views:           views,
 			ViewsCount:      viewsCount,
+			Performer:       performer,
 			Source:          e.Name(),
 			SourceDisplay:   e.DisplayName(),
 		})

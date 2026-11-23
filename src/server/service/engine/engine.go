@@ -150,6 +150,7 @@ type BaseEngine struct {
 	baseURL       string
 	tier          int
 	enabled       bool
+	enabledMu     sync.RWMutex
 	timeout       time.Duration
 	useSpoofedTLS bool
 	appConfig     *config.AppConfig
@@ -252,7 +253,10 @@ func (e *BaseEngine) Tier() int {
 
 // IsAvailable checks if the engine is currently enabled and not rate-limited
 func (e *BaseEngine) IsAvailable() bool {
-	if !e.enabled {
+	e.enabledMu.RLock()
+	enabled := e.enabled
+	e.enabledMu.RUnlock()
+	if !enabled {
 		return false
 	}
 	e.statsMu.Lock()
@@ -262,6 +266,8 @@ func (e *BaseEngine) IsAvailable() bool {
 
 // SetEnabled sets the enabled state
 func (e *BaseEngine) SetEnabled(enabled bool) {
+	e.enabledMu.Lock()
+	defer e.enabledMu.Unlock()
 	e.enabled = enabled
 }
 

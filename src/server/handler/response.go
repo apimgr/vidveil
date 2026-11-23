@@ -607,12 +607,12 @@ func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{
 	switch name {
 	case "home":
 		html += "<h1>VidVeil - Privacy-Respecting Video Search</h1>"
-		html += "<p>Search across 33 adult video sites. Search history stays in your browser, not as per-visitor history on the server.</p>"
+		html += "<p>Search across 27 registered adult video engines by default. Search history stays in your browser, not as per-visitor history on the server.</p>"
 		html += "<p>Enter a search query or use bang shortcuts like !ph for PornHub.</p>"
 		html += "<hr>"
 		html += "<h2>Features</h2>"
 		html += "<ul>"
-		html += "<li>33 video search engines</li>"
+		html += "<li>27 registered video search engines</li>"
 		html += "<li>Search history stays in your browser, not on the server as per-visitor history</li>"
 		html += "<li>SSE streaming results</li>"
 		html += "<li>Thumbnail proxy</li>"
@@ -624,7 +624,7 @@ func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{
 		html += "<h2>Key Features</h2>"
 		html += "<ul>"
 		html += "<li>Search history stays in your browser, not on the server as per-visitor history</li>"
-		html += "<li>33 search engines</li>"
+		html += "<li>27 registered search engines</li>"
 		html += "<li>SSE streaming results</li>"
 		html += "<li>Thumbnail proxy</li>"
 		html += "<li>Built-in Tor support</li>"

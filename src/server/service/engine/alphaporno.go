@@ -13,7 +13,9 @@ type AlphaPornoEngine struct{ *BaseEngine }
 
 // newAlphaPornoEngine creates a new AlphaPorno engine
 func newAlphaPornoEngine(appConfig *config.AppConfig) *AlphaPornoEngine {
-	return &AlphaPornoEngine{NewBaseEngine("alphaporno", "AlphaPorno", "https://www.alphaporno.com", 3, appConfig)}
+	e := &AlphaPornoEngine{NewBaseEngine("alphaporno", "AlphaPorno", "https://www.alphaporno.com", 3, appConfig)}
+	e.SetCapabilities(Capabilities{HasDuration: true, APIType: "html"})
+	return e
 }
 
 // Search performs a search on AlphaPorno

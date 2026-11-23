@@ -72,11 +72,27 @@ func (m *EngineManager) validateRelatedTermsAsync(candidates []string) {
 		if term == "" {
 			continue
 		}
-		if _, fresh := m.lookupRelatedTermStatus(term); fresh {
+		m.relatedTermMu.Lock()
+		status, cached := m.relatedTermCache[term]
+		cached = cached && time.Since(status.checkedAt) <= relatedTermTTL
+		if cached || m.relatedTermInFlight[term] {
+			m.relatedTermMu.Unlock()
 			continue
 		}
+		select {
+		case m.relatedValidationSem <- struct{}{}:
+			m.relatedTermInFlight[term] = true
+		default:
+			m.relatedTermMu.Unlock()
+			return
+		}
+		m.relatedTermMu.Unlock()
 		go func(term string) {
 			defer func() {
+				<-m.relatedValidationSem
+				m.relatedTermMu.Lock()
+				delete(m.relatedTermInFlight, term)
+				m.relatedTermMu.Unlock()
 				if rec := recover(); rec != nil {
 					log.Printf("[related] panic validating term %q: %v", term, rec)
 				}

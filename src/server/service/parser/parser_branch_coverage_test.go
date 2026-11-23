@@ -158,6 +158,22 @@ func TestXVideosParse_PreviewURL_MadeAbsolute(t *testing.T) {
 	}
 }
 
+func TestXVideosParse_PVVPreviewURL_MadeAbsolute(t *testing.T) {
+	p := NewXVideosParser()
+	html := `<div class="thumb-block">
+		<a href="/video/pv2" title="Preview URL Test">
+			<img src="thumb.jpg" data-pvv="//cdn.xvideos.com/preview.mp4">
+		</a>
+	</div>`
+	item := p.Parse(newDoc(html).Find("div.thumb-block"))
+	if item == nil {
+		t.Fatal("expected non-nil item")
+	}
+	if item.PreviewURL != "https://cdn.xvideos.com/preview.mp4" {
+		t.Errorf("PreviewURL = %q, want current data-pvv MP4 preview URL", item.PreviewURL)
+	}
+}
+
 // Non-empty data-video-url on img populates DownloadURL (made absolute).
 // Covers xvideos.go:93-95.
 func TestXVideosParse_DownloadURL_MadeAbsolute(t *testing.T) {

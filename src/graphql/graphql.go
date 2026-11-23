@@ -299,7 +299,7 @@ func (h *Handler) handleHealth() Response {
 }
 
 func (h *Handler) handleBangs() Response {
-	bangs := engine.ListBangs()
+	bangs := h.engineMgr.ListBangs()
 
 	gqlBangs := make([]map[string]interface{}, len(bangs))
 	for i, b := range bangs {
@@ -332,7 +332,7 @@ func (h *Handler) handleAutocomplete(req Request) Response {
 		}
 	}
 
-	suggestions := engine.Autocomplete(prefix)
+	suggestions := h.engineMgr.AutocompleteBangs(prefix)
 
 	gqlSuggestions := make([]map[string]interface{}, len(suggestions))
 	for i, s := range suggestions {

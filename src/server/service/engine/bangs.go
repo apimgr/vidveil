@@ -33,14 +33,10 @@ var BangMapping = map[string]string{
 	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
 	// fux intentionally has no bang - engine removed, site returns
 	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
-	"pt":       "porntube",
-	"porntube": "porntube",
 	"yj":       "youjizz",
 	"youjizz":  "youjizz",
 	"sp":       "sunporno",
 	"sunporno": "sunporno",
-	"tx":       "txxx",
-	"txxx":     "txxx",
 	"nv":       "nuvid",
 	"nuvid":    "nuvid",
 	"tna":      "tnaflix",
@@ -49,8 +45,6 @@ var BangMapping = map[string]string{
 	"drtuber":  "drtuber",
 	// emp/empflix intentionally has no bang - engine removed, site returns
 	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
-	"hp":         "hellporno",
-	"hellporno":  "hellporno",
 	"ap":         "alphaporno",
 	"alphaporno": "alphaporno",
 	"pf":         "pornflip",
@@ -65,12 +59,8 @@ var BangMapping = map[string]string{
 	// Tier 4 - Additional yt-dlp supported sites
 	// pb/pornerbros intentionally has no bang - engine removed, site returns
 	// HTTP 403 Cloudflare challenge (no bypass), see manager.go.
-	"nk":          "nonktube",
-	"nonktube":    "nonktube",
 	"np":          "nubilesporn",
 	"nubilesporn": "nubilesporn",
-	"pbox":        "pornbox",
-	"pornbox":     "pornbox",
 	"ptop":        "porntop",
 	"porntop":     "porntop",
 	// phd/pornhd intentionally has no bang - engine removed, site returns
@@ -85,8 +75,6 @@ var BangMapping = map[string]string{
 	"porntrex": "porntrex",
 	"hq":       "hqporner",
 	"hqporner": "hqporner",
-	"vj":       "vjav",
-	"vjav":     "vjav",
 	"ff":       "flyflv",
 	"flyflv":   "flyflv",
 	"t8":       "tube8",
@@ -140,6 +128,10 @@ type ParsedQuery struct {
 //   - @word -> strips @ prefix (used for autocomplete, word kept in query)
 //   - !unknownbang -> stripped from query, recorded in InvalidBang
 func ParseBangs(query string) ParsedQuery {
+	return parseBangs(query, BangMapping)
+}
+
+func parseBangs(query string, mapping map[string]string) ParsedQuery {
 	result := ParsedQuery{
 		Query:         query,
 		Engines:       []string{},
@@ -188,7 +180,7 @@ func ParseBangs(query string) ParsedQuery {
 	for _, word := range words {
 		if strings.HasPrefix(word, "!") && len(word) > 1 {
 			bang := strings.ToLower(word[1:])
-			if engineName, ok := BangMapping[bang]; ok {
+			if engineName, ok := mapping[bang]; ok {
 				result.HasBang = true
 				if !engineSet[engineName] {
 					engineSet[engineName] = true
@@ -259,28 +251,22 @@ var EngineDisplayNames = map[string]string{
 	"xhamster":     "xHamster",
 	"eporner":      "Eporner",
 	"youporn":      "YouPorn",
-	"porntube":     "PornTube",
 	"youjizz":      "YouJizz",
 	"sunporno":     "SunPorno",
-	"txxx":         "TXXX",
 	"nuvid":        "Nuvid",
 	"tnaflix":      "TNAFlix",
 	"drtuber":      "DrTuber",
-	"hellporno":    "HellPorno",
 	"alphaporno":   "AlphaPorno",
 	"pornflip":     "PornFlip",
 	"xxxymovies":   "XXXYMovies",
 	"lovehomeporn": "LoveHomePorn",
-	"nonktube":     "NonkTube",
 	"nubilesporn":  "NubilesPorn",
-	"pornbox":      "PornBox",
 	"porntop":      "PornTop",
 	"xbabe":        "XBabe",
 	"pornone":      "PornOne",
 	"pornhat":      "PornHat",
 	"porntrex":     "PornTrex",
 	"hqporner":     "HQPorner",
-	"vjav":         "VJAV",
 	"flyflv":       "FlyFLV",
 	"tube8":        "Tube8",
 	"anyporn":      "AnyPorn",
@@ -289,16 +275,20 @@ var EngineDisplayNames = map[string]string{
 
 // ListBangs returns a sorted list of all available bangs
 func ListBangs() []BangInfo {
+	return listBangs(BangMapping)
+}
+
+func listBangs(mapping map[string]string) []BangInfo {
 	seen := make(map[string]bool)
 	var result []BangInfo
 
 	// Get unique engine names first
-	for _, engine := range BangMapping {
+	for _, engine := range mapping {
 		if !seen[engine] {
 			seen[engine] = true
 			// Find the short code (shortest bang for this engine)
 			shortCode := engine
-			for bang, eng := range BangMapping {
+			for bang, eng := range mapping {
 				if eng == engine && len(bang) < len(shortCode) {
 					shortCode = bang
 				}
@@ -332,6 +322,10 @@ type AutocompleteSuggestion struct {
 // Autocomplete returns bang suggestions for a partial input
 // prefix should be the text after "!" (e.g., "po" for "!po")
 func Autocomplete(prefix string) []AutocompleteSuggestion {
+	return autocomplete(prefix, BangMapping)
+}
+
+func autocomplete(prefix string, mapping map[string]string) []AutocompleteSuggestion {
 	prefix = strings.ToLower(prefix)
 	if prefix == "" {
 		return nil
@@ -340,7 +334,7 @@ func Autocomplete(prefix string) []AutocompleteSuggestion {
 	// Track best score per engine across all its bang aliases
 	bestScore := make(map[string]int)
 
-	for bang, engine := range BangMapping {
+	for bang, engine := range mapping {
 		bangLower := strings.ToLower(bang)
 		engineLower := strings.ToLower(engine)
 
@@ -371,7 +365,7 @@ func Autocomplete(prefix string) []AutocompleteSuggestion {
 
 		// Find shortest bang for this engine
 		shortCode := engine
-		for b, e := range BangMapping {
+		for b, e := range mapping {
 			if e == engine && len(b) < len(shortCode) {
 				shortCode = b
 			}

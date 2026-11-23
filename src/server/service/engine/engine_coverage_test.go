@@ -447,14 +447,14 @@ func TestEngineManager_InitializeEngines_ListEngines_NonEmpty(t *testing.T) {
 func TestEngineManager_InitializeEngines_SourceCountAndTierMetadata(t *testing.T) {
 	m := newTestManager()
 	list := m.ListEngines()
-	if len(list) != 33 {
-		t.Fatalf("ListEngines() returned %d sources, want 33", len(list))
+	if len(list) != 27 {
+		t.Fatalf("ListEngines() returned %d sources, want 27", len(list))
 	}
 	tierCounts := make(map[int]int)
 	for _, info := range list {
 		tierCounts[info.Tier]++
 	}
-	for tier, wantCount := range map[int]int{1: 5, 2: 2, 3: 12, 4: 12, 5: 1, 6: 1} {
+	for tier, wantCount := range map[int]int{1: 5, 2: 2, 3: 9, 4: 9, 5: 1, 6: 1} {
 		if got := tierCounts[tier]; got != wantCount {
 			t.Errorf("tier %d source count = %d, want %d", tier, got, wantCount)
 		}
@@ -470,6 +470,54 @@ func TestEngineManager_InitializeEngines_SourceCountAndTierMetadata(t *testing.T
 	}
 }
 
+func TestEngineManager_InitializeEngines_RemovedSourcesAreNotRegistered(t *testing.T) {
+	m := newTestManager()
+	if got := m.EnabledCount(); got != 27 {
+		t.Fatalf("EnabledCount() = %d, want 27", got)
+	}
+	removed := []string{"hellporno", "nonktube", "pornbox", "porntube", "txxx", "vjav"}
+	for _, name := range removed {
+		if _, ok := m.GetEngine(name); ok {
+			t.Errorf("removed source %q remains registered", name)
+		}
+		if unknown := m.UnknownEngineNames([]string{name}); len(unknown) != 1 || unknown[0] != name {
+			t.Errorf("removed source %q is not reported as unknown: %v", name, unknown)
+		}
+	}
+}
+
+func TestEngineManager_BangsFollowEngineAvailability(t *testing.T) {
+	m := newTestManager()
+	if parsed := m.ParseBangs("!xv amateur"); !parsed.HasBang || len(parsed.Engines) != 1 || parsed.Engines[0] != "xvideos" {
+		t.Fatalf("available engine bang parse = %#v, want xvideos", parsed)
+	}
+
+	if !m.SetEngineEnabled("xvideos", false) {
+		t.Fatal("SetEngineEnabled(xvideos, false) failed")
+	}
+	parsed := m.ParseBangs("!xv amateur")
+	if parsed.HasBang || parsed.InvalidBang != "!xv" {
+		t.Fatalf("disabled engine bang parse = %#v, want invalid !xv", parsed)
+	}
+	for _, bang := range m.ListBangs() {
+		if bang.EngineName == "xvideos" {
+			t.Fatal("disabled xvideos remains in current bang list")
+		}
+	}
+	for _, suggestion := range m.AutocompleteBangs("xv") {
+		if suggestion.EngineName == "xvideos" {
+			t.Fatal("disabled xvideos remains in bang autocomplete")
+		}
+	}
+
+	if !m.SetEngineEnabled("xvideos", true) {
+		t.Fatal("SetEngineEnabled(xvideos, true) failed")
+	}
+	if parsed := m.ParseBangs("!xv amateur"); !parsed.HasBang || len(parsed.Engines) != 1 || parsed.Engines[0] != "xvideos" {
+		t.Fatalf("re-enabled engine bang parse = %#v, want xvideos", parsed)
+	}
+}
+
 func TestEngineManager_ListEngines_ReportsVerifiedDataCapabilities(t *testing.T) {
 	m := newTestManager()
 	byName := make(map[string]model.EngineInfo)
@@ -477,10 +525,19 @@ func TestEngineManager_ListEngines_ReportsVerifiedDataCapabilities(t *testing.T)
 		byName[info.Name] = info
 	}
 	for name, want := range map[string]model.EngineCapabilities{
-		"drtuber":  {HasPreview: true, HasDuration: true},
-		"sunporno": {HasPreview: true, HasDuration: true, HasViews: true},
-		"porntrex": {HasDuration: true, HasViews: true},
-		"pornone":  {HasDuration: true},
+		"alphaporno": {HasDuration: true},
+		"anyporn":    {HasPreview: true},
+		"drtuber":    {HasPreview: true, HasDuration: true},
+		"pornflip":   {HasDuration: true},
+		"porntop":    {HasPreview: true, HasDuration: true, HasViews: true},
+		"sunporno":   {HasPreview: true, HasDuration: true, HasViews: true},
+		"porntrex":   {HasDuration: true, HasViews: true},
+		"pornone":    {HasDuration: true},
+		"tnaflix":    {HasPreview: true, HasDuration: true, HasViews: true},
+		"tube8":      {HasPreview: true, HasDuration: true, HasViews: true},
+		"xbabe":      {HasPreview: true, HasDuration: true, HasViews: true},
+		"youjizz":    {HasDuration: true, HasViews: true},
+		"youporn":    {HasPreview: true, HasDownload: true, HasDuration: true, HasViews: true},
 	} {
 		info, ok := byName[name]
 		if !ok || info.Capabilities == nil {
@@ -1311,6 +1368,26 @@ func TestResultMatchesIntent_FemaleOnly_MaleWordPresent_False(t *testing.T) {
 	r := model.VideoResult{Title: "guy fucks lesbian"}
 	if ResultMatchesIntent(r, intent) {
 		t.Error("ResultMatchesIntent: 'guy fucks' in female-only query should return false")
+	}
+}
+
+func TestResultMatchesIntent_FemaleOnly_StandaloneMaleTerms(t *testing.T) {
+	intent := DetectQueryIntent("lesbian")
+	for _, term := range []string{"guy", "man", "men", "male", "dude", "husband"} {
+		t.Run(term, func(t *testing.T) {
+			r := model.VideoResult{Title: "lesbian scene with " + term}
+			if ResultMatchesIntent(r, intent) {
+				t.Errorf("ResultMatchesIntent accepted title containing standalone male term %q", term)
+			}
+		})
+	}
+}
+
+func TestResultMatchesIntent_FemaleOnly_WomanIsNotMaleToken(t *testing.T) {
+	intent := DetectQueryIntent("lesbian")
+	r := model.VideoResult{Title: "lesbian woman enjoys scene"}
+	if !ResultMatchesIntent(r, intent) {
+		t.Fatal("ResultMatchesIntent rejected 'woman' as a standalone male term")
 	}
 }
 

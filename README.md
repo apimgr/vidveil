@@ -248,8 +248,9 @@ The root `/healthz` alias is disabled by default.
 | `https://x.scour.li/api/v1/server/swagger` | OpenAPI JSON (`/api/swagger` alias) |
 | `https://x.scour.li/api/v1/server/graphql` | GraphQL endpoint (`/api/graphql` alias) |
 | `https://x.scour.li/server/docs/graphql` | GraphiQL playground |
-| `https://x.scour.li/server/help/mcp` | MCP connection guide (when MCP is enabled) |
+| `https://x.scour.li/server/help/mcp` | MCP connection guide |
 | `https://x.scour.li/server/preferences/tokens` | Restore and manage owner tokens |
+| `https://x.scour.li/server/preferences/sync` | Export and import browser preferences |
 | `https://x.scour.li/feed.xml` | Atom feed of privacy-filtered recent searches |
 | `https://x.scour.li/rss.xml` | RSS feed of privacy-filtered recent searches |
 | `https://x.scour.li/.well-known/llms.txt` | AI-agent discovery (`/llms.txt` alias) |
@@ -278,30 +279,13 @@ Use bang shortcuts to search specific engines:
 
 ### Supported Engines
 
-#### Tier 1 - Major Sites (API-based)
-
-| Engine | Bang | Method | Preview |
-|--------|------|--------|---------|
-| PornHub | `!ph` | Webmasters API | ✓ |
-| RedTube | `!rt` | Public API | ✓ |
-| Eporner | `!ep` | v2 JSON API | ✓ |
-| XVideos | `!xv` | HTML parsing | ✓ |
-| XNXX | `!xn` | HTML parsing | |
-| xHamster | `!xh` | JSON extraction | ✓ |
-
-#### Tier 2 - Popular Sites
-
-| Engine | Bang | Preview |
-|--------|------|---------|
-| YouPorn | `!yp` | ✓ |
-
-#### Tier 3 - Additional Sites
-
-3Movs (`!3m`), AlphaPorno (`!ap`), AnyPorn (`!any`), DrTuber (`!dt`), LoveHomePorn (`!lhp`), Nuvid (`!nv`), PornFlip (`!pf`), SunPorno (`!sp`), TNAFlix (`!tna`), XXXYMovies (`!xxxy`), YouJizz (`!yj`)
-
-#### Tier 4 - Specialty Sites
-
-FlyFLV (`!ff`), HQPorner (`!hq`), NubilesPorn (`!np`), PornHat (`!phat`), PornOne (`!p1`), PornTop (`!ptop`), PornTrex (`!ptrex`), Tube8 (`!t8`), XBabe (`!xb`)
+The 27 registered engine IDs are `3movs`, `alphaporno`, `anyporn`, `drtuber`,
+`eporner`, `flyflv`, `hqporner`, `lovehomeporn`, `nuvid`, `nubilesporn`,
+`pornhat`, `pornflip`, `pornhub`, `pornone`, `porntop`, `porntrex`,
+`redtube`, `sunporno`, `tnaflix`, `tube8`, `xbabe`, `xhamster`, `xnxx`,
+`xxxymovies`, `xvideos`, `youporn`, and `youjizz`. Current bang shortcuts and runtime
+availability are returned by the [engines API](https://x.scour.li/api/v1/engines)
+and [bangs API](https://x.scour.li/api/v1/bangs).
 
 ### Operator Management
 

@@ -1,73 +1,50 @@
 # Preferences
 
-Access preferences at `https://x.scour.li/server/preferences`.
+Open **Preferences** at `/server/preferences`. The page stores visitor
+preferences in browser cookies so the server can apply them while rendering
+pages. It does not create a visitor account or server-side preference profile.
 
-## Settings
+## Main settings
 
-### Appearance
+- **Appearance and language**: Choose a theme and one of the supported
+  languages, or return language selection to automatic detection.
+- **Search and results**: Set result count, tab behavior, default sorting,
+  duration and quality filters, preview behavior, and grid and thumbnail size.
+- **History**: Set the browser search-history limit and its automatic cleanup
+  interval. Search-history entries stay in browser storage.
+- **Search engines**: Choose which registered engines to query. With no saved
+  selection, all enabled engines are used.
+- **Privacy**: Review cookie-consent categories and, where applicable, the
+  CCPA opt-out control. Thumbnail requests are proxied by VidVeil.
 
-- **Theme**: Auto, dark, or light
-- **Grid Density**: Comfortable, default, or compact
-- **Thumbnail Size**: Small, medium, or large
+Save the form to apply changes. **Cancel** discards unsaved edits. **Reset**
+opens a confirmation popover; confirming clears the application's
+non-credential cookies and browser-managed site storage. It preserves owner
+credentials.
 
-### Video Preview
+## Sync preferences between browsers
 
-- **Autoplay Preview**: Enable or disable hover preview playback
-- **Preview Delay**: Instant, 200ms, 500ms, or 1s
+Open `/server/preferences/sync` from the **More preferences** card. The page
+always displays a full import URL and a short code for the current theme,
+language, and valid app preferences. Copy either value to the other browser
+and open the URL or paste the value into the import field. The import form
+works without JavaScript, and the server does not store the exported values.
+Cookie consent, CCPA choices, build stamps, and credentials are not included.
 
-### Search Settings
+## Search history and favorites
 
-- **Results Per Page**: Infinite scroll, 20, 50, or 100
-- **Open New Tab**: Choose whether result links open in a new tab
-
-### Default Filters
-
-- **Preview First**: Prefer results with video previews
-- **Show AI-Generated Content**: Include or hide AI-generated content; hidden by default
-- **Default Duration**: Any, under 10 minutes, 10–30 minutes, or over 30 minutes
-- **Minimum Quality**: Any quality up to 4K-only
-- **Default Sort**: Relevance, longest, shortest, most viewed, or best quality
-- **Minimum Duration**: No minimum up to 30 minutes
-
-### History and Favorites
-
-- **Max History**: Unlimited, 10, 25, 50, or 100 items
-- **Auto-Clear History**: Never, 1 day, 7 days, or 30 days
-- **Import/Export**: Export or import browser-local search history and server-side favorites
-
-### Privacy
-
-- **Use Tor**: Route searches through Tor when available
-- **Thumbnail Proxy**: Always on; thumbnails are served through VidVeil to prevent direct browser requests to source sites
-
-### Search Engines
-
-- All configured engines are selected by default until you save a selection.
-- Enable or disable engines individually
-- Use **Select All** or **Select None** for quick changes
-
-## Storage
-
-Preferences are stored in browser cookies so the server can render the selected
-theme, language, and search settings without JavaScript or an account. Some
-JavaScript features may keep optional convenience state in `localStorage`, but
-it is not required for preferences to work.
+Search history is browser-local. The history controls on the preferences page
+export, import, or clear that local list; they do not export favorites.
+Favorites are private owner resources stored by the server and managed on the
+Favorites page. Use the favorites export/import controls for favorites.
 
 ## Owner tokens
 
-Manage private favorites and automation credentials separately from display
-preferences at [`/server/preferences/tokens`](https://x.scour.li/server/preferences/tokens).
-Restore a primary token there when moving to another browser. Create a linked
-token for each automation or MCP client so it can be revoked independently.
-The primary token is required for token management; do not use it as an
-automation credential. The page shows the primary token and linked tokens in
-separate cards, supports independent reveal, rotation, rename, expiry, and
-revocation actions, and lets you forget the saved token in this browser without
-deleting pastes. Choose a preset expiry or open **Custom date** to set an exact
-expiry. The page works without JavaScript.
-
-## Reset
-
-Use **Reset preferences** to clear the site's non-credential preferences and
-consent cookies. Your owner token is preserved. The reset also clears
-browser-managed site storage.
+Manage owner tokens at `/server/preferences/tokens`. Restore the primary token
+when moving to another browser. Create a linked token for each automation or
+MCP client so it can be revoked independently. The primary token is required
+for token management; do not use it as an automation credential. The page
+supports revealing and rotating the primary or linked tokens, renaming,
+expiry changes, revocation, and forgetting the saved token in this browser.
+Forgetting the browser's saved token does not delete its favorites. The page
+works without JavaScript.

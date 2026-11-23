@@ -133,14 +133,24 @@ partially update preferences, or export/import them for another device:
 ```http
 GET  https://x.scour.li/api/v1/server/preferences
 POST https://x.scour.li/api/v1/server/preferences
-GET  https://x.scour.li/api/v1/server/preferences/export
-GET  https://x.scour.li/api/v1/server/preferences/import?theme=dark&lang=en
+GET  https://x.scour.li/api/v1/server/preferences/sync
+GET  https://x.scour.li/api/v1/server/preferences/sync/import?theme=dark&lang=en
 ```
 
-`POST` accepts JSON or form fields. Portable values are `theme`, `lang`, and
-`vidveil_pref_*` cookies. Consent, build-stamp, session, and other credential
-cookies are never exported or imported. API updates return the effective
-preference state plus `applied` and `ignored` parameter names.
+`POST /server/preferences` accepts JSON or form fields and applies a partial
+update to the browser's preference cookies. `GET /server/preferences/sync`
+returns the effective `theme`, `lang`, and `prefs` plus a shareable `url` and
+base64url `code`. The import endpoint accepts the URL's preference parameters
+or a `code` parameter and returns the resulting preference state with
+`applied` and `ignored` parameter names. Portable values are `theme`, `lang`,
+and valid `vidveil_pref_*` cookies. Consent, CCPA choices, build stamps,
+sessions, and other credentials are never exported or imported.
+
+The browser sync page is `/server/preferences/sync`. Its `GET` response is
+content-negotiated (HTML, plain text, or JSON), and its `POST` form applies a
+short code and redirects back to the sync page by default. Shared import links
+use `/server/preferences/sync/import`; both browser routes set cookies without
+creating server-side preference records.
 
 ## MCP
 

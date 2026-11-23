@@ -95,7 +95,6 @@ server:
   cors:
     allowed_origins:
       - "*"
-    allow_credentials: true
     max_age: 86400
 ```
 
@@ -264,6 +263,19 @@ challenge.
 | `TZ` | Time zone for scheduler timestamps (any IANA zone, e.g. `America/New_York`) |
 | `CACHE_URL` | External cache connection string; sets `server.cache.url` and promotes the cache type from `memory` to `valkey` so it is actually used. Ignored when `VIDVEIL_SERVER_CACHE_URL` or `VIDVEIL_CACHE_URL` is set |
 | `I2P_ENABLED` | Set the I2P eepsite state; project-prefixed `VIDVEIL_SERVER_I2P_ENABLED` and `VIDVEIL_I2P_ENABLED` take precedence over this variable and config defaults |
+
+SMTP environment variables override the corresponding email settings when
+non-empty:
+
+| Variable | Description |
+|---|---|
+| `SMTP_HOST` | SMTP server host |
+| `SMTP_PORT` | SMTP server port; invalid or non-positive values are ignored |
+| `SMTP_USERNAME` | SMTP authentication username |
+| `SMTP_PASSWORD` | SMTP authentication password |
+| `SMTP_TLS` | SMTP TLS mode |
+| `SMTP_FROM_NAME` | Sender display name |
+| `SMTP_FROM_EMAIL` | Sender email address |
 
 Set `server.baseurl` or `BASEURL` when the reverse proxy publishes VidVeil
 under a path such as `/app`. Server-rendered navigation, forms, and assets

@@ -24,7 +24,7 @@ make build
 # Run unit tests
 make test
 
-# Build and push the container image
+# Build the container image locally
 make docker
 ```
 

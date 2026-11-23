@@ -32,7 +32,7 @@ Makefile — it runs explicit commands per `.github/workflows/build.yml`.
 |-------------------|---------------------------------------------------------------------|
 | `make dev`        | Quick development build into `${TMPDIR}/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX/`. |
 | `make local`      | Production-style build with version info into `binaries/`.          |
-| `make build`      | Cross-platform release build (8 targets) into `binaries/`.          |
+| `make build`      | Host server/CLI plus cross-platform server/CLI release binaries (8 targets) into `binaries/`. |
 | `make test`       | Run unit tests and coverage checks in `casjaysdev/go:latest`.         |
 | `make release`    | Build, stage, and publish a stable release.                           |
 | `make docker`     | Build and push the container image.                                 |

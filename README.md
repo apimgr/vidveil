@@ -330,8 +330,8 @@ Options:
 ```bash
 make dev            # Quick build to temp directory
 make local          # Build with version to binaries/
-make build          # Full cross-platform build
-make test           # Run unit tests
+make build          # Host binaries plus server and CLI for all 8 platforms
+make test           # Run unit tests, vulnerability checks, and coverage
 ```
 
 ### Test
@@ -339,8 +339,12 @@ make test           # Run unit tests
 ```bash
 ./tests/run_tests.sh    # Docker-only basic integration tier
 ./tests/docker.sh       # Quick Docker binary checks
-./tests/incus.sh        # Full systemd/OpenRC integration tests (run explicitly)
+./tests/incus.sh [systemd|openrc|all] # Full suite; defaults to both init systems
+./tests/e2e.sh          # On-demand browser suite
 ```
+
+Set `E2E_TEST_FILTER=TestName` before `tests/e2e.sh` to run one matching
+browser test.
 
 ### Platforms
 

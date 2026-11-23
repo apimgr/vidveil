@@ -5,7 +5,7 @@ Endpoint: `https://x.scour.li/api/v1/server/graphql` (alias: `/api/graphql`)
 GraphQL is query-only and exposes read operations. Writes such as contact form
 submissions remain REST-only and appear in OpenAPI, not in this schema.
 
-Interactive playground: `https://x.scour.li/server/docs/graphql`
+GraphiQL interface: `https://x.scour.li/server/docs/graphql`
 
 ## Schema
 
@@ -168,7 +168,7 @@ query {
 
 ## Using GraphiQL
 
-Navigate to `https://x.scour.li/server/docs/graphql` to access the interactive GraphQL playground with:
+Navigate to `https://x.scour.li/server/docs/graphql` to access the interactive GraphiQL interface with:
 
 - Query editor with syntax highlighting
 - Automatic schema documentation

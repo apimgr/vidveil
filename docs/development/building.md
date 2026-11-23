@@ -5,7 +5,8 @@
 - Docker
 - Make
 - Docker for builds and unit tests
-- Incus or Docker for integration test execution
+- Docker for the basic integration test tier
+- Incus (optional) for systemd and OpenRC integration tests
 
 VidVeil uses containerized Go builds. Do **not** run `go build` directly on the host machine.
 
@@ -37,9 +38,9 @@ make docker
 ./tests/e2e.sh
 ```
 
-`run_tests.sh` auto-detects the available container runtime, `incus.sh`
-runs the full systemd integration suite, and `docker.sh` is the Alpine
-fallback.
+`run_tests.sh` is the Docker-only basic tier and never selects Incus.
+`docker.sh` validates the compiled binary in Alpine. Run `incus.sh` explicitly
+for the full systemd and OpenRC service integration suite.
 
 `e2e.sh` is the headless-browser suite. Run it on demand after major frontend
 work, before a release, or for beta testing. It is not part of `make test` or

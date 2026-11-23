@@ -322,7 +322,8 @@ Options:
 
 - Docker (required for builds)
 - Make
-- Incus or Docker (for testing)
+- Docker (required for unit and basic integration tests)
+- Incus (optional, for full systemd/OpenRC integration tests)
 
 ### Build
 
@@ -336,9 +337,9 @@ make test           # Run unit tests
 ### Test
 
 ```bash
-./tests/run_tests.sh    # Auto-detects incus/docker
-./tests/incus.sh        # Full OS test with systemd (PREFERRED)
-./tests/docker.sh       # Quick Docker test
+./tests/run_tests.sh    # Docker-only basic integration tier
+./tests/docker.sh       # Quick Docker binary checks
+./tests/incus.sh        # Full systemd/OpenRC integration tests (run explicitly)
 ```
 
 ### Platforms

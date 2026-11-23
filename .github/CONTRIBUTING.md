@@ -13,8 +13,8 @@ behavior.
 - A POSIX shell (`bash`).
 - Docker (or a compatible runtime). All builds and tests run inside containers
   — VidVeil does not require Go to be installed on your host machine.
-- Optional: [Incus](https://linuxcontainers.org/incus/) for full-stack
-  integration tests with systemd. Falls back to Docker if not present.
+- Optional: [Incus](https://linuxcontainers.org/incus/) for the full systemd
+  and OpenRC integration suite. Basic tests always use Docker.
 
 ### Clone
 
@@ -30,19 +30,19 @@ Makefile — it runs explicit commands per `.github/workflows/build.yml`.
 
 | Command           | What it does                                                        |
 |-------------------|---------------------------------------------------------------------|
-| `make dev`        | Quick development build into `${TMPDIR}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX/`. |
+| `make dev`        | Quick development build into `${TMPDIR}/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX/`. |
 | `make local`      | Production-style build with version info into `binaries/`.          |
 | `make build`      | Cross-platform release build (8 targets) into `binaries/`.          |
-| `make test`       | Run `go test` inside `golang:alpine`.                               |
-| `make release`    | Build and stage release artifacts in `releases/`.                   |
+| `make test`       | Run unit tests and coverage checks in `casjaysdev/go:latest`.         |
+| `make release`    | Build, stage, and publish a stable release.                           |
 | `make docker`     | Build and push the container image.                                 |
 
 To run integration tests:
 
 ```bash
-./tests/run_tests.sh         # auto-detects incus or docker
-./tests/incus.sh             # full systemd integration (preferred)
-./tests/docker.sh            # ephemeral docker-only smoke tests
+./tests/run_tests.sh         # Docker-only basic integration tests
+./tests/docker.sh            # ephemeral Docker binary checks
+./tests/incus.sh              # full systemd and OpenRC integration tests
 ```
 
 ## Branching and PRs
@@ -57,8 +57,8 @@ To run integration tests:
 ## Tests and Documentation Updates Are Required
 
 If your change touches behavior, you must update the relevant tests and
-documentation in the same PR. See `AI.md` PART 29 (Testing & Development) and
-PART 30 (ReadTheDocs Documentation) for the rules. In particular:
+documentation in the same PR. See `AI.md` PART 28 (Testing & Development) and
+PART 29 (ReadTheDocs Documentation) for the rules. In particular:
 
 - Add or update `*_test.go` next to the code you touched.
 - Update `docs/*.md` (ReadTheDocs) for any user-, admin-, operator-, or

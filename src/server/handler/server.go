@@ -1187,7 +1187,7 @@ func (h *ServerHandler) APIAbout(w http.ResponseWriter, r *http.Request) {
 		"version":     version.GetVersion(),
 		"features": []string{
 			"Search history is stored in the visitor's browser, not as per-visitor history on the server; privacy-filtered queries may appear in public feeds",
-			"Meta-search across 33 adult video engines with bang shortcuts",
+			"Meta-search across 27 registered adult video engines with bang shortcuts",
 			"Real-time SSE streaming as each engine responds",
 			"Thumbnail proxy so source sites never see your IP",
 			"Video preview on hover (desktop) and swipe (mobile)",
@@ -1428,7 +1428,7 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 				"endpoint":    apiBase + "/search",
 				"method":      "GET",
 				"parameters":  []string{"q (query; bang shortcuts like !ph !xv supported)", "page", "engines"},
-				"description": "Search across 33 video engines; supports JSON, SSE (text/event-stream), and text/plain",
+				"description": "Search across 27 registered video engines by default; supports JSON, SSE (text/event-stream), and text/plain",
 			},
 			"bangs": map[string]interface{}{
 				"endpoint":    apiBase + "/bangs",

@@ -315,7 +315,7 @@ type ServerHelpPagesConfig struct {
 	MCP     string `yaml:"mcp"`
 }
 
-const vidveilMCPHelp = "VidVeil searches across 33 video engines and streams results as they respond. Use `searchVideos` for a phrase, optionally with a bang such as `!ph` to target Pornhub; use `listEngines` to inspect engine availability, `listBangs` to discover shortcuts, and `autocompleteBangs` to find matching shortcuts or suggestions. For example: search for ocean sunsets with `!ph`, then compare the returned titles and source engines. Favorites are private owner resources; use a linked token for automation and never share a primary or operator token."
+const vidveilMCPHelp = "VidVeil searches across 27 registered video engines by default and streams results as they respond. Use `searchVideos` for a phrase, optionally with a bang such as `!ph` to target Pornhub; use `listEngines` to inspect engine availability, `listBangs` to discover shortcuts, and `autocompleteBangs` to find matching shortcuts or suggestions. For example: search for ocean sunsets with `!ph`, then compare the returned titles and source engines. Favorites are private owner resources; use a linked token for automation and never share a primary or operator token."
 
 // TokensConfig contains limits and retention for anonymous owner tokens.
 type TokensConfig struct {

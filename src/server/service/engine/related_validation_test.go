@@ -90,6 +90,24 @@ func TestGetValidatedRelatedSearches_ZeroMaxResults_ReturnsNil(t *testing.T) {
 	}
 }
 
+func TestValidateRelatedTermsAsync_RespectsConcurrencyLimit(t *testing.T) {
+	m := newEmptyMgr()
+	m.relatedValidationSem <- struct{}{}
+	m.relatedValidationSem <- struct{}{}
+
+	m.validateRelatedTermsAsync([]string{"first candidate", "second candidate", "third candidate"})
+
+	m.relatedTermMu.Lock()
+	inFlight := len(m.relatedTermInFlight)
+	m.relatedTermMu.Unlock()
+	if inFlight != 0 {
+		t.Fatalf("in-flight validations = %d while capacity is exhausted, want 0", inFlight)
+	}
+	if got := len(m.relatedValidationSem); got != cap(m.relatedValidationSem) {
+		t.Fatalf("validation workers acquired %d slots while saturated, want %d", got, cap(m.relatedValidationSem))
+	}
+}
+
 func TestGetValidatedRelatedSearches_ColdCache_BackfillsUnvalidated(t *testing.T) {
 	m := newEmptyMgr()
 

@@ -105,9 +105,28 @@ func (e *YouPornEngine) Search(ctx context.Context, query string, page int) ([]m
 		durationText := parser.CleanText(s.Find(".video-duration").First().Text())
 		duration, durationSeconds := parser.ParseDuration(durationText)
 
-		// Get views and parse to count - YouPorn uses span.info-views
-		viewsText := parser.CleanText(s.Find(".info-views, .video-views").First().Text())
+		// Rating and views are separate .info-views spans, with rating first.
+		var viewsText string
+		var ratingText string
+		s.Find(".info-views, .video-views").Each(func(_ int, info *goquery.Selection) {
+			text := parser.CleanText(info.Text())
+			lower := strings.ToLower(text)
+			if strings.HasPrefix(lower, "views:") {
+				viewsText = strings.TrimSpace(text[len("views:"):])
+				return
+			}
+			if strings.HasPrefix(lower, "rating:") {
+				ratingText = strings.TrimSpace(text[len("rating:"):])
+				return
+			}
+			if viewsText == "" && (strings.Contains(lower, "views") || info.Is(".video-views")) {
+				viewsText = text
+			}
+		})
 		views, viewsCount := parser.ParseViews(viewsText)
+		_, rating := parser.ParseRating(ratingText)
+		quality := parser.ExtractQuality(s)
+		performer := parser.ExtractAttr(s, "data-uploader-name")
 
 		results = append(results, model.VideoResult{
 			ID:              GenerateResultID(videoURL, e.Name()),
@@ -120,6 +139,9 @@ func (e *YouPornEngine) Search(ctx context.Context, query string, page int) ([]m
 			DurationSeconds: durationSeconds,
 			Views:           views,
 			ViewsCount:      viewsCount,
+			Rating:          rating,
+			Quality:         quality,
+			Performer:       performer,
 			Source:          e.Name(),
 			SourceDisplay:   e.DisplayName(),
 		})

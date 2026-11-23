@@ -13,7 +13,9 @@ type XBabeEngine struct{ *BaseEngine }
 
 // newXBabeEngine creates a new XBabe engine
 func newXBabeEngine(appConfig *config.AppConfig) *XBabeEngine {
-	return &XBabeEngine{NewBaseEngine("xbabe", "XBabe", "https://xbabe.com", 4, appConfig)}
+	e := &XBabeEngine{NewBaseEngine("xbabe", "XBabe", "https://xbabe.com", 4, appConfig)}
+	e.SetCapabilities(Capabilities{HasPreview: true, HasDuration: true, HasViews: true, APIType: "html"})
+	return e
 }
 
 // Search performs a search on XBabe

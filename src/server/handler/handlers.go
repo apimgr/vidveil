@@ -1062,7 +1062,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse bangs from query (e.g., "!ph amateur" -> search pornhub for "amateur")
-	parsed := engine.ParseBangs(query)
+	parsed := h.engineMgr.ParseBangs(query)
 	searchQuery := strings.TrimSpace(parsed.Query)
 	if searchQuery == "" {
 		http.Redirect(w, r, "/", http.StatusFound)
@@ -3432,7 +3432,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse bangs from query (e.g., "!ph amateur" -> search pornhub for "amateur")
-	parsed := engine.ParseBangs(query)
+	parsed := h.engineMgr.ParseBangs(query)
 	searchQuery := parsed.Query
 	if searchQuery == "" {
 		h.jsonError(w, "Query cannot be empty after bang parsing", CodeValidation, http.StatusBadRequest)
@@ -3763,7 +3763,7 @@ func (h *SearchHandler) APIBangs(w http.ResponseWriter, r *http.Request) {
 	// Detect response format per AI.md PART 14
 	format := detectResponseFormat(r)
 
-	bangs := engine.ListBangs()
+	bangs := h.engineMgr.ListBangs()
 
 	// Plain text format
 	if format == "text/plain" {
@@ -3814,7 +3814,7 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 	if strings.HasPrefix(q, "!") && len(q) > 1 {
 		// Remove the "!" prefix
 		prefix := q[1:]
-		suggestions := engine.Autocomplete(prefix)
+		suggestions := h.engineMgr.AutocompleteBangs(prefix)
 		if format == "text/plain" {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
@@ -3835,7 +3835,7 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 
 	// If query ends with " !" (space bang), suggest starting a bang
 	if strings.HasSuffix(q, " !") {
-		bangs := engine.ListBangs()
+		bangs := h.engineMgr.ListBangs()
 		// Return first 10 bangs as suggestions
 		if len(bangs) > 10 {
 			bangs = bangs[:10]
@@ -3864,7 +3864,7 @@ func (h *SearchHandler) APIAutocomplete(w http.ResponseWriter, r *http.Request) 
 		lastWord := words[len(words)-1]
 		if strings.HasPrefix(lastWord, "!") && len(lastWord) > 1 {
 			prefix := lastWord[1:]
-			suggestions := engine.Autocomplete(prefix)
+			suggestions := h.engineMgr.AutocompleteBangs(prefix)
 			if format == "text/plain" {
 				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 				w.WriteHeader(http.StatusOK)
@@ -5460,7 +5460,7 @@ func (h *SearchHandler) SearchRSSFeed(w http.ResponseWriter, r *http.Request) {
 			page = pn
 		}
 	}
-	parsed := engine.ParseBangs(query)
+	parsed := h.engineMgr.ParseBangs(query)
 	engineNames := requestEngineNames(r, parsed.Engines, h.engineMgr.ListEngines())
 	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0, engine.ResultFilterOptions{})
 	if isSearchOverloaded(results) {
@@ -5486,7 +5486,7 @@ func (h *SearchHandler) SearchAtomFeed(w http.ResponseWriter, r *http.Request) {
 			page = pn
 		}
 	}
-	parsed := engine.ParseBangs(query)
+	parsed := h.engineMgr.ParseBangs(query)
 	engineNames := requestEngineNames(r, parsed.Engines, h.engineMgr.ListEngines())
 	results := h.engineMgr.SearchWithOperators(r.Context(), parsed.Query, page, engineNames, parsed.ExactPhrases, parsed.Exclusions, parsed.RequiredTerms, false, "", 0, engine.ResultFilterOptions{})
 	if isSearchOverloaded(results) {
@@ -5551,7 +5551,7 @@ func (h *SearchHandler) BatchSearch(w http.ResponseWriter, r *http.Request) {
 					ch <- batchResult{idx: idx, resp: &model.SearchResponse{}}
 				}
 			}()
-			parsed := engine.ParseBangs(bq.Q)
+			parsed := h.engineMgr.ParseBangs(bq.Q)
 			page := bq.Page
 			if page < 1 {
 				page = 1

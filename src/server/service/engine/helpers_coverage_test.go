@@ -133,6 +133,34 @@ func TestParseGenericVideoItem_TitleFromLinkText(t *testing.T) {
 	}
 }
 
+func TestParseGenericVideoItem_RejectsJavaScriptVideoLink(t *testing.T) {
+	sel := newSel(`<a class="videocard" href="javascript:void(0)" title="Placeholder"><img src="https://cdn.example.com/thumb.jpg"></a>`, "a")
+	result := parseGenericVideoItem(sel, "https://example.com", "test", "Test")
+	if result.URL != "" {
+		t.Fatalf("parseGenericVideoItem accepted non-HTTP video URL %q", result.URL)
+	}
+}
+
+func TestIsValidVideoURL(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		valid bool
+	}{
+		{"https://example.com/video/1", true},
+		{"http://example.com/video/1", true},
+		{"javascript:void(0)", false},
+		{"ftp://example.com/video/1", false},
+		{"/video/1", false},
+		{"https://user:pass@example.com/video/1", false},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			if got := isValidVideoURL(tc.value); got != tc.valid {
+				t.Errorf("isValidVideoURL(%q) = %v, want %v", tc.value, got, tc.valid)
+			}
+		})
+	}
+}
+
 // Thumbnail extracted from img src.
 func TestParseGenericVideoItem_Thumbnail_Src(t *testing.T) {
 	sel := newSel(`<div><a href="/v/6" title="T"><img src="https://cdn.example.com/thumb.jpg"></a></div>`, "div")

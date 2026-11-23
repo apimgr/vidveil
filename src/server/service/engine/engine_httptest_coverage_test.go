@@ -346,7 +346,7 @@ func TestTNAFlixEngine_Search_HttpTest(t *testing.T) {
 
 func TestTNAFlixEngine_Search_ExtractsLivePreviewAttribute(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, `<div class="col-xs-6 col-md-4"><a href="/v/18" title="TNAFlix Test"><img src="/t.jpg" data-trailer="https://cdn.example/trailer.mp4"></a></div>`)
+		_, _ = io.WriteString(w, `<div class="col-xs-6 col-md-4"><a href="/v/18" title="TNAFlix Test" data-trailer="https://cdn.example/trailer.mp4"><img src="/t.jpg"></a></div>`)
 	}))
 	defer srv.Close()
 	e := newTNAFlixEngine(defaultCfg())
@@ -357,6 +357,38 @@ func TestTNAFlixEngine_Search_ExtractsLivePreviewAttribute(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].PreviewURL != "https://cdn.example/trailer.mp4" {
 		t.Fatalf("Search() = %#v, want one result with trailer preview", got)
+	}
+}
+
+func TestTNAFlixEngine_Search_ExtractsViewsFromEyeIcon(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `<div class="col-xs-6 col-md-4"><a href="/v/18" title="TNAFlix Test"><img src="/t.jpg"><div class="me-2"><i class="icon-eye"></i>40.3K</div></a></div>`)
+	}))
+	defer srv.Close()
+	e := newTNAFlixEngine(defaultCfg())
+	e.baseURL = srv.URL
+	got, err := e.Search(context.Background(), "test", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ViewsCount != 40300 {
+		t.Fatalf("Search() views = %#v, want one result with 40300 views", got)
+	}
+}
+
+func TestTNAFlixEngine_Search_ExtractsPerformerProfile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `<div class="col-xs-6 col-md-4"><a href="/v/18" title="TNAFlix Test"><img src="/t.jpg"></a><a class="badge-video-info" href="/p/model-name">Model Name</a><a href="/c/category">Category</a></div>`)
+	}))
+	defer srv.Close()
+	e := newTNAFlixEngine(defaultCfg())
+	e.baseURL = srv.URL
+	got, err := e.Search(context.Background(), "test", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Performer != "Model Name" {
+		t.Fatalf("Search() performer = %#v, want Model Name", got)
 	}
 }
 
@@ -504,6 +536,34 @@ func TestYouPornEngine_Search_HttpTest(t *testing.T) {
 	e := newYouPornEngine(defaultCfg())
 	e.baseURL = srv.URL
 	_, _ = e.Search(context.Background(), "test", 1)
+}
+
+func TestYouPornEngine_Search_ExtractsViewsRatingAndQuality(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `<article class="video-box" data-uploader-name="Model Name"><a class="video-box-image" href="/v/1" title="YouPorn Test"><img class="thumb-image" src="/thumb.jpg" data-mediabook="//cdn.example/preview.mp4"></a><span class="video-duration">10:00</span><div class="info-views-container"><span class="info-views">Rating: 94%</span><span class="info-views">Views: 1.2M</span></div><span class="hd-badge">HD</span></article>`)
+	}))
+	defer srv.Close()
+	e := newYouPornEngine(defaultCfg())
+	e.baseURL = srv.URL
+	got, err := e.Search(context.Background(), "test", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("Search() returned %d results, want 1", len(got))
+	}
+	if got[0].ViewsCount != 1200000 || got[0].Views != "1.2M" {
+		t.Errorf("views = (%q, %d), want (1.2M, 1200000)", got[0].Views, got[0].ViewsCount)
+	}
+	if got[0].Rating != 94 {
+		t.Errorf("rating = %v, want 94", got[0].Rating)
+	}
+	if got[0].Quality != "HD" {
+		t.Errorf("quality = %q, want HD", got[0].Quality)
+	}
+	if got[0].Performer != "Model Name" {
+		t.Errorf("performer = %q, want Model Name", got[0].Performer)
+	}
 }
 
 // ── MakeRequestWithMod ────────────────────────────────────────────────────────

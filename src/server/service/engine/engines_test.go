@@ -282,8 +282,8 @@ func TestGetAllBangs(t *testing.T) {
 func TestListBangs(t *testing.T) {
 	bangs := ListBangs()
 
-	if len(bangs) == 0 {
-		t.Error("ListBangs should return non-empty list")
+	if len(bangs) != 27 {
+		t.Fatalf("ListBangs returned %d engines, want 27 registered engines", len(bangs))
 	}
 
 	// Check structure
@@ -329,6 +329,25 @@ func TestListBangs_ExcludesMotherless(t *testing.T) {
 	}
 	if _, ok := BangMapping["motherless"]; ok {
 		t.Error(`BangMapping["motherless"] should not exist - motherless is not registered`)
+	}
+}
+
+func TestListBangs_ExcludesRemovedUpstreamSources(t *testing.T) {
+	removed := []string{"hellporno", "nonktube", "pornbox", "porntube", "txxx", "vjav"}
+	for _, name := range removed {
+		if _, ok := EngineDisplayNames[name]; ok {
+			t.Errorf("EngineDisplayNames includes removed source %q", name)
+		}
+		for _, bang := range ListBangs() {
+			if bang.EngineName == name {
+				t.Errorf("ListBangs includes removed source %q with bang %q", name, bang.Bang)
+			}
+		}
+		for bang, engine := range BangMapping {
+			if engine == name {
+				t.Errorf("BangMapping[%q] still targets removed source %q", bang, name)
+			}
+		}
 	}
 }
 

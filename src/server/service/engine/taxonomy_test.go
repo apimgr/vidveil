@@ -109,16 +109,14 @@ func TestResultMatchesIntent_LesbianTeenNotZeroedByBoilerplateNoise(t *testing.T
 	}
 }
 
-// TestResultMatchesIntent_GenericWordsNoLongerInMalePresenceWords locks in
-// the trimmed malePresenceWords list — ultra-generic single words must not
-// be present, since they matched innocuous boilerplate far too often.
-func TestResultMatchesIntent_GenericWordsNoLongerInMalePresenceWords(t *testing.T) {
-	removed := []string{"male", "man", "men", "guy", "guys", "husband", "dude"}
-	for _, w := range malePresenceWords {
-		for _, r := range removed {
-			if w == r {
-				t.Errorf("malePresenceWords still contains overly generic word %q", r)
-			}
+// TestResultMatchesIntent_GenericMaleWordsRejectSpecificTitles ensures
+// standalone male terms in result titles contradict a female-only query.
+func TestResultMatchesIntent_GenericMaleWordsRejectSpecificTitles(t *testing.T) {
+	intent := DetectQueryIntent("lesbian")
+	for _, term := range []string{"male", "man", "men", "guy", "guys", "husband", "dude"} {
+		r := model.VideoResult{Title: "lesbian scene with " + term}
+		if ResultMatchesIntent(r, intent) {
+			t.Errorf("ResultMatchesIntent accepted title containing %q", term)
 		}
 	}
 }

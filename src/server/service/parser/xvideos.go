@@ -75,12 +75,12 @@ func (p *XVideosParser) Parse(s *goquery.Selection) *VideoItem {
 		}
 	}
 
-	// Get preview video URL - XVideos exposes an MP4 rollover via data-preview
-	// (data-pvv is a JPG thumbnail sprite, not a playable video, and is never used)
-	item.PreviewURL = ExtractAttr(img, "data-preview")
+	// Get preview video URL - current search cards use data-pvv for MP4 rollovers.
+	// Keep the older data-preview and data-spvv variants as fallbacks.
+	item.PreviewURL = ExtractAttr(img, "data-preview", "data-pvv", "data-spvv")
 	if item.PreviewURL == "" {
-		// Also try on the containing elements
-		item.PreviewURL = ExtractAttr(s.Find(".thumb-inside img").First(), "data-preview")
+		// Also try on the containing image element.
+		item.PreviewURL = ExtractAttr(s.Find(".thumb-inside img").First(), "data-preview", "data-pvv", "data-spvv")
 	}
 	if item.PreviewURL != "" {
 		item.PreviewURL = MakeAbsoluteURL(item.PreviewURL, "https:")

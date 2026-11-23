@@ -13,7 +13,9 @@ type YouJizzEngine struct{ *BaseEngine }
 
 // newYouJizzEngine creates a new YouJizz engine
 func newYouJizzEngine(appConfig *config.AppConfig) *YouJizzEngine {
-	return &YouJizzEngine{NewBaseEngine("youjizz", "YouJizz", "https://www.youjizz.com", 3, appConfig)}
+	e := &YouJizzEngine{NewBaseEngine("youjizz", "YouJizz", "https://www.youjizz.com", 3, appConfig)}
+	e.SetCapabilities(Capabilities{HasDuration: true, HasViews: true, APIType: "html"})
+	return e
 }
 
 // Search performs a search on YouJizz

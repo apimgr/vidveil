@@ -82,6 +82,31 @@ func TestSearch_WithMockEngine_ReturnsResults(t *testing.T) {
 	}
 }
 
+func TestSearch_LesbianQueryFiltersMaleTermsFromTitlesServerSide(t *testing.T) {
+	m := newMgrWithMock("mock-lesbian", []model.VideoResult{
+		validResult("lesbian women together", "https://example.com/women"),
+		validResult("lesbian scene with guy", "https://example.com/guy"),
+		validResult("lesbian scene with a man", "https://example.com/man"),
+		validResult("lesbian scene with male performer", "https://example.com/male"),
+	}, nil, true)
+
+	resp := m.Search(context.Background(), "lesbian", 1, nil, "")
+	if resp == nil || len(resp.Data.Results) != 1 || resp.Data.Results[0].URL != "https://example.com/women" {
+		t.Fatalf("lesbian search results = %#v, want only the female-only result", resp)
+	}
+}
+
+func TestSearchWithOperators_FiltersInvalidVideoURLs(t *testing.T) {
+	valid := validResult("amateur video", "https://example.com/video")
+	invalid := validResult("amateur video placeholder", "javascript:void(0)")
+	m := newMgrWithMock("mock-invalid-url", []model.VideoResult{valid, invalid}, nil, true)
+
+	resp := m.SearchWithOperators(context.Background(), "amateur", 1, nil, nil, nil, nil, false, "", 10, ResultFilterOptions{})
+	if resp == nil || len(resp.Data.Results) != 1 || resp.Data.Results[0].URL != valid.URL {
+		t.Fatalf("search results = %#v, want only the result with an HTTP(S) video URL", resp)
+	}
+}
+
 func TestSearchWithOperators_AIFilterHonorsRequestPreference(t *testing.T) {
 	m := newMgrWithMock("mock-ai-sync", []model.VideoResult{
 		validResult("deepfake video", "https://example.com/deepfake"),

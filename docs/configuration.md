@@ -310,7 +310,7 @@ Environment overrides win over the config file but lose to explicit CLI flags.
 
 The configuration tree below lists every serialized setting and its current
 default. First-run generated values are shown as placeholders: the server
-creates credentials and detects host-specific values at runtime. Leave
+creates credentials and detects machine-specific values at runtime. Leave
 `server.token` and `server.security.encryption_key` as generated in the live
 configuration; never copy a placeholder value into a deployed server.
 
@@ -367,9 +367,9 @@ server:
   daemonize: false
   contact:
     admin:
-      email: admin@<detected host>
+      email: admin@<detected domain>
     security:
-      email: security@<detected host>
+      email: security@<detected domain>
     abuse:
       email: ""
     dpo:
@@ -387,7 +387,7 @@ server:
         tls: auto
       from:
         name: ""
-        email: no-reply@<detected host>
+        email: no-reply@<detected domain>
   schedule:
     timezone: America/New_York
     catch_up_window: 1h

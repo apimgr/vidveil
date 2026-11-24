@@ -1,8 +1,8 @@
 # Development
 
 Vidveil is a single self-contained Go binary. All builds run through
-the repository Makefile and the Docker-backed Go toolchain — never on
-the host.
+the repository Makefile and the Docker-backed Go toolchain — never directly
+on the local machine.
 
 ## Detailed Pages
 

@@ -31,4 +31,4 @@ its workflow. CI commands are explicit and do not call Makefile targets.
 - Clear description
 - Reference any related issues
 - Include tests for new features
-- Do not introduce host-only build or test steps; use the existing Makefile and test scripts
+- Do not introduce local-machine-only build or test steps; use the existing Makefile and test scripts

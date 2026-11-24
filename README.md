@@ -330,7 +330,7 @@ Options:
 ```bash
 make dev            # Quick build to temp directory
 make local          # Build with version to binaries/
-make build          # Host binaries plus server and CLI for all 8 platforms
+make build          # Local binaries plus server and CLI for all 8 platforms
 make test           # Run unit tests, vulnerability checks, and coverage
 ```
 

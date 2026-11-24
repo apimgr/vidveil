@@ -22,7 +22,7 @@ docker compose up -d
 
 Vidveil uses two runtime volume roots in compose-based deployments:
 
-| Host Path | Container Path | Purpose |
+| Local Path | Container Path | Purpose |
 |---|---|---|
 | `./volumes/config` | `/config` | Configuration root |
 | `./volumes/data` | `/data` | Data and logs root |

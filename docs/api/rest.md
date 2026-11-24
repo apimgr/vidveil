@@ -124,6 +124,14 @@ GET https://x.scour.li/server/healthz
 
 `/server/healthz` is the canonical frontend health route. `/healthz` is an
 optional root alias controlled by `server.healthz.root.enabled`.
+Browser requests receive the server-rendered status page; frontend text
+negotiation uses human-readable values, while JSON and API text responses keep
+machine values. `checks` contains the core components, enabled Tor/I2P checks,
+and cached checks for enabled datasets such as GeoIP, blocklists, and the CVE
+feed. Dataset check values are only `ok`, `degraded`, or `error`; their keys
+follow registration order and never expose paths or error details. Dataset
+failures degrade the service unless a check is explicitly registered as
+critical.
 
 ## Guest preferences
 

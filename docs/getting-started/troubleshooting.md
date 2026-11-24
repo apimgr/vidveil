@@ -267,7 +267,7 @@ docker logs vidveil
 
 1. **Volume permissions:**
    ```bash
-   # The server prepares volume ownership at startup. Check the host
+   # The server prepares volume ownership at startup. Check the local
    # directories are writable by Docker and review the container logs.
    ```
 

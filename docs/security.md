@@ -20,7 +20,7 @@ VidVeil is internet-facing by default and assumes hostile traffic.
   operator-token-protected API endpoints. There is no admin web UI or
   operator account login.
 - Tor hidden service support auto-enables when the `tor` binary is
-  present on the host or in the container.
+  present on the local machine or in the container.
 
 ## Public Status Endpoints
 
@@ -30,7 +30,7 @@ internal IPs, query strings, or stack traces.
 | Endpoint                             | Purpose                                       |
 |--------------------------------------|-----------------------------------------------|
 | `GET https://x.scour.li/server/healthz`               | Health, version, build info, uptime.          |
-| `GET https://x.scour.li/api/v1/server/healthz`        | Same data, JSON-only.                         |
+| `GET https://x.scour.li/api/v1/server/healthz`        | Same data, JSON by default; text is negotiable. |
 | `GET https://x.scour.li/.well-known/security.txt`     | Machine-readable security contact metadata.   |
 | `GET https://x.scour.li/server/security`               | Security contacts and reporting guidance.     |
 

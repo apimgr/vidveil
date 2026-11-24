@@ -87,7 +87,9 @@ These are the well-defined entry points clients can integrate against.
 ### Health / Status
 
 - `GET /server/healthz` — content-negotiated public status.
-- `GET /api/v1/server/healthz` — JSON-only equivalent.
+- `GET /api/v1/server/healthz` — JSON by default; API clients may request text.
+  Enabled dataset checks appear after core and overlay checks, with public-safe
+  status values only.
 - `GET /metrics` — Prometheus exposition when the root alias is enabled.
   Metrics are internal-only and require a per-service bearer token by default.
   Operators can disable authentication only for a firewalled deployment with

@@ -92,7 +92,7 @@ There are no conventional user accounts. Possession of an owner's valid token id
 |----------|--------------------|---------------------------|
 | Video search engines | Third-party sites and their responses are untrusted and may change or be unavailable. | Report unavailable sources while continuing with usable results from other engines. |
 | Thumbnail and preview sources | External media may be unsafe, malformed, or privacy-invasive. | Serve media through the service's privacy protections; omit unusable media. |
-| Tor | Tor may be available on the host or deployment, but is not guaranteed. | Preserve ordinary service access when Tor is unavailable. |
+| Tor | Tor may be available on the local machine or deployment, but is not guaranteed. | Preserve ordinary service access when Tor is unavailable. |
 | GeoIP and public blocklist data | GeoIP uses the iptoasn ASN/country and DB-IP city datasets distributed by sapics/ip-location-db; data can be stale or temporarily unreachable. | Verify downloaded database checksums, retain the last usable data, and fail open on lookup errors without treating location data as authoritative identity. |
 | Incoming visitors and clients | Requests may be malformed or malicious. | Validate requests and return safe errors without exposing private data or internals. |
 

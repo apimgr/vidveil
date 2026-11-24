@@ -314,6 +314,11 @@ creates credentials and detects machine-specific values at runtime. Leave
 `server.token` and `server.security.encryption_key` as generated in the live
 configuration; never copy a placeholder value into a deployed server.
 
+Privacy collection, usage, and security text is built into VidVeil. Extend the
+privacy page through `server.branding.content.privacy`; deployment-specific
+sharing, retention, cookie, and third-party details remain under
+`server.privacy`.
+
 ```yaml
 server:
   port: <random unused 64xxx>
@@ -765,11 +770,6 @@ server:
         description_suffix_sold: This data may be shared with third parties.
     third_party:
       services: []
-    content:
-      data_collection: ""
-      data_usage: ""
-      data_usage_if_sold: ""
-      data_security: ""
 cli:
   binary_download:
     require_auth: false

@@ -343,6 +343,10 @@ make test           # Run unit tests, vulnerability checks, and coverage
 ./tests/e2e.sh          # On-demand browser suite
 ```
 
+The Docker image check reports `SKIP: no outbound network` when Tor bootstrap
+cannot be tested without outbound access. Set `REQUIRE_OVERLAY=1` when running
+`tests/docker.sh` to make Tor health mandatory.
+
 Set `E2E_TEST_FILTER=TestName` before `tests/e2e.sh` to run one matching
 browser test.
 

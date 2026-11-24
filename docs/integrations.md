@@ -9,6 +9,12 @@ is stored in the browser; privacy-filtered queries may appear in public feeds.
 This page describes the small set of external dependencies VidVeil does
 talk to, plus the integration surfaces it exposes for clients.
 
+When the server detects a critical database or data-directory write failure,
+its API remains available for reads while writes return `503 MAINTENANCE`.
+The health endpoints report the public-safe recovery state and recommend a
+30-second retry interval; automatic recovery clears the state after the checks
+pass.
+
 ## What VidVeil Does **Not** Integrate With
 
 These integrations exist in the `AI.md` template but are **not adopted**

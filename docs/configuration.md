@@ -423,6 +423,9 @@ server:
       healthcheck_self:
         schedule: '@every 5m'
         enabled: true
+      dataset_health_refresh:
+        schedule: '@every 1m'
+        enabled: true
       log_rotation:
         schedule: 0 0 * * *
         enabled: true
@@ -631,6 +634,16 @@ server:
       max_total_size: 10%
     encryption:
       enabled: false
+  maintenance:
+    self_healing:
+      retry_interval: 30s
+      max_attempts: 0
+    cleanup:
+      disk_threshold: 90
+      log_retention_days: 7
+    notify:
+      on_enter: true
+      on_exit: true
   restore:
     max_archive_size: 1G
     max_expanded_size: 4G
@@ -865,3 +878,11 @@ engines:
     browser: chrome
     browser_version: "131"
 ```
+
+`server.maintenance.self_healing.retry_interval` controls the recovery retry
+schedule; `max_attempts: 0` means retries continue without a limit. Disk-pressure
+cleanup starts at `disk_threshold`, removes logs older than
+`log_retention_days` and project temporary files older than 24 hours, then
+applies the configured `server.backup.retention` policy. Maintenance entry and
+recovery notifications are controlled independently by `notify.on_enter` and
+`notify.on_exit`.

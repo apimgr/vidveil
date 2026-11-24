@@ -34,6 +34,17 @@ internal IPs, query strings, or stack traces.
 | `GET https://x.scour.li/.well-known/security.txt`     | Machine-readable security contact metadata.   |
 | `GET https://x.scour.li/server/security`               | Security contacts and reporting guidance.     |
 
+## Operator Diagnostics
+
+Maintenance diagnostics include raw database and data-directory probe errors,
+so they are not part of the public health response. Operators can retrieve the
+recovery state and fix guidance with the server token:
+
+```http
+GET https://x.scour.li/api/v1/status
+Authorization: Bearer <configured server.token>
+```
+
 Metrics routes are **internal only** and require a per-service bearer token
 by default. An operator can disable token checks with
 `server.metrics.auth.allow_unauthenticated: true`; this is intended only for a

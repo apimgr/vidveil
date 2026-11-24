@@ -133,6 +133,21 @@ follow registration order and never expose paths or error details. Dataset
 failures degrade the service unless a check is explicitly registered as
 critical.
 
+If a critical database or data-directory write failure occurs, the server
+enters read-only maintenance mode. Read requests and the health endpoints stay
+available; write requests return the standard `503 MAINTENANCE` response with
+`Retry-After` set from `server.maintenance.self_healing.retry_interval` and
+`X-Maintenance-*` headers. Health JSON reports the safe failure category and
+self-healing attempt schedule. The server retries on the configured interval
+and clears maintenance mode when database and file-write checks recover. The
+operator status endpoint includes recovery diagnostics and fix guidance and
+requires the `server.token` as a Bearer token:
+
+```http
+GET https://x.scour.li/api/v1/status
+Authorization: Bearer <server.token>
+```
+
 ## Guest preferences
 
 Guest preferences are cookie based and need no API token. The API can read and

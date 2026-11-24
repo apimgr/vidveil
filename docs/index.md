@@ -9,9 +9,11 @@ Vidveil aggregates results from adult video sites without user accounts or serve
 ### Docker
 
 ```bash
+CONTAINER_NAME="vidveil-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)"
 docker run -d \
-  --name vidveil \
-  -p 64580:80 \
+  --rm \
+  --name "$CONTAINER_NAME" \
+  -p 172.17.0.1:64580:80 \
   -v ./volumes/config:/config:z \
   -v ./volumes/data:/data:z \
   ghcr.io/apimgr/vidveil:latest

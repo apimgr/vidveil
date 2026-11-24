@@ -2,7 +2,7 @@
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
-<!-- Rule summary checked against AI.md on 2026-11-14; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-24; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -30,7 +30,7 @@
 - Always prefer Incus (`images:debian/trixie`, full systemd) for integration testing; fall back to Docker (`casjaysdev/go:latest` build, `alpine:latest` run) when Incus unavailable
 - Always host-mount `GO_CACHE`/`GO_BUILD` cache dirs for Docker Go builds, and build via `make build` when a Makefile exists (output always `binaries/`)
 - Always include the required `docs/` files (`index.md`, `installation.md`, `configuration.md`, `api.md`, `security.md`, `integrations.md`, `development.md`, `requirements.txt`; `cli.md` if applicable) plus root `mkdocs.yml` and `.readthedocs.yaml`
-- Always support all 7 required languages identically across server and CLI binaries (single `src/common/i18n/locales/` embedded via `go:embed`)
+- Always support the same registry-defined locale set in server and CLI binaries: the seven base locales plus any complete locales added by translators, all embedded from the shared `src/common/i18n/locales/` via `go:embed`
 - Always meet WCAG 2.1 AA: 4.5:1 text contrast, full keyboard navigation, screen-reader support, visible focus indicators, 44×44px touch targets, skip links as first focusable elements
 - Always run all three Browser E2E tiers (SSR, no-JS browser, full browser) when the E2E suite runs, covering every IDEA.md feature and the universal checklist (full crawl, owner-token flows, docs pages, theme, responsive, i18n, forms/CSRF, error pages, static assets, zero console errors)
 
@@ -54,7 +54,7 @@
 
 **I18N translation key conventions:** every human-readable string (web, API errors, Swagger/GraphQL descriptions, email, server/CLI/agent CLI output, health page, cookie consent, privacy/terms) uses `t(r, key)` / `{{t .Lang key}}` — no hardcoded text anywhere, no exceptions. Dot-separated lowercase keys (`health.status.title`), `{variable}` interpolation, plurals nested under CLDR categories (`zero/one/two/few/many/other`). Single source of truth: `src/common/i18n/locales/{lang}.json`, embedded in ALL binaries via `go:embed` — server and CLI always support identical languages/keys. Missing key → fall back to `en`; unsupported language → silently fall back to `en` (never error). Language resolution: web `?lang=` (sets 1-year cookie) → `lang` cookie → `Accept-Language` header → `en`; CLI/server/agent `--lang` flag → config file `lang:` → `LANG`/`LC_ALL` env → `en`. Locale integrity and translation placeholders are validated by the i18n package tests run with `make test`, per AI.md PART 30.
 
-**Supported locales:** `en` (English, ltr, one/other), `es` (Spanish, ltr, one/other), `zh` (Chinese, ltr, other only), `fr` (French, ltr, one/other, 0="one"), `ar` (Arabic, **rtl**, zero/one/two/few/many/other), `de` (German, ltr, one/other), `ja` (Japanese, ltr, other only). Arabic requires `dir="rtl"` (from `meta.direction` in the locale file) and CSS logical properties (`margin-inline-start`, `text-align: start`, never physical `left`/`right`). Date/time/number/currency formatting via `golang.org/x/text`, locale-aware per language.
+**Supported locales:** The template requires at least six base locales (`en`, `es`, `fr`, `ar`, `de`, `it`). This project currently supports eight, including `zh` and `ja`; translators may add more complete locales. The registry defines the supported set, and server and CLI use the identical set. Derive counts and lists from the registry rather than treating eight as a fixed limit. Arabic requires `dir="rtl"` (from `meta.direction` in the locale file) and CSS logical properties (`margin-inline-start`, `text-align: start`, never physical `left`/`right`). Date/time/number/currency formatting via `golang.org/x/text`, locale-aware per language.
 
 **Accessibility (a11y) baseline:** WCAG 2.1 AA mandatory — 4.5:1 contrast for normal text (3:1 for large text/UI components/focus indicators), full keyboard navigation, NVDA/JAWS/VoiceOver screen-reader support, visible focus indicators, 44×44px minimum touch targets. Skip links (`#main-content`, `#navigation`) as the first two focusable elements on every page. ARIA: `role="status"`/`aria-live="polite"` for status, `role="alert"`/`aria-live="assertive"` for errors, `role="dialog"` + `aria-modal="true"` + focus trap for modals, landmark roles (`banner`/`navigation`/`main`/`complementary`/`contentinfo`), `aria-required`/`aria-describedby`/`aria-invalid` on form fields. Focus management: modal open → first focusable inside; modal close → trigger element; toast → do NOT move focus, use `aria-live` instead. `.sr-only` class for screen-reader-only text; never rely on color alone to convey meaning. Test with axe DevTools, WAVE, Lighthouse, a screen reader, and keyboard-only navigation; automated integration tests must verify skip links, alt text, label association, heading hierarchy, and landmarks.
 

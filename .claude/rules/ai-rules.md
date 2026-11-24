@@ -1,7 +1,7 @@
 # AI Assistant Rules (PART 0, 1)
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
-<!-- Rule summary checked against AI.md on 2026-11-14; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-24; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 

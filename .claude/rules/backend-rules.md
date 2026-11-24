@@ -2,7 +2,7 @@
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
-<!-- Rule summary checked against AI.md on 2026-11-14; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-24; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -23,7 +23,7 @@
 - Never accept a plaintext archive/backup password via CLI flag — interactive prompt only; never store the private PGP key unencrypted
 - Never use system Tor or a default Tor port (9050/9051) — the binary starts its own isolated Tor instance with `ControlPort 127.0.0.1:auto`
 - Never make the Tor hidden service configurable on/off — it is always enabled when the `tor` binary is found, no toggle
-- Never auto-enable I2P — it is opt-in only (`server.i2p.enabled: true`), unlike Tor; no provider is contacted and no port allocated unless explicitly enabled
+- Never assume I2P has one default across runtime environments — it is opt-in and off by default on bare metal/VMs, but on by default in containers; no provider is contacted and no port allocated when disabled
 - Never wrap the I2P eepsite backend listener in `go-proxyproto` — neither i2pd nor SAMv3 prepend a PROXY-protocol header, so it is a plain loopback listener, unlike the Tor backend
 
 ## CRITICAL - ALWAYS DO
@@ -154,9 +154,9 @@ All log FILES: raw ASCII, no ANSI/emoji/color/control chars, one event per line.
 - If Tor binary not found: log INFO, disable Tor features, continue without Tor (no hard failure).
 - `--status` includes Tor hidden-service state (Connected + .onion address) alongside node/cluster status.
 
-**PART 31.2 — I2P Eepsite (OPTIONAL, opt-in, default OFF):**
+**PART 31.2 — I2P Eepsite (OPTIONAL; off by default outside containers, on by default inside containers):**
 
-- Unlike Tor, I2P is never auto-enabled — the eepsite is created only when `server.i2p.enabled: true` (or `I2P_ENABLED=true`/`--i2p`) **and** a provider resolves; no port, no `tunnels.conf`, no SAM session otherwise.
+- Unlike Tor, I2P is opt-in and off by default on bare metal/VMs, but on by default in containers; the eepsite starts only when `server.i2p.enabled` resolves true and a provider is available. When disabled, no port, config, or SAM session is created.
 - I2P provides ONE capability: `.b32.i2p` eepsite hosting. It is never used for outbound anonymized requests (that's Tor's job), floodfill/relay, or SOCKS/HTTP client proxying.
 - Two provider models, resolved in order: **Model A (preferred)** — an `i2pd` binary is found → app spawns/owns a dedicated i2pd process, regenerates its `tunnels.conf` server-tunnel every startup (torrc-regeneration parallel); **Model B (fallback)** — no i2pd binary but a SAMv3 bridge is reachable (default `127.0.0.1:7656`) → app speaks raw SAMv3 over `net.Conn` (no new dependency), creates a `STREAM` session from a persisted destination key and issues `STREAM FORWARD` to the backend port. Neither available → log WARN, disable I2P, continue (not an error).
 - Eepsite backend is a **plain loopback listener** (`127.0.0.1:{i2p_backend_port}`) — no `go-proxyproto` wrapping, since neither i2pd nor SAM prepend a PROXY-protocol header (this differs from Tor).

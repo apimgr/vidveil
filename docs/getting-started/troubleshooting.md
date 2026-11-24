@@ -256,11 +256,13 @@ troubleshooting, see the [configuration guide](../configuration.md) and
 
 **Symptoms:** Container exits immediately
 
-**Check logs** (use the name assigned to the container; the compose service
-uses `vidveil-app`):
+**Check logs** by listing the disposable container name and passing the selected
+name to Docker. For a Compose deployment, use the `vidveil` service name:
 
 ```bash
-docker logs vidveil
+docker ps --filter 'name=^vidveil-' --format '{{.Names}}'
+docker logs <generated-container-name>
+docker compose logs vidveil
 ```
 
 **Common issues:**
@@ -273,7 +275,8 @@ docker logs vidveil
 
 2. **Port conflicts:**
    ```bash
-   docker run -p 64581:80 ghcr.io/apimgr/vidveil:latest
+   CONTAINER_NAME="vidveil-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)"
+   docker run --rm --name "$CONTAINER_NAME" -p 172.17.0.1:64581:80 ghcr.io/apimgr/vidveil:latest
    ```
 
 ### Data persistence
@@ -284,9 +287,11 @@ docker logs vidveil
 
 ```bash
 # Use volumes for persistence
+CONTAINER_NAME="vidveil-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)"
 docker run -d \
-  --name vidveil \
-  -p 64580:80 \
+  --rm \
+  --name "$CONTAINER_NAME" \
+  -p 172.17.0.1:64580:80 \
   -v ./volumes/config:/config:z \
   -v ./volumes/data:/data:z \
   ghcr.io/apimgr/vidveil:latest

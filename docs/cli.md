@@ -230,6 +230,32 @@ vidveil-cli probe --engines pornhub
 vidveil-cli probe --engines pornhub,xvideos --query "amateur"
 ```
 
+### health
+
+Check the configured server's public health endpoint.
+
+```bash
+vidveil-cli health
+```
+
+The command prints a short status line, or JSON when `--output json` is set.
+
+### favorites
+
+Manage favorites associated with an owner token. Listing and mutations require
+the token for the owner whose favorites should be accessed.
+
+```bash
+vidveil-cli favorites list
+vidveil-cli favorites add --url https://example.test/video --title "Example video" --source example
+vidveil-cli favorites remove 17
+vidveil-cli favorites clear --yes
+```
+
+`list` supports the global JSON, YAML, CSV, table, and plain output formats.
+`clear` requires `--yes` to confirm deletion of every favorite belonging to the
+configured token.
+
 ### login
 
 Save the server address and API token for future CLI use.
@@ -432,6 +458,8 @@ view for each command:
 - `bangs`: live filter input for shortcuts
 - `probe`: engine and query inputs with verbose capability and field details
 - `login`: server URL and masked token inputs, saved through the CLI config/token files
+
+Health and favorites commands are available in standard command mode.
 
 ### TUI Keyboard Shortcuts
 

@@ -75,6 +75,14 @@ These are the well-defined entry points clients can integrate against.
 - Spec served at `/api/v1/server/swagger`.
 - Swagger UI at `/server/docs/swagger`.
 
+The interactive documentation tools are self-hosted from pinned files under
+`src/server/static/vendor/`; page startup code is kept in separate local
+scripts. Swagger UI is version 5.36.0. GraphiQL is version 2.4.7 and uses
+React and ReactDOM 18.3.1. License texts are shipped beside the assets:
+Swagger UI's `LICENSE` and `NOTICE`, plus GraphiQL's `GRAPHIQL-LICENSE`,
+React's `LICENSE`, and ReactDOM's `REACT-DOM-LICENSE`. These assets are served
+locally and do not require the visitor's browser to contact a third-party CDN.
+
 ### MCP and AI-agent discovery
 
 - MCP Streamable HTTP is exposed at `/api/{api_version}/server/mcp`, `/api/mcp`,

@@ -32,6 +32,7 @@ internal IPs, query strings, or stack traces.
 | `GET https://x.scour.li/server/healthz`               | Health, version, build info, uptime.          |
 | `GET https://x.scour.li/api/v1/server/healthz`        | Same data, JSON by default; text is negotiable. |
 | `GET https://x.scour.li/.well-known/security.txt`     | Machine-readable security contact metadata.   |
+| `GET https://x.scour.li/.well-known/pgp-key.asc`       | Public reporting key, when configured.         |
 | `GET https://x.scour.li/server/security`               | Security contacts and reporting guidance.     |
 
 ## Operator Diagnostics
@@ -70,7 +71,8 @@ The public security overview is `/server/security`; it mirrors the current
 `/.well-known/security.txt` contacts and links to `/server/security/policy`,
 `/server/security/thanks`, the public key, and the machine-readable file.
 Researchers can open the coordinated-disclosure report form from
-`/server/security`. A one-shot emailed link opens
+`/server/security`; the form is served at `/server/contact?security_id=…` and
+requires the current rotating security ID. A one-shot emailed link opens
 `/server/security/report/{tracking_id}` to show report status without exposing
 the report body.
 

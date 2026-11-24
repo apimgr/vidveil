@@ -40,8 +40,10 @@ Favorites page. Use the favorites export/import controls for favorites.
 
 ## Owner tokens
 
-Manage owner tokens at `/server/preferences/tokens`. Restore the primary token
-when moving to another browser. Create a linked token for each automation or
+Manage owner tokens at `/server/preferences/tokens`. If this browser has no
+primary owner token, issue a new one from the page; the token is shown once, so
+save it securely. To recover an existing owner on another browser, restore its
+primary token instead. Create a linked token for each automation or
 MCP client so it can be revoked independently. The primary token is required
 for token management; do not use it as an automation credential. The page
 supports revealing and rotating the primary or linked tokens, renaming,

@@ -163,8 +163,9 @@ first saved favorite creates an owner token. Save the primary token securely to
 restore access on another browser at `/server/preferences/tokens`. Create a
 separate linked token for each API or MCP client; do not use the primary or
 operator token for automation. API clients send owner tokens as Bearer
-credentials. The token page supports restore, reveal, rotation, linked-token
-creation and management, and works without JavaScript. See the
+credentials. The token page can issue a new primary token when no primary
+cookie exists, restore an existing token, reveal or rotate tokens, and create
+and manage linked tokens. It works without JavaScript. See the
 [authentication guide](docs/api/authentication.md) and
 [token management guide](docs/user-guide/preferences.md#owner-tokens).
 
@@ -257,6 +258,8 @@ health state, and requires correcting the cause and restarting the service.
 | `https://x.scour.li/server/security` | Security contacts and reporting guidance |
 | `https://x.scour.li/server/security/policy` | Coordinated disclosure policy |
 | `https://x.scour.li/server/security/thanks` | Security researcher acknowledgments |
+| `https://x.scour.li/server/security/report/{tracking_id}` | One-time security report status |
+| `https://x.scour.li/server/healthz` | Public health page |
 | `https://x.scour.li/server/docs/swagger` | Swagger UI |
 | `https://x.scour.li/api/v1/server/swagger` | OpenAPI JSON (`/api/swagger` alias) |
 | `https://x.scour.li/api/v1/server/graphql` | GraphQL endpoint (`/api/graphql` alias) |
@@ -264,6 +267,9 @@ health state, and requires correcting the cause and restarting the service.
 | `https://x.scour.li/server/help/mcp` | MCP connection guide |
 | `https://x.scour.li/server/preferences/tokens` | Restore and manage owner tokens |
 | `https://x.scour.li/server/preferences/sync` | Export and import browser preferences |
+| `https://x.scour.li/server/preferences` | Configure visitor preferences |
+| `https://x.scour.li/server/contact` | Contact form and public contact details |
+| `https://x.scour.li/server/restore` | Restore a backup with operator authorization |
 | `https://x.scour.li/feed.xml` | Atom feed of privacy-filtered recent searches |
 | `https://x.scour.li/rss.xml` | RSS feed of privacy-filtered recent searches |
 | `https://x.scour.li/.well-known/llms.txt` | AI-agent discovery (`/llms.txt` alias) |

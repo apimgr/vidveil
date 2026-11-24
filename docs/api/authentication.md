@@ -40,9 +40,12 @@ secret operations; see the [CLI reference](../cli.md).
 
 ### Owner Token Management
 
-The browser token page is `/server/preferences/tokens`. It allows restoring an
-existing primary token on another browser and managing tokens when the primary
-owner cookie is valid. The owner-token management API is available under
+The browser token page is `/server/preferences/tokens`. A visitor without a
+valid primary owner cookie can create a new primary identity with
+`POST /server/preferences/token/create`; the server sets the owner cookie and
+shows the raw token once. Save it securely. To recover an existing owner on a
+new browser, restore its primary token. Token management is available when the
+primary owner cookie is valid. The owner-token management API is available under
 `/api/{api_version}/server/preferences/tokens`. Send the primary owner token
 as `Authorization: Bearer …` for list, create, reveal, rotate, update, and
 revoke operations. Linked tokens receive `403` on token-management routes.

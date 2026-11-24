@@ -19,7 +19,9 @@ docker run -d \
   ghcr.io/apimgr/vidveil:latest
 ```
 
-Open `http://localhost:64580`.
+Open `http://172.17.0.1:64580` from the host. If that address is not available
+in your environment, publish the container on an address reachable from your
+browser.
 
 ### Binary
 
@@ -49,14 +51,24 @@ See [Configuration](configuration.md) for details.
 - [Docker](getting-started/docker.md)
 - [Search Guide](user-guide/search.md)
 - [Preferences](user-guide/preferences.md)
+- [Translating](translating.md)
 - [REST API](api/rest.md)
+- [API overview](api.md)
 - [GraphQL](api/graphql.md)
+- [API authentication](api/authentication.md)
 - [CLI Reference](cli.md)
 - [Configuration](configuration.md)
 - [Security](security.md)
 - [Integrations](integrations.md)
 - [Administration](admin.md)
 - [Development](development.md)
+
+## Project Links
+
+- [Source repository](https://github.com/apimgr/vidveil)
+- [Official site](https://x.scour.li)
+- [OpenAPI documentation](https://x.scour.li/server/docs/swagger)
+- [GraphiQL explorer](https://x.scour.li/server/docs/graphql)
 
 ## License
 

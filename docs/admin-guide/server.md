@@ -18,8 +18,10 @@ instructions come from `server.pages.help.mcp`.
 The standard server pages are server-rendered at `/server/about`,
 `/server/privacy`, `/server/dpo`, `/server/help`, `/server/help/mcp`,
 `/server/terms`, `/server/security`, `/server/security/policy`,
-`/server/security/thanks`, `/server/security/report/{tracking_id}`, and
-`/server/healthz`. Interactive API references are at
+`/server/security/thanks`, `/server/security/report/{tracking_id}`,
+`/server/contact`, `/server/preferences`, `/server/preferences/tokens`,
+`/server/preferences/sync`, `/server/restore`, and `/server/healthz`.
+Interactive API references are at
 `/server/docs/swagger` and `/server/docs/graphql`. Their API routes and
 configuration are documented in the [REST API guide](../api/rest.md),
 [integrations guide](../integrations.md), and [configuration guide](../configuration.md).

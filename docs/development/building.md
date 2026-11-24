@@ -39,11 +39,12 @@ make docker
 ```
 
 `run_tests.sh` is the Docker-only basic tier and never selects Incus.
-`docker.sh` validates the compiled binary in Alpine. Run `incus.sh` explicitly
-for the full systemd and OpenRC service integration suite.
-The Docker image check waits up to the configured Tor bootstrap timeout. When
-the runner has no outbound network, it reports `SKIP: no outbound network`;
-set `REQUIRE_OVERLAY=1` to require Tor health instead.
+`docker.sh` validates the compiled binary in Alpine and checks Tor and I2P
+health in its application container. Run `incus.sh` explicitly for the full
+systemd and OpenRC service integration suite. When outbound network access is
+unavailable, overlay bootstrap checks report `SKIP: no outbound network`; set
+`REQUIRE_OVERLAY=1` to require both overlays to become healthy. The shipped
+image is checked after `make docker` and in CI.
 The Incus selector defaults to `all`; use `systemd` or `openrc` to run one
 init-system suite. Set `E2E_TEST_FILTER=TestName` before `e2e.sh` to run a
 matching browser test.

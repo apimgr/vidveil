@@ -19,7 +19,7 @@ assignees: []
 
 ## Use Case / Target User
 
-<!-- Who benefits from this? Self-hosters? Operators? CLI/API consumers?
+<!-- Who benefits from this? Private instance operators? CLI/API consumers?
      Tor users? Developers integrating against the API? -->
 
 ## Constraints / Non-Goals

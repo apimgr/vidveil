@@ -41,7 +41,7 @@ do not receive backports unless explicitly noted.
 
 ## Out of Scope
 
-- Vulnerabilities that require physical access to a self-hosted instance.
+- Vulnerabilities that require physical access to a privately operated instance.
 - Bugs in third-party dependencies — please report those upstream first; we
   will track them via Dependabot.
 - "Self-XSS" requiring the victim to paste attacker-controlled JavaScript into

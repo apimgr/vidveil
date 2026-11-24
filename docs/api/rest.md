@@ -139,7 +139,9 @@ available; write requests return the standard `503 MAINTENANCE` response with
 `Retry-After` set from `server.maintenance.self_healing.retry_interval` and
 `X-Maintenance-*` headers. Health JSON reports the safe failure category and
 self-healing attempt schedule. The server retries on the configured interval
-and clears maintenance mode when database and file-write checks recover. The
+and clears maintenance mode when database and file-write checks recover unless
+a positive `server.maintenance.self_healing.max_attempts` limit is reached. An
+exhausted state requires correcting the cause and restarting the service. The
 operator status endpoint includes recovery diagnostics and fix guidance and
 requires the `server.token` as a Bearer token:
 

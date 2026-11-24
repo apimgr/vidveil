@@ -11,9 +11,10 @@ talk to, plus the integration surfaces it exposes for clients.
 
 When the server detects a critical database or data-directory write failure,
 its API remains available for reads while writes return `503 MAINTENANCE`.
-The health endpoints report the public-safe recovery state and recommend a
-30-second retry interval; automatic recovery clears the state after the checks
-pass.
+Health endpoints report public-safe recovery state and the configured retry
+interval. A positive `server.maintenance.self_healing.max_attempts` limit can
+stop retries with an exhausted state; correct the cause and restart the service
+to resume recovery.
 
 ## What VidVeil Does **Not** Integrate With
 

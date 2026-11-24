@@ -100,8 +100,8 @@ server:
 
 `server.cors.allowed_origins` accepts `"*"` (the default), one or more exact
 HTTP(S) origins, or the single empty string (`[""]`) to disable CORS headers.
-When the list is empty, origins from `DOMAIN` and trusted reverse-proxy hosts
-are used; if none are available, the server falls back to `*`. Credentials are
+When the list is empty, origins from `DOMAIN` and trusted reverse-proxy origin
+values are used; if none are available, the server falls back to `*`. Credentials are
 enabled only for a specific origin, never with `*`. CORS preflight allows the
 documented API methods and authentication headers, and defaults to a 24-hour
 preflight cache.
@@ -880,8 +880,12 @@ engines:
 ```
 
 `server.maintenance.self_healing.retry_interval` controls the recovery retry
-schedule; `max_attempts: 0` means retries continue without a limit. Disk-pressure
-cleanup starts at `disk_threshold`, removes logs older than
+schedule. `max_attempts: 0` means retries continue without a limit; a positive
+value stops retries after that many failed recovery attempts and leaves the
+server in read-only maintenance mode. Health status reports self-healing as
+disabled and exhausted with no next attempt, and the audit log records
+`server.self_healing_exhausted`. After correcting the cause, restart the service
+to reset the attempt count and resume recovery. Disk-pressure cleanup starts at `disk_threshold`, removes logs older than
 `log_retention_days` and project temporary files older than 24 hours, then
 applies the configured `server.backup.retention` policy. Maintenance entry and
 recovery notifications are controlled independently by `notify.on_enter` and

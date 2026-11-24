@@ -111,7 +111,7 @@ explicitly noted in the release notes.
 
 ## Operator Checklist
 
-When self-hosting, follow this minimum baseline:
+When operating VidVeil, follow this minimum baseline:
 
 - Run behind HTTPS (Let's Encrypt or your own CA).
 - Configure `server.fqdn` to your real domain so emitted links match.

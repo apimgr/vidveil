@@ -118,6 +118,7 @@ vidveil-cli bangs
 Running `vidveil-cli` without a command opens the interactive TUI in a terminal.
 The optional GUI-enabled desktop client opens a native GUI when a local display
 is available; the default static client uses the TUI.
+On first launch, the GUI provides a native server setup and connection check.
 The current GUI does not expose its widget tree through operating-system
 screen-reader APIs. Use the CLI or TUI for screen-reader access.
 
@@ -238,6 +239,9 @@ The root `/healthz` alias is disabled by default.
 During automatic maintenance, operators can retrieve detailed recovery
 diagnostics from `/api/v1/status` with the configured `server.token` Bearer
 credential; public health responses omit raw diagnostic details.
+`server.maintenance.self_healing.max_attempts: 0` retries without a limit. A
+positive limit stops retries after that many failed checks, records an exhausted
+health state, and requires correcting the cause and restarting the service.
 
 ### Server Pages and API Documentation
 

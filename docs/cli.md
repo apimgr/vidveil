@@ -447,7 +447,8 @@ view for each command:
 | `?` | Show help |
 
 The native GUI uses the same command order and includes search, engine and bang
-lists, engine probing, and login screens. Its controls support Tab and
+lists, engine probing, login, and a first-run server setup screen with connection
+and optional token checks. Its controls support Tab and
 Shift+Tab focus navigation and Enter or Space activation. API errors open a
 focus-managed dialog; the TUI shows API error messages inline.
 The current GUI does not expose its widget tree through operating-system

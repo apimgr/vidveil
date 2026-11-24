@@ -91,7 +91,7 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-11-23
+- Last read AI.md: 2026-11-24
 - Current task: full repository alignment against AI.md, including server/client behavior, rendered pages, docs, tests, and deployment artifacts
-- Verified: `make test` passes (69.3% coverage, govulncheck reports no imported-code vulnerabilities); GUI-tagged tests, Staticcheck, and strict MkDocs build pass. Integration and browser E2E verification remain in progress.
+- Verified: `make test` and the documented Docker integration runner pass; the eight-platform server/CLI build, six GUI cross-compiles, Staticcheck, and strict MkDocs build pass. Incus and browser E2E scripts were refused by the required test-lint wrapper before execution; resolution is pending in the coordinating apimgr tab.
 - Relevant PARTs: 0–32

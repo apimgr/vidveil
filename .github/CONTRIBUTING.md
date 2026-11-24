@@ -29,7 +29,7 @@ VidVeil ships a Makefile for local development only. CI/CD never invokes the
 Makefile — it runs explicit commands in the provider workflows. The repository
 ships GitHub Actions (`.github/workflows/`), GitLab CI (`.gitlab-ci.yml`),
 Gitea Actions (`.gitea/workflows/`), Forgejo Actions (`.forgejo/workflows/`),
-and Jenkins (`Jenkinsfile`). Only the provider hosting a given mirror runs its
+and Jenkins (`Jenkinsfile`). Only the provider configured for a given mirror runs its
 workflows.
 
 | Command           | What it does                                                        |
@@ -55,7 +55,7 @@ To run integration tests:
 2. Keep commits small and focused — one logical change per commit.
 3. Open a pull request to `main`. The PR template will prompt you for the
    summary, motivation, test evidence, and security/privacy impact.
-4. The hosting provider's CI workflow must pass before merge. GitHub CI runs
+4. The configured git provider's CI workflow must pass before merge. GitHub CI runs
    lint, tests with coverage, build, vulnerability scanning, secret scanning,
    image scanning, and workflow policy checks; the Docker workflow builds and
    scans container images separately.

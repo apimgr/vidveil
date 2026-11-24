@@ -91,7 +91,7 @@ Purpose:
 
 ## Current Project State
 [AI updates this section as work progresses]
-- Last read AI.md: 2026-11-17
-- Current task: verify and repair all configured search engines, preference handling, preview fallbacks, and service paths against live data and the current specification
-- Verified: full `go test ./...` passes; `golangci-lint run ./...` passes with 0 issues
-- Relevant PARTs: 0, 1, 3, 5, 8, 10, 11, 14, 15, 16, 20, 23, 24, 28
+- Last read AI.md: 2026-11-23
+- Current task: full repository alignment against AI.md, including server/client behavior, rendered pages, docs, tests, and deployment artifacts
+- Verified: `make test` passes (69.3% coverage, govulncheck reports no imported-code vulnerabilities); GUI-tagged tests, Staticcheck, and strict MkDocs build pass. Integration and browser E2E verification remain in progress.
+- Relevant PARTs: 0–32

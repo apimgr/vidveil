@@ -26,7 +26,7 @@ make local  # Builds both server and CLI client
 ## Quick Start
 
 ```bash
-# Launch interactive TUI (first run shows setup wizard)
+# Launch the detected interactive interface (first run shows setup wizard)
 vidveil-cli
 
 # Quick search
@@ -42,10 +42,16 @@ The CLI automatically selects the appropriate interface:
 
 | Condition | Mode |
 |-----------|------|
-| Interactive terminal + no command | TUI (interactive) |
+| Local display + GUI-enabled build + no command | Native GUI |
+| Interactive terminal + no command (or GUI support not built) | TUI (interactive) |
 | Interactive terminal + command | CLI output |
 | Piped/redirected output | Plain text (no TUI) |
 | First run without server configured | Setup wizard |
+
+The default client is a static build without the `gui` build tag; it opens the
+TUI when launched in an interactive terminal. The optional desktop client is
+built with `-tags gui` for Linux, macOS, or Windows and depends on the platform
+graphics loader. BSD uses the TUI/CLI build.
 
 ## Global Flags
 
@@ -417,12 +423,15 @@ vidveil-cli search "!ph !xv !rt amateur"
 
 ## Interactive TUI Mode
 
-When launched without arguments in an interactive terminal, the CLI opens a full-screen TUI interface with:
+When launched without arguments in an interactive terminal, the CLI opens a
+full-screen TUI menu. It lists the CLI commands in help order and provides a
+view for each command:
 
-- Direct search execution
-- Result list navigation
-- Open-in-browser shortcuts
-- On-screen shortcuts help
+- `search`: query, page, result limit, and engine filters; result navigation and browser opening
+- `engines`: all/enabled/disabled filters and refresh
+- `bangs`: live filter input for shortcuts
+- `probe`: engine and query inputs with verbose capability and field details
+- `login`: server URL and masked token inputs, saved through the CLI config/token files
 
 ### TUI Keyboard Shortcuts
 
@@ -436,6 +445,13 @@ When launched without arguments in an interactive terminal, the CLI opens a full
 | `Esc` | Close help or clear current search |
 | `q` or `Ctrl+C` | Quit |
 | `?` | Show help |
+
+The native GUI uses the same command order and includes search, engine and bang
+lists, engine probing, and login screens. Its controls support Tab and
+Shift+Tab focus navigation and Enter or Space activation. API errors open a
+focus-managed dialog; the TUI shows API error messages inline.
+The current GUI does not expose its widget tree through operating-system
+screen-reader APIs; use the CLI or TUI for screen-reader access.
 
 ## Exit Codes
 

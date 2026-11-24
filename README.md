@@ -105,7 +105,7 @@ vidveil-cli --server https://x.scour.li --token YOUR_API_TOKEN
 # Show help
 vidveil-cli --help
 
-# Search (launches interactive TUI)
+# Search from the command line
 vidveil-cli search "query"
 
 # List engines
@@ -115,7 +115,11 @@ vidveil-cli engines
 vidveil-cli bangs
 ```
 
-The CLI automatically launches an interactive TUI (Terminal User Interface) with keyboard navigation, dark theme, and real-time updates.
+Running `vidveil-cli` without a command opens the interactive TUI in a terminal.
+The optional GUI-enabled desktop client opens a native GUI when a local display
+is available; the default static client uses the TUI.
+The current GUI does not expose its widget tree through operating-system
+screen-reader APIs. Use the CLI or TUI for screen-reader access.
 
 ---
 
@@ -231,6 +235,9 @@ GET https://x.scour.li/api/v1/server/healthz
 
 The canonical frontend health route is `https://x.scour.li/server/healthz`.
 The root `/healthz` alias is disabled by default.
+During automatic maintenance, operators can retrieve detailed recovery
+diagnostics from `/api/v1/status` with the configured `server.token` Bearer
+credential; public health responses omit raw diagnostic details.
 
 ### Server Pages and API Documentation
 
@@ -368,7 +375,7 @@ This software is provided "as is" without warranty of any kind. Use at your own 
 - **No Warranty**: The authors are not responsible for any damages, data loss, or issues arising from use of this software
 - **Legal Compliance**: This software is a search aggregator. Users are responsible for ensuring compliance with applicable laws and regulations in their jurisdiction
 - **Third-Party Services**: This software connects to external adult video sites; their terms of service and content policies apply separately
-- **Content**: VidVeil does not host, store, or distribute any content — it only indexes metadata from third-party sites
+- **Content**: VidVeil does not store or distribute content — it only indexes metadata from third-party sites
 - **Security**: While we strive to follow security best practices, no software is guaranteed to be free of vulnerabilities
 - **Production Use**: Evaluate thoroughly before deploying in production environments
 

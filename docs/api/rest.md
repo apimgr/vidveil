@@ -283,7 +283,7 @@ The public syndication endpoints are `GET` and `HEAD /feed.xml` (Atom 1.0) and
 `GET` and `HEAD /rss.xml` (RSS 2.0). Both expose the same bounded set of recent
 searches after privacy filtering. They include query text and timestamps only;
 queries matching the configured sensitive-data filters are omitted. The
-responses use absolute links for the request host, XML escaping, `ETag`,
+responses use absolute links for the requested domain, XML escaping, `ETag`,
 `Last-Modified`, and `Cache-Control: public, max-age=300`.
 
 ## Metrics

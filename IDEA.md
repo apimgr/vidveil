@@ -158,3 +158,7 @@ The service must limit the risk of correlating visitors with searches, leaking v
 - `DELETE /api/{api_version}/favorites/{id}`: Bearer owner token required; removes the identified favorite belonging to that owner.
 - `DELETE /api/{api_version}/favorites`: Bearer owner token required; clears the authenticated owner's favorites.
 - `POST /api/{api_version}/favorites/import`: Bearer owner token required; accepts an exported favorites array or an object containing a `favorites` array and imports valid entries for that owner.
+- `GET /api/{api_version}/status`: Operator Bearer token required; returns maintenance status, operator diagnostics, and recovery instructions.
+- `POST /api/{api_version}/server/reports/default`: No authentication; accepts browser default-error reports with per-IP rate limiting.
+- `POST /api/{api_version}/server/reports/nel`: No authentication; accepts Network Error Logging reports with per-IP rate limiting.
+- `POST /api/{api_version}/server/reports/csp`: No authentication; accepts Content Security Policy violation reports with per-IP rate limiting.

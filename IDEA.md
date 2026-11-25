@@ -139,3 +139,22 @@ The service must limit the risk of correlating visitors with searches, leaking v
 | AI-generated content is filtered by default | Visitors should not be shown such results unless they choose to enable them. |
 | Tor visitors are not geographically restricted by default | Their location cannot be reliably determined from the service's view; operators may configure a different policy where required. |
 | Search engines are configured for the service as a whole | Visitors may choose among the available engines, while operators control which sources the service contacts. |
+
+### API routes
+
+- `GET /api/{api_version}/search`: No authentication; searches the available video engines using the query, source, filter, sort, and pagination parameters; returns matching results, pagination data, and source status.
+- `POST /api/{api_version}/search/batch`: No authentication; accepts a batch of search requests and returns the corresponding search results and statuses.
+- `GET /api/{api_version}/bangs`: No authentication; returns available bang shortcuts.
+- `GET /api/{api_version}/bangs/autocomplete`: No authentication; accepts a partial bang query and returns matching shortcuts.
+- `GET /api/{api_version}/engines`: No authentication; returns registered engines and their search/media capability information.
+- `GET /api/{api_version}/engines/health`: No authentication; returns engine availability and health information.
+- `GET /api/{api_version}/engines/{name}`: No authentication; returns information and capabilities for the named engine.
+- `GET /api/{api_version}/stats`: No authentication; returns public aggregate service/search statistics.
+- `GET /api/{api_version}/version`: No authentication; returns the running service version information.
+- `GET /api/{api_version}/proxy/thumbnails`: No authentication; accepts a validated upstream thumbnail URL and returns the proxied image bytes.
+- `GET /api/{api_version}/proxy/videos`: No authentication; accepts a validated supported preview URL and returns proxied media when available.
+- `GET /api/{api_version}/favorites`: Bearer owner token required; returns the authenticated owner's private favorites.
+- `POST /api/{api_version}/favorites`: Bearer owner token when an owner already exists; accepts a favorite and returns the saved favorite, issuing a primary owner token once when creating a new anonymous owner.
+- `DELETE /api/{api_version}/favorites/{id}`: Bearer owner token required; removes the identified favorite belonging to that owner.
+- `DELETE /api/{api_version}/favorites`: Bearer owner token required; clears the authenticated owner's favorites.
+- `POST /api/{api_version}/favorites/import`: Bearer owner token required; accepts an exported favorites array or an object containing a `favorites` array and imports valid entries for that owner.

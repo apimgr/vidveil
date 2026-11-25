@@ -180,10 +180,10 @@ creating server-side preference records.
 ## MCP
 
 MCP is enabled by default and uses the same API handlers and Bearer
-authentication as REST. For owner-scoped tools, use a linked owner token
+authentication as REST. Every MCP request requires a valid token, including
+calls to public API tools. For owner-scoped tools, use a linked owner token
 created for that MCP client; never use the primary owner token or the operator
-token (`server.token`). Public tools work anonymously. The canonical route and
-both direct aliases accept Streamable HTTP
+token (`server.token`). The canonical route and both direct aliases accept Streamable HTTP
 JSON-RPC POST requests; GET and DELETE return 405.
 
 ```http
@@ -250,7 +250,6 @@ POST https://x.scour.li/api/v1/server/reports/csp
 GET  https://x.scour.li/api/v1/version
 GET  https://x.scour.li/api/autodiscover
 GET  https://x.scour.li/cli/binaries/{filename}
-POST https://x.scour.li/api/v1/server/restore
 ```
 
 The DPO endpoint always returns `200` with `name`, `email`, and an absolute
@@ -276,7 +275,8 @@ CAPTCHA is required for browser and API submissions. Browser forms include a
 single-use built-in challenge in their `<noscript>` fallback. Tor and I2P
 always use the built-in challenge. `GET /api/v1/server/auth/check` requires a Bearer token and
 returns its kind (`operator` or `owner`) without changing token usage metadata
-or echoing the token; without a token, skip the check. Restore requires the operator token. CLI
+or echoing the token; without a token, skip the check. Backup restore is CLI-only and
+requires the operator token or root access. CLI
 binary downloads are public unless `cli.binary_download.require_auth` is enabled. Browser security-report
 ingestion routes return `204` after recording a sanitized summary; they do not
 return submitted report bodies.

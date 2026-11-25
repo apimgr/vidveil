@@ -37,7 +37,7 @@ https://x.scour.li
 | **8 Languages** | English, Arabic, German, Spanish, French, Italian, Japanese, and Chinese |
 | **AI Integration** | OpenAPI-generated MCP tools and configurable `llms.txt` discovery |
 | **Content Restriction** | Geographic warnings/blocks for regions with adult content laws |
-| **Operator Management** | Configure through `server.yml`, area files, `secrets.yml`, and the CLI; the protected API supports backup restore |
+| **Operator Management** | Configure through `server.yml`, area files, `secrets.yml`, and the CLI; backup restore is performed with the maintenance CLI |
 | **Single Binary** | No external dependencies, embedded assets |
 | **Docker Ready** | Alpine-based container with tini |
 
@@ -262,14 +262,13 @@ health state, and requires correcting the cause and restarting the service.
 | `https://x.scour.li/server/healthz` | Public health page |
 | `https://x.scour.li/server/docs/swagger` | Swagger UI |
 | `https://x.scour.li/api/v1/server/swagger` | OpenAPI JSON (`/api/swagger` alias) |
-| `https://x.scour.li/api/v1/server/graphql` | GraphQL endpoint (`/api/graphql` alias) |
+| `https://x.scour.li/api/v1/server/graphql` | GraphQL endpoint (POST and query-only GET; POST alias at `/api/graphql`) |
 | `https://x.scour.li/server/docs/graphql` | GraphiQL playground |
 | `https://x.scour.li/server/help/mcp` | MCP connection guide |
 | `https://x.scour.li/server/preferences/tokens` | Restore and manage owner tokens |
 | `https://x.scour.li/server/preferences/sync` | Export and import browser preferences |
 | `https://x.scour.li/server/preferences` | Configure visitor preferences |
 | `https://x.scour.li/server/contact` | Contact form and public contact details |
-| `https://x.scour.li/server/restore` | Restore a backup with operator authorization |
 | `https://x.scour.li/feed.xml` | Atom feed of privacy-filtered recent searches |
 | `https://x.scour.li/rss.xml` | RSS feed of privacy-filtered recent searches |
 | `https://x.scour.li/.well-known/llms.txt` | AI-agent discovery (`/llms.txt` alias) |

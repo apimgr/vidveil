@@ -66,7 +66,21 @@ These are the well-defined entry points clients can integrate against.
 
 ### GraphQL
 
-- POST `/api/v1/server/graphql` (also `/api/graphql` alias).
+- POST `/api/v1/server/graphql` (also `/api/graphql` alias); the versioned route
+  also accepts query-only GET requests with `query`, `variables`, and
+  `operationName` parameters.
+- Read queries cover search, engine discovery/status, server information,
+  preferences, preference synchronization/token reads, and owner-scoped
+  favorites. Favorites and token queries retain their REST bearer-token scopes;
+  cookie-backed preference queries use the incoming request cookies.
+- The read-only `POST /api/v1/search/batch` operation is exposed as the
+  `searchBatch` query. `openAPI` returns the served, runtime-filtered OpenAPI
+  document. Security overview, policy, and acknowledgments reads mirror their
+  unauthenticated versioned REST endpoints.
+- Query results that mirror structured REST endpoints expose the exact REST
+  JSON response body in `JSONResult.json`. Binary media streams and
+  machine-only routes are excluded; the binary route-parity conflict is
+  recorded in the project-level `TODO.API.md`.
 - GraphiQL UI at `/server/docs/graphql`.
 - See [`api/graphql.md`](api/graphql.md).
 
@@ -86,11 +100,12 @@ locally and do not require the visitor's browser to contact a third-party CDN.
 ### MCP and AI-agent discovery
 
 - MCP Streamable HTTP is exposed at `/api/{api_version}/server/mcp`, `/api/mcp`,
-  and `/mcp`. Public tools allow anonymous access; use a linked owner token
-  for owner-scoped tools. Never use the primary owner token or `server.token`
-  for an MCP client. MCP is always enabled.
-- `/server/help/mcp` explains how to connect and lists the live anonymous tool
-  set; `/api/{api_version}/server/help/mcp` returns its JSON metadata.
+  and `/mcp`. Every request requires a valid API Bearer token, including calls
+  to public API tools. Use a separately linked owner token for each MCP client.
+  Use the operator token only when that client needs operator-only tools; never
+  give an MCP client the primary owner token. MCP is always enabled.
+- `/server/help/mcp` explains how to connect and lists public API operations;
+  `/api/{api_version}/server/help/mcp` returns its JSON metadata.
 - The generated endpoint guide is available at `/.well-known/llms.txt` and
   `/llms.txt`. See [configuration](configuration.md) for settings.
 

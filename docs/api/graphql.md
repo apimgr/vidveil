@@ -10,7 +10,7 @@ have matching query fields. The read-only `POST /api/v1/search/batch` route is
 available as a GraphQL query. Binary media streams, machine-only checks, and
 PART 20's internal metrics endpoints remain outside the GraphQL surface.
 Mutating routes, including contact submissions and preference import, remain
-REST-only. The Binary parity contradiction is tracked in `TODO.API.md`.
+REST-only.
 
 GraphiQL interface: `https://x.scour.li/server/docs/graphql`
 

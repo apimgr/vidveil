@@ -89,8 +89,9 @@ These are the well-defined entry points clients can integrate against.
 - Swagger UI at `/server/docs/swagger`.
 
 The interactive documentation tools are self-hosted from pinned files under
-`src/server/static/vendor/`; project startup code is part of the shared
-`src/server/static/js/app.js` bundle. Swagger UI is version 5.36.0. GraphiQL is version 2.4.7 and uses
+`src/server/static/vendor/`; their small startup scripts are the documented
+`src/server/static/js/docs-{tool}.js` exception to the shared application
+bundle. Swagger UI is version 5.36.0. GraphiQL is version 2.4.7 and uses
 React and ReactDOM 18.3.1. License texts are shipped beside the assets:
 Swagger UI's `LICENSE` and `NOTICE`, plus GraphiQL's `GRAPHIQL-LICENSE`,
 React's `LICENSE`, and ReactDOM's `REACT-DOM-LICENSE`. These assets are served

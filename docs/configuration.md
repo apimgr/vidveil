@@ -3,9 +3,11 @@
 Vidveil uses `server.yml` for runtime configuration. Optional `yaml.d/*.yml`
 and `yaml.d/*.yaml` files beside it split larger configurations into
 byte-wise filename order. Maps merge recursively; later scalar and list values
-replace earlier values. Environment variables and CLI flags take precedence.
-The server watches both the main file and the drop-in directory, and backs up
-the directory when present. Secret-bearing files must use mode `0600`; writable
+replace earlier values. Only environment variables explicitly documented by the
+AI.md startup contract are read; environment variables do not provide generic
+config-key overrides. First-run initialization variables are saved to config and
+ignored on later starts. The server watches both the main file and the drop-in
+directory, and backs up the directory when present. Secret-bearing files must use mode `0600`; writable
 drop-ins are refused.
 
 ## Config File Locations
@@ -64,7 +66,7 @@ server:
     cookie_max_age: 1y
     idle_purge_days: 0
 web:
-  api_contact: api@example.org
+  api_contact: ""
   llms:
     enabled: true
     include_endpoints: true
@@ -82,7 +84,7 @@ favorites and no token use during that period. Owners with favorites are
 retained. The default value `0` disables purging.
 `server.pages.help.mcp` is VidVeil-specific Markdown appended to the base guide
 at `/server/help/mcp`; it defaults to the project guidance above and can be
-edited in `server.yml`.
+edited in `yaml.d/pages.yml`.
 
 ## Minimal Example
 
@@ -252,20 +254,23 @@ challenge.
 | `PORT` | Initial listen port (default: random `64xxx`, `80` in containers) |
 | `CACHE_DIR` | Override cache directory (default: `/var/cache/apimgr/vidveil` when root, else `~/.cache/apimgr/vidveil`) |
 | `BACKUP_DIR` | Override backup directory (default: `/mnt/Backups/apimgr/vidveil` when root, else `~/.local/share/Backups/apimgr/vidveil`) |
-| `DATABASE_DIR` | Override SQLite database directory (default: `<data-dir>/db`); always overrides `server.database.sqlite.dir` in the config file |
+| `DATABASE_DIR` | Select the SQLite database directory (default: `<data-dir>/db`) |
 | `SSL_DIR` | Override TLS certificate directory (default: `/etc/apimgr/vidveil/ssl` when root, else `~/.config/apimgr/vidveil/ssl`) |
 | `SECURITY_DIR` | Override secret/key material directory (default: `/var/lib/apimgr/vidveil/security` when root, else `~/.local/share/apimgr/vidveil/security`) |
 | `PID_FILE` | Override the pid file location (default: `/var/run/apimgr/vidveil.pid` when root, else `~/.local/share/apimgr/vidveil/vidveil.pid`) |
-| `VIDVEIL_PORT` | Listen port; wins over `PORT` and the config file (port chain: `--port` > `VIDVEIL_PORT` > `PORT` > config > random) |
 | `BASEURL` | Serve under a URL path prefix (e.g. `/app`); ignored when unset or `/` |
 | `DOMAIN` | Force the server FQDN used to build absolute URLs (highest priority) |
 | `HOSTNAME` | Fallback FQDN when `DOMAIN` is unset; also the node id for distributed cache locks |
 | `TZ` | Time zone for scheduler timestamps (any IANA zone, e.g. `America/New_York`) |
-| `CACHE_URL` | External cache connection string; sets `server.cache.url` and promotes the cache type from `memory` to `valkey` so it is actually used. Ignored when `VIDVEIL_SERVER_CACHE_URL` or `VIDVEIL_CACHE_URL` is set |
-| `I2P_ENABLED` | Set the I2P eepsite state; project-prefixed `VIDVEIL_SERVER_I2P_ENABLED` and `VIDVEIL_I2P_ENABLED` take precedence over this variable and config defaults |
+| `APPLICATION_NAME` | First-run application title; saved to `yaml.d/branding.yml` and ignored after initialization |
+| `APPLICATION_TAGLINE` | First-run application description; saved to `yaml.d/branding.yml` and ignored after initialization |
+| `DATABASE_DRIVER` | First-run database driver when `DATABASE_URL` is unset (`sqlite` or `libsql`) |
+| `DATABASE_URL` | First-run database connection string; scheme selects the driver, saved to config (credential-bearing URLs go in `secrets.yml`) and ignored after initialization |
+| `CACHE_URL` | First-run cache connection string (`valkey://` or `redis://`); saved to config (credential-bearing URLs go in `secrets.yml`) and ignored after initialization |
+| `I2P_ENABLED` | Set the I2P eepsite state, subject to the documented CLI and configuration precedence |
 
 SMTP environment variables override the corresponding email settings when
-non-empty:
+non-empty, as explicitly documented by the startup contract:
 
 | Variable | Description |
 |---|---|
@@ -290,21 +295,15 @@ Read by the CLI rather than the server configuration tree:
 |---|---|
 | `VIDVEIL_LANG` | Language tag sent as the `Accept-Language` request header (set by the `--lang` flag). Invalid or empty values send no header, letting the server use its default locale |
 
-### Config-file overrides
+### Environment configuration scope
 
-Any key in `server.yml` can be overridden with an environment variable named
-`VIDVEIL_{SECTION}_{KEY}` (uppercase, `_`-joined path). Keys under the `server`
-section also accept the shorter `VIDVEIL_{KEY}` form. Examples:
-
-| Variable | Overrides |
-|---|---|
-| `VIDVEIL_DATABASE_TYPE` | `database.type` |
-| `VIDVEIL_SESSION_SECRET` | `session.sessionSecret` |
-| `VIDVEIL_SMTP_HOST` | `smtp.host` |
-| `VIDVEIL_SERVER_CACHE_TYPE` | `server.cache.type` |
-| `VIDVEIL_SERVER_CACHE_URL` | `server.cache.url` |
-
-Environment overrides win over the config file but lose to explicit CLI flags.
+The server reads only the named environment variables listed above and in its
+startup contract. There is no generic `VIDVEIL_{SECTION}_{KEY}` mapping.
+`DATABASE_DRIVER`, `DATABASE_URL`, `CACHE_URL`, `APPLICATION_NAME`, and
+`APPLICATION_TAGLINE` seed a fresh installation once; later starts use the
+persisted configuration. `I2P_ENABLED` and the runtime path, network, and SMTP
+variables retain their documented runtime behavior. CLI flags take precedence
+where the startup contract defines them.
 
 ## Complete `server.yml` defaults
 

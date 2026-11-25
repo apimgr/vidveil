@@ -30,6 +30,9 @@ language, and valid app preferences. Copy either value to the other browser
 and open the URL or paste the value into the import field. The import form
 works without JavaScript, and the server does not store the exported values.
 Cookie consent, CCPA choices, build stamps, and credentials are not included.
+Preference imports are ignored with `consent_required` until the visitor accepts
+the Preferences cookie category. Accept that category, then reopen the import
+URL to apply the shared settings.
 
 ## Search history and favorites
 

@@ -256,21 +256,24 @@ The DPO endpoint always returns `200` with `name`, `email`, and an absolute
 `privacy_url` built from the request's resolved base URL and `/server/privacy`.
 An empty DPO email falls back to `server.contact.general.email`; if neither is
 configured, `email` is an empty string. The HTML page is available at
-`/server/dpo` and always links to the root-relative privacy page and contact
-form.
+`/server/dpo` and links to the privacy page and `/server/security` for contact
+options.
 
 The three public security JSON endpoints mirror the overview, disclosure policy,
 and researcher acknowledgments. The token-bearing
 `/server/security/report/{tracking_id}` page has no API mirror.
 
-`GET /api/v1/server/contact` describes the public form, including field limits,
-the CAPTCHA challenge and public security/abuse contacts; it never returns
-recipient addresses. With a valid `security_id` query parameter it describes
-the coordinated-disclosure fields instead. `POST` accepts `name` (100 characters), `email` (254),
-`subject` (200), `message` (5000), and a CAPTCHA response. With `simple`
-(default), send the one-use `captcha_id` and `captcha_answer` returned by the
-GET response; with `recaptcha` or `hcaptcha`, send the corresponding
-`g-recaptcha-response` or `h-captcha-response` from the provider widget. The
+`GET /api/v1/server/contact` describes the public form, including the fields,
+`form_token`, CAPTCHA challenge, and public security/abuse contacts; it never
+returns recipient addresses. With a valid `security_id` query parameter it
+describes the coordinated-disclosure fields instead. Submit the form in two
+`POST` calls. The first sends the `type`, `form_token`, all fields required for
+that type, and exactly one CAPTCHA proof. It returns a review and a
+`review_token` but does not deliver the report. The second repeats the same
+fields and CAPTCHA proof, adds `review_token` and `confirmed: true`, and then
+delivers the report. Do not send the honeypot `website` field. With `simple`
+(default), send `captcha_id` and `captcha_answer`; with `recaptcha` or
+`hcaptcha`, send `captcha_response` containing the provider response. The
 CAPTCHA is required for browser and API submissions. Browser forms include a
 single-use built-in challenge in their `<noscript>` fallback. Tor and I2P
 always use the built-in challenge. `GET /api/v1/server/auth/check` requires a Bearer token and

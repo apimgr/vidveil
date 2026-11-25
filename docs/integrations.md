@@ -79,8 +79,7 @@ These are the well-defined entry points clients can integrate against.
   unauthenticated versioned REST endpoints.
 - Query results that mirror structured REST endpoints expose the exact REST
   JSON response body in `JSONResult.json`. Binary media streams and
-  machine-only routes are excluded; the binary route-parity conflict is
-  recorded in the project-level `TODO.API.md`.
+  machine-only routes are excluded.
 - GraphiQL UI at `/server/docs/graphql`.
 - See [`api/graphql.md`](api/graphql.md).
 
@@ -90,8 +89,8 @@ These are the well-defined entry points clients can integrate against.
 - Swagger UI at `/server/docs/swagger`.
 
 The interactive documentation tools are self-hosted from pinned files under
-`src/server/static/vendor/`; page startup code is kept in separate local
-scripts. Swagger UI is version 5.36.0. GraphiQL is version 2.4.7 and uses
+`src/server/static/vendor/`; project startup code is part of the shared
+`src/server/static/js/app.js` bundle. Swagger UI is version 5.36.0. GraphiQL is version 2.4.7 and uses
 React and ReactDOM 18.3.1. License texts are shipped beside the assets:
 Swagger UI's `LICENSE` and `NOTICE`, plus GraphiQL's `GRAPHIQL-LICENSE`,
 React's `LICENSE`, and ReactDOM's `REACT-DOM-LICENSE`. These assets are served

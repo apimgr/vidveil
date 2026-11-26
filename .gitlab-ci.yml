@@ -8,6 +8,7 @@ stages:
 
 variables:
   PROJECT_NAME: "vidveil"
+  INTERNAL_NAME: "vidveil"
   PROJECT_ORG: "apimgr"
   CGO_ENABLED: "0"
   GOOS: "linux"
@@ -214,9 +215,15 @@ test:
     - GOOS=linux GOARCH=amd64 go generate ./src/swagger
     - git diff --exit-code -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
   script:
-    - go test -buildvcs=false -cover -coverprofile=coverage.out ./...
     - |
-      PCT="$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$3); print int($3)}')"
+      set -eu
+      mkdir -p "/tmp/${CI_PROJECT_NAMESPACE}"
+      COVDIR=$(mktemp -d "/tmp/${CI_PROJECT_NAMESPACE}/${INTERNAL_NAME}-XXXXXX")
+      trap 'rm -rf "$COVDIR"' EXIT
+      mkdir -p "$COVDIR/data"
+      go test -buildvcs=false -cover ./... -args -test.gocoverdir="$COVDIR/data"
+      go tool covdata textfmt -i="$COVDIR/data" -o="$COVDIR/coverage.out"
+      PCT="$(go tool cover -func="$COVDIR/coverage.out" | awk '/^total:/ {gsub("%","",$3); print int($3)}')"
       if [ "${PCT}" -lt 60 ]; then
         echo "coverage ${PCT}% is below 60% threshold"
         exit 1

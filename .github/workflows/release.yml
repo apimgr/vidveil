@@ -15,6 +15,7 @@ permissions:
 
 env:
   PROJECT_NAME: vidveil
+  INTERNAL_NAME: vidveil
 
 jobs:
   build:

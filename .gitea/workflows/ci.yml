@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
 
+env:
+  PROJECT_NAME: vidveil
+  INTERNAL_NAME: vidveil
+
 concurrency:
   group: ${{ gitea.workflow }}-${{ gitea.ref }}
   cancel-in-progress: true
@@ -91,9 +95,11 @@ jobs:
       - name: Run tests with coverage
         run: |
           mkdir -p "/tmp/${{ gitea.repository_owner }}"
-          COVDIR=$(mktemp -d "/tmp/${{ gitea.repository_owner }}/$(basename "${{ gitea.repository }}")-XXXXXX")
+          COVDIR=$(mktemp -d "/tmp/${{ gitea.repository_owner }}/${{ env.INTERNAL_NAME }}-XXXXXX")
           echo "COVDIR=$COVDIR" >> "$GITEA_ENV"
-          go test -cover -coverprofile="$COVDIR/coverage.out" ./...
+          mkdir -p "$COVDIR/data"
+          go test -cover ./... -args -test.gocoverdir="$COVDIR/data"
+          go tool covdata textfmt -i="$COVDIR/data" -o="$COVDIR/coverage.out"
       - name: Enforce coverage threshold
         run: |
           THRESHOLD=60

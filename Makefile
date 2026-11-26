@@ -253,7 +253,9 @@ test:
 	@COVDIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECT_ORG)/$(INTERNAL_NAME)-XXXXXX") && \
 	trap 'rm -rf "$$COVDIR"' EXIT && \
 	$(GO_DOCKER_RUN) -v "$$COVDIR:/coverage" casjaysdev/go:latest sh -c 'set -eu; go mod download; go generate ./src/swagger; go vet ./...; govulncheck ./...; \
-		go test -coverprofile=/coverage/coverage.out ./...; \
+		mkdir -p /coverage/data; \
+		go test -cover ./... -args -test.gocoverdir=/coverage/data; \
+		go tool covdata textfmt -i=/coverage/data -o=/coverage/coverage.out; \
 		COVERAGE=$$(go tool cover -func=/coverage/coverage.out | awk '\''/^total:/ {gsub("%", "", $$3); print $$3}'\''); \
 		awk -v coverage="$$COVERAGE" '\''BEGIN { if (coverage < 60) { printf "coverage %.1f%% is below the 60%% minimum\\n", coverage; exit 1 } }'\''; \
 		printf "Coverage: %s%%\\n" "$$COVERAGE"'

@@ -18,6 +18,7 @@ permissions:
 
 env:
   PROJECT_NAME: vidveil
+  INTERNAL_NAME: vidveil
 
 jobs:
   # Compute VERSION once — matrix legs must never each compute their own value.

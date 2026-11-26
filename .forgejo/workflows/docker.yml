@@ -17,6 +17,7 @@ concurrency:
 
 env:
   PROJECT_NAME: vidveil
+  INTERNAL_NAME: vidveil
   # Registry auto-detected from Gitea instance (works with self-hosted)
   # Format: {gitea-server}/owner/repo -> extracts server for registry
   IMAGE_NAME: ${{ forgejo.repository }}

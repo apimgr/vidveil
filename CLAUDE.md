@@ -87,11 +87,6 @@ Purpose:
 - Project structure: `.claude/rules/project-rules.md` (PART 2, 3, 4)
 - Frontend/WebUI: `.claude/rules/frontend-rules.md` (PART 16)
 - All 13 rule files: `.claude/rules/`
-- Full spec: `AI.md` (~49k lines) ← **SOURCE OF TRUTH**
+- Full spec: `AI.md` (53k+ lines) ← **SOURCE OF TRUTH**
 
-## Current Project State
-[AI updates this section as work progresses]
-- Last read AI.md: 2026-11-24
-- Current task: full repository alignment against AI.md, including server/client behavior, rendered pages, docs, tests, and deployment artifacts
-- Verified: `make test` and the documented Docker integration runner pass; the eight-platform server/CLI build, six GUI cross-compiles, Staticcheck, and strict MkDocs build pass. Incus and browser E2E scripts were refused by the required test-lint wrapper before execution; resolution is pending in the coordinating apimgr tab.
-- Relevant PARTs: 0–32
+Progress is tracked in `TODO.AI.md` and `PLAN.AI.md`, not in this loader.

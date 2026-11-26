@@ -83,6 +83,7 @@ There are no conventional user accounts. Possession of an owner's valid token id
 - **Search:** A visitor's search-history list is stored in that visitor's browser, not on the server as per-visitor history. Search terms that pass the required privacy filters may appear as query text and timestamps in bounded public Atom and RSS feeds. Queries and results are otherwise transient service data.
 - **Favorite:** A visitor-owned saved result can include its source link, title, thumbnail, source, and creation time. Favorites are private to their anonymous owner and persist until that owner removes them or the service data is removed.
 - **Owner token:** A credential grants access to one anonymous owner's private resources. Primary and linked tokens have distinct management roles; tokens are sensitive and must not be exposed in public output.
+- **System ownership:** VidVeil currently has no system-owned product resources: search results are transient and favorites belong to anonymous visitor owners. The database reserves the `system` owner for future server-managed resources; it has no owner token and is excluded from idle-owner deletion.
 - **Visitor preference:** Appearance, language, and search preferences belong to the visitor's browser and are not tied to a named account.
 - **Operational and compliance information:** Service configuration, security events, backups, certificates, and network identity data may be sensitive. Their handling and retention follow AI.md.
 

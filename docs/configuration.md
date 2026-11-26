@@ -440,6 +440,9 @@ server:
       healthcheck_self:
         schedule: '@every 5m'
         enabled: true
+      keyserver_retry:
+        schedule: '@every 15m'
+        enabled: true
       dataset_health_refresh:
         schedule: '@every 1m'
         enabled: true
@@ -804,7 +807,8 @@ web:
     contact: security@1b3383a9067e
     expires: ""
     pgp_key_url: ""
-    keyservers: []
+    keyservers:
+      - keys.openpgp.org
     publish_pgp_key: false
     report_url: ""
     disclosure_window_days: 90

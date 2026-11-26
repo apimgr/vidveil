@@ -1,7 +1,7 @@
 # CI/CD Rules (PART 27)
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
-<!-- Rule summary checked against AI.md on 2026-11-24; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-26; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -21,11 +21,11 @@
 
 ## CRITICAL - ALWAYS DO
 
-- Always include `ci.yml` and `release.yml` on every project (required); `beta.yml`, `devel.yml`, `docker.yml` are project-specific optional
+- Always include `ci.yml` and `release.yml` on every project (required); include beta/devel/docker workflows when the project supports those release and image channels
 - Always run every CI job inside `container: image: casjaysdev/go:latest`
 - Always set `VERSION`, `COMMIT_ID`, `BUILD_EPOCH` (and derived `BUILD_DATE`) explicitly via a "Set build info" step (never as static `env:`)
 - Always build all 8 platforms in matrix (linux/darwin/windows/freebsd × amd64/arm64)
-- Always use workflow concurrency to auto-cancel older in-progress runs for branch pushes to `main`/`master`/`devel`/`dev`/`beta`
+- Always use workflow concurrency to auto-cancel older in-progress runs for pushes to the default `main` branch; the only long-lived branch is `main`
 - Always use workflow concurrency per exact tag ref for tag-only release workflows (never cancels a different tag)
 - Always pin third-party actions to full commit SHA with a trailing `# vX.Y.Z` comment
 - Always run secret scanning (truffleHog), a `workflow-policy` SHA-pin check, `vuln-scan` (govulncheck), and `image-scan` (Trivy, if `docker/Dockerfile` exists) on every public repo as part of `ci.yml`
@@ -50,15 +50,15 @@
 |------|---------|---------|
 | `ci.yml` | Push/PR to default branch + weekly cron (`0 6 * * 1`) for security jobs | Build + test + lint + coverage + secret-scan + workflow-policy + vuln-scan + image-scan |
 | `release.yml` | Tag push (`v*`, `*.*.*`) | Production releases (SBOM, attestation, dual checksums) |
-| `beta.yml` | Push to `beta` branch | Beta releases (optional), dedicated `version` job |
-| `devel.yml` | Daily 3am UTC + push to main/master | Rolling devel release (optional), version = short commit hash, dedicated `version` job |
-| `docker.yml` | Any push (all branches) + version tags + daily 4am UTC cron | Docker images (optional); `build-standard` (skips schedule) + `build-devel` (runs on schedule too) |
+| `beta.yml` | Push of `*-beta` tag | Beta releases, dedicated `version` job |
+| `devel.yml` | Daily 3am UTC + push to main | Rolling devel release, version = short commit hash, dedicated `version` job |
+| `docker.yml` | Push to main, version tags, `*-beta` tags + daily 4am UTC cron | Docker images; `build-standard` + `build-devel` |
 
 `ci.yml` and `release.yml` are required on every project. `beta.yml`/`devel.yml`/`docker.yml` included only when the project needs them.
 
 **Build info variables** — set in a dedicated step, not static `env:`:
 ```
-VERSION      release.txt > ${GITHUB_REF_NAME#v} (release) > timestamp+suffix (beta/dev) > git rev-parse --short=7 HEAD (devel — the commit being built, never a timestamp)
+VERSION      pushed tag for release/beta; short commit id for devel. CI never reads release.txt
 COMMIT_ID    git rev-parse --short HEAD
 BUILD_EPOCH  date -u +%s
 BUILD_DATE   derived from BUILD_EPOCH — Docker OCI labels ONLY, never ldflags
@@ -71,7 +71,7 @@ Used in `LDFLAGS="-s -w -X 'main.Version=...' -X 'main.CommitID=...' -X 'main.Bu
 | Workflow type | Group key | Cancel condition |
 |----------------|-----------|-------------------|
 | Branch push (`beta.yml`, `devel.yml`, `docker.yml`, `ci.yml`) | `${{ github.workflow }}-${{ github.ref }}` | Cancel older run for same ref only |
-| `devel.yml`/`docker.yml` scheduled | same group key | `cancel-in-progress` conditional, scoped to `main`/`master`/`devel`/`dev`/`beta` branches |
+| `devel.yml`/`docker.yml` scheduled | same group key | `cancel-in-progress` conditional, scoped to `main` branch runs |
 | Tag release (`release.yml`) | `release-${{ github.ref }}` | Cancel older run for exact same tag only — never cross-tag |
 
 **`ci.yml` jobs:** `lint` (go vet + staticcheck), `test` (coverage, threshold 60%), `build` (needs lint+test). Security jobs `secret-scan` (truffleHog, explicit range-determination step, never `default_branch`), `workflow-policy` (greps all workflow files for `uses:` lines missing a full 40-char SHA pin, fails on any match), `vuln-scan` (govulncheck), `image-scan` (Trivy, conditional on `docker/Dockerfile` existing) — all four also run on the weekly cron; add `if: github.event_name != 'schedule'` to skip non-security jobs on scheduled runs.
@@ -95,7 +95,7 @@ Pin to full 40-char commit SHA + trailing version comment, e.g. `uses: actions/c
 
 | Image | Job | Dockerfile | Base | Trigger | Tag policy |
 |-------|-----|-----------|------|---------|-----------|
-| Standard | `build-standard` (skips `schedule` events) | `docker/Dockerfile` | alpine | every non-tag push, version tags | `{commit_id}` (any push); `beta` (beta branch push); `{version}`, `latest`, `YYMM` (version tag) |
+| Standard | `build-standard` (skips `schedule` events) | `docker/Dockerfile` | alpine | push to main, version tags, `*-beta` tags | `{commit_id}` (main); `beta` (`*-beta` tag); `{version}`, `latest`, `YYMM` (version tag) |
 | Development | `build-devel` | `docker/Dockerfile.dev` | alpine | every push + daily 4am UTC cron (keeps `:devel` fresh with no new commits needed) | `:devel` only (single static tag), MODE=devel baked in via Dockerfile.dev `ENV`, debug tooling added |
 
 Registry: `ghcr.io` (GitHub) / auto-detected from server URL (Gitea/Forgejo). Platforms: `linux/amd64,linux/arm64` via buildx. Every image build sets both full OCI `labels:` (image-level) AND `manifest:`-prefixed `annotations:` (manifest-level) — vendor, authors, title, base.name, description, licenses=MIT, version (standard only), created, revision, url, source, documentation — inlined directly in the build step, not via a separate metadata-action.

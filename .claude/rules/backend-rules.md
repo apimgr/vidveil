@@ -2,7 +2,7 @@
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
-<!-- Rule summary checked against AI.md on 2026-11-24; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-26; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -89,7 +89,7 @@
 
 **Auth rules:** constant-time comparison (`crypto/subtle.ConstantTimeCompare`) for all token/password/HMAC/signature checks; identical error messages and timing (≥100ms floor) regardless of failure cause; opaque UUID v4/v7 resource IDs only, never sequential.
 
-**Owner API tokens:** store `SHA-256(token)` for validation and an AES-256-GCM encrypted copy (`token_enc`, keyed by `server.security.encryption_key`) for owner reveal. Owner and linked tokens are masked by default, never logged or returned by list/detail endpoints, and revealed only through an audited, no-store action. The operator token remains in `server.yml`, is validated by hash, and is never revealed by the server. Token-management routes must never be exposed as MCP tools.
+**Owner API tokens:** store `SHA-256(token)` for validation and an AES-256-GCM encrypted copy (`token_enc`, keyed by `server.security.encryption_key`) for owner reveal. Owner and linked tokens are masked by default, never logged or returned by list/detail endpoints, and revealed only through an audited, no-store action. The operator token is stored in `secrets.yml`, is validated by hash, and is never revealed by the server. Token-management routes must never be exposed as MCP tools.
 
 **Cryptographic keys** (all stored server-side, never logged/returned, always in backups):
 | Secret | Length | Storage | Rotation |

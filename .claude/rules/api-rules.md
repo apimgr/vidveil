@@ -2,7 +2,7 @@
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
-<!-- Rule summary checked against AI.md on 2026-11-24; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-26; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -68,7 +68,7 @@ Body is always bare (no `{ok,data}` envelope) at every content type — the one 
 
 `restart_required` carries `pending_restart: true` + `restart_reason` (e.g. listen address/port/DB driver changed in `server.yml`).
 
-**Versioning (SemVer):** MAJOR = breaking API/config/DB schema; MINOR = new backward-compatible features; PATCH = bug fixes/security/docs. Start at `1.0.0`, never `0.x.x`. Pre-release: `1.0.0-rc1`. Git tags: `v1.0.0`. Version sources priority: `release.txt` → git tag → `dev`.
+**Versioning (SemVer):** MAJOR = breaking API/config/DB schema; MINOR = new backward-compatible features; PATCH = bug fixes/security/docs. Start at `1.0.0`, never `0.x.x`. Pre-release: `1.0.0-rc1`. Git tags: `v1.0.0`. CI takes the pushed release/beta/devel ref; local Makefile builds use `VERSION` environment override, then non-empty `release.txt`, then the devel fallback.
 
 **Version formats:** Stable `MAJOR.MINOR.PATCH`; Beta `YYYYMMDDHHMMSS-beta`; Devel = short commit hash (`git rev-parse --short=7 HEAD`) — never `release.txt` or a timestamp, for the rolling `devel` release.
 

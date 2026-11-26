@@ -1,7 +1,7 @@
 # AI Assistant Rules (PART 0, 1)
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
-<!-- Rule summary checked against AI.md on 2026-11-24; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-26; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -79,7 +79,7 @@
 
 **Naming conventions:** files `lowercase_snake.go`; packages `lowercase`; public `PascalCase`; private `camelCase`; interfaces `PascalCase`+`-er`. Exceptions: ID, URL, API, HTTP, HTML, JSON, SQL, CSS, JS stay uppercase.
 
-**File-only configuration:** `server.yml` is the only config source, no admin web UI/runtime mutation API, hot-reload on save (except listen address/port/DB driver which need restart + warning).
+**File-only configuration:** `server.yml`, ordered `yaml.d/` area files, and `secrets.yml` are the config sources; there is no admin web UI or runtime config mutation API. Credentials stay in `secrets.yml`; watched files hot-reload, while listener/driver changes require restart.
 
 **Container-only development:** `make dev` (quick build to tempdir), `make local` (binaries/ with version), `make build` (full cross-platform), `make test` (unit tests via Docker); `./tests/incus.sh` for full OS integration tests.
 

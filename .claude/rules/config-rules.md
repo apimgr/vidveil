@@ -2,14 +2,14 @@
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
-<!-- Rule summary checked against AI.md on 2026-11-24; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-26; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
 - Never write inline YAML comments — all comments go ABOVE the setting (exception: GitHub Actions SHA-pin `# vX.Y.Z` annotations)
 - Never use `strconv.ParseBool()` directly — always `config.ParseBool()` / `config.IsTruthy()` (accepts yes/no, on/off, oui/non, si/non, etc.)
 - Never fail startup on invalid config — warn and replace with default
-- Never store user accounts or operator-editable configuration in the database — `server.yml` is the sole config source of truth; database only holds resource state, owner tokens, audit log
+- Never store user accounts or operator-editable configuration in the database — configuration is `server.yml` plus ordered `yaml.d/` area files and `secrets.yml`; the database only holds resource state, owner tokens, and audit log
 - Never bypass `server.token`/root authorization for sensitive ops (`--maintenance setup/restore/mode/pgp/secret rotate`) — file/directory ownership is NOT authorization
 - Never let `--debug`/`DEBUG=true` disable authentication or security checks — debug affects verbosity/diagnostics ONLY, in every mode including production
 - Never let `MODE=debug`/`--mode debug` be implied or auto-enabled — it is explicit opt-in only; it defaults the debug flag on, but an explicit `--debug`/`DEBUG` still wins (`MODE=debug DEBUG=false` = debug mode with `/debug/*` off)
@@ -25,7 +25,7 @@
 
 ## CRITICAL - ALWAYS DO
 
-- Always normalize and validate every path (config, HTTP request, file, API param) via `SafePath()`/`normalizePath()`/`validatePath()` — reject `..`, uppercase, invalid chars, >2048 chars, segments >64 chars
+- Always use the path validator for that input: `SafePath()` for lowercase identifiers, `SafeResourcePath()` for case-sensitive file/resource names, `SafeDirPath()` for filesystem directory flags, and request-path middleware for traversal/encoding; then enforce the base directory with `SafeFilePath()`
 - Always run `PathSecurityMiddleware` at execution position #3 (after URL normalize + RequestID, before auth/routing) — see 10-step middleware order
 - Always self-heal on critical errors (DB connection failure, file write failure) — retry with backoff (default 30s, configurable), enter maintenance mode (read-only + 503 for writes), auto-recover when resolved
 - Always treat only 2 error classes as critical: database connection errors and file write errors — everything else is recoverable

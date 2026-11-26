@@ -2,11 +2,11 @@
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
-<!-- Rule summary checked against AI.md on 2026-11-24; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-26; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
-- Never add Makefile targets beyond the six core ones: `dev`, `local`, `build`, `test`, `release`, `docker`
+- Never add Makefile targets beyond the seven core ones: `dev`, `local`, `build`, `test`, `release`, `beta`, `docker`; `clean` and `release-check` are helpers
 - Never run `go` directly on the host — every target shells out through Docker (`casjaysdev/go:latest`)
 - Never hardcode `PROJECT_NAME`/`PROJECT_ORG` in the Makefile — infer from `git remote get-url origin`, fallback to directory path
 - Never add a `v` prefix to a non-numeric version tag (`dev`, `beta`, `devel`, timestamps, commit ids) — `v` prefix ONLY for numeric semver (`1.2.3` → `v1.2.3`)
@@ -21,16 +21,16 @@
 
 - Always embed `BuildEpoch` (Unix timestamp), `Version`, `CommitID`, `OfficialSite` via `-ldflags -X` at build time — `BuildDate` is derived at runtime from `BuildEpoch`, never embedded directly as its own ldflag
 - Always use `CGO_ENABLED=0` and `GOFLAGS=-buildvcs=false` for all Go Docker builds (mounted `.git` UID mismatch otherwise fails with exit 128)
-- Never add a cleanup target or delete build/release output as a side effect of `build` or `local`
+- `build` and `local` run the explicit `clean` helper first; `clean` removes generated build/release output only
 - Always output `dev` builds to `${TMPDIR:-/tmp}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX/` (isolated, random) — never to `binaries/`
 - Always strip binaries (`strip`) before copying into `releases/` during `make release`
-- Always prefer `release.txt` (if present) as version source of truth over `VERSION` env var over `devel` fallback
+- Always use `VERSION` environment override first, then non-empty `release.txt`, then the devel fallback; AI never sets `VERSION`
 - Always generate both `sha256.txt` and `sha512.txt` checksum files alongside every release artifact set
 - Always use `./tests/incus.sh` (preferred, full OS/systemd) or `./tests/run_tests.sh` (auto-detect) for integration testing after `make dev`/`make local`
 
 ## Key Rules Summary
 
-**Six targets:**
+**Seven targets:**
 | Target | Purpose | Output | Notes |
 |--------|---------|--------|-------|
 | `dev` | quick dev build | `${TMPDIR}/${PROJECT_ORG}/${PROJECT_NAME}-XXXXXX/` | local platform only, no ldflags |
@@ -38,13 +38,16 @@
 | `build` | full release build | `binaries/` | all 8 platforms |
 | `test` | unit tests | coverage report | 60% minimum gate |
 | `release` | manual local release | `releases/` | strips binaries, source tar.gz + checksums, `gh release create` |
+| `beta` | tag current main commit | remote beta tag | pushes `YYYYMMDDHHMMSS-beta`; CI publishes the beta |
 | `docker` | build+push container | `$REGISTRY` | `docker buildx`, multi-arch, `--push`, `DOCKER_MEM ?= 4g`, `DOCKER_CPUS ?= 2` |
+
+`clean` and `release-check` are helper targets; they are not additional build channels.
 
 **Build matrix (8 platforms):** linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64, windows/arm64, freebsd/amd64, freebsd/arm64.
 
 **Binary naming:** server `{project_name}[-{os}-{arch}][.exe]` → for vidveil: `vidveil`, `vidveil-linux-amd64`, `vidveil-windows-amd64.exe`, etc. CLI (if `src/client/` exists): `vidveil-cli-{os}-{arch}`.
 
-**Version precedence:** 1) `release.txt` file (wins if present) 2) `VERSION` env var 3) `devel` fallback.
+**Version precedence:** 1) `VERSION` environment override (AI never sets it) 2) non-empty `release.txt` 3) devel fallback (short commit id in Git, `devel` outside Git).
 
 **Version tag `v` prefix rule:**
 | Input | Add `v`? | Result |
@@ -63,7 +66,7 @@
 | Type | Trigger | Version format | v prefix | Max releases |
 |------|---------|-----------------|----------|---------------|
 | Stable | tag push `v*`/`*.*.*` | `X.Y.Z` | YES | unlimited |
-| Beta | push to `beta` branch | `{YYYYMMDDHHMMSS}-beta` | NO | unlimited |
+| Beta | `make beta` pushes `YYYYMMDDHHMMSS-beta` tag from clean `main` | `{YYYYMMDDHHMMSS}-beta` | NO | unlimited |
 | Devel | 3am UTC schedule + push to main | short commit id (`git rev-parse --short=7 HEAD`) | NO | **1** (single rolling tag `devel`, replaces previous) |
 
 Devel identity is the commit being built, not `release.txt` and not a timestamp — this differs from beta, which still uses a UTC timestamp version.

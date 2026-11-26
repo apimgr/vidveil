@@ -1,11 +1,11 @@
 # Project Rules (PART 2, 3, 4)
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
-<!-- Rule summary checked against AI.md on 2026-11-24; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-26; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
-- Never use GPL/AGPL/LGPL licensed dependencies — MIT-only compatibility (MIT, Apache 2.0, BSD, ISC, Public Domain are OK)
+- Never use GPL/AGPL/LGPL licensed dependencies — MIT-compatible licenses are allowed, including unmodified MPL 2.0 dependencies
 - Never use `github.com/mattn/go-sqlite3` (CGO) — use `modernc.org/sqlite` (pure Go)
 - Never use `github.com/lib/pq`, `github.com/ooni/go-libtor`, `github.com/dgrijalva/jwt-go`, `github.com/gorilla/mux`, `github.com/go-redis/redis` (old path) — see forbidden table below
 - Never use any library requiring CGO — all libraries must work with `CGO_ENABLED=0`
@@ -33,7 +33,7 @@
 
 ## Key Rules Summary
 
-**License:** MIT only. `LICENSE.md` required. Docker license metadata via `--annotation "org.opencontainers.image.licenses=MIT"` at buildx time (no Dockerfile LABEL). README badge: `[![License](https://img.shields.io/github/license/{project_org}/{project_name})](LICENSE.md)`. Compatibility matrix: MIT project may depend on MIT/Apache-2.0/BSD/ISC/Public-Domain; never GPL/AGPL/LGPL.
+**License:** MIT only. `LICENSE.md` required. Docker license metadata via `--annotation "org.opencontainers.image.licenses=MIT"` at buildx time (no Dockerfile LABEL). README badge: `[![License](https://img.shields.io/github/license/{project_org}/{project_name})](LICENSE.md)`. MIT-compatible dependencies include MIT/Apache-2.0/BSD/ISC/MPL-2.0 (unmodified)/Public-Domain; never GPL/AGPL/LGPL.
 
 **Variable placeholders:** `{project_name}` (lowercase, may change on rename), `{PROJECT_NAME}` (env/Makefile uppercase), `{project_org}` (lowercase), `{internal_name}` and `{internal_org}` (lowercase, both frozen after the project ships; ordinary project/org renames change only `project_name`/`project_org`), `{plist_name}` = `io.github.{internal_org}.{internal_name}`. This project: `project_name=vidveil`, `project_org=apimgr`, `internal_name=vidveil`, `internal_org=apimgr`, `official_site=https://x.scour.li`.
 

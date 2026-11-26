@@ -88,7 +88,7 @@ edited in `yaml.d/pages.yml`.
 `server.pages.help.content` supplies the Markdown shown at `/server/help` and
 returned by `GET /api/{api_version}/server/help`. Set one scalar for shared
 content, or a language map; the server selects the exact request language,
-then `default`, then the first configured language in YAML order.
+then `default`, then the built-in help content.
 
 ```yaml
 server:

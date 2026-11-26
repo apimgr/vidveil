@@ -2886,8 +2886,9 @@ type HealthzHTMLData struct {
 	LanguageName string
 
 	// Nav template compatibility
-	ActiveNav string
-	Query     string
+	ActiveNav       string
+	Query           string
+	HideThemeToggle bool
 
 	// Shared partial compatibility (head.tmpl / footer.tmpl per AI.md PART 16) —
 	// these are flat top-level fields the shared head/footer partials read
@@ -4895,6 +4896,10 @@ func (h *SearchHandler) InternalErrorHandler(w http.ResponseWriter, r *http.Requ
 
 func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, name string, data map[string]interface{}) {
 	r = withOperatorConfig(r, h.appConfig)
+	if data == nil {
+		data = make(map[string]interface{})
+	}
+	data["HideThemeToggle"] = name == "preferences"
 	// Ensure required fields for nav.tmpl
 	if data["ActiveNav"] == nil {
 		data["ActiveNav"] = name

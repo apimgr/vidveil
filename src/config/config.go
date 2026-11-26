@@ -105,27 +105,73 @@ type BrandingPageContent struct {
 type LocalizedContentBody struct {
 	Text   string            `yaml:"-"`
 	Values map[string]string `yaml:"-"`
+	Order  []string          `yaml:"-"`
 }
 
 func (body *LocalizedContentBody) UnmarshalYAML(node *yaml.Node) error {
 	if node.Kind == yaml.ScalarNode {
 		body.Text = node.Value
 		body.Values = nil
+		body.Order = nil
 		return nil
 	}
 	if node.Kind != yaml.MappingNode {
 		return fmt.Errorf("content body must be text or a language map")
 	}
 	values := make(map[string]string, len(node.Content)/2)
+	order := make([]string, 0, len(node.Content)/2)
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		if node.Content[i+1].Kind != yaml.ScalarNode {
 			return fmt.Errorf("content body language values must be text")
 		}
 		values[node.Content[i].Value] = node.Content[i+1].Value
+		order = append(order, node.Content[i].Value)
 	}
 	body.Text = ""
 	body.Values = values
+	body.Order = order
 	return nil
+}
+
+func (body LocalizedContentBody) MarshalYAML() (any, error) {
+	if len(body.Values) == 0 {
+		return body.Text, nil
+	}
+	order := append([]string(nil), body.Order...)
+	if len(order) == 0 {
+		for key := range body.Values {
+			order = append(order, key)
+		}
+		sort.Strings(order)
+	}
+	node := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	for _, key := range order {
+		value, ok := body.Values[key]
+		if !ok {
+			continue
+		}
+		node.Content = append(node.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value},
+		)
+	}
+	return node, nil
+}
+
+func (body LocalizedContentBody) ResolveWithFallback(language, fallback string) string {
+	if len(body.Values) == 0 {
+		if body.Text != "" {
+			return body.Text
+		}
+		return fallback
+	}
+	if value := body.Values[language]; value != "" {
+		return value
+	}
+	if value := body.Values["default"]; value != "" {
+		return value
+	}
+	return fallback
 }
 
 func (body LocalizedContentBody) Resolve(language string) string {
@@ -313,9 +359,12 @@ type ContactAntispamConfig struct {
 }
 
 type ServerHelpPagesConfig struct {
-	Content string `yaml:"content"`
-	MCP     string `yaml:"mcp"`
+	Content LocalizedContentBody `yaml:"content"`
+	MCP     string               `yaml:"mcp"`
 }
+
+// DefaultHelpContent is the built-in fallback for server help localization.
+const DefaultHelpContent = "VidVeil searches across configured video engines. Search with a phrase, use bang shortcuts such as `!ph`, and manage saved engines and display options under `/server/preferences`."
 
 const vidveilMCPHelp = "VidVeil searches across 27 registered video engines by default and streams results as they respond. Use `searchVideos` for a phrase, optionally with a bang such as `!ph` to target Pornhub; use `listEngines` to inspect engine availability, `listBangs` to discover shortcuts, and `autocompleteBangs` to find matching shortcuts or suggestions. For example: search for ocean sunsets with `!ph`, then compare the returned titles and source engines. Favorites are private owner resources; use a linked token for automation and never share a primary or operator token."
 
@@ -1157,8 +1206,9 @@ type CVEConfig struct {
 
 // BackupConfig holds backup settings per AI.md PART 21
 type BackupConfig struct {
-	Retention  BackupRetentionConfig  `yaml:"retention"`
-	Encryption BackupEncryptionConfig `yaml:"encryption"`
+	Retention          BackupRetentionConfig  `yaml:"retention"`
+	Encryption         BackupEncryptionConfig `yaml:"encryption"`
+	EncryptionPassword string                 `yaml:"encryption_password,omitempty" json:"-"`
 }
 
 // MaintenanceConfig controls automatic recovery and disk-pressure cleanup.
@@ -1899,7 +1949,7 @@ func DefaultAppConfig() *AppConfig {
 					},
 				},
 				Help: ServerHelpPagesConfig{
-					Content: "VidVeil searches across configured video engines. Search with a phrase, use bang shortcuts such as `!ph`, and manage saved engines and display options under `/server/preferences`.",
+					Content: LocalizedContentBody{Text: DefaultHelpContent},
 					MCP:     vidveilMCPHelp,
 				},
 			},

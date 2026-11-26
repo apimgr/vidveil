@@ -9,8 +9,12 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	cryptoRand "crypto/rand"
 	"crypto/sha256"
+	"database/sql"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -27,12 +31,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
 	projectpath "github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server/service/logging"
+	"github.com/apimgr/vidveil/src/server/service/pgp"
 	"golang.org/x/crypto/argon2"
+	_ "modernc.org/sqlite"
 )
 
 var maintenanceOperationMu sync.Mutex
@@ -131,7 +138,12 @@ func (m *MaintenanceManager) audit(event, result string, details map[string]inte
 // BackupOptions configures backup behavior per AI.md PART 21
 type BackupOptions struct {
 	// Filename is output filename (auto-generated if empty)
-	Filename string
+	Filename   string
+	Type       string
+	SnapshotAt time.Time
+	BaseBackup string
+	BaseSHA256 string
+	BaseFiles  map[string]BackupFile
 	// Password is encryption password (empty = no encryption)
 	Password string
 	// IncludeSSL determines if SSL certificates are included
@@ -157,14 +169,42 @@ type BackupOptions struct {
 
 // BackupManifest contains backup metadata per AI.md PART 21
 type BackupManifest struct {
-	Version          string   `json:"version"`
-	CreatedAt        string   `json:"created_at"`
-	CreatedBy        string   `json:"created_by"`
-	AppVersion       string   `json:"app_version"`
-	Contents         []string `json:"contents"`
-	Encrypted        bool     `json:"encrypted"`
-	EncryptionMethod string   `json:"encryption_method,omitempty"`
-	Checksum         string   `json:"checksum"`
+	Version          string       `json:"version"`
+	CreatedAt        string       `json:"created_at"`
+	CreatedBy        string       `json:"created_by"`
+	AppVersion       string       `json:"app_version"`
+	Contents         []string     `json:"contents"`
+	Encrypted        bool         `json:"encrypted"`
+	EncryptionMethod string       `json:"encryption_method,omitempty"`
+	Type             string       `json:"type"`
+	SnapshotAt       string       `json:"snapshot_at"`
+	Files            []BackupFile `json:"files"`
+	SHA256           string       `json:"sha256"`
+	BaseBackup       string       `json:"base_backup,omitempty"`
+	BaseSHA256       string       `json:"base_sha256,omitempty"`
+	Deleted          []string     `json:"deleted,omitempty"`
+}
+
+// BackupFile records content metadata for one regular archive entry.
+type BackupFile struct {
+	Path   string `json:"path"`
+	Size   int64  `json:"size"`
+	MTime  int64  `json:"mtime"`
+	SHA256 string `json:"sha256"`
+}
+
+type backupSnapshot struct {
+	database  string
+	temporary string
+}
+
+// BackupTestResult reports the independent checks performed by the operator backup test.
+type BackupTestResult struct {
+	Filename           string
+	ChecksumVerified   bool
+	ManifestVerified   bool
+	DatabaseVerified   bool
+	PGPKeypairVerified bool
 }
 
 // NewMaintenanceManager creates a new maintenance manager
@@ -189,21 +229,111 @@ func (m *MaintenanceManager) Backup(backupFile string) error {
 // BackupIncremental creates an hourly incremental backup per AI.md PART 21.
 // Always writes to a fixed filename so only one file is kept (replaced each hour).
 func (m *MaintenanceManager) BackupIncremental(backupFile string) error {
+	return m.BackupIncrementalWithPassword(backupFile, "")
+}
+
+func (m *MaintenanceManager) BackupIncrementalWithPassword(backupFile, password string) error {
 	return m.withMaintenanceOperation(func() error {
-		return m.backupIncremental(backupFile)
+		return m.backupIncremental(backupFile, password)
 	})
 }
 
-func (m *MaintenanceManager) backupIncremental(backupFile string) error {
+func (m *MaintenanceManager) backupIncremental(backupFile, password string) error {
+	defaultFilename := backupFile == ""
 	if backupFile == "" {
-		// Fixed filename per PART 21: vidveil-hourly.tar.gz — always 1 file
-		backupFile = filepath.Join(m.paths.Backup, "vidveil-hourly.tar.gz")
+		// Fixed filename per PART 21: only the newest hourly incremental is kept.
+		ext := ".tar.gz"
+		if password != "" {
+			ext += ".enc"
+		}
+		backupFile = filepath.Join(m.paths.Backup, "vidveil-hourly"+ext)
 	}
-	return m.backupWithOptions(BackupOptions{
+	options := BackupOptions{
 		Filename:    backupFile,
+		Password:    password,
 		IncludeData: true,
 		MaxBackups:  1,
-	}, false)
+		Type:        "incremental",
+		SnapshotAt:  time.Now().UTC(),
+	}
+	baseInfo, baseManifest, err := m.latestFullManifest(password)
+	if err != nil {
+		return fmt.Errorf("hourly incremental requires a valid full backup: %w", err)
+	}
+	options.BaseBackup = baseInfo.Filename
+	options.BaseSHA256 = baseManifest.SHA256
+	options.BaseFiles = make(map[string]BackupFile, len(baseManifest.Files))
+	for _, file := range baseManifest.Files {
+		options.BaseFiles[file.Path] = file
+	}
+	if err := m.backupWithOptions(options, false); err != nil {
+		return err
+	}
+	if defaultFilename {
+		return removeStaleIncrementalExtension(backupFile, password)
+	}
+	return nil
+}
+
+func removeStaleIncrementalExtension(currentFile, password string) error {
+	staleFile := strings.TrimSuffix(currentFile, ".enc")
+	if password == "" {
+		staleFile = currentFile + ".enc"
+	}
+	if err := os.Remove(staleFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove stale incremental %q: %w", staleFile, err)
+	}
+	return nil
+}
+
+func (m *MaintenanceManager) snapshotDatabase() (*backupSnapshot, error) {
+	source := filepath.Join(m.paths.Data, "db", "server.db")
+	info, err := os.Lstat(source)
+	if os.IsNotExist(err) {
+		return &backupSnapshot{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("database path is not a regular file")
+	}
+	tempBase := filepath.Join(os.TempDir(), projectpath.ProjectOrg)
+	if err := os.MkdirAll(tempBase, 0755); err != nil {
+		return nil, err
+	}
+	temporary, err := os.MkdirTemp(tempBase, projectpath.ProjectName+"-backup-")
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(temporary, 0700); err != nil {
+		_ = os.RemoveAll(temporary)
+		return nil, err
+	}
+	databasePath := filepath.Join(temporary, "server.db")
+	db, err := sql.Open("sqlite", source+"?_busy_timeout=5000")
+	if err != nil {
+		_ = os.RemoveAll(temporary)
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	statement := "VACUUM INTO '" + strings.ReplaceAll(databasePath, "'", "''") + "'"
+	_, execErr := db.ExecContext(ctx, statement)
+	closeErr := db.Close()
+	if execErr != nil || closeErr != nil {
+		_ = os.RemoveAll(temporary)
+		return nil, errors.Join(execErr, closeErr)
+	}
+	if err := os.Chmod(databasePath, 0600); err != nil {
+		_ = os.RemoveAll(temporary)
+		return nil, err
+	}
+	if err := os.Chtimes(databasePath, info.ModTime(), info.ModTime()); err != nil {
+		_ = os.RemoveAll(temporary)
+		return nil, err
+	}
+	return &backupSnapshot{database: databasePath, temporary: temporary}, nil
 }
 
 // BackupDailyFull creates the scheduled backup_daily run per AI.md PART 21
@@ -219,49 +349,328 @@ func (m *MaintenanceManager) BackupDailyFull(opts BackupOptions) error {
 	})
 }
 
-func (m *MaintenanceManager) backupDailyFull(opts BackupOptions) error {
+func (m *MaintenanceManager) backupDailyFull(opts BackupOptions) (retErr error) {
+	snapshot := time.Now().UTC()
+	if opts.SnapshotAt.IsZero() {
+		opts.SnapshotAt = snapshot
+	}
+	dbSnapshot, err := m.snapshotDatabase()
+	if err != nil {
+		return fmt.Errorf("snapshot backup database: %w", err)
+	}
+	if dbSnapshot.temporary != "" {
+		defer func() {
+			if err := os.RemoveAll(dbSnapshot.temporary); err != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("remove backup database snapshot: %w", err))
+			}
+		}()
+	}
 	ext := ".tar.gz"
 	if opts.Password != "" {
 		ext = ".tar.gz.enc"
 	}
 
-	// Step 3-4: full backup, retention-controlled, date-only filename per PART 21.
+	// Step 3-4: write changes against the previous full before creating today's full.
 	fullOpts := opts
+	fullOpts.Type = "full"
+	fullOpts.SnapshotAt = snapshot
 	if fullOpts.Filename == "" {
-		dateStr := time.Now().Format("2006-01-02")
-		fullOpts.Filename = filepath.Join(m.paths.Backup, fmt.Sprintf("vidveil_backup_%s%s", dateStr, ext))
+		dateStr := snapshot.Format("2006-01-02")
+		dateName := filepath.Join(m.paths.Backup, fmt.Sprintf("vidveil_backup_%s%s", dateStr, ext))
+		fullOpts.Filename = dateName
+		if _, err := os.Stat(dateName); err == nil {
+			stamp := snapshot.Format("2006-01-02_150405")
+			fullOpts.Filename = filepath.Join(m.paths.Backup, fmt.Sprintf("vidveil_backup_%s%s", stamp, ext))
+			for suffix := 2; ; suffix++ {
+				if _, err := os.Stat(fullOpts.Filename); os.IsNotExist(err) {
+					break
+				}
+				fullOpts.Filename = filepath.Join(m.paths.Backup, fmt.Sprintf("vidveil_backup_%s_%d%s", stamp, suffix, ext))
+			}
+		}
 	}
-	if err := m.backupWithOptions(fullOpts, false); err != nil {
+	baseInfo, baseManifest, baseErr := m.latestFullManifest(opts.Password)
+	if baseErr == nil {
+		// Daily incremental is cumulative against the previous full, never chained.
+		dailyOpts := opts
+		dailyOpts.Type = "incremental"
+		dailyOpts.SnapshotAt = snapshot
+		dailyOpts.BaseBackup = baseInfo.Filename
+		dailyOpts.BaseSHA256 = baseManifest.SHA256
+		dailyOpts.BaseFiles = make(map[string]BackupFile, len(baseManifest.Files))
+		for _, file := range baseManifest.Files {
+			dailyOpts.BaseFiles[file.Path] = file
+		}
+		dailyOpts.Filename = filepath.Join(m.paths.Backup, fmt.Sprintf("vidveil-daily%s", ext))
+		dailyOpts.MaxBackups = 1
+		dailyOpts.KeepWeekly = 0
+		dailyOpts.KeepMonthly = 0
+		dailyOpts.KeepYearly = 0
+		dailyOpts.MaxTotalSize = ""
+		if err := m.backupWithDatabaseSnapshot(dailyOpts, false, dbSnapshot); err != nil {
+			return fmt.Errorf("daily incremental backup failed: %w", err)
+		}
+		if err := removeStaleIncrementalExtension(dailyOpts.Filename, dailyOpts.Password); err != nil {
+			return err
+		}
+	} else if !errors.Is(baseErr, os.ErrNotExist) {
+		passwordChanged, keyErr := m.latestFullPasswordChanged(opts.Password)
+		if keyErr == nil && passwordChanged {
+			fmt.Println("Info: backup password changed; skipping daily incremental and creating a new full backup")
+		} else {
+			fmt.Printf("Warning: skipping daily incremental because the previous full is corrupt or unavailable: %v\n", errors.Join(baseErr, keyErr))
+		}
+	}
+	if err := m.backupWithDatabaseSnapshot(fullOpts, false, dbSnapshot); err != nil {
 		return fmt.Errorf("daily full backup failed: %w", err)
 	}
 
-	// Step 5-6: daily incremental, fixed filename, always exactly 1 file.
-	dailyOpts := opts
-	dailyOpts.Filename = filepath.Join(m.paths.Backup, fmt.Sprintf("vidveil-daily%s", ext))
-	dailyOpts.MaxBackups = 1
-	dailyOpts.KeepWeekly = 0
-	dailyOpts.KeepMonthly = 0
-	dailyOpts.KeepYearly = 0
-	dailyOpts.MaxTotalSize = ""
-	if err := m.backupWithOptions(dailyOpts, false); err != nil {
-		return fmt.Errorf("daily incremental backup failed: %w", err)
-	}
+	// Retention applies after the new full and any incremental both verify.
 	if err := m.applyRetentionWithOptions(opts.MaxBackups, opts.KeepWeekly, opts.KeepMonthly, opts.KeepYearly, opts.MaxTotalSize); err != nil {
 		fmt.Printf("Warning: failed to apply retention policy after verified backup pair: %v\n", err)
 	}
 
-	// "Changes since last" per AI.md PART 21 Audit Events: this manager always
-	// snapshots config+data fully rather than diffing against the prior daily
-	// incremental, so the on-disk size is reported as the closest available signal.
+	// Report the updated cumulative incremental when one was produced.
+	dailyOpts := opts
+	dailyOpts.Filename = filepath.Join(m.paths.Backup, fmt.Sprintf("vidveil-daily%s", ext))
 	dailySize := int64(0)
-	if info, err := os.Stat(dailyOpts.Filename); err == nil {
-		dailySize = info.Size()
+	if baseErr == nil {
+		if info, err := os.Stat(dailyOpts.Filename); err == nil {
+			dailySize = info.Size()
+		}
 	}
 	m.audit("backup.daily_updated", "success", map[string]interface{}{
 		"filename": filepath.Base(dailyOpts.Filename),
 		"size":     dailySize,
 	})
 
+	return nil
+}
+
+func (m *MaintenanceManager) latestFullPasswordChanged(password string) (bool, error) {
+	backups, err := m.ListBackups()
+	if err != nil {
+		return false, err
+	}
+	for _, backup := range backups {
+		if !strings.HasPrefix(backup.Filename, "vidveil_backup_") {
+			continue
+		}
+		if !strings.HasSuffix(backup.Filename, ".enc") {
+			return false, nil
+		}
+		data, err := os.ReadFile(backup.Path)
+		if err != nil {
+			return false, err
+		}
+		keyID, err := backupKeyIDForPassword(data, password)
+		if err != nil {
+			return false, err
+		}
+		return keyID != string(data[45:53]), nil
+	}
+	return false, os.ErrNotExist
+}
+
+func backupKeyIDForPassword(data []byte, password string) (string, error) {
+	if len(data) < 71 || string(data[:5]) != "BKUP1" {
+		return "", fmt.Errorf("invalid encrypted backup header")
+	}
+	memoryKiB := binary.BigEndian.Uint32(data[21:25])
+	iterations := binary.BigEndian.Uint32(data[25:29])
+	parallelism := binary.BigEndian.Uint32(data[29:33])
+	baseLen := int(binary.BigEndian.Uint16(data[53:55]))
+	if baseLen > 255 || len(data) < 55+baseLen+16 || memoryKiB == 0 || memoryKiB > 1024*1024 || iterations == 0 || iterations > 10 || parallelism == 0 || parallelism > 16 || !validBackupKeyID(data[45:53]) {
+		return "", fmt.Errorf("invalid encrypted backup header")
+	}
+	base := data[55 : 55+baseLen]
+	if strings.ContainsAny(string(base), `/\\`) || strings.ContainsRune(string(base), 0) || !utf8.Valid(base) || string(base) == "." || string(base) == ".." {
+		return "", fmt.Errorf("invalid encrypted backup base filename")
+	}
+	key := argon2.IDKey([]byte(password), data[5:21], iterations, memoryKiB, uint8(parallelism), 32)
+	keyIDMAC := hmac.New(sha256.New, key)
+	_, _ = keyIDMAC.Write([]byte("key-id"))
+	return hex.EncodeToString(keyIDMAC.Sum(nil))[:8], nil
+}
+
+func validBackupKeyID(value []byte) bool {
+	if len(value) != 8 {
+		return false
+	}
+	for _, char := range value {
+		if !(char >= '0' && char <= '9') && !(char >= 'a' && char <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *MaintenanceManager) latestFullManifest(password string) (BackupInfo, *BackupManifest, error) {
+	backups, err := m.ListBackups()
+	if err != nil {
+		return BackupInfo{}, nil, err
+	}
+	for _, backup := range backups {
+		if !strings.HasPrefix(backup.Filename, "vidveil_backup_") {
+			continue
+		}
+		data, err := os.ReadFile(backup.Path)
+		if err != nil {
+			return BackupInfo{}, nil, err
+		}
+		if strings.HasSuffix(backup.Filename, ".enc") {
+			if password == "" {
+				return BackupInfo{}, nil, fmt.Errorf("encrypted base requires the configured password")
+			}
+			data, err = m.decryptBackup(data, password)
+			if err != nil {
+				return BackupInfo{}, nil, err
+			}
+		}
+		manifest, err := parseBackupManifest(data)
+		if err != nil {
+			return BackupInfo{}, nil, err
+		}
+		if manifest.Type != "full" || manifest.SHA256 == "" || backupManifestChecksum(manifest.Files) != manifest.SHA256 {
+			return BackupInfo{}, nil, fmt.Errorf("previous full backup manifest is invalid")
+		}
+		return backup, &manifest, nil
+	}
+	return BackupInfo{}, nil, os.ErrNotExist
+}
+
+func parseBackupManifest(archiveData []byte) (BackupManifest, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(archiveData))
+	if err != nil {
+		return BackupManifest{}, err
+	}
+	defer reader.Close()
+	tr := tar.NewReader(reader)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return BackupManifest{}, err
+		}
+		if header.Name != "manifest.json" {
+			continue
+		}
+		var manifest BackupManifest
+		if err := json.NewDecoder(io.LimitReader(tr, 1<<20)).Decode(&manifest); err != nil {
+			return BackupManifest{}, err
+		}
+		return manifest, nil
+	}
+	return BackupManifest{}, fmt.Errorf("backup missing manifest.json")
+}
+
+func (m *MaintenanceManager) latestSnapshotBackup(password string) (string, error) {
+	backups, err := m.ListBackups()
+	if err != nil {
+		return "", err
+	}
+	var latestPath string
+	var latestSnapshot time.Time
+	needsPassword := false
+	for _, backup := range backups {
+		data, err := os.ReadFile(backup.Path)
+		if err != nil {
+			return "", fmt.Errorf("read backup %q: %w", backup.Filename, err)
+		}
+		if strings.HasSuffix(backup.Filename, ".enc") {
+			if password == "" {
+				needsPassword = true
+				continue
+			}
+			data, err = m.decryptBackup(data, password)
+			if err != nil {
+				return "", fmt.Errorf("cannot determine newest backup: decrypt %q: %w; select the backup file explicitly when retained archives use different passwords", backup.Filename, err)
+			}
+		}
+		manifest, err := parseBackupManifest(data)
+		if err != nil {
+			return "", fmt.Errorf("cannot determine newest backup: read manifest in %q: %w", backup.Filename, err)
+		}
+		snapshot, err := time.Parse(time.RFC3339, manifest.SnapshotAt)
+		if err != nil {
+			return "", fmt.Errorf("cannot determine newest backup: invalid snapshot_at in %q: %w", backup.Filename, err)
+		}
+		if latestPath == "" || snapshot.After(latestSnapshot) {
+			latestPath = backup.Path
+			latestSnapshot = snapshot
+		}
+	}
+	if needsPassword {
+		return "", fmt.Errorf("backup password required to determine the newest snapshot")
+	}
+	if latestPath == "" {
+		return "", fmt.Errorf("no backup files found in %s", m.paths.Backup)
+	}
+	return latestPath, nil
+}
+
+func backupHeaderBaseName(data []byte) (string, error) {
+	if len(data) < 55 || string(data[:5]) != "BKUP1" {
+		return "", fmt.Errorf("invalid encrypted backup header")
+	}
+	baseLen := int(binary.BigEndian.Uint16(data[53:55]))
+	if baseLen > 255 || len(data) < 55+baseLen+16 {
+		return "", fmt.Errorf("invalid encrypted backup header")
+	}
+	base := data[55 : 55+baseLen]
+	if strings.ContainsAny(string(base), `/\\`) || strings.ContainsRune(string(base), 0) || !utf8.Valid(base) || string(base) == "." || string(base) == ".." {
+		return "", fmt.Errorf("invalid encrypted backup base filename")
+	}
+	return string(base), nil
+}
+
+func (m *MaintenanceManager) combineIncrementalRestore(backupFile, password, tempDir string, incremental *restoreArchive) error {
+	baseName := incremental.manifest.BaseBackup
+	if baseName == "" || filepath.Base(baseName) != baseName || baseName == "." || baseName == ".." || strings.ContainsAny(baseName, `/\\`) {
+		return fmt.Errorf("ERR_BASE_CORRUPT: invalid base backup filename")
+	}
+	basePath := filepath.Join(filepath.Dir(backupFile), baseName)
+	baseData, err := os.ReadFile(basePath)
+	if err != nil {
+		return fmt.Errorf("ERR_BASE_MISSING: cannot read base backup %q: %w", baseName, err)
+	}
+	if strings.HasSuffix(baseName, ".enc") {
+		if password == "" {
+			return fmt.Errorf("ERR_BASE_CORRUPT: encrypted base requires the incremental password")
+		}
+		baseData, err = m.decryptBackup(baseData, password)
+		if err != nil {
+			return fmt.Errorf("ERR_BASE_CORRUPT: cannot decrypt base backup: %w", err)
+		}
+	}
+	base, err := loadRestoreArchiveToTemp(baseData, tempDir, m.limits)
+	if err != nil {
+		return fmt.Errorf("ERR_BASE_CORRUPT: cannot read base archive: %w", err)
+	}
+	if base.manifest.Type != "full" || validateBackupManifest(base.manifest, base.records) != nil || base.manifest.SHA256 != incremental.manifest.BaseSHA256 {
+		return fmt.Errorf("ERR_BASE_CORRUPT: base manifest checksum does not match incremental")
+	}
+	merged := make(map[string]restoreFileEntry, len(base.files)+len(incremental.files))
+	for _, file := range base.files {
+		merged[file.name] = file
+	}
+	for _, file := range incremental.files {
+		merged[file.name] = file
+	}
+	for _, deleted := range incremental.manifest.Deleted {
+		if err := validateArchiveEntryName(deleted); err != nil {
+			return fmt.Errorf("ERR_BASE_CORRUPT: invalid deleted path %q", deleted)
+		}
+		delete(merged, deleted)
+	}
+	combined := make([]restoreFileEntry, 0, len(merged))
+	for _, file := range merged {
+		combined = append(combined, file)
+	}
+	sort.Slice(combined, func(i, j int) bool { return combined[i].name < combined[j].name })
+	incremental.files = combined
 	return nil
 }
 
@@ -273,6 +682,24 @@ func (m *MaintenanceManager) BackupWithOptions(opts BackupOptions) error {
 }
 
 func (m *MaintenanceManager) backupWithOptions(opts BackupOptions, applyRetention bool) (retErr error) {
+	if opts.SnapshotAt.IsZero() {
+		opts.SnapshotAt = time.Now().UTC()
+	}
+	dbSnapshot, err := m.snapshotDatabase()
+	if err != nil {
+		return fmt.Errorf("snapshot backup database: %w", err)
+	}
+	if dbSnapshot.temporary != "" {
+		defer func() {
+			if err := os.RemoveAll(dbSnapshot.temporary); err != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("remove backup database snapshot: %w", err))
+			}
+		}()
+	}
+	return m.backupWithDatabaseSnapshot(opts, applyRetention, dbSnapshot)
+}
+
+func (m *MaintenanceManager) backupWithDatabaseSnapshot(opts BackupOptions, applyRetention bool, dbSnapshot *backupSnapshot) (retErr error) {
 	if opts.Password != strings.TrimSpace(opts.Password) {
 		return ErrBackupPasswordWhitespace
 	}
@@ -292,6 +719,13 @@ func (m *MaintenanceManager) backupWithOptions(opts BackupOptions, applyRetentio
 			ext = ".tar.gz.enc"
 		}
 		backupFile = filepath.Join(m.paths.Backup, fmt.Sprintf("vidveil_backup_%s%s", timestamp, ext))
+	}
+	if opts.Type != "incremental" {
+		if _, err := os.Stat(backupFile); err == nil {
+			return fmt.Errorf("backup file already exists: %s", backupFile)
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("inspect backup target: %w", err)
+		}
 	}
 
 	// Ensure backup directory exists
@@ -326,35 +760,68 @@ func (m *MaintenanceManager) backupWithOptions(opts BackupOptions, applyRetentio
 	// Track contents for manifest, and a content-addressable hash (name+content per
 	// regular file) so the manifest checksum is independent of tar/gzip metadata.
 	var contents []string
+	var manifestFiles []BackupFile
 	contentHash := sha256.New()
 
 	// Always include config directory (server.yml, server.db)
-	if err := m.addDirToTar(tarWriter, m.paths.Config, "config", contentHash); err != nil {
+	var currentFiles []BackupFile
+	files, current, err := m.addDirToTar(tarWriter, m.paths.Config, "config", contentHash, opts.BaseFiles)
+	if err != nil {
 		return fmt.Errorf("failed to backup config: %w", err)
 	}
+	manifestFiles = append(manifestFiles, files...)
+	currentFiles = append(currentFiles, current...)
 	contents = append(contents, "config/")
 
 	// Include data directory if requested
 	if opts.IncludeData {
-		if err := m.addDirToTar(tarWriter, m.paths.Data, "data", contentHash); err != nil {
+		databaseSource := filepath.Join(m.paths.Data, "db", "server.db")
+		files, current, err := m.addDirToTar(tarWriter, m.paths.Data, "data", contentHash, opts.BaseFiles, databaseSource)
+		if err != nil {
 			return fmt.Errorf("failed to backup data: %w", err)
 		}
+		manifestFiles = append(manifestFiles, files...)
+		currentFiles = append(currentFiles, current...)
 		contents = append(contents, "data/")
+	}
+	if dbSnapshot != nil && dbSnapshot.database != "" {
+		archived, databaseRecord, err := addSnapshotFileToTar(tarWriter, dbSnapshot.database, "data/db/server.db", opts.BaseFiles, contentHash)
+		if err != nil {
+			return fmt.Errorf("failed to backup SQLite database: %w", err)
+		}
+		if archived != nil {
+			manifestFiles = append(manifestFiles, *archived)
+		}
+		currentFiles = append(currentFiles, databaseRecord)
+		contents = append(contents, "data/db/server.db")
 	}
 
 	// Include SSL certificates if requested
 	if opts.IncludeSSL {
 		sslDir := m.paths.SSL
 		if _, err := os.Stat(sslDir); err == nil {
-			if err := m.addDirToTar(tarWriter, sslDir, "ssl", contentHash); err != nil {
+			files, current, err := m.addDirToTar(tarWriter, sslDir, "ssl", contentHash, opts.BaseFiles)
+			if err != nil {
 				return fmt.Errorf("failed to backup ssl: %w", err)
 			}
+			manifestFiles = append(manifestFiles, files...)
+			currentFiles = append(currentFiles, current...)
 			contents = append(contents, "ssl/")
 		}
 	}
 
 	// Create manifest
-	manifestChecksum := "sha256:" + hex.EncodeToString(contentHash.Sum(nil))
+	manifestChecksum := backupManifestChecksum(manifestFiles)
+	snapshot := opts.SnapshotAt
+	if snapshot.IsZero() {
+		snapshot = time.Now().UTC()
+	}
+	snapshotAt := snapshot.UTC().Format(time.RFC3339)
+	backupType := opts.Type
+	if backupType == "" {
+		backupType = "full"
+	}
+	deleted := backupDeletedPaths(opts.BaseFiles, currentFiles)
 	manifest := BackupManifest{
 		Version:    "1.0.0",
 		CreatedAt:  time.Now().Format(time.RFC3339),
@@ -362,7 +829,13 @@ func (m *MaintenanceManager) backupWithOptions(opts BackupOptions, applyRetentio
 		AppVersion: m.version,
 		Contents:   contents,
 		Encrypted:  opts.Password != "",
-		Checksum:   manifestChecksum,
+		Type:       backupType,
+		SnapshotAt: snapshotAt,
+		Files:      manifestFiles,
+		SHA256:     manifestChecksum,
+		BaseBackup: opts.BaseBackup,
+		BaseSHA256: opts.BaseSHA256,
+		Deleted:    deleted,
 	}
 	if opts.Password != "" {
 		manifest.EncryptionMethod = "AES-256-GCM"
@@ -403,7 +876,7 @@ func (m *MaintenanceManager) backupWithOptions(opts BackupOptions, applyRetentio
 	var finalData []byte
 	if opts.Password != "" {
 		// Encrypt with AES-256-GCM using Argon2id key derivation
-		encrypted, err := m.encryptBackup(archiveData, opts.Password)
+		encrypted, err := m.encryptBackupWithBase(archiveData, opts.Password, opts.BaseBackup)
 		if err != nil {
 			return fmt.Errorf("failed to encrypt backup: %w", err)
 		}
@@ -661,6 +1134,16 @@ func (m *MaintenanceManager) checkDiskSpace(backupDir string) error {
 
 // encryptBackup encrypts data using AES-256-GCM with Argon2id key derivation
 func (m *MaintenanceManager) encryptBackup(data []byte, password string) ([]byte, error) {
+	return m.encryptBackupWithBase(data, password, "")
+}
+
+func (m *MaintenanceManager) encryptBackupWithBase(data []byte, password, baseName string) ([]byte, error) {
+	const memoryKiB uint32 = 64 * 1024
+	const iterations uint32 = 1
+	const parallelism uint32 = 4
+	if len(baseName) > 255 || strings.ContainsAny(baseName, `/\\`) || strings.ContainsRune(baseName, 0) || !utf8.ValidString(baseName) || baseName == "." || baseName == ".." {
+		return nil, fmt.Errorf("invalid backup base filename")
+	}
 	// Generate salt
 	salt := make([]byte, 16)
 	if _, err := io.ReadFull(cryptoRand.Reader, salt); err != nil {
@@ -668,7 +1151,7 @@ func (m *MaintenanceManager) encryptBackup(data []byte, password string) ([]byte
 	}
 
 	// Derive key using Argon2id
-	key := argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32)
+	key := argon2.IDKey([]byte(password), salt, iterations, memoryKiB, uint8(parallelism), 32)
 
 	// Create AES-GCM cipher
 	block, err := aes.NewCipher(key)
@@ -686,32 +1169,51 @@ func (m *MaintenanceManager) encryptBackup(data []byte, password string) ([]byte
 		return nil, err
 	}
 
-	// Encrypt
-	ciphertext := gcm.Seal(nil, nonce, data, nil)
-
-	// Format: salt (16) + nonce (12) + ciphertext
-	result := make([]byte, len(salt)+len(nonce)+len(ciphertext))
-	copy(result[:16], salt)
-	copy(result[16:16+len(nonce)], nonce)
-	copy(result[16+len(nonce):], ciphertext)
+	keyIDMAC := hmac.New(sha256.New, key)
+	_, _ = keyIDMAC.Write([]byte("key-id"))
+	keyID := hex.EncodeToString(keyIDMAC.Sum(nil))[:8]
+	base := []byte(baseName)
+	header := make([]byte, 55+len(base))
+	copy(header[:5], "BKUP1")
+	copy(header[5:21], salt)
+	binary.BigEndian.PutUint32(header[21:25], memoryKiB)
+	binary.BigEndian.PutUint32(header[25:29], iterations)
+	binary.BigEndian.PutUint32(header[29:33], parallelism)
+	copy(header[33:45], nonce)
+	copy(header[45:53], keyID)
+	binary.BigEndian.PutUint16(header[53:55], uint16(len(base)))
+	copy(header[55:], base)
+	ciphertext := gcm.Seal(nil, nonce, data, header)
+	result := append(header, ciphertext...)
 
 	return result, nil
 }
 
 // decryptBackup decrypts AES-256-GCM encrypted data
 func (m *MaintenanceManager) decryptBackup(data []byte, password string) ([]byte, error) {
-	// 16 salt + 12 nonce minimum
-	if len(data) < 28 {
+	// Fixed header (55 bytes) and the AES-GCM authentication tag are required.
+	if len(data) < 55+16 {
 		return nil, fmt.Errorf("invalid encrypted data")
 	}
-
-	// Extract salt, nonce, ciphertext
-	salt := data[:16]
-	nonce := data[16:28]
-	ciphertext := data[28:]
-
-	// Derive key using Argon2id
-	key := argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32)
+	if string(data[:5]) != "BKUP1" {
+		return nil, fmt.Errorf("invalid encrypted backup header")
+	}
+	salt := data[5:21]
+	memoryKiB := binary.BigEndian.Uint32(data[21:25])
+	iterations := binary.BigEndian.Uint32(data[25:29])
+	parallelism := binary.BigEndian.Uint32(data[29:33])
+	baseLen := int(binary.BigEndian.Uint16(data[53:55]))
+	headerLen := 55 + baseLen
+	if baseLen > 255 || len(data) < headerLen+16 || memoryKiB == 0 || memoryKiB > 1024*1024 || iterations == 0 || iterations > 10 || parallelism == 0 || parallelism > 16 || !validBackupKeyID(data[45:53]) {
+		return nil, fmt.Errorf("invalid encrypted backup header")
+	}
+	base := data[55:headerLen]
+	if strings.ContainsAny(string(base), `/\\`) || strings.ContainsRune(string(base), 0) || !utf8.Valid(base) || string(base) == "." || string(base) == ".." {
+		return nil, fmt.Errorf("invalid encrypted backup base filename")
+	}
+	nonce := data[33:45]
+	ciphertext := data[headerLen:]
+	key := argon2.IDKey([]byte(password), salt, iterations, memoryKiB, uint8(parallelism), 32)
 
 	// Create AES-GCM cipher
 	block, err := aes.NewCipher(key)
@@ -723,8 +1225,12 @@ func (m *MaintenanceManager) decryptBackup(data []byte, password string) ([]byte
 		return nil, err
 	}
 
-	// Decrypt
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	keyIDMAC := hmac.New(sha256.New, key)
+	_, _ = keyIDMAC.Write([]byte("key-id"))
+	if !hmac.Equal(data[45:53], []byte(hex.EncodeToString(keyIDMAC.Sum(nil))[:8])) {
+		return nil, fmt.Errorf("decryption failed (wrong password?)")
+	}
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, data[:headerLen])
 	if err != nil {
 		return nil, fmt.Errorf("decryption failed (wrong password?)")
 	}
@@ -753,7 +1259,12 @@ func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password
 	}
 
 	// Check 4: Decrypt test (if encrypted)
+	headerBase := ""
 	if password != "" {
+		headerBase, err = backupHeaderBaseName(data)
+		if err != nil {
+			return fmt.Errorf("decrypt test failed: %w", err)
+		}
 		data, err = m.decryptBackup(data, password)
 		if err != nil {
 			return fmt.Errorf("decrypt test failed: %w", err)
@@ -795,6 +1306,7 @@ func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password
 	tarReader := tar.NewReader(gzReader)
 	var manifestData []byte
 	var dbData []byte
+	var manifestFiles []BackupFile
 
 	// Check 6: Content extraction — test-extract every entry to temp dir
 	for {
@@ -832,8 +1344,13 @@ func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password
 
 		if cleanName == "manifest.json" {
 			manifestData = contents
+		} else if header.Typeflag == tar.TypeReg {
+			digest := sha256.Sum256(contents)
+			manifestFiles = append(manifestFiles, BackupFile{
+				Path: header.Name, Size: int64(len(contents)), MTime: header.ModTime.Unix(), SHA256: hex.EncodeToString(digest[:]),
+			})
 		}
-		if cleanName == "server.db" {
+		if filepath.Base(cleanName) == "server.db" {
 			dbData = contents
 		}
 	}
@@ -849,6 +1366,35 @@ func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password
 	if manifest.Version == "" {
 		return fmt.Errorf("manifest.json missing version field")
 	}
+	if err := validateBackupManifest(manifest, manifestFiles); err != nil {
+		return err
+	}
+	if manifest.Type == "incremental" {
+		if headerBase != "" && headerBase != manifest.BaseBackup {
+			return fmt.Errorf("ERR_BASE_CORRUPT: encrypted header and manifest name different base backups")
+		}
+		baseName := manifest.BaseBackup
+		if baseName == "" || filepath.Base(baseName) != baseName || baseName == "." || baseName == ".." || strings.ContainsAny(baseName, `/\\`) {
+			return fmt.Errorf("ERR_BASE_CORRUPT: invalid base backup filename")
+		}
+		baseData, err := os.ReadFile(filepath.Join(filepath.Dir(backupFile), baseName))
+		if err != nil {
+			return fmt.Errorf("ERR_BASE_MISSING: cannot read base backup %q: %w", baseName, err)
+		}
+		if strings.HasSuffix(baseName, ".enc") {
+			if password == "" {
+				return fmt.Errorf("ERR_BASE_CORRUPT: encrypted base requires the incremental password")
+			}
+			baseData, err = m.decryptBackup(baseData, password)
+			if err != nil {
+				return fmt.Errorf("ERR_BASE_CORRUPT: cannot decrypt base backup: %w", err)
+			}
+		}
+		baseManifest, err := parseBackupManifest(baseData)
+		if err != nil || baseManifest.Type != "full" || baseManifest.SHA256 != manifest.BaseSHA256 {
+			return fmt.Errorf("ERR_BASE_CORRUPT: base manifest checksum does not match incremental")
+		}
+	}
 
 	// Check 7: Database integrity — verify SQLite magic header
 	if dbData != nil {
@@ -858,6 +1404,137 @@ func (m *MaintenanceManager) verifyBackup(backupFile, expectedChecksum, password
 	}
 
 	return nil
+}
+
+// TestBackup validates an archive without writing to live configuration or data.
+func (m *MaintenanceManager) TestBackup(backupFile, password string) (result BackupTestResult, retErr error) {
+	result.Filename = backupFile
+	if password != strings.TrimSpace(password) {
+		return result, ErrBackupPasswordWhitespace
+	}
+	if backupFile == "" {
+		var err error
+		backupFile, err = m.latestSnapshotBackup(password)
+		if err != nil {
+			return result, err
+		}
+		result.Filename = backupFile
+	}
+	if strings.HasSuffix(backupFile, ".enc") && password == "" {
+		return result, fmt.Errorf("backup password required to test encrypted backup")
+	}
+	archiveData, err := os.ReadFile(backupFile)
+	if err != nil {
+		return result, fmt.Errorf("read backup: %w", err)
+	}
+	if strings.HasSuffix(backupFile, ".enc") || password != "" {
+		archiveData, err = m.decryptBackup(archiveData, password)
+		if err != nil {
+			return result, fmt.Errorf("decrypt backup: %w", err)
+		}
+	}
+	tempBase := filepath.Join(os.TempDir(), projectpath.ProjectOrg)
+	if err := os.MkdirAll(tempBase, 0755); err != nil {
+		return result, fmt.Errorf("prepare backup test temporary directory: %w", err)
+	}
+	tempDir, err := os.MkdirTemp(tempBase, projectpath.ProjectName+"-")
+	if err != nil {
+		return result, fmt.Errorf("create backup test temporary directory: %w", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("remove backup test temporary directory: %w", err))
+		}
+	}()
+	entry, err := loadRestoreArchiveToTemp(archiveData, tempDir, m.limits)
+	if err != nil {
+		return result, err
+	}
+	if err := validateBackupManifest(entry.manifest, entry.records); err != nil {
+		return result, err
+	}
+	result.ChecksumVerified = true
+	result.ManifestVerified = true
+	if entry.manifest.Type == "incremental" {
+		if err := m.combineIncrementalRestore(backupFile, password, tempDir, entry); err != nil {
+			return result, err
+		}
+	}
+
+	var databasePath, publicKeyPath, encryptedPrivateKeyPath string
+	for _, file := range entry.files {
+		switch file.name {
+		case "data/db/server.db", "config/server.db":
+			databasePath = file.contentPath
+		case "config/security/pgp.pub.asc":
+			publicKeyPath = file.contentPath
+		case "config/security/pgp.priv.asc.enc":
+			encryptedPrivateKeyPath = file.contentPath
+		}
+	}
+	if databasePath == "" {
+		return result, fmt.Errorf("backup is missing data/db/server.db")
+	}
+	databaseBytes, err := os.ReadFile(databasePath)
+	if err != nil {
+		return result, fmt.Errorf("read backed up database: %w", err)
+	}
+	if err := verifySQLiteIntegrity(databaseBytes); err != nil {
+		return result, fmt.Errorf("verify backed up database: %w", err)
+	}
+	db, err := sql.Open("sqlite", databasePath+"?mode=ro")
+	if err != nil {
+		return result, fmt.Errorf("open backed up database: %w", err)
+	}
+	defer db.Close()
+	if err := db.Ping(); err != nil {
+		return result, fmt.Errorf("verify backed up database: %w", err)
+	}
+	result.DatabaseVerified = true
+	if publicKeyPath == "" || encryptedPrivateKeyPath == "" {
+		return result, fmt.Errorf("backup is missing the PGP keypair")
+	}
+	encodedSecret := ""
+	if err := db.QueryRow("SELECT value FROM app_secrets WHERE key = ?", "installation_secret").Scan(&encodedSecret); err != nil {
+		return result, fmt.Errorf("read installation_secret from backed up database: %w", err)
+	}
+	installationSecret, err := base64.StdEncoding.DecodeString(encodedSecret)
+	if err != nil {
+		return result, fmt.Errorf("decode backed up installation_secret: %w", err)
+	}
+	encryptedPrivateKey, err := os.ReadFile(encryptedPrivateKeyPath)
+	if err != nil {
+		return result, fmt.Errorf("read backed up encrypted PGP private key: %w", err)
+	}
+	privateKey, err := pgp.DecryptPrivateKey(encryptedPrivateKey, installationSecret)
+	if err != nil {
+		return result, fmt.Errorf("decrypt backed up PGP private key: %w", err)
+	}
+	keypair, _, _, err := pgp.ParsePrivateKey(privateKey)
+	if err != nil {
+		return result, fmt.Errorf("parse backed up PGP private key: %w", err)
+	}
+	publicKey, err := os.ReadFile(publicKeyPath)
+	if err != nil {
+		return result, fmt.Errorf("read backed up PGP public key: %w", err)
+	}
+	verificationConfig := filepath.Join(tempDir, "verify-config")
+	securityDir := filepath.Join(verificationConfig, "security")
+	if err := os.MkdirAll(securityDir, 0700); err != nil {
+		return result, fmt.Errorf("prepare PGP fingerprint verification: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(securityDir, pgp.StagedPublicKeyFile), publicKey, 0600); err != nil {
+		return result, fmt.Errorf("stage backed up PGP public key: %w", err)
+	}
+	publicFingerprint, err := pgp.StagedFingerprint(verificationConfig)
+	if err != nil {
+		return result, fmt.Errorf("read backed up PGP public fingerprint: %w", err)
+	}
+	if keypair.Fingerprint != publicFingerprint {
+		return result, fmt.Errorf("backed up PGP public and private key fingerprints do not match")
+	}
+	result.PGPKeypairVerified = true
+	return result, nil
 }
 
 // verifySQLiteIntegrity checks the SQLite magic header per AI.md PART 21
@@ -959,11 +1636,15 @@ func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, k
 	}
 
 	// Delete backups not marked for keeping
+	protectedBases := protectedBackupBases(backups)
 	var deleted []string
 	for i, b := range backups {
 		if _, ok := keep[i]; !ok {
 			// Skip incremental files (vidveil-daily.tar.gz, vidveil-hourly.tar.gz)
 			if strings.HasPrefix(b.Filename, "vidveil-daily") || strings.HasPrefix(b.Filename, "vidveil-hourly") {
+				continue
+			}
+			if protectedBases[b.Filename] {
 				continue
 			}
 			if err := os.Remove(b.Path); err != nil {
@@ -984,11 +1665,38 @@ func (m *MaintenanceManager) applyRetentionWithOptions(maxBackups, keepWeekly, k
 
 	// Enforce max_total_size hard cap per AI.md PART 21: delete oldest-first (never the
 	// vidveil-daily/vidveil-hourly incrementals) until the backup dir is back under the cap.
-	if err := m.enforceMaxTotalSize(maxTotalSize); err != nil {
+	if err := m.enforceMaxTotalSize(maxTotalSize, protectedBases); err != nil {
 		fmt.Printf("Warning: failed to enforce max_total_size: %v\n", err)
 	}
 
 	return nil
+}
+
+func protectedBackupBases(backups []BackupInfo) map[string]bool {
+	protected := make(map[string]bool)
+	for _, backup := range backups {
+		if !strings.HasPrefix(backup.Filename, "vidveil-daily") && !strings.HasPrefix(backup.Filename, "vidveil-hourly") {
+			continue
+		}
+		data, err := os.ReadFile(backup.Path)
+		if err != nil {
+			continue
+		}
+		base := ""
+		if strings.HasSuffix(backup.Filename, ".enc") {
+			base, err = backupHeaderBaseName(data)
+		} else {
+			var manifest BackupManifest
+			manifest, err = parseBackupManifest(data)
+			if err == nil {
+				base = manifest.BaseBackup
+			}
+		}
+		if err == nil && base != "" && filepath.Base(base) == base && !strings.ContainsAny(base, `/\\`) {
+			protected[base] = true
+		}
+	}
+	return protected
 }
 
 // parseSizeString parses a max_total_size value per AI.md PART 21. Accepted forms:
@@ -1048,7 +1756,11 @@ func (m *MaintenanceManager) parseSizeString(s, path string) (bytesLimit uint64,
 
 // enforceMaxTotalSize deletes oldest backups (never vidveil-daily/vidveil-hourly incrementals)
 // until the backup directory's total size is under the max_total_size cap.
-func (m *MaintenanceManager) enforceMaxTotalSize(maxTotalSize string) error {
+func (m *MaintenanceManager) enforceMaxTotalSize(maxTotalSize string, protectedArgs ...map[string]bool) error {
+	protected := map[string]bool{}
+	if len(protectedArgs) > 0 && protectedArgs[0] != nil {
+		protected = protectedArgs[0]
+	}
 	limit, enabled, err := m.parseSizeString(maxTotalSize, m.paths.Backup)
 	if err != nil {
 		return err
@@ -1081,6 +1793,9 @@ func (m *MaintenanceManager) enforceMaxTotalSize(maxTotalSize string) error {
 			break
 		}
 		if strings.HasPrefix(b.Filename, "vidveil-daily") || strings.HasPrefix(b.Filename, "vidveil-hourly") {
+			continue
+		}
+		if protected[b.Filename] {
 			continue
 		}
 		if err := os.Remove(b.Path); err != nil {
@@ -1119,14 +1834,11 @@ func (m *MaintenanceManager) restoreWithPassword(backupFile, password string) (r
 		return ErrBackupPasswordWhitespace
 	}
 	if backupFile == "" {
-		// Find most recent backup
-		files, err := filepath.Glob(filepath.Join(m.paths.Backup, "vidveil_backup_*.tar.gz*"))
-		if err != nil || len(files) == 0 {
-			return fmt.Errorf("no backup files found in %s", m.paths.Backup)
+		var err error
+		backupFile, err = m.latestSnapshotBackup(password)
+		if err != nil {
+			return err
 		}
-		// Most recent by name (sorted alphabetically = chronologically with our naming)
-		sort.Strings(files)
-		backupFile = files[len(files)-1]
 	}
 
 	// Check compressed archive size before allocating memory or decrypting it.
@@ -1156,9 +1868,14 @@ func (m *MaintenanceManager) restoreWithPassword(backupFile, password string) (r
 	}
 
 	// Decrypt if .enc extension or password provided
+	headerBase := ""
 	if strings.HasSuffix(backupFile, ".enc") || password != "" {
 		if password == "" {
 			return fmt.Errorf("backup is encrypted, password required")
+		}
+		headerBase, err = backupHeaderBaseName(data)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt backup: %w", err)
 		}
 		data, err = m.decryptBackup(data, password)
 		if err != nil {
@@ -1198,12 +1915,16 @@ func (m *MaintenanceManager) restoreWithPassword(backupFile, password string) (r
 	if entry.manifest.Version == "" {
 		return fmt.Errorf("invalid backup: manifest.json missing or has empty version")
 	}
-	if entry.manifest.Checksum == "" {
-		return fmt.Errorf("invalid backup: manifest.json missing checksum")
+	if err := validateBackupManifest(entry.manifest, entry.records); err != nil {
+		return err
 	}
-	computed := "sha256:" + hex.EncodeToString(entry.contentHash.Sum(nil))
-	if computed != entry.manifest.Checksum {
-		return fmt.Errorf("backup checksum mismatch: manifest says %s, computed %s", entry.manifest.Checksum, computed)
+	if entry.manifest.Type == "incremental" {
+		if headerBase != "" && headerBase != entry.manifest.BaseBackup {
+			return fmt.Errorf("ERR_BASE_CORRUPT: encrypted header and manifest name different base backups")
+		}
+		if err := m.combineIncrementalRestore(backupFile, password, tempDir, entry); err != nil {
+			return err
+		}
 	}
 
 	if entry.manifest.AppVersion != "" && entry.manifest.AppVersion != m.version {
@@ -1321,6 +2042,7 @@ type restoreArchive struct {
 	manifest    BackupManifest
 	files       []restoreFileEntry
 	contentHash hash.Hash
+	records     []BackupFile
 }
 
 type restoreEntryStore func(header *tar.Header, content io.Reader) (restoreFileEntry, error)
@@ -1480,11 +2202,15 @@ func loadRestoreArchiveWithStore(data []byte, store restoreEntryStore, configure
 
 		archive.contentHash.Write([]byte(header.Name))
 		archive.contentHash.Write([]byte{0})
-		entry, err := store(header, io.TeeReader(tarReader, archive.contentHash))
+		fileHasher := sha256.New()
+		entry, err := store(header, io.TeeReader(tarReader, io.MultiWriter(archive.contentHash, fileHasher)))
 		if err != nil {
 			return nil, fmt.Errorf("read file %s: %w", header.Name, err)
 		}
 		archive.contentHash.Write([]byte{0})
+		archive.records = append(archive.records, BackupFile{
+			Path: header.Name, Size: header.Size, MTime: header.ModTime.Unix(), SHA256: hex.EncodeToString(fileHasher.Sum(nil)),
+		})
 		archive.files = append(archive.files, entry)
 	}
 	if limitedReader.exceeded {
@@ -1995,42 +2721,135 @@ func (m *MaintenanceManager) GetUpdateBranch() string {
 	return branch
 }
 
-// Helper to add directory to tar. contentHash, if non-nil, is fed name+NUL+content+NUL
-// for every regular file (in walk/tar order) to build a content-addressable checksum
-// that is independent of tar/gzip metadata (mtimes, permissions, etc).
-func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string, contentHash hash.Hash) error {
-	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+func backupManifestChecksum(files []BackupFile) string {
+	sorted := append([]BackupFile(nil), files...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Path < sorted[j].Path })
+	hasher := sha256.New()
+	for _, file := range sorted {
+		_, _ = fmt.Fprintf(hasher, "%s  %s\n", file.SHA256, file.Path)
+	}
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+func backupDeletedPaths(base map[string]BackupFile, current []BackupFile) []string {
+	currentPaths := make(map[string]struct{}, len(current))
+	for _, file := range current {
+		currentPaths[file.Path] = struct{}{}
+	}
+	deleted := make([]string, 0)
+	for path := range base {
+		if _, exists := currentPaths[path]; !exists {
+			deleted = append(deleted, path)
+		}
+	}
+	sort.Strings(deleted)
+	return deleted
+}
+
+func validateBackupManifest(manifest BackupManifest, actual []BackupFile) error {
+	if manifest.Type != "full" && manifest.Type != "incremental" {
+		return fmt.Errorf("invalid backup: manifest.json has invalid type")
+	}
+	if _, err := time.Parse(time.RFC3339, manifest.SnapshotAt); err != nil {
+		return fmt.Errorf("invalid backup: manifest.json has invalid snapshot_at")
+	}
+	if manifest.SHA256 == "" {
+		return fmt.Errorf("invalid backup: manifest.json missing sha256")
+	}
+	if backupManifestChecksum(manifest.Files) != manifest.SHA256 {
+		return fmt.Errorf("backup manifest sha256 mismatch")
+	}
+	if manifest.Type == "incremental" && (manifest.BaseBackup == "" || manifest.BaseSHA256 == "") {
+		return fmt.Errorf("invalid backup: incremental manifest is missing base metadata")
+	}
+	expected := make(map[string]BackupFile, len(manifest.Files))
+	for _, file := range manifest.Files {
+		if _, exists := expected[file.Path]; exists {
+			return fmt.Errorf("invalid backup: duplicate manifest file %q", file.Path)
+		}
+		expected[file.Path] = file
+	}
+	if len(expected) != len(actual) {
+		return fmt.Errorf("backup manifest file count mismatch: manifest has %d, archive has %d", len(expected), len(actual))
+	}
+	for _, file := range actual {
+		want, exists := expected[file.Path]
+		if !exists || want.Size != file.Size || want.MTime != file.MTime || want.SHA256 != file.SHA256 {
+			return fmt.Errorf("backup manifest file metadata mismatch for %q: expected size=%d mtime=%d sha256=%s, got size=%d mtime=%d sha256=%s", file.Path, want.Size, want.MTime, want.SHA256, file.Size, file.MTime, file.SHA256)
+		}
+	}
+	return nil
+}
+
+// addDirToTar archives a directory and returns metadata for each regular file.
+func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string, contentHash hash.Hash, base map[string]BackupFile, excluded ...string) ([]BackupFile, []BackupFile, error) {
+	var files []BackupFile
+	var currentFiles []BackupFile
+	err := filepath.Walk(srcDir, func(sourcePath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+		for _, excludedPath := range excluded {
+			if filepath.Clean(sourcePath) == filepath.Clean(excludedPath) {
+				return nil
+			}
 		}
 
 		// Create tar header
-		relPath, err := filepath.Rel(srcDir, path)
+		relPath, err := filepath.Rel(srcDir, sourcePath)
 		if err != nil {
 			return err
 		}
-		tarPath := filepath.Join(prefix, relPath)
+		tarPath := filepath.ToSlash(filepath.Join(prefix, relPath))
+		var fileSHA string
+		var fileEntry BackupFile
+		unchanged := false
+		if info.Mode().IsRegular() {
+			file, err := os.Open(sourcePath)
+			if err != nil {
+				return err
+			}
+			hasher := sha256.New()
+			if _, err := io.Copy(hasher, file); err != nil {
+				return errors.Join(err, file.Close())
+			}
+			if err := file.Close(); err != nil {
+				return err
+			}
+			fileSHA = hex.EncodeToString(hasher.Sum(nil))
+			fileEntry = BackupFile{Path: tarPath, Size: info.Size(), MTime: info.ModTime().Unix(), SHA256: fileSHA}
+			currentFiles = append(currentFiles, fileEntry)
+			if previous, exists := base[tarPath]; exists && previous.Size == fileEntry.Size && previous.MTime == fileEntry.MTime && previous.SHA256 == fileEntry.SHA256 {
+				unchanged = true
+			}
+		}
 
 		header, err := tar.FileInfoHeader(info, "")
 		if err != nil {
 			return err
 		}
 		header.Name = tarPath
+		header.ModTime = time.Unix(info.ModTime().Unix(), 0).UTC()
+		if unchanged {
+			return nil
+		}
 
 		if err := tw.WriteHeader(header); err != nil {
 			return err
 		}
 
 		// Write file content
-		if !info.IsDir() {
-			file, err := os.Open(path)
+		if info.Mode().IsRegular() {
+			fileEntry.MTime = header.ModTime.Unix()
+			files = append(files, fileEntry)
+			file, err := os.Open(sourcePath)
 			if err != nil {
 				return err
 			}
 			var writer io.Writer = tw
 			if contentHash != nil {
-				contentHash.Write([]byte(tarPath))
-				contentHash.Write([]byte{0})
+				_, _ = contentHash.Write([]byte(tarPath))
+				_, _ = contentHash.Write([]byte{0})
 				writer = io.MultiWriter(tw, contentHash)
 			}
 			if _, err := io.Copy(writer, file); err != nil {
@@ -2040,12 +2859,66 @@ func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string, 
 				return err
 			}
 			if contentHash != nil {
-				contentHash.Write([]byte{0})
+				_, _ = contentHash.Write([]byte{0})
 			}
 		}
+		_ = fileSHA
 
 		return nil
 	})
+	return files, currentFiles, err
+}
+
+func addSnapshotFileToTar(tw *tar.Writer, sourcePath, tarPath string, base map[string]BackupFile, contentHash hash.Hash) (*BackupFile, BackupFile, error) {
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		return nil, BackupFile{}, err
+	}
+	file, err := os.Open(sourcePath)
+	if err != nil {
+		return nil, BackupFile{}, err
+	}
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return nil, BackupFile{}, errors.Join(err, file.Close())
+	}
+	if err := file.Close(); err != nil {
+		return nil, BackupFile{}, err
+	}
+	record := BackupFile{Path: tarPath, Size: info.Size(), MTime: info.ModTime().Unix(), SHA256: hex.EncodeToString(hasher.Sum(nil))}
+	if previous, exists := base[tarPath]; exists && previous.Size == record.Size && previous.MTime == record.MTime && previous.SHA256 == record.SHA256 {
+		return nil, record, nil
+	}
+	header, err := tar.FileInfoHeader(info, "")
+	if err != nil {
+		return nil, BackupFile{}, err
+	}
+	header.Name = tarPath
+	header.Mode = 0600
+	header.ModTime = time.Unix(record.MTime, 0).UTC()
+	if err := tw.WriteHeader(header); err != nil {
+		return nil, BackupFile{}, err
+	}
+	file, err = os.Open(sourcePath)
+	if err != nil {
+		return nil, BackupFile{}, err
+	}
+	var writer io.Writer = tw
+	if contentHash != nil {
+		_, _ = contentHash.Write([]byte(tarPath))
+		_, _ = contentHash.Write([]byte{0})
+		writer = io.MultiWriter(tw, contentHash)
+	}
+	if _, err := io.Copy(writer, file); err != nil {
+		return nil, record, errors.Join(err, file.Close())
+	}
+	if err := file.Close(); err != nil {
+		return nil, record, err
+	}
+	if contentHash != nil {
+		_, _ = contentHash.Write([]byte{0})
+	}
+	return &record, record, nil
 }
 
 // UpdateInfo contains update information

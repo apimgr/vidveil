@@ -465,7 +465,7 @@ func run(ctx context.Context) error {
 				// Per AI.md PART 21: no --password flag; the password is prompted
 				// interactively, so only a non-flag operand is taken here.
 				maintArg := ""
-				if (rest[0] == "data" || rest[0] == "security") && len(rest) > 1 {
+				if (rest[0] == "data" || rest[0] == "security" || (rest[0] == "backup" && len(rest) > 1 && rest[1] == "test")) && len(rest) > 1 {
 					maintArg = strings.Join(rest[1:], " ")
 				} else if len(rest) > 1 && !strings.HasPrefix(rest[1], "--") {
 					maintArg = rest[1]
@@ -896,6 +896,7 @@ func run(ctx context.Context) error {
 			// never stored) causes BackupWithOptions to reject unattended runs -
 			// this is the spec's "Scheduled backups skip with audit log warning".
 			return maint.BackupDailyFull(maintenance.BackupOptions{
+				Password:       appConfig.Server.Backup.EncryptionPassword,
 				IncludeData:    true,
 				MaxBackups:     retention.MaxBackups,
 				KeepWeekly:     retention.KeepWeekly,
@@ -909,7 +910,7 @@ func run(ctx context.Context) error {
 			// Hourly incremental backup per AI.md PART 18/21 (disabled by default)
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
 			maint.SetLogger(logger)
-			return maint.BackupIncremental("")
+			return maint.BackupIncrementalWithPassword("", appConfig.Server.Backup.EncryptionPassword)
 		},
 		HealthcheckSelf: func(ctx context.Context) error {
 			// Self health check per PART 13
@@ -2061,28 +2062,40 @@ func promptLine(prompt string) string {
 	return strings.TrimSpace(line)
 }
 
-// promptPasswordConfirmed prompts for a new password twice and requires both
-// entries to match before returning it, per AI.md PART 21 encryption setup.
-func promptPasswordConfirmed() string {
-	for {
-		p1 := promptPassword("Password: ")
-		p2 := promptPassword("Confirm password: ")
-		if p1 == p2 {
-			return p1
-		}
-		fmt.Println(terminal.StatusIcon(false) + " Passwords do not match, try again.")
-	}
-}
-
 func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 	binaryName := filepath.Base(os.Args[0])
 	maint := maintenance.NewMaintenanceManager(configDir, dataDir, version.GetVersion())
 
 	switch cmd {
 	case "backup":
-		// Per AI.md PART 21: no --password flag - password is always prompted for
-		// interactively (shell history/process list leakage). Encryption is opt-in
-		// unless compliance mode is enabled, in which case it is mandatory.
+		if strings.HasPrefix(arg, "test") && (arg == "test" || strings.HasPrefix(arg, "test ")) {
+			backupFile := strings.TrimSpace(strings.TrimPrefix(arg, "test"))
+			if strings.HasPrefix(backupFile, "--") {
+				fmt.Fprintln(os.Stderr, "Usage: vidveil --maintenance backup test [file]")
+				os.Exit(2)
+			}
+			result, err := maint.TestBackup(backupFile, "")
+			if err != nil && strings.Contains(err.Error(), "password required") {
+				if !term.IsTerminal(int(os.Stdin.Fd())) {
+					fmt.Fprintln(os.Stderr, "Backup test requires an interactive terminal to enter the backup password.")
+					os.Exit(1)
+				}
+				result, err = maint.TestBackup(backupFile, promptPassword("Enter backup password: "))
+			}
+			fmt.Printf("Backup: %s\n", result.Filename)
+			fmt.Printf("Archive checksum: %t\n", result.ChecksumVerified)
+			fmt.Printf("Manifest and content: %t\n", result.ManifestVerified)
+			fmt.Printf("SQLite database: %t\n", result.DatabaseVerified)
+			fmt.Printf("PGP keypair: %t\n", result.PGPKeypairVerified)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Backup test failed: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println(terminal.StatusIcon(true) + " Backup test passed.")
+			return
+		}
+		// Per AI.md PART 21, backups use only the configured secret value and
+		// never prompt for or accept a password on the command line.
 		appConfig, _, err := config.LoadAppConfig(configDir, dataDir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load configuration: %v\n", err)
@@ -2096,16 +2109,10 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 			maint.SetLogger(cliLogger)
 		}
 
-		password := ""
-		if complianceMode {
-			fmt.Println(terminal.WarningIcon() + " Compliance mode requires encrypted backups.")
-			password = promptPasswordConfirmed()
-			if password == "" {
-				fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Compliance mode requires backup encryption: set a backup password.")
-				os.Exit(1)
-			}
-		} else if promptYesNo("Encrypt backup with password? [y/N]: ") {
-			password = promptPasswordConfirmed()
+		password := appConfig.Server.Backup.EncryptionPassword
+		if complianceMode && password == "" {
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Compliance mode requires backup encryption: set server.backup.encryption_password in secrets.yml.")
+			os.Exit(1)
 		}
 		if password != "" {
 			fmt.Println("Creating encrypted backup...")
@@ -2120,6 +2127,7 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 				os.Exit(1)
 			}
 		} else {
+			fmt.Println(terminal.WarningIcon() + " Creating an unencrypted backup because no backup password is configured.")
 			fmt.Println("Creating backup...")
 			if err := maint.Backup(arg); err != nil {
 				fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Backup failed: %v\n", err)
@@ -2278,7 +2286,8 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 	case "--help", "help", "-h":
 		// Per AI.md PART 8: --maintenance --help prints help and exits 0
 		fmt.Printf(`Maintenance Commands:
-  %s --maintenance backup [file]      Create backup (prompts for password)
+  %s --maintenance backup [file]      Create backup (uses configured password)
+      backup test [file]               Verify archive without touching live data
   %s --maintenance restore [file]     Restore from backup (prompts if encrypted)
   %s --maintenance update             Check and apply updates
   %s --maintenance mode <on|off>      Enable/disable maintenance mode
@@ -2315,9 +2324,9 @@ Data actions (AI.md GDPR/CCPA):
   export [--out <file>]               Write a JSON export of all stored data
   delete                              Erase personal data; audit log retained
 
-Per AI.md PART 21 the backup password is never passed on the command
-line; backup always prompts and restore prompts only when the archive
-is encrypted.
+Per AI.md PART 21 the backup password is never passed on the command line.
+Scheduled and manual backups use the configured password; restore and backup
+test prompt only when the selected archive is encrypted.
 
 Examples:
   %s --maintenance backup             # Backup to default location

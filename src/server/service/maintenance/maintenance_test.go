@@ -5,6 +5,7 @@ package maintenance
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 )
 
@@ -114,9 +115,43 @@ func TestEncryptBackupMinimumLength(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encryptBackup error: %v", err)
 	}
-	// salt(16) + nonce(12) = 28 bytes minimum, plus ciphertext and GCM tag
-	if len(enc) < 28 {
-		t.Errorf("encrypted length = %d, want >= 28", len(enc))
+	// Header is 55 bytes, followed by the plaintext and the 16-byte GCM tag.
+	if len(enc) < 55+1+16 {
+		t.Errorf("encrypted length = %d, want >= 72", len(enc))
+	}
+}
+
+func TestEncryptedBackupHeaderAndBaseAreAuthenticated(t *testing.T) {
+	m := newTestManager(t)
+	enc, err := m.encryptBackupWithBase([]byte("payload"), "secret", "full.tar.gz.enc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(enc[:5]) != "BKUP1" || string(enc[45:53]) == "" {
+		t.Fatalf("encrypted backup header is invalid: %q", enc[:55])
+	}
+	baseLen := int(binary.BigEndian.Uint16(enc[53:55]))
+	if baseLen != len("full.tar.gz.enc") || string(enc[55:55+baseLen]) != "full.tar.gz.enc" {
+		t.Fatalf("base metadata = len %d, value %q", baseLen, enc[55:55+baseLen])
+	}
+	if _, err := m.decryptBackup(enc, "secret"); err != nil {
+		t.Fatalf("decrypt valid archive: %v", err)
+	}
+	enc[55] ^= 1
+	if _, err := m.decryptBackup(enc, "secret"); err == nil {
+		t.Fatal("modified authenticated base filename was accepted")
+	}
+}
+
+func TestDecryptBackupRejectsOversizedBaseHeaderBeforeKDF(t *testing.T) {
+	m := newTestManager(t)
+	enc, err := m.encryptBackup([]byte("payload"), "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary.BigEndian.PutUint16(enc[53:55], 256)
+	if _, err := m.decryptBackup(enc, "secret"); err == nil {
+		t.Fatal("oversized base filename was accepted")
 	}
 }
 

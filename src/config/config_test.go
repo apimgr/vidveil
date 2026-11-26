@@ -66,6 +66,42 @@ func TestDefaultAppConfig(t *testing.T) {
 	}
 }
 
+func TestLocalizedHelpContentResolution(t *testing.T) {
+	var body LocalizedContentBody
+	if err := yaml.Unmarshal([]byte("fr: français\nen: English\n"), &body); err != nil {
+		t.Fatal(err)
+	}
+	if got := body.ResolveWithFallback("fr", "Built-in"); got != "français" {
+		t.Errorf("exact locale = %q, want français", got)
+	}
+	if got := body.ResolveWithFallback("de", "Built-in"); got != "Built-in" {
+		t.Errorf("missing locale fallback = %q, want Built-in", got)
+	}
+	encoded, err := yaml.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var roundTrip LocalizedContentBody
+	if err := yaml.Unmarshal(encoded, &roundTrip); err != nil {
+		t.Fatal(err)
+	}
+	if got := roundTrip.ResolveWithFallback("de", "Built-in"); got != "Built-in" {
+		t.Errorf("round-trip missing locale fallback = %q, want Built-in; YAML: %s", got, encoded)
+	}
+	if err := yaml.Unmarshal([]byte("default: fallback\nfr: français\nen: English\n"), &body); err != nil {
+		t.Fatal(err)
+	}
+	if got := body.ResolveWithFallback("de", "Built-in"); got != "fallback" {
+		t.Errorf("default locale = %q, want fallback", got)
+	}
+	if err := yaml.Unmarshal([]byte("single language help"), &body); err != nil {
+		t.Fatal(err)
+	}
+	if got := body.ResolveWithFallback("fr", "Built-in"); got != "single language help" {
+		t.Errorf("scalar content = %q", got)
+	}
+}
+
 func TestPrivacyPageTextIsBuiltIn(t *testing.T) {
 	cfg := DefaultAppConfig()
 	want := cfg.Server.Privacy.Content
@@ -288,6 +324,49 @@ func TestDNSCredentialsAreEncryptedOnDiskAndHiddenFromJSON(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), "sensitive-token-value") || strings.Contains(string(encoded), "dns_credentials") {
 		t.Fatal("DNS credentials appeared in JSON serialization")
+	}
+}
+
+func TestBackupPasswordIsStoredInSecretsFile(t *testing.T) {
+	configDir := t.TempDir()
+	dataDir := t.TempDir()
+	cfg := DefaultAppConfig()
+	cfg.Server.Backup.EncryptionPassword = "private-backup-password"
+	configPath := filepath.Join(configDir, "server.yml")
+	if err := SaveAppConfig(cfg, configPath); err != nil {
+		t.Fatal(err)
+	}
+	serverData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secretsData, err := os.ReadFile(filepath.Join(configDir, "secrets.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(serverData), "private-backup-password") || !strings.Contains(string(secretsData), "private-backup-password") {
+		t.Fatal("backup password was not kept in secrets.yml")
+	}
+	secretInfo, err := os.Stat(filepath.Join(configDir, "secrets.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secretInfo.Mode().Perm() != 0600 {
+		t.Fatalf("secrets.yml permissions = %04o, want 0600", secretInfo.Mode().Perm())
+	}
+	loaded, _, err := LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := loaded.Server.Backup.EncryptionPassword; got != "private-backup-password" {
+		t.Fatalf("loaded backup password = %q", got)
+	}
+	encoded, err := json.Marshal(loaded.Server.Backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "private-backup-password") {
+		t.Fatal("backup password appeared in JSON serialization")
 	}
 }
 

@@ -13,6 +13,18 @@ type Envelope struct {
 	Message string `json:"message,omitempty"`
 }
 
+type HelpPageLink struct {
+	Title string `json:"title"`
+	Path  string `json:"path"`
+}
+
+type ServerHelpData struct {
+	Title   string         `json:"title"`
+	Content string         `json:"content"`
+	Format  string         `json:"format"`
+	Pages   []HelpPageLink `json:"pages"`
+}
+
 // ErrorEnvelope is the common error response used by JSON API operations.
 type ErrorEnvelope struct {
 	OK      bool   `json:"ok"`
@@ -455,7 +467,7 @@ var routeDefinitions = []Definition{
 	{Method: http.MethodGet, Path: "/api/{api_version}/server/auth/check", OperationID: "checkServerToken", Summary: "Check server authentication status", Auth: "bearer", Listed: true, Request: map[string]any{}, Response: Envelope{Data: APIAuthData{}}, Message: "Retrieved successfully"},
 	{Method: http.MethodGet, Path: "/api/{api_version}/server/contact", OperationID: "getServerContactForm", Summary: "Get contact form description", Auth: "none", Listed: true, Request: map[string]any{"security_id": "string"}, Response: Envelope{Data: map[string]any{"fields": []any{}, "types": []string{}, "captcha": map[string]any{}, "form_token": "string", "security_url": "string", "abuse_email": "string"}}, Primary: "contact", Message: "Retrieved successfully"},
 	{Method: http.MethodPost, Path: "/api/{api_version}/server/contact", OperationID: "submitServerContact", Summary: "Submit a contact or security report", Auth: "none", Listed: true, Request: ContactRequest{}, Response: Envelope{Data: ContactSubmissionData{}}, Message: "Created successfully"},
-	{Method: http.MethodGet, Path: "/api/{api_version}/server/help", OperationID: "getServerHelp", Summary: "Get server help", Auth: "none", Listed: true, Request: map[string]any{}, Response: Envelope{Data: map[string]any{}}, Primary: "help", Message: "Retrieved successfully"},
+	{Method: http.MethodGet, Path: "/api/{api_version}/server/help", OperationID: "getServerHelp", Summary: "Get server help", Auth: "none", Listed: true, Request: map[string]any{}, Response: Envelope{Data: ServerHelpData{}}, Message: "Retrieved successfully"},
 	{Method: http.MethodGet, Path: "/api/{api_version}/server/help/mcp", OperationID: "getServerHelpMCP", Summary: "Get MCP integration help", Auth: "none", Listed: true, Request: map[string]any{}, Response: Envelope{Data: map[string]any{}}, Primary: "help", Message: "Retrieved successfully"},
 	{Method: http.MethodGet, Path: "/api/{api_version}/server/terms", OperationID: "getServerTerms", Summary: "Get server terms", Auth: "none", Listed: true, Request: map[string]any{}, Response: Envelope{Data: TermsData{}}, Primary: "terms", Message: "Retrieved successfully"},
 	{Method: http.MethodGet, Path: "/api/{api_version}/server/security", OperationID: "getServerSecurity", Summary: "Get server security contact information", Auth: "none", Listed: true, Request: map[string]any{}, Response: SecurityOverviewResponse{}, Primary: "contacts", Message: "Retrieved successfully"},

@@ -6,12 +6,18 @@
 package maintenance
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/apimgr/vidveil/src/server/service/pgp"
 )
 
 // newManagerWithDirs creates a MaintenanceManager whose Config/Data/Backup
@@ -310,10 +316,111 @@ func TestBackup_CreatesFile(t *testing.T) {
 	}
 }
 
+func TestBackupAlwaysSnapshotsSQLiteDatabase(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, dataDir := newManagerWithDirs(t)
+	databaseDir := filepath.Join(dataDir, "db")
+	if err := os.MkdirAll(databaseDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	databasePath := filepath.Join(databaseDir, "server.db")
+	db, err := sql.Open("sqlite", databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("CREATE TABLE snapshot_test (value TEXT)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO snapshot_test(value) VALUES ('captured')"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	backupFile := filepath.Join(backupDir, "database.tar.gz")
+	if err := m.BackupWithOptions(BackupOptions{Filename: backupFile, IncludeData: false}); err != nil {
+		t.Fatalf("backup without optional data: %v", err)
+	}
+	archiveData, err := os.ReadFile(backupFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive, err := loadRestoreArchive(archiveData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range archive.files {
+		if file.name == "data/db/server.db" {
+			if err := verifySQLiteIntegrity(file.content); err != nil {
+				t.Fatalf("snapshot database: %v", err)
+			}
+			return
+		}
+	}
+	t.Fatal("backup omitted the SQLite database when optional data was disabled")
+}
+
+func TestTestBackupVerifiesArchivedPGPKeypair(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, configDir, dataDir := newManagerWithDirs(t)
+	secret := []byte("test installation secret with enough entropy")
+	keypair, err := pgp.GenerateKeypair("VidVeil Security", "security@example.test", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encryptedPrivate, err := pgp.EncryptPrivateKey(keypair.PrivateArmored, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	securityDir := filepath.Join(configDir, "security")
+	if err := os.MkdirAll(securityDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(securityDir, pgp.PublicKeyFile), keypair.PublicArmored, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(securityDir, pgp.PrivateKeyFile), encryptedPrivate, 0600); err != nil {
+		t.Fatal(err)
+	}
+	databaseDir := filepath.Join(dataDir, "db")
+	if err := os.MkdirAll(databaseDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", filepath.Join(databaseDir, "server.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("CREATE TABLE app_secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO app_secrets(key,value) VALUES (?,?)", "installation_secret", base64.StdEncoding.EncodeToString(secret)); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	backupFile := filepath.Join(backupDir, "operator-test.tar.gz")
+	if err := m.BackupWithOptions(BackupOptions{Filename: backupFile}); err != nil {
+		t.Fatalf("create backup: %v", err)
+	}
+	result, err := m.TestBackup(backupFile, "")
+	if err != nil {
+		t.Fatalf("test backup: %v", err)
+	}
+	if !result.ChecksumVerified || !result.ManifestVerified || !result.DatabaseVerified || !result.PGPKeypairVerified {
+		t.Fatalf("backup test checks incomplete: %+v", result)
+	}
+}
+
 func TestBackupIncremental_CreatesFile(t *testing.T) {
 	backupDir := t.TempDir()
 	t.Setenv("BACKUP_DIR", backupDir)
 	m, _, _ := newManagerWithDirs(t)
+	if err := m.BackupWithOptions(BackupOptions{Filename: filepath.Join(backupDir, "vidveil_backup_2026-01-01.tar.gz")}); err != nil {
+		t.Fatalf("create full backup base: %v", err)
+	}
 
 	outFile := filepath.Join(backupDir, "hourly.tar.gz")
 	if err := m.BackupIncremental(outFile); err != nil {
@@ -321,6 +428,27 @@ func TestBackupIncremental_CreatesFile(t *testing.T) {
 	}
 	if _, err := os.Stat(outFile); err != nil {
 		t.Error("BackupIncremental: output file missing")
+	}
+}
+
+func TestBackupIncrementalWithPassword_UsesEncryptedBase(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+	password := "backup-secret"
+	baseFile := filepath.Join(backupDir, "vidveil_backup_2026-01-01.tar.gz.enc")
+	if err := m.BackupWithOptions(BackupOptions{Filename: baseFile, Password: password}); err != nil {
+		t.Fatalf("create encrypted full base: %v", err)
+	}
+	outFile := filepath.Join(backupDir, "vidveil-hourly.tar.gz.enc")
+	if err := m.BackupIncrementalWithPassword(outFile, password); err != nil {
+		t.Fatalf("create encrypted incremental: %v", err)
+	}
+	if _, err := os.Stat(outFile); err != nil {
+		t.Fatalf("encrypted incremental missing: %v", err)
+	}
+	if err := m.BackupIncrementalWithPassword(filepath.Join(backupDir, "wrong-password.tar.gz.enc"), "wrong-password"); err == nil {
+		t.Fatal("wrong password unexpectedly created an incremental")
 	}
 }
 
@@ -370,6 +498,35 @@ func TestVerifyBackup_WrongChecksum(t *testing.T) {
 	}
 }
 
+func TestVerifyBackup_IncrementalChecksItsBase(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+	baseFile := filepath.Join(backupDir, "vidveil_backup_2026-01-01.tar.gz")
+	if err := m.BackupWithOptions(BackupOptions{Filename: baseFile}); err != nil {
+		t.Fatalf("create full base: %v", err)
+	}
+	incrementalFile := filepath.Join(backupDir, "vidveil-hourly.tar.gz")
+	if err := m.BackupIncremental(incrementalFile); err != nil {
+		t.Fatalf("create incremental: %v", err)
+	}
+	data, err := os.ReadFile(incrementalFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(data)
+	checksum := "sha256:" + hex.EncodeToString(sum[:])
+	if err := m.verifyBackup(incrementalFile, checksum, ""); err != nil {
+		t.Fatalf("verify incremental with base: %v", err)
+	}
+	if err := os.Remove(baseFile); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.verifyBackup(incrementalFile, checksum, ""); err == nil || !strings.Contains(err.Error(), "ERR_BASE_MISSING") {
+		t.Fatalf("verify incremental without base error = %v, want ERR_BASE_MISSING", err)
+	}
+}
+
 // ── RestoreWithPassword / Restore ─────────────────────────────────────────────
 
 func TestRestoreWithPassword_RestoresFromBackup(t *testing.T) {
@@ -388,6 +545,50 @@ func TestRestoreWithPassword_RestoresFromBackup(t *testing.T) {
 
 	if err := m.RestoreWithPassword(outFile, ""); err != nil {
 		t.Errorf("RestoreWithPassword: %v", err)
+	}
+}
+
+func TestRestoreIncrementalCombinesBaseChangesAndDeletions(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, configDir, _ := newManagerWithDirs(t)
+	changedPath := filepath.Join(configDir, "changed.yml")
+	deletedPath := filepath.Join(configDir, "deleted.yml")
+	if err := os.WriteFile(changedPath, []byte("base"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(deletedPath, []byte("remove me"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	baseFile := filepath.Join(backupDir, "vidveil_backup_2026-01-01.tar.gz")
+	if err := m.BackupWithOptions(BackupOptions{Filename: baseFile}); err != nil {
+		t.Fatalf("create full base: %v", err)
+	}
+	if err := os.WriteFile(changedPath, []byte("incremental"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(deletedPath); err != nil {
+		t.Fatal(err)
+	}
+	incrementalFile := filepath.Join(backupDir, "vidveil-hourly.tar.gz")
+	if err := m.BackupIncremental(incrementalFile); err != nil {
+		t.Fatalf("create incremental: %v", err)
+	}
+	if err := os.WriteFile(changedPath, []byte("live state to replace"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.RestoreWithPassword(incrementalFile, ""); err != nil {
+		t.Fatalf("restore incremental: %v", err)
+	}
+	contents, err := os.ReadFile(changedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "incremental" {
+		t.Fatalf("restored changed file = %q, want incremental", contents)
+	}
+	if _, err := os.Stat(deletedPath); !os.IsNotExist(err) {
+		t.Fatalf("deleted path still exists after restore: %v", err)
 	}
 }
 
@@ -518,6 +719,9 @@ func TestBackupWithOptions_EncryptedPath(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	if err := m.BackupWithOptions(BackupOptions{Filename: filepath.Join(backupDir, "vidveil_backup_2026-01-01.tar.gz")}); err != nil {
+		t.Fatalf("create full backup base: %v", err)
+	}
 
 	outFile := filepath.Join(backupDir, "enc_backup.tar.gz.enc")
 	err := m.BackupWithOptions(BackupOptions{
@@ -567,6 +771,9 @@ func TestBackupWithOptions_IncludeSSL(t *testing.T) {
 // to BackupIncremental with an empty path.
 func TestBackupIncremental_AutoNaming(t *testing.T) {
 	m, _, _ := newManagerWithDirs(t)
+	if err := m.BackupWithOptions(BackupOptions{Filename: filepath.Join(m.paths.Backup, "vidveil_backup_2026-01-01.tar.gz")}); err != nil {
+		t.Fatalf("create full backup base: %v", err)
+	}
 
 	if err := m.BackupIncremental(""); err != nil {
 		t.Fatalf("BackupIncremental auto-name: %v", err)
@@ -624,9 +831,8 @@ func TestApplyRetentionWithOptions_KeepWeeklyMonthlyYearly(t *testing.T) {
 
 // ── BackupDailyFull ────────────────────────────────────────────────────────────
 
-// TestBackupDailyFull_CreatesBothFiles verifies the scheduled backup_daily run
-// (AI.md PART 21) produces both the date-stamped full backup and the fixed
-// vidveil-daily incremental file in the same pass.
+// TestBackupDailyFull_CreatesBothFiles verifies the first run creates only a
+// full and the next run creates the cumulative incremental before its new full.
 func TestBackupDailyFull_CreatesBothFiles(t *testing.T) {
 	backupDir := t.TempDir()
 	t.Setenv("BACKUP_DIR", backupDir)
@@ -646,6 +852,12 @@ func TestBackupDailyFull_CreatesBothFiles(t *testing.T) {
 	}
 
 	dailyFile := filepath.Join(backupDir, "vidveil-daily.tar.gz")
+	if _, err := os.Stat(dailyFile); !os.IsNotExist(err) {
+		t.Fatalf("first backup run must skip the incremental, stat error = %v", err)
+	}
+	if err := m.BackupDailyFull(BackupOptions{IncludeData: true, MaxBackups: 5}); err != nil {
+		t.Fatalf("second BackupDailyFull: %v", err)
+	}
 	if _, err := os.Stat(dailyFile); err != nil {
 		t.Errorf("BackupDailyFull: expected daily incremental file %s: %v", dailyFile, err)
 	}
@@ -661,7 +873,8 @@ func TestBackupDailyFull_EncryptedNamesUseEncExtension(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := m.BackupDailyFull(BackupOptions{IncludeData: true, MaxBackups: 5, Password: "s3cret"}); err != nil {
+	options := BackupOptions{IncludeData: true, MaxBackups: 5, Password: "s3cret"}
+	if err := m.BackupDailyFull(options); err != nil {
 		t.Fatalf("BackupDailyFull encrypted: %v", err)
 	}
 
@@ -672,8 +885,96 @@ func TestBackupDailyFull_EncryptedNamesUseEncExtension(t *testing.T) {
 	}
 
 	dailyFile := filepath.Join(backupDir, "vidveil-daily.tar.gz.enc")
+	if _, err := os.Stat(dailyFile); !os.IsNotExist(err) {
+		t.Fatalf("first encrypted run must skip the incremental, stat error = %v", err)
+	}
+	if err := m.BackupDailyFull(options); err != nil {
+		t.Fatalf("second BackupDailyFull encrypted: %v", err)
+	}
 	if _, err := os.Stat(dailyFile); err != nil {
 		t.Errorf("BackupDailyFull encrypted: expected daily incremental file %s: %v", dailyFile, err)
+	}
+}
+
+func TestBackupDailyFull_PasswordChangePreservesPreviousIncremental(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, configDir, _ := newManagerWithDirs(t)
+	if err := os.WriteFile(filepath.Join(configDir, "server.yml"), []byte("config: true"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	first := BackupOptions{IncludeData: true, MaxBackups: 5, Password: "first-password"}
+	if err := m.BackupDailyFull(first); err != nil {
+		t.Fatalf("initial full: %v", err)
+	}
+	if err := m.BackupDailyFull(first); err != nil {
+		t.Fatalf("initial incremental: %v", err)
+	}
+	dailyFile := filepath.Join(backupDir, "vidveil-daily.tar.gz.enc")
+	previousIncremental, err := os.ReadFile(dailyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := first
+	changed.Password = "second-password"
+	passwordChanged, err := m.latestFullPasswordChanged(changed.Password)
+	if err != nil || !passwordChanged {
+		t.Fatalf("password change detection = %v, %v; want true, nil", passwordChanged, err)
+	}
+	if err := m.BackupDailyFull(changed); err != nil {
+		t.Fatalf("full after password change: %v", err)
+	}
+	currentIncremental, err := os.ReadFile(dailyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(previousIncremental, currentIncremental) {
+		t.Fatal("password change replaced the existing incremental before a new base had an incremental")
+	}
+	if err := m.BackupDailyFull(changed); err != nil {
+		t.Fatalf("incremental after password change: %v", err)
+	}
+	updatedIncremental, err := os.ReadFile(dailyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(previousIncremental, updatedIncremental) {
+		t.Fatal("next run did not replace the old incremental")
+	}
+}
+
+func TestBackupDailyFull_RemovingEncryptionReplacesOldIncremental(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+	encrypted := BackupOptions{IncludeData: true, MaxBackups: 5, Password: "old-password"}
+	if err := m.BackupDailyFull(encrypted); err != nil {
+		t.Fatalf("initial encrypted full: %v", err)
+	}
+	if err := m.BackupDailyFull(encrypted); err != nil {
+		t.Fatalf("initial encrypted incremental: %v", err)
+	}
+	oldDaily := filepath.Join(backupDir, "vidveil-daily.tar.gz.enc")
+	plain := encrypted
+	plain.Password = ""
+	passwordChanged, err := m.latestFullPasswordChanged("")
+	if err != nil || !passwordChanged {
+		t.Fatalf("encryption removal detection = %v, %v; want true, nil", passwordChanged, err)
+	}
+	if err := m.BackupDailyFull(plain); err != nil {
+		t.Fatalf("full after removing encryption: %v", err)
+	}
+	if _, err := os.Stat(oldDaily); err != nil {
+		t.Fatalf("old encrypted incremental should remain until the new base has an incremental: %v", err)
+	}
+	if err := m.BackupDailyFull(plain); err != nil {
+		t.Fatalf("plain incremental after encryption removal: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(backupDir, "vidveil-daily.tar.gz")); err != nil {
+		t.Fatalf("new plain incremental missing: %v", err)
+	}
+	if _, err := os.Stat(oldDaily); !os.IsNotExist(err) {
+		t.Fatalf("stale encrypted incremental remains after replacement: %v", err)
 	}
 }
 

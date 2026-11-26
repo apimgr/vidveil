@@ -785,8 +785,8 @@ func TestAPIPrivacy_TextPlain_ReturnsText(t *testing.T) {
 	}
 }
 
-// APIHelp text/plain path returns plain text with endpoint list.
-func TestAPIHelp_TextPlain_ReturnsText(t *testing.T) {
+// APIHelp returns the same typed data for every negotiated representation.
+func TestAPIHelp_TextPlainReturnsTypedHelpData(t *testing.T) {
 	h := newServerHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/help", nil)
 	req.Header.Set("Accept", "text/plain")
@@ -795,11 +795,11 @@ func TestAPIHelp_TextPlain_ReturnsText(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("APIHelp text: status=%d want 200", rr.Code)
 	}
-	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
-		t.Errorf("APIHelp text: Content-Type=%q want text/plain", rr.Header().Get("Content-Type"))
+	if !strings.Contains(rr.Header().Get("Content-Type"), "application/json") {
+		t.Errorf("APIHelp direct handler: Content-Type=%q want application/json", rr.Header().Get("Content-Type"))
 	}
-	if !strings.Contains(rr.Body.String(), "search:") {
-		t.Errorf("APIHelp text: body missing 'search:': %s", rr.Body.String())
+	if !strings.Contains(rr.Body.String(), `"format": "markdown"`) {
+		t.Errorf("APIHelp response missing help format: %s", rr.Body.String())
 	}
 }
 

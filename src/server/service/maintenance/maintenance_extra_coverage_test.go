@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,26 @@ import (
 // "config/server.yml"). Mirrors the layout loadRestoreArchive expects.
 func buildTestBackupArchive(t *testing.T, manifest BackupManifest, files map[string]string) []byte {
 	t.Helper()
+	missingSHA := manifest.Type == "missing-sha256"
+	if missingSHA {
+		manifest.Type = "full"
+	}
+	if manifest.Type == "" {
+		manifest.Type = "full"
+	}
+	if manifest.SnapshotAt == "" {
+		manifest.SnapshotAt = time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	}
+	if manifest.Files == nil {
+		for name, content := range files {
+			digest := sha256.Sum256([]byte(content))
+			manifest.Files = append(manifest.Files, BackupFile{Path: name, Size: int64(len(content)), SHA256: hex.EncodeToString(digest[:])})
+		}
+		sort.Slice(manifest.Files, func(i, j int) bool { return manifest.Files[i].Path < manifest.Files[j].Path })
+	}
+	if manifest.SHA256 == "" && !missingSHA {
+		manifest.SHA256 = backupManifestChecksum(manifest.Files)
+	}
 
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
@@ -621,13 +642,13 @@ func TestRestoreWithPassword_MissingManifestVersion(t *testing.T) {
 }
 
 // TestRestoreWithPassword_ChecksumMismatch verifies a manifest with an
-// incorrect Checksum is rejected before extraction.
+// incorrect sha256 is rejected before extraction.
 func TestRestoreWithPassword_ChecksumMismatch(t *testing.T) {
 	m, _ := newMaintMgrWithTempDirs(t)
 
 	data := buildTestBackupArchive(t, BackupManifest{
-		Version:  "1",
-		Checksum: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		Version: "1",
+		SHA256:  "0000000000000000000000000000000000000000000000000000000000000000",
 	}, map[string]string{"config/server.yml": "content"})
 	path := filepath.Join(m.paths.Backup, "vidveil_backup_badsum.tar.gz")
 	if err := os.WriteFile(path, data, 0644); err != nil {
@@ -635,40 +656,32 @@ func TestRestoreWithPassword_ChecksumMismatch(t *testing.T) {
 	}
 
 	err := m.RestoreWithPassword(path, "")
-	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+	if err == nil || !strings.Contains(err.Error(), "sha256 mismatch") {
 		t.Errorf("expected checksum mismatch error, got: %v", err)
 	}
 }
 
 func TestRestoreWithPassword_MissingChecksum(t *testing.T) {
 	m, _ := newMaintMgrWithTempDirs(t)
-	data := buildTestBackupArchive(t, BackupManifest{Version: "1"}, map[string]string{"config/server.yml": "content"})
+	data := buildTestBackupArchive(t, BackupManifest{Version: "1", Type: "missing-sha256"}, map[string]string{"config/server.yml": "content"})
 	path := filepath.Join(m.paths.Backup, "vidveil_backup_nosum.tar.gz")
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.RestoreWithPassword(path, ""); err == nil || !strings.Contains(err.Error(), "missing checksum") {
-		t.Fatalf("expected missing-checksum error, got %v", err)
+	if err := m.RestoreWithPassword(path, ""); err == nil || !strings.Contains(err.Error(), "missing sha256") {
+		t.Fatalf("expected missing-sha256 error, got %v", err)
 	}
 }
 
 // TestRestoreWithPassword_ValidChecksumSucceeds verifies a manifest whose
-// Checksum matches the recomputed content hash restores successfully and
+// sha256 matches the recomputed file-list hash restores successfully and
 // extracts the file to the config directory.
 func TestRestoreWithPassword_ValidChecksumSucceeds(t *testing.T) {
 	m, _ := newMaintMgrWithTempDirs(t)
 
 	const name, content = "config/server.yml", "restored content"
-	hasher := sha256.New()
-	hasher.Write([]byte(name))
-	hasher.Write([]byte{0})
-	hasher.Write([]byte(content))
-	hasher.Write([]byte{0})
-	checksum := "sha256:" + hex.EncodeToString(hasher.Sum(nil))
-
 	data := buildTestBackupArchive(t, BackupManifest{
-		Version:  "1",
-		Checksum: checksum,
+		Version: "1",
 	}, map[string]string{name: content})
 	path := filepath.Join(m.paths.Backup, "vidveil_backup_goodsum.tar.gz")
 	if err := os.WriteFile(path, data, 0644); err != nil {
@@ -694,16 +707,9 @@ func TestRestoreWithPassword_ValidChecksumSucceeds(t *testing.T) {
 func TestRestoreWithPassword_AppVersionMismatchWarns(t *testing.T) {
 	m, _ := newMaintMgrWithTempDirs(t)
 	const name, content = "config/server.yml", "content"
-	hasher := sha256.New()
-	hasher.Write([]byte(name))
-	hasher.Write([]byte{0})
-	hasher.Write([]byte(content))
-	hasher.Write([]byte{0})
-
 	data := buildTestBackupArchive(t, BackupManifest{
 		Version:    "1",
 		AppVersion: "0.0.1-does-not-match",
-		Checksum:   "sha256:" + hex.EncodeToString(hasher.Sum(nil)),
 	}, map[string]string{name: content})
 	path := filepath.Join(m.paths.Backup, "vidveil_backup_oldver.tar.gz")
 	if err := os.WriteFile(path, data, 0644); err != nil {

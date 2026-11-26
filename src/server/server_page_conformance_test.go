@@ -2,14 +2,20 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/handler"
+	"github.com/apimgr/vidveil/src/server/service/database"
+	"github.com/apimgr/vidveil/src/server/service/secreport"
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/net/html"
 )
@@ -39,6 +45,70 @@ func TestServerPageConformance(t *testing.T) {
 			checkServerPageDocument(t, s, path, recorder.Body.String())
 		})
 	}
+
+	t.Run("security-report-status", func(t *testing.T) {
+		dbPath := filepath.Join(t.TempDir(), "server.db")
+		schema, err := database.NewSchemaManager(dbPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := schema.EnsureSchema(); err != nil {
+			_ = schema.Close()
+			t.Fatal(err)
+		}
+		defer schema.Close()
+		s.appConfig.Server.Security.EncryptionKey = strings.Repeat("a", 64)
+		s.serverHandler.SetDB(schema.GetDB())
+		submission, err := secreport.CreateReport(t.Context(), schema.GetDB(), s.configDir, s.appConfig.Server.Security.EncryptionKey, secreport.Input{
+			IDWindow: time.Now().Unix(), Severity: "low", Component: "conformance",
+			Body: []byte("conformance report"), CreditPreference: "none",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := "/server/security/report/" + submission.TrackingID
+		request := httptest.NewRequest(http.MethodGet, path+"?token="+url.QueryEscape(submission.ReportToken), nil)
+		request.Header.Set("Accept", "text/html")
+		request.Header.Set("User-Agent", "Mozilla/5.0")
+		request.AddCookie(&http.Cookie{Name: "age_verified", Value: "1"})
+		recorder := httptest.NewRecorder()
+		s.router.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s returned %d: %s", path, recorder.Code, recorder.Body.String())
+		}
+		checkServerPageDocument(t, s, path, recorder.Body.String())
+	})
+
+	t.Run("themed-error-statuses", func(t *testing.T) {
+		statuses := []struct {
+			code  int
+			title string
+		}{
+			{http.StatusBadRequest, "Bad Request"},
+			{http.StatusUnauthorized, "Unauthorized"},
+			{http.StatusForbidden, "Forbidden"},
+			{http.StatusNotFound, "Not Found"},
+			{http.StatusInternalServerError, "Internal Server Error"},
+			{http.StatusBadGateway, "Bad Gateway"},
+			{http.StatusServiceUnavailable, "Service Unavailable"},
+		}
+		for _, status := range statuses {
+			t.Run(strconv.Itoa(status.code), func(t *testing.T) {
+				path := "/server/__error_" + strconv.Itoa(status.code)
+				request := httptest.NewRequest(http.MethodGet, path, nil)
+				request.Header.Set("Accept", "text/html")
+				request.Header.Set("User-Agent", "Mozilla/5.0")
+				request.AddCookie(&http.Cookie{Name: "age_verified", Value: "1"})
+				request = request.WithContext(context.WithValue(request.Context(), handler.CSRFTokenKey, "conformance-token"))
+				recorder := httptest.NewRecorder()
+				s.searchHandler.RenderErrorPage(recorder, request, status.code, status.title, status.title+" details")
+				if recorder.Code != status.code {
+					t.Fatalf("error render status = %d, want %d", recorder.Code, status.code)
+				}
+				checkServerPageDocument(t, s, path, recorder.Body.String())
+			})
+		}
+	})
 
 	t.Run("branded-404", func(t *testing.T) {
 		const path = "/server/__page_conformance_missing__"
@@ -320,8 +390,14 @@ func checkServerHeader(t *testing.T, pagePath string, root *html.Node) {
 				actions = append(actions, child)
 			}
 		}
-		if len(actions) != 2 || actions[0].Data != "a" || attr(actions[0], "href") != "/server/preferences" || actions[1].Data != "form" || attr(actions[1], "method") != "post" {
-			t.Errorf("%s header actions must contain preferences and the theme form", pagePath)
+		if len(actions) == 0 || actions[0].Data != "a" || attr(actions[0], "href") != "/server/preferences" {
+			t.Errorf("%s header actions must start with the preferences link", pagePath)
+		} else if pagePath == "/server/preferences" {
+			if len(actions) != 1 {
+				t.Errorf("%s must omit its separate theme form", pagePath)
+			}
+		} else if len(actions) != 2 || actions[1].Data != "form" || attr(actions[1], "method") != "post" || !hasClass(actions[1], "theme-toggle-form") {
+			t.Errorf("%s header actions must include the theme form", pagePath)
 		}
 	}
 }

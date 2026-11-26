@@ -133,6 +133,17 @@ func TestGenerateSpecNilConfig(t *testing.T) {
 	}
 }
 
+func TestGenerateSourceSpecUsesDeterministicServerURL(t *testing.T) {
+	var document map[string]any
+	if err := json.Unmarshal([]byte(GenerateSourceSpec()), &document); err != nil {
+		t.Fatal(err)
+	}
+	servers, ok := document["servers"].([]any)
+	if !ok || len(servers) != 1 || servers[0].(map[string]any)["url"] != "https://generated.invalid" {
+		t.Fatalf("source spec servers = %#v, want stable generated.invalid URL", document["servers"])
+	}
+}
+
 // TestGenerateSpecWithConfig covers the default-config path: must return valid JSON
 // containing VidVeil branding, the "paths" key, and the two required API paths.
 func TestGenerateSpecWithConfig(t *testing.T) {

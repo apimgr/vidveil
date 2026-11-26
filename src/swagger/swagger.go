@@ -49,7 +49,7 @@ func generateSourceSpec(appConfig *config.AppConfig, r *http.Request) string {
 		},
 		"servers": []map[string]string{
 			{
-				"url":         urlvar.BuildURL(r, ""),
+				"url":         sourceServerURL(r),
 				"description": "Current server",
 			},
 		},
@@ -553,6 +553,13 @@ func generateSourceSpec(appConfig *config.AppConfig, r *http.Request) string {
 	synchronizeRouteDefinitions(paths, apiBase)
 	data, _ := json.MarshalIndent(spec, "", "  ")
 	return string(data)
+}
+
+func sourceServerURL(r *http.Request) string {
+	if r != nil && r.Host == "generated.invalid" {
+		return "https://generated.invalid"
+	}
+	return urlvar.BuildURL(r, "")
 }
 
 // synchronizeRouteDefinitions makes the route registry authoritative for the

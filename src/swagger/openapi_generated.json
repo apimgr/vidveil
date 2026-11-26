@@ -2284,9 +2284,41 @@
                 "schema": {
                   "properties": {
                     "data": {
-                      "additionalProperties": {
-                        "type": "object"
+                      "properties": {
+                        "content": {
+                          "type": "string"
+                        },
+                        "format": {
+                          "type": "string"
+                        },
+                        "pages": {
+                          "items": {
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "title",
+                              "path"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "title": {
+                          "type": "string"
+                        }
                       },
+                      "required": [
+                        "title",
+                        "content",
+                        "format",
+                        "pages"
+                      ],
                       "type": "object"
                     },
                     "message": {
@@ -4387,7 +4419,7 @@
   "servers": [
     {
       "description": "Current server",
-      "url": "http://48aa8fb07e2b"
+      "url": "https://generated.invalid"
     }
   ]
 }

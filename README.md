@@ -37,7 +37,7 @@ https://x.scour.li
 | **8 Languages** | English, Arabic, German, Spanish, French, Italian, Japanese, and Chinese |
 | **AI Integration** | OpenAPI-generated MCP tools and configurable `llms.txt` discovery |
 | **Content Restriction** | Geographic warnings/blocks for regions with adult content laws |
-| **Operator Management** | Configure through `server.yml`, area files, `secrets.yml`, and the CLI; backup restore is performed with the maintenance CLI |
+| **Operator Management** | Configure through `server.yml`, area files, `secrets.yml`, and the CLI; create, verify, and restore encrypted or unencrypted backups with the maintenance CLI ([backup guide](docs/admin-guide/backup.md)) |
 | **Single Binary** | No external dependencies, embedded assets |
 | **Docker Ready** | Alpine-based container with tini |
 

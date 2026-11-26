@@ -64,9 +64,8 @@ func pagePayload(pages []hubPage, locale string) []map[string]string {
 	result := make([]map[string]string, 0, len(pages))
 	for _, page := range pages {
 		result = append(result, map[string]string{
-			"path":        page.Path,
-			"title":       i18n.Translate(locale, page.TitleKey),
-			"description": i18n.Translate(locale, page.DescriptionKey),
+			"path":  page.Path,
+			"title": i18n.Translate(locale, page.TitleKey),
 		})
 	}
 	return result

@@ -304,7 +304,7 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	data := map[string]interface{}{
 		"Title":          appName,
 		"AppName":        appName,
-		"PageContent":    h.pageContent(templateName),
+		"PageContent":    h.pageContent(templateName, locale),
 		"AppTagline":     h.appConfig.Server.Branding.Tagline,
 		"AppDescription": h.appConfig.Server.Branding.Description,
 		"DPOName":        h.appConfig.Server.Contact.DPO.Name,
@@ -433,10 +433,10 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	_, _ = w.Write(buf.Bytes())
 }
 
-func (h *ServerHandler) pageContent(templateName string) string {
+func (h *ServerHandler) pageContent(templateName, locale string) string {
 	switch templateName {
 	case "server-help":
-		return h.appConfig.Server.Pages.Help.Content
+		return h.appConfig.Server.Pages.Help.Content.ResolveWithFallback(locale, config.DefaultHelpContent)
 	default:
 		return ""
 	}
@@ -1545,79 +1545,14 @@ func (h *ServerHandler) apiSecurityReportSubmit(w http.ResponseWriter, r *http.R
 // APIHelp handles GET {api_version}/server/help
 // Per AI.md PART 14: content negotiation required; health API is at {api_version}/server/healthz.
 func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
-	apiBase := h.appConfig.APIBasePath()
-	if getAPIResponseFormat(r) == "text" {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = fmt.Fprintf(w, "search: GET %s/search  params: q, page, engines (bang shortcuts like !ph supported in q)\n", apiBase)
-		_, _ = fmt.Fprintf(w, "bangs: GET %s/bangs\n", apiBase)
-		_, _ = fmt.Fprintf(w, "autocomplete: GET %s/bangs/autocomplete?q={partial}\n", apiBase)
-		_, _ = fmt.Fprintf(w, "engines: GET %s/engines\n", apiBase)
-		_, _ = fmt.Fprintf(w, "engines_health: GET %s/engines/health\n", apiBase)
-		_, _ = fmt.Fprintf(w, "thumbnail_proxy: GET %s/proxy/thumbnails?url={url}\n", apiBase)
-		_, _ = fmt.Fprintf(w, "health: GET %s/server/healthz\n", apiBase)
-		_, _ = fmt.Fprintf(w, "contact_form: GET %s/server/contact; POST %s/server/contact\n", apiBase, apiBase)
-		_, _ = fmt.Fprintf(w, "auth_check: GET %s/server/auth/check (Bearer token)\n", apiBase)
-		_, _ = fmt.Fprintf(w, "swagger: /server/docs/swagger\n")
-		_, _ = fmt.Fprintf(w, "graphql: /server/docs/graphql\n")
-		return
-	}
+	locale := i18n.DetectLocale(r)
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
 		"data": map[string]interface{}{
-			"pages": pagePayload(pagesForHub("help", h.appConfig), i18n.DetectLocale(r)),
-			"search": map[string]interface{}{
-				"endpoint":    apiBase + "/search",
-				"method":      "GET",
-				"parameters":  []string{"q (query; bang shortcuts like !ph !xv supported)", "page", "engines"},
-				"description": "Search across 27 registered video engines by default; supports JSON, SSE (text/event-stream), and text/plain",
-			},
-			"bangs": map[string]interface{}{
-				"endpoint":    apiBase + "/bangs",
-				"method":      "GET",
-				"description": "List all bang shortcuts",
-			},
-			"autocomplete": map[string]interface{}{
-				"endpoint":    apiBase + "/bangs/autocomplete",
-				"method":      "GET",
-				"parameters":  []string{"q (partial query, bang, or @performer)"},
-				"description": "Autocomplete bangs, performer names, and search terms",
-			},
-			"engines": map[string]interface{}{
-				"endpoint":    apiBase + "/engines",
-				"method":      "GET",
-				"description": "List available search engines",
-			},
-			"engines_health": map[string]interface{}{
-				"endpoint":    apiBase + "/engines/health",
-				"method":      "GET",
-				"description": "Per-engine health/availability status",
-			},
-			"contact_form": map[string]interface{}{
-				"endpoint":    apiBase + "/server/contact",
-				"methods":     []string{"GET", "POST"},
-				"description": "GET describes the contact form; POST submits it with a required captcha",
-			},
-			"auth_check": map[string]interface{}{
-				"endpoint":      apiBase + "/server/auth/check",
-				"method":        "GET",
-				"authorization": "Bearer token required",
-				"description":   "Validate a token and return its kind without changing token usage metadata",
-			},
-			"thumbnail_proxy": map[string]interface{}{
-				"endpoint":    apiBase + "/proxy/thumbnails",
-				"method":      "GET",
-				"parameters":  []string{"url (upstream thumbnail URL)"},
-				"description": "Privacy-preserving thumbnail proxy",
-			},
-			"health": map[string]interface{}{
-				"endpoint":    apiBase + "/server/healthz",
-				"method":      "GET",
-				"description": "Check server health status",
-			},
-			"documentation": map[string]interface{}{
-				"swagger": "/server/docs/swagger",
-				"graphql": "/server/docs/graphql",
-			},
+			"title":   i18n.Translate(locale, "help.title"),
+			"content": h.appConfig.Server.Pages.Help.Content.ResolveWithFallback(locale, config.DefaultHelpContent),
+			"format":  "markdown",
+			"pages":   pagePayload(pagesForHub("help", h.appConfig), locale),
 		},
 	})
 }

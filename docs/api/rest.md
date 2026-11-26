@@ -252,6 +252,12 @@ GET  https://x.scour.li/api/autodiscover
 GET  https://x.scour.li/cli/binaries/{filename}
 ```
 
+`GET /api/{api_version}/server/help` returns `{title, content, format, pages}`.
+`content` is the configured localized Markdown source, `format` is always
+`markdown`, and each registry-ordered page link contains only `title` and
+`path`. The corresponding server-rendered guide uses the same localized
+content.
+
 The DPO endpoint always returns `200` with `name`, `email`, and an absolute
 `privacy_url` built from the request's resolved base URL and `/server/privacy`.
 An empty DPO email falls back to `server.contact.general.email`; if neither is

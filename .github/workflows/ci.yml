@@ -33,7 +33,7 @@ jobs:
       - name: Regenerate embedded API specifications
         run: go generate ./src/swagger
       - name: Verify generated API specifications are current
-        run: git diff --exit-code -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
+        run: git diff --exit-code HEAD -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
       - run: go vet ./...
       - run: staticcheck ./...
 
@@ -94,7 +94,7 @@ jobs:
       - name: Regenerate embedded API specifications
         run: go generate ./src/swagger
       - name: Verify generated API specifications are current
-        run: git diff --exit-code -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
+        run: git diff --exit-code HEAD -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
       - name: Run tests with coverage
         run: |
           mkdir -p "/tmp/${{ github.repository_owner }}"
@@ -126,7 +126,7 @@ jobs:
       - name: Regenerate embedded API specifications
         run: go generate ./src/swagger
       - name: Verify generated API specifications are current
-        run: git diff --exit-code -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
+        run: git diff --exit-code HEAD -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
       - run: go build -trimpath -buildvcs=false ./...
 
   vuln-scan:

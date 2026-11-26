@@ -51,7 +51,7 @@ jobs:
       - name: Regenerate embedded API specifications
         run: go generate ./src/swagger
       - name: Verify generated API specifications are current
-        run: git diff --exit-code -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
+        run: git diff --exit-code HEAD -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
 
       - name: Set build info
         run: |

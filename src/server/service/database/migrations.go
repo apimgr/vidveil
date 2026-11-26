@@ -7,6 +7,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,9 +21,12 @@ import (
 // Uses CREATE TABLE IF NOT EXISTS - no migrations tracking table
 // Supports SQLite (local) and libsql/Turso (remote) backends per AI.md PART 3
 type SchemaManager struct {
-	db     *sql.DB
-	dbPath string
-	driver Driver
+	db        *sql.DB
+	readDB    *sql.DB
+	appDB     *AppDatabase
+	readAppDB *AppDatabase
+	dbPath    string
+	driver    Driver
 }
 
 // NewSchemaManager creates a new schema manager for SQLite (backward compatibility)
@@ -38,11 +42,17 @@ func NewSchemaManager(dbPath string) (*SchemaManager, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	return &SchemaManager{
-		db:     db,
-		dbPath: dbPath,
-		driver: DriverSQLite,
-	}, nil
+	var readDB *sql.DB
+	if dbPath == ":memory:" {
+		readDB = db
+	} else {
+		readDB, err = sql.Open("sqlite", readOnlySQLiteDSN(dbPath))
+		if err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("failed to open read-only database handle: %w", err)
+		}
+	}
+	return &SchemaManager{db: db, readDB: readDB, dbPath: dbPath, driver: DriverSQLite}, nil
 }
 
 // NewSchemaManagerWithConfig creates a schema manager using DatabaseConfig
@@ -53,11 +63,32 @@ func NewSchemaManagerWithConfig(cfg DatabaseConfig) (*SchemaManager, error) {
 		return nil, err
 	}
 
-	return &SchemaManager{
-		db:     appDB.DB(),
-		dbPath: cfg.Path,
-		driver: appDB.Driver(),
-	}, nil
+	var readDB *sql.DB
+	var readAppDB *AppDatabase
+	if normalizeDriver(cfg.Driver) == DriverSQLite {
+		if cfg.Path == ":memory:" {
+			readDB = appDB.DB()
+		} else {
+			readDB, err = sql.Open("sqlite", readOnlySQLiteDSN(cfg.Path))
+		}
+	} else {
+		readAppDB, err = NewAppDatabase(cfg)
+		if err == nil {
+			readDB = readAppDB.DB()
+		}
+	}
+	if err != nil {
+		_ = appDB.Close()
+		return nil, fmt.Errorf("failed to open read database handle: %w", err)
+	}
+	return &SchemaManager{db: appDB.DB(), readDB: readDB, appDB: appDB, readAppDB: readAppDB, dbPath: cfg.Path, driver: appDB.Driver()}, nil
+}
+
+func readOnlySQLiteDSN(path string) string {
+	if strings.HasPrefix(path, "file:") {
+		return path + "?mode=ro&_busy_timeout=5000"
+	}
+	return "file:" + path + "?mode=ro&_busy_timeout=5000"
 }
 
 // EnsureSchema creates all required tables if they don't exist
@@ -68,12 +99,28 @@ func (sm *SchemaManager) EnsureSchema() error {
 
 	// Get tables DDL for the current driver
 	tables := sm.getTablesDDL()
+	var deferredSchedulerIndexes []string
 
 	// Execute all table creation statements
 	for _, ddl := range tables {
+		if strings.Contains(ddl, "idx_scheduler_history_") {
+			deferredSchedulerIndexes = append(deferredSchedulerIndexes, ddl)
+			continue
+		}
 		if _, err := sm.db.ExecContext(ctx, ddl); err != nil {
 			return fmt.Errorf("failed to create table: %w", err)
 		}
+	}
+	if err := sm.migrateSchedulerSchema(ctx); err != nil {
+		return err
+	}
+	for _, ddl := range deferredSchedulerIndexes {
+		if _, err := sm.db.ExecContext(ctx, ddl); err != nil {
+			return fmt.Errorf("create scheduler history index: %w", err)
+		}
+	}
+	if _, err := sm.db.ExecContext(ctx, `INSERT OR IGNORE INTO owners(id) VALUES ('system')`); err != nil {
+		return fmt.Errorf("create reserved system owner: %w", err)
 	}
 	if err := sm.ensureOwnerTokenColumns(ctx); err != nil {
 		return err
@@ -347,31 +394,32 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			updated_by TEXT
 		)`,
 
-		// Scheduled tasks table
-		`CREATE TABLE IF NOT EXISTS scheduled_tasks (
+		// Scheduler task state per AI.md PART 10 / PART 18.
+		`CREATE TABLE IF NOT EXISTS scheduler_tasks (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
+			enabled INTEGER NOT NULL DEFAULT 1,
 			schedule TEXT NOT NULL,
-			enabled INTEGER DEFAULT 1,
-			last_run DATETIME,
-			next_run DATETIME,
-			last_result TEXT,
+			last_run INTEGER,
+			last_status TEXT,
 			last_error TEXT,
-			run_count INTEGER DEFAULT 0,
-			fail_count INTEGER DEFAULT 0
+			next_run INTEGER,
+			run_count INTEGER NOT NULL DEFAULT 0,
+			fail_count INTEGER NOT NULL DEFAULT 0
 		)`,
 
-		// Task history table
-		`CREATE TABLE IF NOT EXISTS task_history (
+		// Scheduler execution history per AI.md PART 10 / PART 18.
+		`CREATE TABLE IF NOT EXISTS scheduler_history (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			task_id TEXT NOT NULL,
-			start_time DATETIME NOT NULL,
-			end_time DATETIME,
-			duration_ms INTEGER,
-			result TEXT,
+			task_id TEXT NOT NULL REFERENCES scheduler_tasks(id),
+			started_at INTEGER NOT NULL,
+			finished_at INTEGER,
+			status TEXT NOT NULL,
 			error TEXT,
-			FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
+			duration_ms INTEGER
 		)`,
+		`CREATE INDEX IF NOT EXISTS idx_scheduler_history_task ON scheduler_history(task_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_scheduler_history_started ON scheduler_history(started_at)`,
 
 		// App secrets table per AI.md PART 11
 		// Stores installation_secret, cookie_signing_key, csrf_token_secret
@@ -488,9 +536,26 @@ func (sm *SchemaManager) GetDB() *sql.DB {
 	return sm.db
 }
 
+// GetReadDB returns the separate read handle used for health probes and read-only work.
+func (sm *SchemaManager) GetReadDB() *sql.DB {
+	return sm.readDB
+}
+
 // Close closes the database connection
 func (sm *SchemaManager) Close() error {
-	return sm.db.Close()
+	var readErr error
+	if sm.readAppDB != nil {
+		readErr = sm.readAppDB.Close()
+	} else if sm.readDB != nil && sm.readDB != sm.db {
+		readErr = sm.readDB.Close()
+	}
+	writeErr := error(nil)
+	if sm.appDB != nil {
+		writeErr = sm.appDB.Close()
+	} else if sm.db != nil {
+		writeErr = sm.db.Close()
+	}
+	return errors.Join(readErr, writeErr)
 }
 
 // MigrationManager is an alias for SchemaManager for backward compatibility
@@ -523,7 +588,7 @@ func (sm *SchemaManager) GetMigrationStatus() ([]map[string]interface{}, error) 
 
 	// List all tables we manage
 	tables := []string{
-		"audit_log", "settings", "scheduled_tasks", "task_history",
+		"audit_log", "settings", "scheduler_tasks", "scheduler_history",
 	}
 
 	var status []map[string]interface{}
@@ -536,6 +601,215 @@ func (sm *SchemaManager) GetMigrationStatus() ([]map[string]interface{}, error) 
 	}
 
 	return status, nil
+}
+
+func (sm *SchemaManager) migrateSchedulerSchema(ctx context.Context) error {
+	if err := sm.renameSchedulerColumns(ctx, "scheduler_tasks", map[string]string{
+		"task_id":     "id",
+		"task_name":   "name",
+		"last_result": "last_status",
+	}); err != nil {
+		return err
+	}
+	if err := sm.renameSchedulerColumns(ctx, "scheduler_history", map[string]string{
+		"ran_at": "started_at",
+		"result": "status",
+	}); err != nil {
+		return err
+	}
+	if err := sm.ensureSchedulerColumns(ctx); err != nil {
+		return err
+	}
+	for _, column := range []struct{ table, name string }{
+		{"scheduler_tasks", "last_run"}, {"scheduler_tasks", "next_run"},
+		{"scheduler_history", "started_at"}, {"scheduler_history", "finished_at"},
+	} {
+		if _, err := sm.db.ExecContext(ctx, `UPDATE "`+column.table+`" SET "`+column.name+`" = CAST(strftime('%s', "`+column.name+`") AS INTEGER) WHERE "`+column.name+`" IS NOT NULL AND typeof("`+column.name+`") != 'integer'`); err != nil {
+			return fmt.Errorf("normalize scheduler timestamp %s.%s: %w", column.table, column.name, err)
+		}
+	}
+	for _, table := range []string{"scheduler_tasks", "scheduler_history"} {
+		column := "last_status"
+		if table == "scheduler_history" {
+			column = "status"
+		}
+		if _, err := sm.db.ExecContext(ctx, `UPDATE "`+table+`" SET "`+column+`" = 'failed' WHERE lower("`+column+`") = 'failure'`); err != nil {
+			return fmt.Errorf("normalize scheduler status %s.%s: %w", table, column, err)
+		}
+	}
+	if err := sm.copyLegacySchedulerTables(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (sm *SchemaManager) ensureSchedulerColumns(ctx context.Context) error {
+	for table, required := range map[string]map[string]string{
+		"scheduler_tasks": {
+			"name": "TEXT NOT NULL DEFAULT ''", "enabled": "INTEGER NOT NULL DEFAULT 1",
+			"schedule": "TEXT NOT NULL DEFAULT ''", "last_run": "INTEGER", "last_status": "TEXT",
+			"last_error": "TEXT", "next_run": "INTEGER", "run_count": "INTEGER NOT NULL DEFAULT 0",
+			"fail_count": "INTEGER NOT NULL DEFAULT 0",
+		},
+		"scheduler_history": {
+			"started_at": "INTEGER NOT NULL DEFAULT 0", "finished_at": "INTEGER", "status": "TEXT NOT NULL DEFAULT 'failed'",
+			"error": "TEXT", "duration_ms": "INTEGER",
+		},
+	} {
+		columns, err := sm.tableColumns(ctx, table)
+		if err != nil {
+			return err
+		}
+		if !columns["id"] {
+			return fmt.Errorf("%s is missing required id column", table)
+		}
+		if table == "scheduler_history" && !columns["task_id"] {
+			return fmt.Errorf("%s is missing required task_id column", table)
+		}
+		for name, definition := range required {
+			if columns[name] {
+				continue
+			}
+			if _, err := sm.db.ExecContext(ctx, `ALTER TABLE "`+table+`" ADD COLUMN "`+name+`" `+definition); err != nil {
+				return fmt.Errorf("add scheduler column %s.%s: %w", table, name, err)
+			}
+		}
+	}
+	return nil
+}
+
+func (sm *SchemaManager) renameSchedulerColumns(ctx context.Context, table string, renames map[string]string) error {
+	exists, err := sm.tableExists(ctx, table)
+	if err != nil || !exists {
+		return err
+	}
+	columns, err := sm.tableColumns(ctx, table)
+	if err != nil {
+		return err
+	}
+	for oldName, newName := range renames {
+		if columns[oldName] && !columns[newName] {
+			if _, err := sm.db.ExecContext(ctx, `ALTER TABLE "`+table+`" RENAME COLUMN "`+oldName+`" TO "`+newName+`"`); err != nil {
+				return fmt.Errorf("rename scheduler column %s.%s to %s: %w", table, oldName, newName, err)
+			}
+			columns[newName] = true
+			delete(columns, oldName)
+		}
+	}
+	return nil
+}
+
+func (sm *SchemaManager) tableColumns(ctx context.Context, table string) (map[string]bool, error) {
+	rows, err := sm.db.QueryContext(ctx, `PRAGMA table_info("`+table+`")`)
+	if err != nil {
+		return nil, fmt.Errorf("inspect %s columns: %w", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+	columns := make(map[string]bool)
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, dataType string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return nil, fmt.Errorf("scan %s columns: %w", table, err)
+		}
+		columns[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read %s columns: %w", table, err)
+	}
+	return columns, nil
+}
+
+func (sm *SchemaManager) copyLegacySchedulerTables(ctx context.Context) error {
+	legacyTasks, err := sm.tableExists(ctx, "scheduled_tasks")
+	if err != nil {
+		return fmt.Errorf("check legacy scheduler task table: %w", err)
+	}
+	legacyHistory, err := sm.tableExists(ctx, "task_history")
+	if err != nil {
+		return fmt.Errorf("check legacy scheduler history table: %w", err)
+	}
+	if !legacyTasks && !legacyHistory {
+		return nil
+	}
+	var taskColumns, historyColumns map[string]bool
+	if legacyTasks {
+		taskColumns, err = sm.tableColumns(ctx, "scheduled_tasks")
+		if err != nil {
+			return err
+		}
+	}
+	if legacyHistory {
+		historyColumns, err = sm.tableColumns(ctx, "task_history")
+		if err != nil {
+			return err
+		}
+	}
+	tx, err := sm.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin scheduler schema migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if legacyTasks {
+		lastRun := legacyUnixColumn(taskColumns, "last_run")
+		nextRun := legacyUnixColumn(taskColumns, "next_run")
+		lastStatus := legacyColumn(taskColumns, "last_result", "NULL")
+		lastError := legacyColumn(taskColumns, "last_error", "NULL")
+		runCount := legacyColumn(taskColumns, "run_count", "0")
+		failCount := legacyColumn(taskColumns, "fail_count", "0")
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO scheduler_tasks
+			(id, name, enabled, schedule, last_run, last_status, last_error, next_run, run_count, fail_count)
+			SELECT id, name, COALESCE(enabled, 1), schedule, `+lastRun+`,
+			CASE lower(COALESCE(`+lastStatus+`, '')) WHEN 'failure' THEN 'failed' ELSE `+lastStatus+` END,
+			`+lastError+`, `+nextRun+`, COALESCE(`+runCount+`, 0), COALESCE(`+failCount+`, 0)
+			FROM scheduled_tasks`); err != nil {
+			return fmt.Errorf("copy legacy scheduler tasks: %w", err)
+		}
+	}
+	if legacyHistory {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO scheduler_tasks(id, name, enabled, schedule)
+			SELECT DISTINCT h.task_id, h.task_id, 0, '' FROM task_history h
+			WHERE NOT EXISTS (SELECT 1 FROM scheduler_tasks t WHERE t.id = h.task_id)`); err != nil {
+			return fmt.Errorf("preserve scheduler history task references: %w", err)
+		}
+		startedAt := legacyUnixColumn(historyColumns, "start_time")
+		finishedAt := legacyUnixColumn(historyColumns, "end_time")
+		status := legacyColumn(historyColumns, "result", "'failed'")
+		errorText := legacyColumn(historyColumns, "error", "NULL")
+		duration := legacyColumn(historyColumns, "duration_ms", "NULL")
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO scheduler_history
+			(id, task_id, started_at, finished_at, status, error, duration_ms)
+			SELECT id, task_id, `+startedAt+`, `+finishedAt+`,
+			CASE lower(COALESCE(`+status+`, 'failed')) WHEN 'failure' THEN 'failed' ELSE `+status+` END,
+			`+errorText+`, `+duration+` FROM task_history`); err != nil {
+			return fmt.Errorf("copy legacy scheduler history: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `DROP TABLE task_history`); err != nil {
+			return fmt.Errorf("remove legacy scheduler history table: %w", err)
+		}
+	}
+	if legacyTasks {
+		if _, err := tx.ExecContext(ctx, `DROP TABLE scheduled_tasks`); err != nil {
+			return fmt.Errorf("remove legacy scheduler task table: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit scheduler schema migration: %w", err)
+	}
+	return nil
+}
+
+func legacyColumn(columns map[string]bool, name, fallback string) string {
+	if columns[name] {
+		return `"` + name + `"`
+	}
+	return fallback
+}
+
+func legacyUnixColumn(columns map[string]bool, name string) string {
+	column := legacyColumn(columns, name, "NULL")
+	return `CASE WHEN ` + column + ` IS NULL THEN NULL WHEN typeof(` + column + `) IN ('integer','real') THEN CAST(` + column + ` AS INTEGER) ELSE CAST(strftime('%s', ` + column + `) AS INTEGER) END`
 }
 
 // tableExists checks if a table exists.

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/metric"
@@ -53,8 +54,8 @@ type ScheduledTask struct {
 	Schedule string    `json:"schedule"`
 	Enabled  bool      `json:"enabled"`
 	LastRun  time.Time `json:"last_run"`
-	// LastResult: success, failure, running, or pending
-	LastResult string    `json:"last_result"`
+	// LastResult stores the canonical scheduler status.
+	LastResult string    `json:"last_status"`
 	LastError  string    `json:"last_error,omitempty"`
 	NextRun    time.Time `json:"next_run"`
 	RunCount   int64     `json:"run_count"`
@@ -65,11 +66,14 @@ type ScheduledTask struct {
 	cronSched cronSchedule `json:"-"`
 	fn        TaskFunc
 	// retryCount tracks consecutive failed attempts for exponential backoff per AI.md PART 18
-	retryCount int
+	retryCount  int
+	retryOnFail bool
+	retryDelay  time.Duration
 	// running marks a task whose execution is currently in flight, used to
 	// enforce the PART 18 overlap policy (a still-running task is skipped, not
 	// run concurrently). In-memory only, guarded by Scheduler.mu.
-	running bool `json:"-"`
+	running               bool `json:"-"`
+	interruptionRequested bool `json:"-"`
 }
 
 // Retry policy per AI.md PART 18: max 3 retries, 5m base delay, exponential backoff (5m, 10m, 20m)
@@ -81,10 +85,10 @@ const (
 // TaskHistory represents a historical run of a task
 type TaskHistory struct {
 	TaskID    string        `json:"task_id"`
-	StartTime time.Time     `json:"start_time"`
-	EndTime   time.Time     `json:"end_time"`
+	StartTime time.Time     `json:"started_at"`
+	EndTime   time.Time     `json:"finished_at"`
 	Duration  time.Duration `json:"duration"`
-	Result    string        `json:"result"`
+	Result    string        `json:"status"`
 	Error     string        `json:"error,omitempty"`
 }
 
@@ -136,8 +140,8 @@ func (s *Scheduler) logTaskAudit(task *ScheduledTask, history TaskHistory) {
 		return
 	}
 	result := "success"
-	if history.Result == "failure" {
-		result = "failure"
+	if history.Result == "failed" {
+		result = "failed"
 	}
 	details := map[string]interface{}{
 		"task_id":     task.ID,
@@ -150,6 +154,13 @@ func (s *Scheduler) logTaskAudit(task *ScheduledTask, history TaskHistory) {
 		details["error"] = history.Error
 	}
 	logger.Audit("scheduler.task", task.ID, "system", "", result, details)
+}
+
+func unixTimeOrNil(value time.Time) interface{} {
+	if value.IsZero() {
+		return nil
+	}
+	return value.Unix()
 }
 
 func (s *Scheduler) logSchedulerError(message string, fields map[string]interface{}) {
@@ -218,6 +229,52 @@ func (s *Scheduler) SetCatchUpWindow(window time.Duration) {
 	s.catchUpWindow = window
 }
 
+// SetTimezone configures the IANA timezone used by cron schedules.
+func (s *Scheduler) SetTimezone(name string) error {
+	location, err := time.LoadLocation(name)
+	if err != nil {
+		return fmt.Errorf("load scheduler timezone %q: %w", name, err)
+	}
+	s.mu.Lock()
+	s.loc = location
+	for _, task := range s.tasks {
+		if task.cronSched != nil {
+			task.NextRun = task.cronSched.Next(s.now())
+			copy := *task
+			if err := s.saveTaskStateToDB(&copy); err != nil {
+				s.mu.Unlock()
+				return fmt.Errorf("persist next run for task %q after timezone update: %w", task.ID, err)
+			}
+		}
+	}
+	s.mu.Unlock()
+	return nil
+}
+
+// SetRetryPolicy configures a task's YAML-backed failure retry behavior.
+func (s *Scheduler) SetRetryPolicy(taskID string, enabled bool, delay string) error {
+	baseDelay := schedulerRetryDelay
+	if delay != "" {
+		parsed, err := time.ParseDuration(delay)
+		if err != nil || parsed <= 0 {
+			if err == nil {
+				err = fmt.Errorf("duration must be positive")
+			}
+			return fmt.Errorf("invalid retry_delay %q: %w", delay, err)
+		}
+		baseDelay = parsed
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	task, ok := s.tasks[taskID]
+	if !ok {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	task.retryOnFail = enabled
+	task.retryDelay = baseDelay
+	return nil
+}
+
 // Query timeout helpers per AI.md PART 10: All queries MUST have timeouts
 // execCtx runs a statement whose execution completes before this helper
 // returns, so scoping the timeout context to the helper is safe. Query
@@ -242,11 +299,11 @@ func (s *Scheduler) loadTaskStateFromDB(taskID string) (*ScheduledTask, error) {
 
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, name, schedule, enabled, last_run, next_run,
-		       last_result, last_error, run_count, fail_count
-		FROM scheduled_tasks WHERE id = ?`, taskID)
+		       last_status, last_error, run_count, fail_count
+		FROM scheduler_tasks WHERE id = ?`, taskID)
 
 	var task ScheduledTask
-	var lastRun, nextRun sql.NullTime
+	var lastRun, nextRun sql.NullInt64
 	var lastResult, lastError sql.NullString
 
 	err := row.Scan(
@@ -262,13 +319,17 @@ func (s *Scheduler) loadTaskStateFromDB(taskID string) (*ScheduledTask, error) {
 	}
 
 	if lastRun.Valid {
-		task.LastRun = lastRun.Time
+		task.LastRun = time.Unix(lastRun.Int64, 0)
 	}
 	if nextRun.Valid {
-		task.NextRun = nextRun.Time
+		task.NextRun = time.Unix(nextRun.Int64, 0)
 	}
 	if lastResult.Valid {
 		task.LastResult = lastResult.String
+	}
+	if task.LastResult == "running" {
+		task.LastResult = "interrupted"
+		task.NextRun = s.now()
 	}
 	if lastError.Valid {
 		task.LastError = lastError.String
@@ -284,8 +345,8 @@ func (s *Scheduler) saveTaskStateToDB(task *ScheduledTask) error {
 	}
 
 	_, err := s.execCtx(`
-		INSERT INTO scheduled_tasks (id, name, schedule, enabled, last_run, next_run,
-		                             last_result, last_error, run_count, fail_count)
+		INSERT INTO scheduler_tasks (id, name, schedule, enabled, last_run, next_run,
+		                             last_status, last_error, run_count, fail_count)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name = excluded.name,
@@ -293,12 +354,12 @@ func (s *Scheduler) saveTaskStateToDB(task *ScheduledTask) error {
 			enabled = excluded.enabled,
 			last_run = excluded.last_run,
 			next_run = excluded.next_run,
-			last_result = excluded.last_result,
+			last_status = excluded.last_status,
 			last_error = excluded.last_error,
 			run_count = excluded.run_count,
 			fail_count = excluded.fail_count`,
 		task.ID, task.Name, task.Schedule, task.Enabled,
-		task.LastRun, task.NextRun, task.LastResult, task.LastError,
+		unixTimeOrNil(task.LastRun), unixTimeOrNil(task.NextRun), task.LastResult, task.LastError,
 		task.RunCount, task.FailCount,
 	)
 	return err
@@ -311,9 +372,9 @@ func (s *Scheduler) saveHistoryToDB(hist TaskHistory) error {
 	}
 
 	_, err := s.execCtx(`
-		INSERT INTO task_history (task_id, start_time, end_time, duration_ms, result, error)
+		INSERT INTO scheduler_history (task_id, started_at, finished_at, duration_ms, status, error)
 		VALUES (?, ?, ?, ?, ?, ?)`,
-		hist.TaskID, hist.StartTime, hist.EndTime,
+		hist.TaskID, unixTimeOrNil(hist.StartTime), unixTimeOrNil(hist.EndTime),
 		hist.Duration.Milliseconds(), hist.Result, hist.Error,
 	)
 	return err
@@ -335,9 +396,9 @@ func (s *Scheduler) LoadHistoryFromDB(limit int) error {
 	defer cancel()
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT task_id, start_time, end_time, duration_ms, result, error
-		FROM task_history
-		ORDER BY start_time DESC
+		SELECT task_id, started_at, finished_at, duration_ms, status, error
+		FROM scheduler_history
+		ORDER BY started_at DESC
 		LIMIT ?`, limit)
 	if err != nil {
 		return fmt.Errorf("failed to load history: %w", err)
@@ -348,10 +409,17 @@ func (s *Scheduler) LoadHistoryFromDB(limit int) error {
 	for rows.Next() {
 		var h TaskHistory
 		var durationMs int64
+		var startedAt, finishedAt sql.NullInt64
 		var errStr sql.NullString
 
-		if err := rows.Scan(&h.TaskID, &h.StartTime, &h.EndTime, &durationMs, &h.Result, &errStr); err != nil {
+		if err := rows.Scan(&h.TaskID, &startedAt, &finishedAt, &durationMs, &h.Result, &errStr); err != nil {
 			return fmt.Errorf("failed to scan history row: %w", err)
+		}
+		if startedAt.Valid {
+			h.StartTime = time.Unix(startedAt.Int64, 0)
+		}
+		if finishedAt.Valid {
+			h.EndTime = time.Unix(finishedAt.Int64, 0)
 		}
 
 		h.Duration = time.Duration(durationMs) * time.Millisecond
@@ -432,6 +500,10 @@ func (s *Scheduler) RegisterTask(id, name, description, schedule string, fn Task
 				nextFromLast := existingState.LastRun.Add(task.Interval)
 				task.NextRun = nextFromLast
 			}
+		}
+		if existingState.LastResult == "interrupted" {
+			task.LastResult = "interrupted"
+			task.NextRun = s.now()
 		}
 	}
 
@@ -635,11 +707,26 @@ func (s *Scheduler) Start(ctx context.Context) {
 	s.mu.Unlock()
 
 	// Check for missed tasks within catch-up window per AI.md PART 18
+	s.runInterruptedTasks()
 	if catchUpWindow > 0 {
 		s.runMissedTasks(catchUpWindow)
 	}
 
 	go s.run()
+}
+
+func (s *Scheduler) runInterruptedTasks() {
+	s.mu.RLock()
+	tasks := make([]*ScheduledTask, 0)
+	for _, task := range s.tasks {
+		if task.Enabled && task.LastResult == "interrupted" {
+			tasks = append(tasks, task)
+		}
+	}
+	s.mu.RUnlock()
+	for _, task := range tasks {
+		go s.runTask(task)
+	}
 }
 
 // runMissedTasks runs tasks that were missed while the server was down
@@ -700,6 +787,21 @@ func (s *Scheduler) Stop() {
 	case <-completed:
 	case <-time.After(30 * time.Second):
 		s.logSchedulerError("scheduler shutdown timed out waiting for tasks", map[string]interface{}{"timeout": "30s"})
+		s.mu.Lock()
+		interrupted := make([]ScheduledTask, 0)
+		for _, task := range s.tasks {
+			if task.running {
+				task.interruptionRequested = true
+				task.LastResult = "interrupted"
+				interrupted = append(interrupted, *task)
+			}
+		}
+		s.mu.Unlock()
+		for i := range interrupted {
+			if err := s.saveTaskStateToDB(&interrupted[i]); err != nil {
+				s.logSchedulerError("failed to persist interrupted scheduled task", map[string]interface{}{"task_id": interrupted[i].ID, "error": err.Error()})
+			}
+		}
 	}
 	if taskCancel != nil {
 		taskCancel()
@@ -757,8 +859,13 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 	task.running = true
 	s.taskWG.Add(1)
 	task.LastResult = "running"
+	task.interruptionRequested = false
 	startTime := s.now()
+	startingState := *task
 	s.mu.Unlock()
+	if err := s.saveTaskStateToDB(&startingState); err != nil {
+		s.logSchedulerError("failed to persist running scheduled task", map[string]interface{}{"task_id": task.ID, "error": err.Error()})
+	}
 
 	// Always clear the in-flight flag, even on panic, so a crashed task never
 	// permanently blocks its own future triggers.
@@ -785,6 +892,16 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 	err := invokeTask(ctx, task.fn)
 
 	s.mu.Lock()
+	if task.interruptionRequested {
+		task.LastResult = "interrupted"
+		task.running = false
+		taskCopy := *task
+		s.mu.Unlock()
+		if err := s.saveTaskStateToDB(&taskCopy); err != nil {
+			s.logSchedulerError("failed to persist interrupted scheduled task", map[string]interface{}{"task_id": task.ID, "error": err.Error()})
+		}
+		return
+	}
 	endTime := time.Now()
 	duration := endTime.Sub(startTime)
 
@@ -795,7 +912,6 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 	} else {
 		task.NextRun = startTime.Add(task.Interval)
 	}
-	task.RunCount++
 
 	hist := TaskHistory{
 		TaskID:    task.ID,
@@ -807,18 +923,22 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 	status := "success"
 	var retryLog map[string]interface{}
 	if err != nil {
-		status = "failure"
-		task.LastResult = "failure"
+		status = "failed"
+		task.LastResult = "failed"
 		task.LastError = err.Error()
 		task.FailCount++
-		hist.Result = "failure"
+		hist.Result = "failed"
 		hist.Error = err.Error()
 		// Retry policy per AI.md PART 18: schedule a retry with exponential
 		// backoff (5m, 10m, 20m) until max_retries is reached, then fall back
 		// to the task's normal schedule computed above.
-		if task.retryCount < schedulerMaxRetries {
+		if task.retryOnFail && task.retryCount < schedulerMaxRetries {
 			task.retryCount++
-			backoff := schedulerRetryDelay * time.Duration(1<<(task.retryCount-1))
+			baseDelay := task.retryDelay
+			if baseDelay <= 0 {
+				baseDelay = schedulerRetryDelay
+			}
+			backoff := baseDelay * time.Duration(1<<(task.retryCount-1))
 			task.NextRun = startTime.Add(backoff)
 			retryLog = map[string]interface{}{
 				"task_id":     task.ID,
@@ -834,6 +954,7 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 		task.LastResult = "success"
 		task.LastError = ""
 		hist.Result = "success"
+		task.RunCount++
 		task.retryCount = 0
 	}
 
@@ -864,7 +985,7 @@ func (s *Scheduler) runTask(task *ScheduledTask) {
 		s.logSchedulerError("failed to persist scheduled task history", map[string]interface{}{"task_id": task.ID, "error": err.Error()})
 	}
 	s.logTaskAudit(&taskCopy, hist)
-	if hist.Result == "failure" {
+	if hist.Result == "failed" {
 		s.mu.RLock()
 		notifyFailure := s.failureNotifier
 		s.mu.RUnlock()
@@ -970,6 +1091,9 @@ func (s *Scheduler) EnableTask(taskID string) error {
 // DisableTask disables a task
 // Per AI.md PART 18: Enabled state is persisted to database
 func (s *Scheduler) DisableTask(taskID string) error {
+	if criticalSchedulerTask(taskID) {
+		return fmt.Errorf("task %q is required and cannot be disabled", taskID)
+	}
 	s.mu.Lock()
 	task, ok := s.tasks[taskID]
 	if !ok {
@@ -987,6 +1111,16 @@ func (s *Scheduler) DisableTask(taskID string) error {
 	}
 	s.mu.Unlock()
 	return nil
+}
+
+func criticalSchedulerTask(taskID string) bool {
+	switch taskID {
+	case "ssl_renewal", "security_cleanup", "keyserver_retry", "token_cleanup",
+		"log_rotation", "healthcheck_self", "tor_health", "i2p_health":
+		return true
+	default:
+		return false
+	}
 }
 
 // SetSchedule updates a task's schedule
@@ -1151,11 +1285,13 @@ type BuiltinTaskFuncs struct {
 	I2PHealth TaskFunc
 	// update_check - Daily at 06:00 per AI.md PART 18/22: notify-only unless auto_install is true
 	UpdateCheck TaskFunc
+	// keyserver_retry - Every 15 minutes, resume due durable PGP keyserver submissions.
+	KeyserverRetry TaskFunc
 }
 
 // RegisterBuiltinTasks registers all built-in scheduled tasks per AI.md
 // PART 18. Task IDs use the spec-canonical underscore form (e.g.
-// "ssl_renewal"). Existing rows in scheduled_tasks / task_history that
+// "ssl_renewal"). Existing rows in scheduler_tasks / scheduler_history that
 // were persisted under the legacy dot form ("ssl.renewal") are
 // renamed in-place by migrateLegacyTaskIDs() before registration so
 // run history and per-task config survive the rename.
@@ -1266,12 +1402,16 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) error {
 		"0 6 * * *", funcs.UpdateCheck); err != nil {
 		return err
 	}
+	if err := register("keyserver_retry", "PGP Keyserver Retry",
+		"Retry due public key submissions to configured keyservers", "@every 15m", funcs.KeyserverRetry); err != nil {
+		return err
+	}
 	return nil
 }
 
 // migrateLegacyTaskIDs renames built-in task IDs from the old "xxx.yyy"
 // form to the spec-canonical "xxx_yyy" form (PART 18) in the persisted
-// scheduled_tasks and task_history tables, so historical state and
+// scheduler_tasks and scheduler_history tables, so historical state and
 // admin-tweaked schedules survive the upgrade. Idempotent — re-running
 // it after migration is a no-op.
 func (s *Scheduler) migrateLegacyTaskIDs() error {
@@ -1292,25 +1432,25 @@ func (s *Scheduler) migrateLegacyTaskIDs() error {
 		"tor.health":       "tor_health",
 	}
 	for old, newID := range rename {
-		// Update scheduled_tasks (state). UPDATE OR IGNORE conflict if
+		// Update scheduler_tasks (state). UPDATE OR IGNORE conflict if
 		// the new ID already has a row from a prior migration / a fresh
 		// install — keep the new row in that case.
 		if _, err := s.execCtx(
-			`UPDATE scheduled_tasks SET id = ? WHERE id = ? `+
-				`AND NOT EXISTS (SELECT 1 FROM scheduled_tasks WHERE id = ?)`,
+			`UPDATE scheduler_tasks SET id = ? WHERE id = ? `+
+				`AND NOT EXISTS (SELECT 1 FROM scheduler_tasks WHERE id = ?)`,
 			newID, old, newID,
 		); err != nil {
 			s.logSchedulerError("failed to migrate legacy scheduler task ID", map[string]interface{}{"old_id": old, "new_id": newID, "error": err.Error()})
 			migrationErr = errors.Join(migrationErr, fmt.Errorf("migrate task ID %q to %q: %w", old, newID, err))
 			continue
 		}
-		if _, err := s.execCtx(`DELETE FROM scheduled_tasks WHERE id = ?`, old); err != nil {
+		if _, err := s.execCtx(`DELETE FROM scheduler_tasks WHERE id = ?`, old); err != nil {
 			s.logSchedulerError("failed to delete legacy scheduler task ID", map[string]interface{}{"task_id": old, "error": err.Error()})
 			migrationErr = errors.Join(migrationErr, fmt.Errorf("delete legacy task ID %q: %w", old, err))
 		}
 
-		// Update task_history (run records).
-		if _, err := s.execCtx(`UPDATE task_history SET task_id = ? WHERE task_id = ?`, newID, old); err != nil {
+		// Update scheduler_history (run records).
+		if _, err := s.execCtx(`UPDATE scheduler_history SET task_id = ? WHERE task_id = ?`, newID, old); err != nil {
 			s.logSchedulerError("failed to migrate legacy scheduler task history", map[string]interface{}{"old_id": old, "new_id": newID, "error": err.Error()})
 			migrationErr = errors.Join(migrationErr, fmt.Errorf("migrate task history ID %q to %q: %w", old, newID, err))
 		}

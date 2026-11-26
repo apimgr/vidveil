@@ -39,6 +39,7 @@ import (
 	paths "github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server/handler"
 	mcpserver "github.com/apimgr/vidveil/src/server/mcp"
+	"github.com/apimgr/vidveil/src/server/service/alertcheck"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/branding"
 	"github.com/apimgr/vidveil/src/server/service/email"
@@ -105,6 +106,8 @@ type Server struct {
 	brandingCtx        context.Context
 	brandingCancel     context.CancelFunc
 	brandingRefreshWG  sync.WaitGroup
+	databaseMonitor    alertcheck.DatabaseMonitor
+	diskMonitor        alertcheck.DiskMonitor
 	serversMu          sync.Mutex
 	servers            []*http.Server
 	// stored for Onion-Location middleware
@@ -226,6 +229,40 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 		}
 	}()
 	if sched != nil {
+		databaseInterval := parseDuration(appConfig.Server.Notifications.DatabaseError.CheckInterval, time.Minute)
+		if databaseInterval <= 0 {
+			databaseInterval = time.Minute
+		}
+		if err := sched.RegisterTask("database_check", "Database Connection Check", "Probe the database and notify after consecutive failures", "@every "+databaseInterval.String(), func(ctx context.Context) error {
+			return s.runDatabaseCheck(ctx)
+		}); err != nil {
+			if s.logger != nil {
+				s.logger.Error("database check task registration failed", map[string]interface{}{"error": err.Error()})
+			}
+		} else if !appConfig.Server.Notifications.DatabaseError.Enabled {
+			if err := sched.DisableTask("database_check"); err != nil {
+				if s.logger != nil {
+					s.logger.Error("database check task disable failed", map[string]interface{}{"error": err.Error()})
+				}
+			}
+		}
+		diskInterval := parseDuration(appConfig.Server.Notifications.DiskLow.CheckInterval, 5*time.Minute)
+		if diskInterval <= 0 {
+			diskInterval = 5 * time.Minute
+		}
+		if err := sched.RegisterTask("disk_check", "Disk Space Check", "Check data, log, and backup filesystem usage", "@every "+diskInterval.String(), func(ctx context.Context) error {
+			return s.runDiskCheck(ctx)
+		}); err != nil {
+			if s.logger != nil {
+				s.logger.Error("disk check task registration failed", map[string]interface{}{"error": err.Error()})
+			}
+		} else if !appConfig.Server.Notifications.DiskLow.Enabled {
+			if err := sched.DisableTask("disk_check"); err != nil {
+				if s.logger != nil {
+					s.logger.Error("disk check task disable failed", map[string]interface{}{"error": err.Error()})
+				}
+			}
+		}
 		interval := parseDuration(appConfig.Server.Branding.RefreshInterval, 24*time.Hour)
 		if interval <= 0 {
 			interval = 24 * time.Hour
@@ -306,6 +343,107 @@ func (s *Server) RefreshBrandingImages(ctx context.Context) error {
 		OGImage: s.appConfig.Server.SEO.OGImage,
 	})
 	return s.brandingImages.Refresh(ctx)
+}
+
+func (s *Server) runDatabaseCheck(ctx context.Context) error {
+	if !s.appConfig.Server.Notifications.DatabaseError.Enabled {
+		return nil
+	}
+	var probeErr error
+	if s.migrationMgr == nil || s.migrationMgr.GetDB() == nil {
+		probeErr = fmt.Errorf("database handle is unavailable")
+	} else {
+		probeErr = alertcheck.ProbeDatabase(ctx, s.migrationMgr.GetDB())
+		if probeErr == nil {
+			readDB := s.migrationMgr.GetDB()
+			if manager, ok := s.migrationMgr.(interface{ GetReadDB() *sql.DB }); ok {
+				readDB = manager.GetReadDB()
+			}
+			probeErr = alertcheck.ProbeDatabase(ctx, readDB)
+		}
+	}
+	settings := s.appConfig.Server.Notifications.DatabaseError
+	failureThreshold := settings.Failures
+	if failureThreshold < 1 {
+		failureThreshold = 3
+	}
+	repeat := parseDuration(settings.Repeat, 24*time.Hour)
+	event := s.databaseMonitor.Observe(probeErr, time.Now(), failureThreshold, repeat)
+	if event.Recovered {
+		if s.logger != nil {
+			s.logger.Info("Database connection recovered", map[string]interface{}{"event": "database_recovered"})
+		}
+		return nil
+	}
+	if !event.Alert {
+		return nil
+	}
+	safeError := safeNotificationError(event.Error)
+	fields := map[string]interface{}{"since": event.Since.UTC().Format(time.RFC3339), "error": safeError}
+	if s.logger != nil {
+		s.logger.Warn("Database connection problem", fields)
+	}
+	to := s.appConfig.Server.Contact.Admin.Email
+	if s.appConfig.Server.Notifications.Email.Enabled && s.emailService != nil && to != "" {
+		body := fmt.Sprintf("The database has failed %d consecutive availability probes.\nFirst failure: %s\nLast error: %s", failureThreshold, event.Since.UTC().Format(time.RFC3339), safeError)
+		if err := s.emailService.SendRaw(to, "Database Connection Problem - VidVeil", body); err != nil && s.logger != nil {
+			s.logger.Warn("database problem notification email failed", map[string]interface{}{"error": err.Error()})
+		}
+	}
+	return nil
+}
+
+func (s *Server) runDiskCheck(context.Context) error {
+	settings := s.appConfig.Server.Notifications.DiskLow
+	if !settings.Enabled {
+		return nil
+	}
+	appPaths := config.GetAppPaths(s.configDir, s.dataDir)
+	checkPaths := []string{appPaths.Data, appPaths.Log, appPaths.Backup}
+	repeat := parseDuration(settings.Repeat, 24*time.Hour)
+	var probeErrors []string
+	for _, path := range checkPaths {
+		used, free, volume, err := alertcheck.ProbeDisk(path)
+		if err != nil {
+			probeErrors = append(probeErrors, fmt.Sprintf("%s: %v", path, err))
+			continue
+		}
+		event := s.diskMonitor.Observe(volume, path, used, free, settings.ThresholdPercent, repeat, time.Now())
+		if event.Recovered {
+			if s.logger != nil {
+				s.logger.Info("Disk space recovered", map[string]interface{}{"path": path, "used_percent": used})
+			}
+		}
+		if !event.Alert {
+			continue
+		}
+		fields := map[string]interface{}{"path": path, "used_percent": used, "free_bytes": free}
+		if s.logger != nil {
+			s.logger.Warn("Disk space low", fields)
+		}
+		to := s.appConfig.Server.Contact.Admin.Email
+		if s.appConfig.Server.Notifications.Email.Enabled && s.emailService != nil && to != "" {
+			body := fmt.Sprintf("Disk usage at %s is %.1f%%. Free space: %d bytes.", path, used, free)
+			if err := s.emailService.SendRaw(to, "Disk Space Low - VidVeil", body); err != nil && s.logger != nil {
+				s.logger.Warn("disk space notification email failed", map[string]interface{}{"error": err.Error()})
+			}
+		}
+	}
+	if len(probeErrors) > 0 {
+		return fmt.Errorf("probe disk space: %s", strings.Join(probeErrors, "; "))
+	}
+	return nil
+}
+
+func safeNotificationError(err error) string {
+	if err == nil {
+		return "unknown database error"
+	}
+	fields := logging.SanitizeLogFields(map[string]interface{}{"error": err.Error()})
+	if safe, ok := fields["error"].(string); ok {
+		return safe
+	}
+	return "database probe failed"
 }
 
 // APIRoutes returns the per-server API route definitions bound to live handlers.
@@ -1107,6 +1245,9 @@ func (s *Server) setupRoutes() {
 	// Wire real dependency probes for /server/healthz (AI.md PART 13): the
 	// database ping and the scheduler running-state check.
 	h.SetHealthDB(s.migrationMgr.GetDB())
+	if manager, ok := s.migrationMgr.(interface{ GetReadDB() *sql.DB }); ok {
+		h.SetReadHealthDB(manager.GetReadDB())
+	}
 	h.SetOwnerTokenManager(s.tokenManager)
 	if s.scheduler != nil {
 		h.SetScheduler(s.scheduler)
@@ -1617,6 +1758,15 @@ func (s *Server) RefreshOperatorTokenHash() {
 	s.operatorTokenSet = true
 }
 
+// RotateCSRFSecretAfterOperatorTokenChange invalidates outstanding CSRF
+// tokens after the operator credential is regenerated.
+func (s *Server) RotateCSRFSecretAfterOperatorTokenChange(ctx context.Context) error {
+	if s == nil || s.secretsMgr == nil {
+		return fmt.Errorf("secret manager unavailable")
+	}
+	return s.secretsMgr.RotateImmediately(ctx, secret.CSRFTokenSecret)
+}
+
 // RefreshEncryptionKey applies the key from a live secrets.yml reload. The
 // database fingerprint marker independently rejects writes from stale workers.
 func (s *Server) RefreshEncryptionKey(key string) {
@@ -1874,7 +2024,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 // URLNormalizeMiddleware normalizes URLs for consistent routing per AI.md PART 16
 // - Removes trailing slashes (except for root "/")
-// - Redirects to canonical URL with 301 if normalization changed path
+// - Redirects to the canonical URL if normalization changed the path: 301 for GET/HEAD, 308 for other methods
 func URLNormalizeMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -1895,7 +2045,11 @@ func URLNormalizeMiddleware(next http.Handler) http.Handler {
 				if r.URL.RawQuery != "" {
 					canonical += "?" + r.URL.RawQuery
 				}
-				http.Redirect(w, r, canonical, http.StatusMovedPermanently)
+				status := http.StatusMovedPermanently
+				if r.Method != http.MethodGet && r.Method != http.MethodHead {
+					status = http.StatusPermanentRedirect
+				}
+				http.Redirect(w, r, canonical, status)
 				return
 			}
 		}

@@ -6,10 +6,10 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
+	"errors"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -18,9 +18,45 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/pgp"
+	"github.com/apimgr/vidveil/src/server/service/scheduler"
 	"github.com/apimgr/vidveil/src/server/service/system"
 	_ "modernc.org/sqlite"
 )
+
+func TestApplySchedulerConfig(t *testing.T) {
+	appConfig := config.DefaultAppConfig()
+	appConfig.Server.Schedule.Timezone = "Asia/Tokyo"
+	appConfig.Server.Schedule.Tasks = map[string]config.ScheduleTaskConfig{
+		"configured":    {Schedule: "@every 2h", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
+		"backup_hourly": {Schedule: "@hourly", Enabled: false},
+	}
+	sched := scheduler.NewScheduler()
+	if err := sched.RegisterTask("configured", "Configured", "test", "@every 1h", func(context.Context) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := sched.RegisterTask("backup_hourly", "Hourly Backup", "test", "@hourly", func(context.Context) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	applySchedulerConfig(sched, appConfig, nil)
+	configured, err := sched.GetTask("configured")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configured.Schedule != "@every 2h" || !configured.Enabled {
+		t.Fatalf("configured task = %#v", configured)
+	}
+	hourly, err := sched.GetTask("backup_hourly")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hourly.Enabled {
+		t.Fatal("backup_hourly remained enabled after configured disable")
+	}
+	if got := configured.NextRun.Location().String(); got != "Asia/Tokyo" {
+		t.Fatalf("timezone = %q, want Asia/Tokyo", got)
+	}
+}
 
 // ── loadInstallationSecret / pgpGenerateCore / pgpExportPublicCore ────────────
 // AI.md PART 12 GPG Keypair Management. These exercise the error-returning cores
@@ -279,6 +315,7 @@ func TestPgpPublishCore_NoKeyservers(t *testing.T) {
 	}
 	cfg.Server.Contact.Security.Email = "security@example.com"
 	cfg.Server.Branding.Title = "VidVeil"
+	cfg.Web.Security.Keyservers = []string{}
 	if err := config.SaveAppConfig(cfg, cfgPath); err != nil {
 		t.Fatalf("SaveAppConfig: %v", err)
 	}
@@ -295,8 +332,8 @@ func TestPgpPublishCore_NoKeyservers(t *testing.T) {
 	}
 }
 
-// TestPgpPublishCore_Success drives the full publish path against a local HTTP
-// server: the key is submitted, state persists to disk, and the DB row updates.
+// TestPgpPublishCore_Success verifies successful publish state persists to disk
+// and the database after the publisher accepts the configured host.
 func TestPgpPublishCore_Success(t *testing.T) {
 	base := t.TempDir()
 	cfgDir := base + "/config"
@@ -308,20 +345,14 @@ func TestPgpPublishCore_Success(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var hit bool
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hit = true
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer ts.Close()
-
 	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
 	if err != nil {
 		t.Fatalf("LoadAppConfig: %v", err)
 	}
 	cfg.Server.Contact.Security.Email = "security@example.com"
 	cfg.Server.Branding.Title = "VidVeil"
-	cfg.Web.Security.Keyservers = []string{ts.URL}
+	keyserverHost := "keys.openpgp.org"
+	cfg.Web.Security.Keyservers = []string{keyserverHost}
 	if err := config.SaveAppConfig(cfg, cfgPath); err != nil {
 		t.Fatalf("SaveAppConfig: %v", err)
 	}
@@ -329,14 +360,19 @@ func TestPgpPublishCore_Success(t *testing.T) {
 		t.Fatalf("pgpGenerateCore: %v", err)
 	}
 
-	res, err := pgpPublishCore(cfgDir, dataDir)
+	var hit bool
+	res, err := pgpPublishCoreWithPublisher(cfgDir, dataDir, func(_ context.Context, _ []byte, fingerprint string, servers []string, previous []pgp.KeyserverState) ([]pgp.KeyserverState, []pgp.KeyserverState, error) {
+		hit = len(servers) == 1 && servers[0] == keyserverHost
+		published := pgp.KeyserverState{URL: keyserverHost, Fingerprint: fingerprint, PublishedAt: time.Now().UTC()}
+		return append(previous, published), []pgp.KeyserverState{published}, nil
+	})
 	if err != nil {
 		t.Fatalf("pgpPublishCore: %v", err)
 	}
 	if !hit {
 		t.Fatal("keyserver was not contacted")
 	}
-	if len(res.published) != 1 || res.published[0].URL != ts.URL {
+	if len(res.published) != 1 || res.published[0].URL != keyserverHost {
 		t.Fatalf("published = %+v", res.published)
 	}
 }
@@ -355,18 +391,13 @@ func TestPgpPublishCore_AllFail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer ts.Close()
-
 	cfg, cfgPath, err := config.LoadAppConfig(cfgDir, dataDir)
 	if err != nil {
 		t.Fatalf("LoadAppConfig: %v", err)
 	}
 	cfg.Server.Contact.Security.Email = "security@example.com"
 	cfg.Server.Branding.Title = "VidVeil"
-	cfg.Web.Security.Keyservers = []string{ts.URL}
+	cfg.Web.Security.Keyservers = []string{"keys.openpgp.org"}
 	if err := config.SaveAppConfig(cfg, cfgPath); err != nil {
 		t.Fatalf("SaveAppConfig: %v", err)
 	}
@@ -374,7 +405,9 @@ func TestPgpPublishCore_AllFail(t *testing.T) {
 		t.Fatalf("pgpGenerateCore: %v", err)
 	}
 
-	res, err := pgpPublishCore(cfgDir, dataDir)
+	res, err := pgpPublishCoreWithPublisher(cfgDir, dataDir, func(_ context.Context, _ []byte, _ string, _ []string, previous []pgp.KeyserverState) ([]pgp.KeyserverState, []pgp.KeyserverState, error) {
+		return previous, nil, errors.New("keyserver rejected key")
+	})
 	if err == nil {
 		t.Fatal("expected error when all keyservers reject the key")
 	}

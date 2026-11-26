@@ -138,7 +138,7 @@ func (s *Server) handleDebugScheduler(w http.ResponseWriter, r *http.Request) {
 			"schedule":    t.Schedule,
 			"enabled":     t.Enabled,
 			"last_run":    t.LastRun,
-			"last_result": t.LastResult,
+			"last_status": t.LastResult,
 			"next_run":    t.NextRun,
 			"run_count":   t.RunCount,
 			"fail_count":  t.FailCount,

@@ -56,6 +56,9 @@ func TestDefaultAppConfig(t *testing.T) {
 	if cfg.Web.UI.Theme != "dark" {
 		t.Errorf("Expected theme 'dark', got '%s'", cfg.Web.UI.Theme)
 	}
+	if len(cfg.Web.Security.Keyservers) != 1 || cfg.Web.Security.Keyservers[0] != "keys.openpgp.org" {
+		t.Errorf("PGP keyserver defaults = %v, want [keys.openpgp.org]", cfg.Web.Security.Keyservers)
+	}
 
 	// Check search defaults
 	if cfg.Search.ResultsPerPage != 50 {
@@ -63,6 +66,21 @@ func TestDefaultAppConfig(t *testing.T) {
 	}
 	if cfg.Server.Pages.Contact.Antispam.MaxLinks != 10 || cfg.Server.Pages.Contact.Antispam.ReviewMinSeconds != 2 || cfg.Server.Pages.Contact.Antispam.ReviewMaxSeconds != 900 {
 		t.Errorf("contact antispam defaults = %+v, want max_links 10 and review window 2..900 seconds", cfg.Server.Pages.Contact.Antispam)
+	}
+}
+
+func TestValidatePGPKeyserversRequiresBareHosts(t *testing.T) {
+	cfg := DefaultAppConfig()
+	cfg.Web.Security.Keyservers = []string{"https://keys.openpgp.org"}
+	validatePGPKeyservers(cfg)
+	if len(cfg.Web.Security.Keyservers) != 1 || cfg.Web.Security.Keyservers[0] != "keys.openpgp.org" {
+		t.Fatalf("invalid keyserver entry was not replaced with the default: %v", cfg.Web.Security.Keyservers)
+	}
+
+	cfg.Web.Security.Keyservers = []string{}
+	validatePGPKeyservers(cfg)
+	if len(cfg.Web.Security.Keyservers) != 0 {
+		t.Fatalf("empty keyserver list should remain disabled: %v", cfg.Web.Security.Keyservers)
 	}
 }
 

@@ -4,6 +4,7 @@ package scheduler
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 )
@@ -573,7 +574,7 @@ func TestGetHistory_LimitZeroMeansAll(t *testing.T) {
 	// Inject entries directly to avoid running goroutines.
 	s.history = []TaskHistory{
 		{TaskID: "x", Result: "success"},
-		{TaskID: "x", Result: "failure"},
+		{TaskID: "x", Result: "failed"},
 		{TaskID: "x", Result: "success"},
 	}
 	hist := s.GetHistory("x", 0)
@@ -601,7 +602,7 @@ func TestGetHistory_FiltersByTaskID(t *testing.T) {
 	s.history = []TaskHistory{
 		{TaskID: "a", Result: "success"},
 		{TaskID: "b", Result: "success"},
-		{TaskID: "a", Result: "failure"},
+		{TaskID: "a", Result: "failed"},
 	}
 	hist := s.GetHistory("a", 10)
 	if len(hist) != 2 {
@@ -724,8 +725,8 @@ func TestRunTaskNow_FailingTask(t *testing.T) {
 	if len(hist) == 0 {
 		t.Fatal("expected history entry for failed task")
 	}
-	if hist[0].Result != "failure" {
-		t.Errorf("history Result = %q, want 'failure'", hist[0].Result)
+	if hist[0].Result != "failed" {
+		t.Errorf("history Result = %q, want 'failed'", hist[0].Result)
 	}
 }
 
@@ -743,8 +744,8 @@ func TestRunTask_PanicIsRecordedAsFailure(t *testing.T) {
 	s.mu.RUnlock()
 	s.runTask(task)
 
-	if task.LastResult != "failure" {
-		t.Errorf("LastResult = %q, want failure", task.LastResult)
+	if task.LastResult != "failed" {
+		t.Errorf("LastResult = %q, want failed", task.LastResult)
 	}
 	if task.FailCount != 1 {
 		t.Errorf("FailCount = %d, want 1", task.FailCount)
@@ -812,6 +813,70 @@ func TestDisableTask_Idempotent(t *testing.T) {
 	}
 	if err := s.DisableTask("idem"); err != nil {
 		t.Fatalf("second DisableTask (idempotent) error: %v", err)
+	}
+}
+
+func TestDisableTask_RejectsRequiredBuiltIn(t *testing.T) {
+	s := NewScheduler()
+	if err := s.RegisterTask("healthcheck_self", "Health", "required", "@every 5m", noop); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DisableTask("healthcheck_self"); err == nil {
+		t.Fatal("DisableTask accepted required built-in task")
+	}
+	if !s.tasks["healthcheck_self"].Enabled {
+		t.Fatal("required task became disabled")
+	}
+}
+
+func TestSetTimezone(t *testing.T) {
+	s := NewScheduler()
+	if err := s.SetTimezone("Asia/Tokyo"); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.now().Location().String(); got != "Asia/Tokyo" {
+		t.Fatalf("scheduler timezone = %q, want Asia/Tokyo", got)
+	}
+	if err := s.SetTimezone("invalid/zone"); err == nil {
+		t.Fatal("SetTimezone accepted invalid zone")
+	}
+}
+
+func TestSetRetryPolicy(t *testing.T) {
+	s := NewScheduler()
+	if err := s.RegisterTask("retryable", "Retryable", "test", "@hourly", noop); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetRetryPolicy("retryable", true, "1h"); err != nil {
+		t.Fatal(err)
+	}
+	if !s.tasks["retryable"].retryOnFail || s.tasks["retryable"].retryDelay != time.Hour {
+		t.Fatalf("retry policy = (%v, %s), want (true, 1h)", s.tasks["retryable"].retryOnFail, s.tasks["retryable"].retryDelay)
+	}
+	if err := s.SetRetryPolicy("retryable", true, "0s"); err == nil {
+		t.Fatal("SetRetryPolicy accepted a non-positive delay")
+	}
+}
+
+func TestRunTaskUsesConfiguredRetryDelay(t *testing.T) {
+	s := NewScheduler()
+	s.ctx = context.Background()
+	if err := s.RegisterTask("retry-policy", "Retry Policy", "test", "@every 1h", func(context.Context) error {
+		return errors.New("temporary failure")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetRetryPolicy("retry-policy", true, "1h"); err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	s.runTask(s.tasks["retry-policy"])
+	task := s.tasks["retry-policy"]
+	if task.retryCount != 1 {
+		t.Fatalf("retry count = %d, want 1", task.retryCount)
+	}
+	if task.NextRun.Before(started.Add(time.Hour)) || task.NextRun.After(started.Add(time.Hour+time.Second)) {
+		t.Fatalf("next retry = %s, want about one hour after %s", task.NextRun, started)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,18 +20,15 @@ import (
 // restore does not double-submit (AI.md PART 21 "Backup Contents").
 const keyserverStateFile = "keyservers.state"
 
-// keyserverMaxAttempts bounds the per-keyserver submission attempts. AI.md
-// PART 12 "Publish to keyservers": failures are retried with exponential
-// backoff.
-const keyserverMaxAttempts = 3
+// keyserverMaxAttempts bounds durable per-keyserver attempts per fingerprint.
+const keyserverMaxAttempts = 8
 
 // keyserverHTTPClient is the HTTP client used for keyserver submissions. It has
 // a bounded timeout so a hung keyserver cannot block the maintenance command.
 var keyserverHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
-// keyserverRetryBackoff is the base delay for the exponential backoff between
-// retry attempts. It is a package var so tests can shorten it.
-var keyserverRetryBackoff = 2 * time.Second
+// keyserverRetryBackoff is the base delay between durable retry attempts.
+const keyserverRetryBackoff = time.Minute
 
 // PublishToKeyservers submits the armored public key to each configured
 // keyserver (AI.md PART 12 "Publish to keyservers"). It returns the states for
@@ -38,55 +36,121 @@ var keyserverRetryBackoff = 2 * time.Second
 // partial success is possible, so callers should persist the returned states
 // even when err is non-nil.
 func PublishToKeyservers(ctx context.Context, pubArmored []byte, keyservers []string) ([]KeyserverState, error) {
+	_, published, err := PublishToKeyserversWithState(ctx, pubArmored, "", keyservers, nil)
+	return published, err
+}
+
+// PublishToKeyserversWithState makes one attempt for each due keyserver and
+// returns the complete fingerprint-scoped retry state for durable storage.
+func PublishToKeyserversWithState(ctx context.Context, pubArmored []byte, fingerprint string, keyservers []string, previous []KeyserverState) ([]KeyserverState, []KeyserverState, error) {
 	var (
-		states []KeyserverState
-		errs   []string
+		states    = append([]KeyserverState(nil), previous...)
+		published []KeyserverState
+		errs      []string
 	)
 	for _, ks := range keyservers {
 		ks = strings.TrimSpace(ks)
 		if ks == "" {
 			continue
 		}
-		if err := submitWithRetry(ctx, ks, pubArmored); err != nil {
+		index := findKeyserverState(states, fingerprint, ks)
+		state := KeyserverState{URL: ks, Fingerprint: fingerprint}
+		if index >= 0 {
+			state = states[index]
+			if !state.PublishedAt.IsZero() || state.Permanent || state.Attempts >= keyserverMaxAttempts || (state.NextAttempt != nil && time.Now().Before(*state.NextAttempt)) {
+				continue
+			}
+		}
+		if err := submitToKeyserver(ctx, ks, pubArmored); err != nil {
+			if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return states, published, fmt.Errorf("keyserver submission cancelled: %w", ctx.Err())
+			}
+			state.Attempts++
+			state.LastError = err.Error()
+			if !isRetryableKeyserverError(err) {
+				state.Permanent = true
+				state.NextAttempt = nil
+			} else if state.Attempts < keyserverMaxAttempts {
+				next := time.Now().UTC().Add(keyserverRetryDelay(state.Attempts))
+				state.NextAttempt = &next
+			} else {
+				state.NextAttempt = nil
+			}
+			states = putKeyserverState(states, index, state)
 			errs = append(errs, fmt.Sprintf("%s: %v", ks, err))
 			continue
 		}
-		states = append(states, KeyserverState{URL: ks, PublishedAt: time.Now().UTC()})
+		state.Attempts++
+		state.PublishedAt = time.Now().UTC()
+		state.LastError = ""
+		state.Permanent = false
+		state.NextAttempt = nil
+		states = putKeyserverState(states, index, state)
+		published = append(published, state)
 	}
 	if len(errs) > 0 {
-		return states, fmt.Errorf("keyserver publish failures: %s", strings.Join(errs, "; "))
+		return states, published, fmt.Errorf("keyserver publish failures: %s", strings.Join(errs, "; "))
 	}
-	return states, nil
+	return states, published, nil
 }
 
-// submitWithRetry submits the public key to a single keyserver, retrying failed
-// attempts with exponential backoff up to keyserverMaxAttempts. It stops early
-// when the context is cancelled.
-func submitWithRetry(ctx context.Context, keyserver string, pubArmored []byte) error {
-	var lastErr error
-	for attempt := 0; attempt < keyserverMaxAttempts; attempt++ {
-		if attempt > 0 {
-			delay := keyserverRetryBackoff * time.Duration(1<<uint(attempt-1))
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("cancelled after %d attempt(s): %w", attempt, ctx.Err())
-			case <-time.After(delay):
-			}
-		}
-		if lastErr = submitToKeyserver(ctx, keyserver, pubArmored); lastErr == nil {
-			return nil
+func findKeyserverState(states []KeyserverState, fingerprint, keyserver string) int {
+	for index, state := range states {
+		if state.Fingerprint == fingerprint && state.URL == keyserver {
+			return index
 		}
 	}
-	return fmt.Errorf("gave up after %d attempts: %w", keyserverMaxAttempts, lastErr)
+	return -1
+}
+
+func putKeyserverState(states []KeyserverState, index int, state KeyserverState) []KeyserverState {
+	if index >= 0 {
+		states[index] = state
+		return states
+	}
+	return append(states, state)
+}
+
+func keyserverRetryDelay(attempt int) time.Duration {
+	delay := keyserverRetryBackoff * time.Duration(1<<uint(max(0, attempt-1)))
+	if delay > 6*time.Hour {
+		return 6 * time.Hour
+	}
+	return delay
+}
+
+func isRetryableKeyserverError(err error) bool {
+	var statusError *keyserverStatusError
+	if errors.As(err, &statusError) {
+		return statusError.status == http.StatusTooManyRequests || statusError.status >= http.StatusInternalServerError
+	}
+	return true
+}
+
+type keyserverStatusError struct {
+	status int
+	body   string
+}
+
+func (e *keyserverStatusError) Error() string {
+	return fmt.Sprintf("keyserver returned %d: %s", e.status, e.body)
 }
 
 // submitToKeyserver POSTs the public key to a single keyserver. keys.openpgp.org
 // (and Hagrid-based servers) accept a JSON body at /vks/v1/upload; classic HKP
 // servers accept a urlencoded keytext form at /pks/add.
 func submitToKeyserver(ctx context.Context, keyserver string, pubArmored []byte) error {
-	base, err := url.Parse(strings.TrimRight(keyserver, "/"))
+	keyserver = strings.TrimRight(keyserver, "/")
+	urlValue := keyserver
+	if !strings.Contains(keyserver, "://") {
+		urlValue = "https://" + keyserver
+	}
+	base, err := url.Parse(urlValue)
 	if err != nil {
 		return fmt.Errorf("parse keyserver url: %w", err)
+	}
+	if base.Scheme != "https" || base.Host == "" || base.User != nil || base.Path != "" || base.RawQuery != "" || base.Fragment != "" {
+		return fmt.Errorf("parse keyserver url: expected an HTTPS keyserver host")
 	}
 
 	var req *http.Request
@@ -121,7 +185,16 @@ func submitToKeyserver(ctx context.Context, keyserver string, pubArmored []byte)
 		return fmt.Errorf("read keyserver response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("keyserver returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return &keyserverStatusError{status: resp.StatusCode, body: strings.TrimSpace(string(body))}
+	}
+	if strings.EqualFold(base.Hostname(), "keys.openpgp.org") {
+		var result struct {
+			KeyFingerprint string `json:"key_fpr"`
+			Status         string `json:"status"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil || result.KeyFingerprint == "" || result.Status == "" {
+			return fmt.Errorf("keyserver returned an invalid VKS success response")
+		}
 	}
 	return nil
 }

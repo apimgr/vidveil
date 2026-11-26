@@ -18,9 +18,11 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/term"
@@ -131,6 +133,66 @@ func probeDataDirectoryWrite(dataDir string) error {
 
 func maintenanceDiagnostic(databaseErr, fileWriteErr error) string {
 	return errors.Join(databaseErr, fileWriteErr).Error()
+}
+
+func applySchedulerConfig(sched *scheduler.Scheduler, appConfig *config.AppConfig, logger *logging.AppLogger) {
+	if zone := appConfig.Server.Schedule.Timezone; zone != "" {
+		if err := sched.SetTimezone(zone); err != nil {
+			logger.Warn("invalid server.scheduler.timezone; using America/New_York", map[string]interface{}{"key": "server.scheduler.timezone", "value": zone, "default": "America/New_York", "error": err.Error()})
+			if fallbackErr := sched.SetTimezone("America/New_York"); fallbackErr != nil {
+				logger.Warn("America/New_York scheduler timezone unavailable; using UTC", map[string]interface{}{"key": "server.scheduler.timezone", "default": "UTC", "error": fallbackErr.Error()})
+				_ = sched.SetTimezone("UTC")
+			}
+		}
+	}
+	if window := appConfig.Server.Schedule.CatchUpWindow; window != "" {
+		if duration, err := time.ParseDuration(window); err == nil {
+			sched.SetCatchUpWindow(duration)
+		} else {
+			logger.Warn("invalid server.scheduler.catch_up_window; retaining current value", map[string]interface{}{"key": "server.scheduler.catch_up_window", "value": window, "error": err.Error()})
+		}
+	}
+	for id, taskConfig := range appConfig.Server.Schedule.Tasks {
+		schedule := taskConfig.Schedule
+		if id == "database_check" && schedule == "@every 1m" && appConfig.Server.Notifications.DatabaseError.CheckInterval != "" {
+			schedule = "@every " + appConfig.Server.Notifications.DatabaseError.CheckInterval
+		}
+		if id == "disk_check" && schedule == "@every 5m" && appConfig.Server.Notifications.DiskLow.CheckInterval != "" {
+			schedule = "@every " + appConfig.Server.Notifications.DiskLow.CheckInterval
+		}
+		if schedule == "" {
+			continue
+		}
+		if err := sched.SetSchedule(id, schedule); err != nil {
+			if strings.Contains(err.Error(), "task not found:") {
+				continue
+			}
+			logger.Warn("invalid configured scheduler task schedule", map[string]interface{}{"task_id": id, "schedule": schedule, "error": err.Error()})
+			continue
+		}
+		if err := sched.SetRetryPolicy(id, taskConfig.RetryOnFail, taskConfig.RetryDelay); err != nil {
+			if !strings.Contains(err.Error(), "task not found:") {
+				logger.Warn("invalid configured scheduler retry policy", map[string]interface{}{"task_id": id, "error": err.Error()})
+			}
+			continue
+		}
+		enabled := taskConfig.Enabled
+		switch id {
+		case "database_check":
+			enabled = enabled && appConfig.Server.Notifications.DatabaseError.Enabled
+		case "disk_check":
+			enabled = enabled && appConfig.Server.Notifications.DiskLow.Enabled
+		}
+		var err error
+		if enabled {
+			err = sched.EnableTask(id)
+		} else {
+			err = sched.DisableTask(id)
+		}
+		if err != nil && !strings.Contains(err.Error(), "task not found:") {
+			logger.Warn("failed to apply configured scheduler task state", map[string]interface{}{"task_id": id, "enabled": enabled, "error": err.Error()})
+		}
+	}
 }
 
 func formatServerStartupTime(started time.Time) string {
@@ -807,14 +869,6 @@ func run(ctx context.Context) error {
 		}
 	}
 
-	// Set catch-up window per AI.md PART 18
-	// Missed tasks within this window will run on startup
-	if appConfig.Server.Schedule.CatchUpWindow != "" {
-		if catchUpDuration, err := time.ParseDuration(appConfig.Server.Schedule.CatchUpWindow); err == nil {
-			sched.SetCatchUpWindow(catchUpDuration)
-		}
-	}
-
 	// Register all built-in tasks per AI.md PART 18
 	if err := sched.RegisterBuiltinTasks(scheduler.BuiltinTaskFuncs{
 		SSLRenewal: func(ctx context.Context) error {
@@ -975,11 +1029,14 @@ func run(ctx context.Context) error {
 			}
 			return nil
 		},
+		KeyserverRetry: func(ctx context.Context) error {
+			_, err := pgpPublishCoreWithPublisherContext(ctx, paths.Config, paths.Data, pgp.PublishToKeyserversWithState)
+			return err
+		},
 	}); err != nil {
 		logger.Error("failed to register built-in scheduler tasks", map[string]interface{}{"error": err.Error()})
 		return fmt.Errorf("register built-in scheduler tasks: %w", err)
 	}
-
 	// Set Tor provider for engine manager per PART 31
 	// This enables Tor outbound network for anonymized engine queries when UseNetwork is true
 	engineMgr.SetTorProvider(torSvc)
@@ -992,6 +1049,17 @@ func run(ctx context.Context) error {
 
 	// Create server with migration manager, scheduler, and logger per AI.md PART 11
 	srv := server.NewServer(appConfig, configDir, dataDir, engineMgr, migrationMgr, sched, logger)
+	applySchedulerConfig(sched, appConfig, logger)
+	serveTorProxy := func(listener net.Listener) {
+		if listener == nil {
+			return
+		}
+		go func() {
+			if err := srv.ServeOn(listener); err != nil && err != http.ErrServerClosed && !errors.Is(err, net.ErrClosed) {
+				logger.Warn("Tor proxy listener failed", map[string]interface{}{"error": err.Error()})
+			}
+		}()
+	}
 
 	// Set Tor service for handlers per AI.md PART 31
 	srv.SetTorService(torSvc)
@@ -1025,7 +1093,42 @@ func run(ctx context.Context) error {
 
 	// Start live config watcher per AI.md PART 8 NON-NEGOTIABLE
 	configWatcher := config.NewWatcher(configPath, appConfig)
+	var torConfigMu sync.Mutex
+	var torRestartMu sync.Mutex
+	lastTorConfig := appConfig.Server.Tor
+	lastOperatorToken := appConfig.Server.Token
+	torStartupComplete := make(chan struct{})
+	torStartAttempted := false
 	configWatcher.OnReload(func(newCfg *config.AppConfig) {
+		applySchedulerConfig(sched, newCfg, logger)
+		torConfigMu.Lock()
+		operatorTokenChanged := lastOperatorToken != newCfg.Server.Token
+		lastOperatorToken = newCfg.Server.Token
+		torChanged := !reflect.DeepEqual(lastTorConfig, newCfg.Server.Tor)
+		lastTorConfig = newCfg.Server.Tor
+		torConfigMu.Unlock()
+		if torChanged {
+			go func() {
+				<-torStartupComplete
+				if !torStartAttempted {
+					return
+				}
+				torRestartMu.Lock()
+				defer torRestartMu.Unlock()
+				if err := torSvc.Restart(context.Background()); err != nil {
+					logger.Warn("Tor restart after configuration reload failed", map[string]interface{}{"error": err.Error()})
+					return
+				}
+				svcmetrics.SetTorState(torSvc.IsEnabled(), torSvc.IsRunning(),
+					torSvc.GetStatus() == tor.TorServiceStatusConnected)
+				serveTorProxy(torSvc.GetProxyListener())
+			}()
+		}
+		if operatorTokenChanged {
+			if err := srv.RotateCSRFSecretAfterOperatorTokenChange(context.Background()); err != nil {
+				logger.Warn("CSRF secret rotation after operator token regeneration failed", map[string]interface{}{"error": err.Error()})
+			}
+		}
 		// Config has been reloaded - the shared appConfig pointer is already updated
 		// Refresh token-auth state so server.token changes take effect immediately.
 		srv.RefreshOperatorTokenHash()
@@ -1124,6 +1227,7 @@ func run(ctx context.Context) error {
 	// drop and intermittently left root-owned files the dropped process
 	// could not write to.
 	go func() {
+		defer close(torStartupComplete)
 		torCtx := context.Background()
 		// Parse server port from config — Tor forwards .onion traffic to the local
 		// serving port. Per AI.md PART 15 overlays prefer the HTTP port; fall back to
@@ -1138,6 +1242,7 @@ func run(ctx context.Context) error {
 			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Tor hidden service: invalid target port %q: %v\n", torTargetPort, portErr)
 			return
 		}
+		torStartAttempted = true
 		if err := torSvc.Start(torCtx, serverPort); err != nil {
 			// PART 31: Tor errors are WARN level, server continues without Tor
 			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Tor hidden service: %v\n", err)
@@ -1157,13 +1262,7 @@ func run(ctx context.Context) error {
 			}
 			// Serve the same handler chain on the dedicated loopback PROXY-protocol
 			// listener that torrc's HiddenServicePort 80 forwards .onion traffic to.
-			if proxyLn := torSvc.GetProxyListener(); proxyLn != nil {
-				go func() {
-					if err := srv.ServeOn(proxyLn); err != nil && err != http.ErrServerClosed {
-						fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Tor proxy listener: %v\n", err)
-					}
-				}()
-			}
+			serveTorProxy(torSvc.GetProxyListener())
 		}
 	}()
 
@@ -2450,6 +2549,9 @@ func pgpGenerate(configDir, dataDir string) {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 		os.Exit(1)
 	}
+	if _, publishErr := pgpPublishCore(configDir, dataDir); publishErr != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Keypair generated; keyserver retry is scheduled: %v\n", publishErr)
+	}
 	fmt.Println(terminal.StatusIcon(true) + " Security PGP keypair generated.")
 	fmt.Printf("   Identity:    %s <%s>\n", identityName, securityContact)
 	fmt.Printf("   Fingerprint: %s\n", kp.Fingerprint)
@@ -2698,7 +2800,11 @@ func pgpPublish(configDir, dataDir string) {
 		os.Exit(1)
 	}
 	if len(res.published) == 0 {
-		fmt.Println(terminal.WarningIcon() + " No keyservers configured; nothing published.")
+		if res.attempted == 0 {
+			fmt.Println(terminal.WarningIcon() + " No keyservers configured; nothing published.")
+		} else {
+			fmt.Println(terminal.WarningIcon() + " No keyserver submissions are due; any pending retries remain scheduled.")
+		}
 		return
 	}
 	fmt.Printf(terminal.StatusIcon(true)+" Published the security public key to %d keyserver(s):\n", len(res.published))
@@ -2714,6 +2820,14 @@ func pgpPublish(configDir, dataDir string) {
 // the returned result carries the servers that accepted the key even when err
 // is non-nil.
 func pgpPublishCore(configDir, dataDir string) (*pgpPublishResult, error) {
+	return pgpPublishCoreWithPublisherContext(context.Background(), configDir, dataDir, pgp.PublishToKeyserversWithState)
+}
+
+func pgpPublishCoreWithPublisher(configDir, dataDir string, publish func(context.Context, []byte, string, []string, []pgp.KeyserverState) ([]pgp.KeyserverState, []pgp.KeyserverState, error)) (*pgpPublishResult, error) {
+	return pgpPublishCoreWithPublisherContext(context.Background(), configDir, dataDir, publish)
+}
+
+func pgpPublishCoreWithPublisherContext(ctx context.Context, configDir, dataDir string, publish func(context.Context, []byte, string, []string, []pgp.KeyserverState) ([]pgp.KeyserverState, []pgp.KeyserverState, error)) (*pgpPublishResult, error) {
 	appConfig, _, err := config.LoadAppConfig(configDir, dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load configuration: %w", err)
@@ -2730,26 +2844,54 @@ func pgpPublishCore(configDir, dataDir string) (*pgpPublishResult, error) {
 		return &pgpPublishResult{}, nil
 	}
 
-	ctx := context.Background()
-	states, pubErr := pgp.PublishToKeyservers(ctx, pub, keyservers)
-	res := &pgpPublishResult{published: states, attempted: len(keyservers)}
+	serverDBPath := filepath.Join(paths.Data, "db", "server.db")
+	dbMgr, err := database.NewMigrationManager(serverDBPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+	defer func() { _ = dbMgr.Close() }()
+	if err := dbMgr.RunMigrations(); err != nil {
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+	meta, err := pgp.GetKeypairMeta(dbMgr.GetDB())
+	if err != nil {
+		return nil, fmt.Errorf("failed to read keypair metadata: %w", err)
+	}
+	if meta == nil {
+		return nil, fmt.Errorf("keypair metadata is unavailable")
+	}
+	previous, err := pgp.LoadKeyserverState(paths.Config)
+	if err != nil {
+		return nil, err
+	}
+	legacyPublished := make(map[string]struct{}, len(meta.KeyserversPublished))
+	for _, state := range meta.KeyserversPublished {
+		legacyPublished[state.URL] = struct{}{}
+	}
+	currentState := make([]pgp.KeyserverState, 0, len(previous))
+	for _, state := range previous {
+		if state.Fingerprint == "" {
+			if _, wasPublished := legacyPublished[state.URL]; !wasPublished {
+				continue
+			}
+			state.Fingerprint = meta.Fingerprint
+		}
+		currentState = append(currentState, state)
+	}
+	states, published, pubErr := publish(ctx, pub, meta.Fingerprint, keyservers, currentState)
+	res := &pgpPublishResult{published: published, attempted: len(keyservers)}
 
-	// Persist state even on partial failure so a restore does not re-submit the
-	// servers that already accepted the key.
-	if len(states) > 0 {
-		if err := pgp.WriteKeyserverState(paths.Config, states); err != nil {
-			return res, fmt.Errorf("published but failed to write keyserver state: %w", err)
+	if err := pgp.WriteKeyserverState(paths.Config, states); err != nil {
+		return res, fmt.Errorf("failed to write keyserver state: %w", err)
+	}
+	if len(published) > 0 {
+		var allPublished []pgp.KeyserverState
+		for _, state := range states {
+			if state.Fingerprint == meta.Fingerprint && !state.PublishedAt.IsZero() {
+				allPublished = append(allPublished, state)
+			}
 		}
-		serverDBPath := filepath.Join(paths.Data, "db", "server.db")
-		dbMgr, dbErr := database.NewMigrationManager(serverDBPath)
-		if dbErr != nil {
-			return res, fmt.Errorf("published but failed to open database: %w", dbErr)
-		}
-		defer func() { _ = dbMgr.Close() }()
-		if err := dbMgr.RunMigrations(); err != nil {
-			return res, fmt.Errorf("published but failed to run migrations: %w", err)
-		}
-		if err := pgp.UpdateKeyserversPublished(dbMgr.GetDB(), states); err != nil {
+		if err := pgp.UpdateKeyserversPublished(dbMgr.GetDB(), allPublished); err != nil {
 			return res, fmt.Errorf("published but failed to record keyserver state: %w", err)
 		}
 	}
@@ -2946,19 +3088,10 @@ func emitPrivateExportAudit(configDir, dataDir, operator, operatorIP, reason, ou
 		map[string]interface{}{"reason": reason, "path": outPath})
 }
 
-// localOperatorIP returns the machine's primary outbound IP on a best-effort
-// basis for the audit trail. A UDP "connection" to a documentation-range address
-// sends no packets but resolves the local source IP; failures yield "".
+// localOperatorIP identifies local CLI audit events without inventing a remote
+// address for an operation that has no network peer.
 func localOperatorIP() string {
-	conn, err := net.Dial("udp", "192.0.2.1:9")
-	if err != nil {
-		return ""
-	}
-	defer func() { _ = conn.Close() }()
-	if addr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
-		return addr.IP.String()
-	}
-	return ""
+	return "local"
 }
 
 // pgpImportResult carries the outcome of a private-key import for reporting.

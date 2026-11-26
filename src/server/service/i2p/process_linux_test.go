@@ -4,6 +4,7 @@
 package i2p
 
 import (
+	"bufio"
 	"errors"
 	"os"
 	"os/exec"
@@ -26,13 +27,22 @@ func TestReapStaleI2PDStopsMatchingProcess(t *testing.T) {
 	root := t.TempDir()
 	confPath := filepath.Join(root, "i2pd.conf")
 	pidPath := filepath.Join(root, "i2pd.pid")
-	command := exec.Command("/bin/sh", "-c", "read -r line; # --conf "+confPath)
+	command := exec.Command("/bin/sh", "-c", "printf 'ready\\n'; read -r line; # --conf "+confPath)
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	stdin, err := command.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := command.Start(); err != nil {
 		t.Fatal(err)
+	}
+	if line, err := bufio.NewReader(stdout).ReadString('\n'); err != nil || line != "ready\n" {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+		t.Fatalf("wait for helper process readiness: line=%q err=%v", line, err)
 	}
 	defer func() { _ = stdin.Close() }()
 	actualBinary, err := os.Readlink(filepath.Join("/proc", strconv.Itoa(command.Process.Pid), "exe"))

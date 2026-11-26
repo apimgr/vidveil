@@ -36,12 +36,9 @@ func useTestKeyserver(t *testing.T, ts *httptest.Server) {
 		t.Fatalf("parse test server url: %v", err)
 	}
 	prevClient := keyserverHTTPClient
-	prevBackoff := keyserverRetryBackoff
 	keyserverHTTPClient = &http.Client{Transport: rewriteTransport{target: target}}
-	keyserverRetryBackoff = time.Millisecond
 	t.Cleanup(func() {
 		keyserverHTTPClient = prevClient
-		keyserverRetryBackoff = prevBackoff
 	})
 }
 
@@ -51,12 +48,16 @@ func TestPublishToKeyserversSuccess(t *testing.T) {
 	var paths []string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.URL.Path)
+		if r.URL.Path == "/vks/v1/upload" {
+			_, _ = w.Write([]byte(`{"key_fpr":"FINGERPRINT","status":"published"}`))
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
 	useTestKeyserver(t, ts)
 
-	servers := []string{"https://keys.openpgp.org", "https://keyserver.ubuntu.com/"}
+	servers := []string{"keys.openpgp.org", "keyserver.ubuntu.com"}
 	states, err := PublishToKeyservers(context.Background(), []byte("PUBKEY"), servers)
 	if err != nil {
 		t.Fatalf("PublishToKeyservers: %v", err)
@@ -90,6 +91,7 @@ func TestPublishToKeyserversPartialFailure(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		_, _ = w.Write([]byte(`{"key_fpr":"FINGERPRINT","status":"published"}`))
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
@@ -107,7 +109,7 @@ func TestPublishToKeyserversPartialFailure(t *testing.T) {
 
 // TestPublishToKeyserversRetries verifies a persistently failing keyserver is
 // retried keyserverMaxAttempts times before giving up.
-func TestPublishToKeyserversRetries(t *testing.T) {
+func TestPublishToKeyserversSchedulesDurableRetry(t *testing.T) {
 	var hits int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&hits, 1)
@@ -116,15 +118,43 @@ func TestPublishToKeyserversRetries(t *testing.T) {
 	defer ts.Close()
 	useTestKeyserver(t, ts)
 
-	states, err := PublishToKeyservers(context.Background(), []byte("K"), []string{"https://keyserver.ubuntu.com"})
+	states, published, err := PublishToKeyserversWithState(context.Background(), []byte("K"), "fingerprint", []string{"keyserver.ubuntu.com"}, nil)
 	if err == nil {
-		t.Fatal("expected error after exhausting retries")
+		t.Fatal("expected error from failed keyserver attempt")
 	}
-	if len(states) != 0 {
-		t.Fatalf("expected no states, got %+v", states)
+	if len(published) != 0 {
+		t.Fatalf("expected no published states, got %+v", published)
 	}
-	if got := atomic.LoadInt32(&hits); got != keyserverMaxAttempts {
-		t.Fatalf("server hit %d times, want %d", got, keyserverMaxAttempts)
+	if len(states) != 1 || states[0].Attempts != 1 || states[0].NextAttempt == nil || states[0].Permanent {
+		t.Fatalf("retry state = %+v, want one scheduled retry", states)
+	}
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Fatalf("server hit %d times, want one attempt per scheduler run", got)
+	}
+}
+
+func TestPublishToKeyserversDoesNotRetryClientErrors(t *testing.T) {
+	var hits int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer ts.Close()
+	useTestKeyserver(t, ts)
+
+	keyserver := "keyserver.ubuntu.com"
+	states, _, err := PublishToKeyserversWithState(context.Background(), []byte("K"), "fingerprint", []string{keyserver}, nil)
+	if err == nil {
+		t.Fatal("expected permanent keyserver error")
+	}
+	if len(states) != 1 || !states[0].Permanent || states[0].Attempts != 1 || states[0].NextAttempt != nil {
+		t.Fatalf("permanent failure state = %+v", states)
+	}
+	if _, _, err := PublishToKeyserversWithState(context.Background(), []byte("K"), "fingerprint", []string{keyserver}, states); err != nil {
+		t.Fatalf("permanent failure should remain terminal: %v", err)
+	}
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Fatalf("server hit %d times, want one permanent attempt", got)
 	}
 }
 
@@ -148,8 +178,6 @@ func TestPublishToKeyserversContextCancelled(t *testing.T) {
 	}))
 	defer ts.Close()
 	useTestKeyserver(t, ts)
-	keyserverRetryBackoff = time.Hour
-
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := PublishToKeyservers(ctx, []byte("K"), []string{"https://keyserver.ubuntu.com"})

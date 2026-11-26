@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -352,6 +353,49 @@ func TestSchemaManager_EnsureSchema_NoPanic(t *testing.T) {
 		}
 	}()
 	_ = sm.EnsureSchema()
+}
+
+func TestSchemaManager_ReadHandleIsSeparateAndReadOnly(t *testing.T) {
+	sm, err := NewSchemaManager(filepath.Join(t.TempDir(), "server.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sm.Close() }()
+	if err := sm.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	readDB := sm.GetReadDB()
+	if readDB == nil || readDB == sm.GetDB() {
+		t.Fatal("read database handle is missing or aliases the write handle")
+	}
+	var owners int
+	if err := readDB.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM owners").Scan(&owners); err != nil {
+		t.Fatalf("read handle query: %v", err)
+	}
+	if _, err := readDB.ExecContext(context.Background(), "INSERT INTO owners(id) VALUES ('read-only-check')"); err == nil {
+		t.Fatal("read database handle accepted a write")
+	}
+}
+
+func TestSchemaManager_EnsureSchemaCreatesReservedSystemOwner(t *testing.T) {
+	sm, err := NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sm.Close() }()
+	if err := sm.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	if err := sm.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := sm.GetDB().QueryRow(`SELECT COUNT(*) FROM owners WHERE id = 'system'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("reserved system owner count = %d, want exactly one", count)
+	}
 }
 
 // --- isColumnExistsError / isSerializationError (unexported helpers) ---

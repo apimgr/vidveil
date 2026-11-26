@@ -21,31 +21,31 @@ func openTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Skip("sqlite driver unavailable:", err)
 	}
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS scheduled_tasks (
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS scheduler_tasks (
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL,
 		schedule TEXT NOT NULL,
 		enabled INTEGER DEFAULT 1,
-		last_run DATETIME,
-		next_run DATETIME,
-		last_result TEXT,
+		last_run INTEGER,
+		next_run INTEGER,
+		last_status TEXT,
 		last_error TEXT,
 		run_count INTEGER DEFAULT 0,
 		fail_count INTEGER DEFAULT 0
 	)`); err != nil {
-		t.Fatalf("create scheduled_tasks: %v", err)
+		t.Fatalf("create scheduler_tasks: %v", err)
 	}
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS task_history (
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS scheduler_history (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		task_id TEXT NOT NULL,
-		start_time DATETIME NOT NULL,
-		end_time DATETIME,
+		started_at INTEGER NOT NULL,
+		finished_at INTEGER,
 		duration_ms INTEGER,
-		result TEXT,
+		status TEXT,
 		error TEXT,
-		FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
+		FOREIGN KEY (task_id) REFERENCES scheduler_tasks(id)
 	)`); err != nil {
-		t.Fatalf("create task_history: %v", err)
+		t.Fatalf("create scheduler_history: %v", err)
 	}
 	t.Cleanup(func() {
 		if err := db.Close(); err != nil {
@@ -245,12 +245,13 @@ func TestRegisterBuiltinTasks_MultipleTasksRegistered(t *testing.T) {
 		BackupDaily:          func(_ context.Context) error { return nil },
 		HealthcheckSelf:      func(_ context.Context) error { return nil },
 		DatasetHealthRefresh: func(_ context.Context) error { return nil },
+		KeyserverRetry:       func(_ context.Context) error { return nil },
 	}); err != nil {
 		t.Fatalf("RegisterBuiltinTasks: %v", err)
 	}
 	expected := []string{
 		"ssl_renewal", "geoip_update", "blocklist_update",
-		"cve_update", "log_rotation", "backup_daily", "healthcheck_self", "dataset_health_refresh",
+		"cve_update", "log_rotation", "backup_daily", "healthcheck_self", "dataset_health_refresh", "keyserver_retry",
 	}
 	for _, id := range expected {
 		if _, err := s.GetTask(id); err != nil {
@@ -308,7 +309,7 @@ func TestRegisterBuiltinTasks_Idempotent(t *testing.T) {
 func TestRegisterTaskReturnsPersistenceFailure(t *testing.T) {
 	db := openTestDB(t)
 	if _, err := db.Exec(`CREATE TRIGGER reject_scheduled_task_insert
-		BEFORE INSERT ON scheduled_tasks
+		BEFORE INSERT ON scheduler_tasks
 		BEGIN SELECT RAISE(FAIL, 'registration blocked'); END`); err != nil {
 		t.Fatalf("create rejecting trigger: %v", err)
 	}
@@ -316,7 +317,7 @@ func TestRegisterTaskReturnsPersistenceFailure(t *testing.T) {
 	if err := s.RegisterTask("persist-failure", "Task", "desc", "hourly", func(context.Context) error { return nil }); err == nil {
 		t.Fatal("RegisterTask returned nil after database rejected persistence")
 	}
-	if _, err := s.GetTask("persist-failure"); err == nil {
+	if _, err := s.GetTask("persist-failed"); err == nil {
 		t.Fatal("task became runnable after persistence failed")
 	}
 }
@@ -379,8 +380,8 @@ func TestMigrateLegacyTaskIDs_WithDB_RenamesLegacyIDs(t *testing.T) {
 	db := openTestDB(t)
 	s := NewSchedulerWithDB(db)
 
-	// Insert a legacy row into scheduled_tasks.
-	_, err := db.Exec(`INSERT INTO scheduled_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
+	// Insert a legacy row into scheduler_tasks.
+	_, err := db.Exec(`INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
 		"ssl.renewal", "SSL", "daily", 1)
 	if err != nil {
 		t.Fatalf("insert legacy row: %v", err)
@@ -392,13 +393,13 @@ func TestMigrateLegacyTaskIDs_WithDB_RenamesLegacyIDs(t *testing.T) {
 
 	// The old ID must be gone and the new ID must exist.
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE id = ?`, "ssl.renewal").Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduler_tasks WHERE id = ?`, "ssl.renewal").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
 		t.Error("legacy ID ssl.renewal still present after migration")
 	}
-	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE id = ?`, "ssl_renewal").Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduler_tasks WHERE id = ?`, "ssl_renewal").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
@@ -410,7 +411,7 @@ func TestMigrateLegacyTaskIDs_WithDB_Idempotent(t *testing.T) {
 	db := openTestDB(t)
 	s := NewSchedulerWithDB(db)
 
-	_, _ = db.Exec(`INSERT INTO scheduled_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
+	_, _ = db.Exec(`INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
 		"geoip.update", "GeoIP", "daily", 1)
 
 	if err := s.migrateLegacyTaskIDs(); err != nil {
@@ -422,7 +423,7 @@ func TestMigrateLegacyTaskIDs_WithDB_Idempotent(t *testing.T) {
 	}
 
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE id = ?`, "geoip_update").Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduler_tasks WHERE id = ?`, "geoip_update").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
@@ -436,7 +437,7 @@ func TestExecCtx_ExecutesStatement(t *testing.T) {
 	db := openTestDB(t)
 	s := NewSchedulerWithDB(db)
 
-	_, err := s.execCtx(`INSERT INTO scheduled_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
+	_, err := s.execCtx(`INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
 		"dbtest", "DB", "hourly", 1)
 	if err != nil {
 		t.Fatalf("execCtx INSERT: %v", err)
@@ -471,7 +472,7 @@ func TestLoadTaskStateFromDB_KnownIDReturnsTask(t *testing.T) {
 	db := openTestDB(t)
 	s := NewSchedulerWithDB(db)
 
-	_, _ = db.Exec(`INSERT INTO scheduled_tasks (id, name, schedule, enabled, run_count, fail_count) VALUES (?, ?, ?, ?, ?, ?)`,
+	_, _ = db.Exec(`INSERT INTO scheduler_tasks (id, name, schedule, enabled, run_count, fail_count) VALUES (?, ?, ?, ?, ?, ?)`,
 		"known", "Known", "hourly", 1, 5, 2)
 
 	task, err := s.loadTaskStateFromDB("known")
@@ -518,7 +519,7 @@ func TestSaveTaskStateToDB_PersistsTask(t *testing.T) {
 
 	var name string
 	var runCount int
-	if err := db.QueryRow(`SELECT name, run_count FROM scheduled_tasks WHERE id = ?`, "persist").Scan(&name, &runCount); err != nil {
+	if err := db.QueryRow(`SELECT name, run_count FROM scheduler_tasks WHERE id = ?`, "persist").Scan(&name, &runCount); err != nil {
 		t.Fatal(err)
 	}
 	if name != "Persist" {
@@ -543,7 +544,7 @@ func TestSaveHistoryToDB_PersistsEntry(t *testing.T) {
 	s := NewSchedulerWithDB(db)
 
 	// Need the task row to satisfy the foreign key.
-	_, _ = db.Exec(`INSERT INTO scheduled_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
+	_, _ = db.Exec(`INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
 		"htask", "HTask", "hourly", 1)
 
 	h := TaskHistory{
@@ -558,11 +559,11 @@ func TestSaveHistoryToDB_PersistsEntry(t *testing.T) {
 	}
 
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM task_history WHERE task_id = ?`, "htask").Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduler_history WHERE task_id = ?`, "htask").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
-		t.Errorf("task_history rows for htask = %d, want 1", count)
+		t.Errorf("scheduler_history rows for htask = %d, want 1", count)
 	}
 }
 
@@ -576,13 +577,13 @@ func TestLoadHistoryFromDB_LoadsEntries(t *testing.T) {
 	db := openTestDB(t)
 	s := NewSchedulerWithDB(db)
 
-	_, _ = db.Exec(`INSERT INTO scheduled_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
+	_, _ = db.Exec(`INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
 		"lhtask", "LH", "hourly", 1)
 	now := time.Now()
-	_, _ = db.Exec(`INSERT INTO task_history (task_id, start_time, end_time, duration_ms, result) VALUES (?, ?, ?, ?, ?)`,
-		"lhtask", now.Add(-10*time.Second), now, 10000, "success")
-	_, _ = db.Exec(`INSERT INTO task_history (task_id, start_time, end_time, duration_ms, result) VALUES (?, ?, ?, ?, ?)`,
-		"lhtask", now.Add(-20*time.Second), now.Add(-10*time.Second), 10000, "failure")
+	_, _ = db.Exec(`INSERT INTO scheduler_history (task_id, started_at, finished_at, duration_ms, status) VALUES (?, ?, ?, ?, ?)`,
+		"lhtask", now.Add(-10*time.Second).Unix(), now.Unix(), 10000, "success")
+	_, _ = db.Exec(`INSERT INTO scheduler_history (task_id, started_at, finished_at, duration_ms, status) VALUES (?, ?, ?, ?, ?)`,
+		"lhtask", now.Add(-20*time.Second).Unix(), now.Add(-10*time.Second).Unix(), 10000, "failed")
 
 	if err := s.LoadHistoryFromDB(100); err != nil {
 		t.Fatalf("LoadHistoryFromDB: %v", err)
@@ -603,11 +604,11 @@ func TestRegisterTask_PersistsToDBAndLoadsState(t *testing.T) {
 	_ = s.RegisterTask("dbr1", "DB Task", "desc", "hourly", noop)
 
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE id = ?`, "dbr1").Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduler_tasks WHERE id = ?`, "dbr1").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
-		t.Errorf("scheduled_tasks rows for dbr1 = %d, want 1", count)
+		t.Errorf("scheduler_tasks rows for dbr1 = %d, want 1", count)
 	}
 }
 
@@ -616,7 +617,7 @@ func TestRegisterTask_MergesPersistedState(t *testing.T) {
 	s := NewSchedulerWithDB(db)
 
 	// Pre-populate DB with existing run state.
-	_, _ = db.Exec(`INSERT INTO scheduled_tasks (id, name, schedule, enabled, run_count, fail_count) VALUES (?, ?, ?, ?, ?, ?)`,
+	_, _ = db.Exec(`INSERT INTO scheduler_tasks (id, name, schedule, enabled, run_count, fail_count) VALUES (?, ?, ?, ?, ?, ?)`,
 		"existing", "Existing", "hourly", 1, 10, 3)
 
 	_ = s.RegisterTask("existing", "Existing", "desc", "hourly", noop)

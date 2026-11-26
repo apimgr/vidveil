@@ -691,7 +691,25 @@ type EmailNotificationsConfig struct {
 
 // NotificationsConfig holds notification settings per AI.md PART 17
 type NotificationsConfig struct {
-	Email EmailNotificationsConfig `yaml:"email"`
+	Email         EmailNotificationsConfig `yaml:"email"`
+	DatabaseError DatabaseErrorConfig      `yaml:"database_error"`
+	DiskLow       DiskLowConfig            `yaml:"disk_low"`
+}
+
+// DatabaseErrorConfig controls the database connection failure trigger.
+type DatabaseErrorConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	Failures      int    `yaml:"failures"`
+	CheckInterval string `yaml:"check_interval"`
+	Repeat        string `yaml:"repeat"`
+}
+
+// DiskLowConfig controls low disk space checks and notification thresholds.
+type DiskLowConfig struct {
+	Enabled          bool   `yaml:"enabled"`
+	ThresholdPercent int    `yaml:"threshold_percent"`
+	CheckInterval    string `yaml:"check_interval"`
+	Repeat           string `yaml:"repeat"`
 }
 
 // ContactRoleConfig holds contact settings for one notification role per AI.md PART 12.
@@ -1994,6 +2012,12 @@ func DefaultAppConfig() *AppConfig {
 				},
 			},
 			Notifications: NotificationsConfig{
+				DatabaseError: DatabaseErrorConfig{
+					Enabled: true, Failures: 3, CheckInterval: "1m", Repeat: "24h",
+				},
+				DiskLow: DiskLowConfig{
+					Enabled: true, ThresholdPercent: 85, CheckInterval: "5m", Repeat: "24h",
+				},
 				Email: EmailNotificationsConfig{
 					SMTP: SMTPConfig{
 						Port: 587,
@@ -2009,11 +2033,14 @@ func DefaultAppConfig() *AppConfig {
 				CatchUpWindow: "1h",
 				Tasks: map[string]ScheduleTaskConfig{
 					"ssl_renewal":      {Schedule: "0 3 * * *", Enabled: true},
+					"database_check":   {Schedule: "@every 1m", Enabled: true},
+					"disk_check":       {Schedule: "@every 5m", Enabled: true},
 					"geoip_update":     {Schedule: "0 3 * * 0", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
 					"blocklist_update": {Schedule: "0 4 * * *", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
 					"cve_update":       {Schedule: "0 5 * * *", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
 					"update_check":     {Schedule: "0 6 * * *", Enabled: true},
 					"token_cleanup":    {Schedule: "@every 15m", Enabled: true},
+					"keyserver_retry":  {Schedule: "@every 15m", Enabled: true},
 					"log_rotation":     {Schedule: "0 0 * * *", Enabled: true},
 					"backup_daily": {
 						Schedule: "0 2 * * *", Enabled: true, Verify: true,
@@ -2338,6 +2365,7 @@ func DefaultAppConfig() *AppConfig {
 			},
 			Security: WebSecurityConfig{
 				Contact:              "security@" + fqdn,
+				Keyservers:           []string{"keys.openpgp.org"},
 				DisclosureWindowDays: 90,
 			},
 			CSP: CSPConfig{
@@ -2910,6 +2938,7 @@ func validateConfig(cfg *AppConfig) {
 	validateTorConfig(&cfg.Server.Tor, defaults.Server.Tor)
 	validateI2PConfig(&cfg.Server.I2P, defaults.Server.I2P)
 	validateUpdateChannel(&cfg.Server.Update, defaults.Server.Update)
+	validatePGPKeyservers(cfg)
 	if err := ValidateTracking(&cfg.Server.Tracking); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: invalid tracking configuration: %v; analytics disabled\n", err)
 		cfg.Server.Tracking = defaults.Server.Tracking
@@ -3020,6 +3049,18 @@ func validateConfig(cfg *AppConfig) {
 	}
 	validateMaintenanceConfig(&cfg.Server.Maintenance, defaults.Server.Maintenance)
 	validateRestoreConfig(&cfg.Server.Restore, defaults.Server.Restore)
+}
+
+func validatePGPKeyservers(cfg *AppConfig) {
+	devMode := cfg.Server.Mode == "development" || cfg.Server.Mode == "debug"
+	for _, host := range cfg.Web.Security.Keyservers {
+		if host != strings.TrimSpace(host) || strings.ContainsAny(host, ":/@?#") || !IsValidHost(host, devMode, paths.ProjectName) {
+			defaults := DefaultAppConfig().Web.Security.Keyservers
+			fmt.Fprintf(os.Stderr, "Warning: invalid web.security.keyservers host %q, using defaults\n", host)
+			cfg.Web.Security.Keyservers = defaults
+			return
+		}
+	}
 }
 
 func validateMaintenanceConfig(cfg *MaintenanceConfig, defaults MaintenanceConfig) {

@@ -62,8 +62,13 @@ type KeypairMeta struct {
 
 // KeyserverState records that the public key was published to a keyserver.
 type KeyserverState struct {
-	URL         string    `json:"url"`
-	PublishedAt time.Time `json:"published_at"`
+	URL         string     `json:"url"`
+	Fingerprint string     `json:"fingerprint,omitempty"`
+	PublishedAt time.Time  `json:"published_at,omitempty"`
+	Attempts    int        `json:"attempts,omitempty"`
+	NextAttempt *time.Time `json:"next_attempt,omitempty"`
+	LastError   string     `json:"last_error,omitempty"`
+	Permanent   bool       `json:"permanent,omitempty"`
 }
 
 // SaveKeypairMeta replaces the single keypair metadata row with the given

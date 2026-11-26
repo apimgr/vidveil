@@ -85,7 +85,7 @@ func TestOwnerTokenRevealRedirectsAndIsConsumedOnce(t *testing.T) {
 	}
 }
 
-func TestAPITokenRegenerationRotatesCSRFSecret(t *testing.T) {
+func TestOperatorTokenRegenerationRotatesCSRFSecret(t *testing.T) {
 	schema, err := database.NewSchemaManager(":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -103,13 +103,15 @@ func TestAPITokenRegenerationRotatesCSRFSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &Server{secretsMgr: manager}
-	s.rotateCSRFSecretAfterAPITokenRegeneration(httptest.NewRequest(http.MethodPost, "/", nil))
+	if err := s.RotateCSRFSecretAfterOperatorTokenChange(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	valid, err := manager.ValidateWithPrevious(context.Background(), secret.CSRFTokenSecret, previous)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if valid {
-		t.Fatal("API token regeneration left the previous CSRF secret valid")
+		t.Fatal("operator token regeneration left the previous CSRF secret valid")
 	}
 }
 

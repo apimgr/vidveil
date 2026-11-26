@@ -37,7 +37,7 @@ func TestScheduledBackupFailureUsesDedicatedAdminNotification(t *testing.T) {
 		notifyDispatcher: notify.New(&cfg.Server.Contact, paths.ProjectName, version.GetVersion(), cfg.GetPublicURL()),
 	}
 	task := scheduler.ScheduledTask{ID: "backup_daily", Name: "Daily Backup", NextRun: time.Now().Add(time.Hour)}
-	history := scheduler.TaskHistory{Result: "failure", Error: "disk full"}
+	history := scheduler.TaskHistory{Result: "failed", Error: "disk full"}
 	s.notifyScheduledTaskFailure(task, history)
 
 	select {

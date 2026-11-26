@@ -405,6 +405,16 @@ server:
       from:
         name: ""
         email: no-reply@<detected domain>
+    database_error:
+      enabled: true
+      failures: 3
+      check_interval: 1m
+      repeat: 24h
+    disk_low:
+      enabled: true
+      threshold_percent: 85
+      check_interval: 5m
+      repeat: 24h
   schedule:
     timezone: America/New_York
     catch_up_window: 1h
@@ -422,6 +432,12 @@ server:
       backup_hourly:
         schedule: '@hourly'
         enabled: false
+      database_check:
+        schedule: '@every 1m'
+        enabled: true
+      disk_check:
+        schedule: '@every 5m'
+        enabled: true
       blocklist_update:
         schedule: 0 4 * * *
         enabled: true
@@ -894,6 +910,8 @@ engines:
     browser: chrome
     browser_version: "131"
 ```
+
+For `database_check` and `disk_check`, the notification `check_interval` supplies the cadence while the task schedule remains at its documented default. An explicit non-default task schedule takes precedence. Disabling the corresponding notification trigger also disables its scheduler task.
 
 `server.maintenance.self_healing.retry_interval` controls the recovery retry
 schedule. `max_attempts: 0` means retries continue without a limit; a positive

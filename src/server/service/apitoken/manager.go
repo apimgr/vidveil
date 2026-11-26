@@ -253,7 +253,7 @@ func (m *Manager) authenticate(ctx context.Context, raw string, updateLastUsed b
 		}
 	}
 	now := time.Now().Unix()
-	if found == nil || found.revoked.Valid || (found.expires.Valid && found.expires.Int64 <= now) {
+	if found == nil || found.owner == "system" || found.revoked.Valid || (found.expires.Valid && found.expires.Int64 <= now) {
 		return Principal{}, ErrInvalidToken
 	}
 	if updateLastUsed && (!found.used.Valid || found.used.Int64 <= now-60) {
@@ -501,7 +501,7 @@ func (m *Manager) PurgeIdleOwners(ctx context.Context, idleDays int) (int64, err
 		return 0, fmt.Errorf("begin idle owner purge: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	const idleOwners = `SELECT o.id FROM owners o WHERE o.last_seen_at <= ?
+	const idleOwners = `SELECT o.id FROM owners o WHERE o.id <> 'system' AND o.last_seen_at <= ?
 		AND NOT EXISTS (SELECT 1 FROM favorites f WHERE f.owner_id = o.id)`
 	if _, err := tx.ExecContext(ctx, `DELETE FROM api_tokens WHERE owner_id IN (`+idleOwners+`)`, cutoff); err != nil {
 		return 0, fmt.Errorf("delete idle owner tokens: %w", err)

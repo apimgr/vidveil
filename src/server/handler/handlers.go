@@ -44,6 +44,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/model"
+	"github.com/apimgr/vidveil/src/server/service/alertcheck"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/cache"
 	"github.com/apimgr/vidveil/src/server/service/engine"
@@ -312,6 +313,7 @@ type SearchHandler struct {
 	geoipSvc          GeoIPChecker
 	secretsMgr        *secret.Manager
 	healthDB          *sql.DB
+	readHealthDB      *sql.DB
 	healthRegistry    *health.Registry
 	maintenanceStatus atomic.Pointer[maintenance.MaintenanceStatus]
 	tokenManager      *apitoken.Manager
@@ -551,6 +553,11 @@ func (h *SearchHandler) SetGeoIPService(g GeoIPChecker) {
 // to probe).
 func (h *SearchHandler) SetHealthDB(db *sql.DB) {
 	h.healthDB = db
+}
+
+// SetReadHealthDB wires the separate read handle used by the database probe.
+func (h *SearchHandler) SetReadHealthDB(db *sql.DB) {
+	h.readHealthDB = db
 }
 
 // SetHealthRegistry wires cached dataset and dependency health checks.
@@ -2464,16 +2471,20 @@ type StatsInfo struct {
 	SearchesTotal     uint64 `json:"searches_total"`
 }
 
-// checkDatabase pings the database per AI.md PART 13. A nil handle (e.g. in
-// tests, or a build with no DB wired) reports "ok" since there is nothing to
-// probe; a live handle that fails to answer within 2s reports "error".
+// checkDatabase probes both database handles per AI.md PART 13. A nil handle
+// reports "ok" since there is no database configured.
 func (h *SearchHandler) checkDatabase(ctx context.Context) string {
 	if h.healthDB == nil {
 		return "ok"
 	}
-	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	if err := h.healthDB.PingContext(pingCtx); err != nil {
+	if err := alertcheck.ProbeDatabase(ctx, h.healthDB); err != nil {
+		return "error"
+	}
+	readDB := h.readHealthDB
+	if readDB == nil {
+		readDB = h.healthDB
+	}
+	if err := alertcheck.ProbeDatabase(ctx, readDB); err != nil {
 		return "error"
 	}
 	return "ok"

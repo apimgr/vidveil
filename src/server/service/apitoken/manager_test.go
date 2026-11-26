@@ -58,6 +58,31 @@ func TestIssuePrimaryAndAuthenticate(t *testing.T) {
 	}
 }
 
+func TestAuthenticateRejectsTokensAssignedToSystemOwner(t *testing.T) {
+	schema, err := database.NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = schema.Close() }()
+	if err := schema.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewManager(schema.GetDB(), strings.Repeat("ab", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := manager.IssuePrimary(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := schema.GetDB().Exec(`UPDATE api_tokens SET owner_id = 'system' WHERE id = ?`, issued.TokenID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Authenticate(context.Background(), issued.Token); err != ErrInvalidToken {
+		t.Fatalf("system-owned token authentication error = %v, want invalid token", err)
+	}
+}
+
 func TestAuthenticateAcceptsLegacyOwnerTokenPrefix(t *testing.T) {
 	schema, err := database.NewSchemaManager(":memory:")
 	if err != nil {
@@ -194,7 +219,7 @@ func TestPurgeIdleOwnersKeepsOwnersWithResources(t *testing.T) {
 		t.Fatal(err)
 	}
 	old := time.Now().Add(-60 * 24 * time.Hour).Unix()
-	if _, err := schema.GetDB().Exec(`UPDATE owners SET last_seen_at = ? WHERE id IN (?, ?)`, old, resourceOwner.OwnerID, idleOwner.OwnerID); err != nil {
+	if _, err := schema.GetDB().Exec(`UPDATE owners SET last_seen_at = ? WHERE id IN (?, ?, 'system')`, old, resourceOwner.OwnerID, idleOwner.OwnerID); err != nil {
 		t.Fatal(err)
 	}
 	if removed, err := manager.PurgeIdleOwners(ctx, 30); err != nil || removed != 1 {
@@ -208,5 +233,12 @@ func TestPurgeIdleOwnersKeepsOwnersWithResources(t *testing.T) {
 	}
 	if _, err := manager.Authenticate(ctx, linked.Token); err != ErrInvalidToken {
 		t.Fatalf("idle linked authentication error = %v, want invalid token", err)
+	}
+	var systemOwnerCount int
+	if err := schema.GetDB().QueryRowContext(ctx, `SELECT COUNT(*) FROM owners WHERE id = 'system'`).Scan(&systemOwnerCount); err != nil {
+		t.Fatal(err)
+	}
+	if systemOwnerCount != 1 {
+		t.Fatalf("reserved system owner count = %d, want 1 after idle purge", systemOwnerCount)
 	}
 }

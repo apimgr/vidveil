@@ -93,6 +93,36 @@ func TestURLNormalizeMiddleware_TrailingSlashRedirects(t *testing.T) {
 	}
 }
 
+func TestURLNormalizeMiddleware_NonGetRedirectPreservesMethod(t *testing.T) {
+	methods := []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
+	for _, method := range methods {
+		t.Run(method, func(t *testing.T) {
+			h := URLNormalizeMiddleware(http.HandlerFunc(passHandler))
+			req := httptest.NewRequest(method, "/foo/bar/", strings.NewReader("payload"))
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusPermanentRedirect {
+				t.Errorf("URLNormalize %s trailing slash: status = %d, want 308", method, rec.Code)
+			}
+			if got := rec.Header().Get("Location"); got != "/foo/bar" {
+				t.Errorf("URLNormalize %s trailing slash: Location = %q, want /foo/bar", method, got)
+			}
+		})
+	}
+}
+
+func TestURLNormalizeMiddleware_HeadRedirectUsesMovedPermanently(t *testing.T) {
+	h := URLNormalizeMiddleware(http.HandlerFunc(passHandler))
+	req := httptest.NewRequest(http.MethodHead, "/foo/bar/", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMovedPermanently {
+		t.Errorf("URLNormalize HEAD trailing slash: status = %d, want 301", rec.Code)
+	}
+}
+
 func TestURLNormalizeMiddleware_TrailingSlashWithDotPassThrough(t *testing.T) {
 	// Path segment containing a dot — middleware should not panic.
 	h := URLNormalizeMiddleware(http.HandlerFunc(passHandler))

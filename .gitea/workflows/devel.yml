@@ -65,10 +65,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - name: Regenerate embedded API specifications
-        run: go generate ./src/swagger
       - name: Verify generated API specifications are current
-        run: git diff --exit-code HEAD -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
+        run: |
+          before=$(sha256sum src/swagger/openapi_generated.json src/graphql/schema_generated.graphql)
+          go generate ./src/swagger
+          after=$(sha256sum src/swagger/openapi_generated.json src/graphql/schema_generated.graphql)
+          if [ "$before" != "$after" ]; then
+            echo "Generated API specifications are stale." >&2
+            exit 1
+          fi
 
       - name: Set build info
         run: |

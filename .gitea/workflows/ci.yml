@@ -30,10 +30,15 @@ jobs:
       options: "--user 0:0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - name: Regenerate embedded API specifications
-        run: go generate ./src/swagger
       - name: Verify generated API specifications are current
-        run: git diff --exit-code HEAD -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
+        run: |
+          before=$(sha256sum src/swagger/openapi_generated.json src/graphql/schema_generated.graphql)
+          go generate ./src/swagger
+          after=$(sha256sum src/swagger/openapi_generated.json src/graphql/schema_generated.graphql)
+          if [ "$before" != "$after" ]; then
+            echo "Generated API specifications are stale." >&2
+            exit 1
+          fi
       - run: go vet ./...
       - run: staticcheck ./...
 
@@ -88,10 +93,15 @@ jobs:
       CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - name: Regenerate embedded API specifications
-        run: go generate ./src/swagger
       - name: Verify generated API specifications are current
-        run: git diff --exit-code HEAD -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
+        run: |
+          before=$(sha256sum src/swagger/openapi_generated.json src/graphql/schema_generated.graphql)
+          go generate ./src/swagger
+          after=$(sha256sum src/swagger/openapi_generated.json src/graphql/schema_generated.graphql)
+          if [ "$before" != "$after" ]; then
+            echo "Generated API specifications are stale." >&2
+            exit 1
+          fi
       - name: Run tests with coverage
         run: |
           mkdir -p "/tmp/${{ gitea.repository_owner }}"
@@ -120,10 +130,15 @@ jobs:
       CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - name: Regenerate embedded API specifications
-        run: go generate ./src/swagger
       - name: Verify generated API specifications are current
-        run: git diff --exit-code HEAD -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
+        run: |
+          before=$(sha256sum src/swagger/openapi_generated.json src/graphql/schema_generated.graphql)
+          go generate ./src/swagger
+          after=$(sha256sum src/swagger/openapi_generated.json src/graphql/schema_generated.graphql)
+          if [ "$before" != "$after" ]; then
+            echo "Generated API specifications are stale." >&2
+            exit 1
+          fi
       - run: go build -buildvcs=false ./...
 
   vuln-scan:

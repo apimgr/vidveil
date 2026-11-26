@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // SchemaManager handles database schema creation per AI.md PART 10
@@ -115,43 +117,203 @@ func (sm *SchemaManager) ensureFavoriteOwnerColumn(ctx context.Context) error {
 // were added. Legacy tokens remain linked to isolated owners and cannot be
 // revealed because their original raw values were never stored.
 func (sm *SchemaManager) ensureOwnerTokenColumns(ctx context.Context) error {
-	columns := []struct{ name, ddl string }{
-		{"owner_id", `ALTER TABLE api_tokens ADD COLUMN owner_id TEXT`},
-		{"kind", `ALTER TABLE api_tokens ADD COLUMN kind TEXT NOT NULL DEFAULT 'linked'`},
-		{"name", `ALTER TABLE api_tokens ADD COLUMN name TEXT`},
-		{"token_suffix", `ALTER TABLE api_tokens ADD COLUMN token_suffix TEXT NOT NULL DEFAULT ''`},
-		{"token_enc", `ALTER TABLE api_tokens ADD COLUMN token_enc TEXT NOT NULL DEFAULT ''`},
-		{"rotated_at", `ALTER TABLE api_tokens ADD COLUMN rotated_at INTEGER`},
+	columns, idType, err := apiTokenColumns(ctx, sm.db)
+	if err != nil {
+		return err
 	}
-	for _, column := range columns {
-		var count int
-		if err := sm.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('api_tokens') WHERE name = ?`, column.name).Scan(&count); err != nil {
-			return fmt.Errorf("inspect API-token schema: %w", err)
-		}
-		if count == 0 {
-			if _, err := sm.db.ExecContext(ctx, column.ddl); err != nil {
-				return fmt.Errorf("add API-token %s column: %w", column.name, err)
-			}
+	required := []string{"id", "owner_id", "kind", "name", "token_hash", "token_prefix", "token_last4", "token_enc", "created_at", "rotated_at", "expires_at", "last_used_at", "revoked_at", "revoked_reason"}
+	needsRebuild := !strings.EqualFold(idType, "TEXT") || len(columns) != len(required)
+	for _, name := range required {
+		if !columns[name] {
+			needsRebuild = true
 		}
 	}
-	if _, err := sm.db.ExecContext(ctx, `
-		INSERT OR IGNORE INTO owners(id)
-		SELECT 'legacy-' || id FROM api_tokens WHERE owner_id IS NULL`); err != nil {
-		return fmt.Errorf("preserve legacy API-token identities: %w", err)
-	}
-	if _, err := sm.db.ExecContext(ctx, `
-		UPDATE api_tokens SET owner_id = 'legacy-' || id WHERE owner_id IS NULL`); err != nil {
-		return fmt.Errorf("assign legacy API-token owners: %w", err)
+	if needsRebuild {
+		if err := sm.rebuildOwnerTokenTable(ctx, columns); err != nil {
+			return err
+		}
 	}
 	for _, ddl := range []string{
-		`CREATE INDEX IF NOT EXISTS idx_api_tokens_owner ON api_tokens(owner_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_primary ON api_tokens(owner_id) WHERE kind = 'primary' AND revoked_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash)`,
+		`CREATE INDEX IF NOT EXISTS idx_api_tokens_prefix ON api_tokens(token_prefix)`,
+		`CREATE INDEX IF NOT EXISTS idx_api_tokens_owner ON api_tokens(owner_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_api_tokens_active ON api_tokens(revoked_at) WHERE revoked_at IS NULL`,
 	} {
 		if _, err := sm.db.ExecContext(ctx, ddl); err != nil {
 			return fmt.Errorf("create owner-token index: %w", err)
 		}
 	}
 	return nil
+}
+
+func apiTokenColumns(ctx context.Context, db *sql.DB) (map[string]bool, string, error) {
+	rows, err := db.QueryContext(ctx, `PRAGMA table_info(api_tokens)`)
+	if err != nil {
+		return nil, "", fmt.Errorf("inspect API-token schema: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	columns := make(map[string]bool)
+	idType := ""
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return nil, "", fmt.Errorf("read API-token schema: %w", err)
+		}
+		columns[name] = true
+		if name == "id" {
+			idType = columnType
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", fmt.Errorf("read API-token schema: %w", err)
+	}
+	return columns, idType, nil
+}
+
+func (sm *SchemaManager) rebuildOwnerTokenTable(ctx context.Context, columns map[string]bool) error {
+	tx, err := sm.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin API-token schema migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	selectColumn := func(name, fallback string) string {
+		if columns[name] {
+			return `"` + name + `"`
+		}
+		return fallback
+	}
+	last4Column := "''"
+	if columns["token_last4"] {
+		last4Column = `COALESCE(token_last4, '')`
+	} else if columns["token_suffix"] {
+		last4Column = `COALESCE(token_suffix, '')`
+	}
+	createdColumn := `CAST(strftime('%s', 'now') AS INTEGER)`
+	if columns["created_at"] {
+		createdColumn = `COALESCE(created_at, CAST(strftime('%s', 'now') AS INTEGER))`
+	}
+	query := `SELECT ` + strings.Join([]string{
+		selectColumn("id", `CAST(rowid AS TEXT)`),
+		selectColumn("owner_id", `NULL`),
+		selectColumn("kind", `'linked'`),
+		selectColumn("name", `NULL`),
+		selectColumn("token_hash", `''`),
+		selectColumn("token_prefix", `''`),
+		last4Column,
+		selectColumn("token_enc", `''`),
+		createdColumn,
+		selectColumn("rotated_at", `NULL`),
+		selectColumn("expires_at", `NULL`),
+		selectColumn("last_used_at", `NULL`),
+		selectColumn("revoked_at", `NULL`),
+		selectColumn("revoked_reason", `NULL`),
+	}, ",") + ` FROM api_tokens ORDER BY rowid`
+	rows, err := tx.QueryContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("read existing API tokens: %w", err)
+	}
+	type legacyToken struct {
+		id, owner, kind, name, hash, prefix, last4, encrypted, revokedReason sql.NullString
+		created, rotated, expires, lastUsed, revoked                         sql.NullInt64
+	}
+	var legacyTokens []legacyToken
+	for rows.Next() {
+		var item legacyToken
+		if err := rows.Scan(&item.id, &item.owner, &item.kind, &item.name, &item.hash, &item.prefix, &item.last4, &item.encrypted, &item.created, &item.rotated, &item.expires, &item.lastUsed, &item.revoked, &item.revokedReason); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan existing API token: %w", err)
+		}
+		legacyTokens = append(legacyTokens, item)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("read existing API tokens: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close existing API-token rows: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DROP TABLE IF EXISTS api_tokens_migrating`); err != nil {
+		return fmt.Errorf("remove stale API-token migration table: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, ownerTokenTableDDL("api_tokens_migrating")); err != nil {
+		return fmt.Errorf("create API-token migration table: %w", err)
+	}
+	for _, old := range legacyTokens {
+		if !old.hash.Valid || old.hash.String == "" {
+			return fmt.Errorf("migrate API token %q: missing token hash", old.id.String)
+		}
+		id, parseErr := uuid.Parse(old.id.String)
+		if parseErr != nil || id.Version() != 7 {
+			id, err = uuid.NewV7()
+			if err != nil {
+				return fmt.Errorf("generate migrated API-token id: %w", err)
+			}
+		}
+		owner := old.owner.String
+		if !old.owner.Valid || owner == "" {
+			ownerUUID, ownerErr := uuid.NewV7()
+			if ownerErr != nil {
+				return fmt.Errorf("generate legacy API-token owner id: %w", ownerErr)
+			}
+			owner = ownerUUID.String()
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO owners(id) VALUES (?)`, owner); err != nil {
+			return fmt.Errorf("preserve API-token owner %q: %w", owner, err)
+		}
+		tokenKind := old.kind.String
+		if !old.kind.Valid || (tokenKind != "primary" && tokenKind != "linked") {
+			tokenKind = "linked"
+		}
+		if old.prefix.String == "" {
+			old.prefix.String = "legacy"
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO api_tokens_migrating
+			(id, owner_id, kind, name, token_hash, token_prefix, token_last4, token_enc, created_at, rotated_at, expires_at, last_used_at, revoked_at, revoked_reason)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id.String(), owner, tokenKind,
+			old.name, old.hash.String, old.prefix.String, old.last4, old.encrypted,
+			old.created.Int64, nullInt64Value(old.rotated), nullInt64Value(old.expires), nullInt64Value(old.lastUsed), nullInt64Value(old.revoked), old.revokedReason); err != nil {
+			return fmt.Errorf("copy API token %q: %w", old.id.String, err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DROP TABLE api_tokens`); err != nil {
+		return fmt.Errorf("replace existing API-token table: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE api_tokens_migrating RENAME TO api_tokens`); err != nil {
+		return fmt.Errorf("install migrated API-token table: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit API-token schema migration: %w", err)
+	}
+	return nil
+}
+
+func ownerTokenTableDDL(table string) string {
+	return `CREATE TABLE IF NOT EXISTS ` + table + ` (
+		id TEXT PRIMARY KEY,
+		owner_id TEXT NOT NULL REFERENCES owners(id) ON DELETE CASCADE,
+		kind TEXT NOT NULL CHECK (kind IN ('primary', 'linked')),
+		name TEXT,
+		token_hash TEXT NOT NULL UNIQUE,
+		token_prefix TEXT NOT NULL,
+		token_last4 TEXT NOT NULL,
+		token_enc TEXT NOT NULL,
+		created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+		rotated_at INTEGER,
+		expires_at INTEGER,
+		last_used_at INTEGER,
+		revoked_at INTEGER,
+		revoked_reason TEXT
+	)`
+}
+
+func nullInt64Value(value sql.NullInt64) any {
+	if !value.Valid {
+		return nil
+	}
+	return value.Int64
 }
 
 // getTablesDDL returns CREATE TABLE statements.
@@ -262,30 +424,31 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 		// PART 11 "Security Administration" — status/comments are set by
 		// out-of-band maintainer tooling.
 		`CREATE TABLE IF NOT EXISTS security_reports (
-			tracking_id TEXT PRIMARY KEY,
-			status TEXT NOT NULL DEFAULT 'received',
-			severity TEXT NOT NULL,
-			component TEXT NOT NULL,
-			endpoint TEXT,
-			summary TEXT NOT NULL,
-			encrypted_body BLOB NOT NULL,
-			encryption_method TEXT NOT NULL,
-			researcher_email TEXT,
-			researcher_gpg_fingerprint TEXT,
-			cve_requested INTEGER DEFAULT 0,
-			disclosure_window_days INTEGER,
-			credit_preference TEXT NOT NULL,
-			credit_name TEXT,
-			disclosed INTEGER DEFAULT 0,
-			app_version TEXT,
-			commit_hash TEXT,
-			report_token_hash TEXT,
-			report_token_last_used_date TEXT,
-			maintainer_comments TEXT,
-			expected_disclosure_date DATETIME,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			closed_at DATETIME
+			tracking_id VARCHAR(32) PRIMARY KEY,
+			id_window BIGINT NOT NULL,
+			severity VARCHAR(16) NOT NULL,
+			component VARCHAR(255) NOT NULL,
+			status VARCHAR(16) NOT NULL DEFAULT 'received',
+			body_enc BLOB NOT NULL,
+			body_alg VARCHAR(16) NOT NULL,
+			contact_enc BLOB,
+			credit_pref VARCHAR(8) NOT NULL DEFAULT 'no',
+			credit_name VARCHAR(100),
+			researcher_comment TEXT NOT NULL DEFAULT '',
+			disclosure_date DATE,
+			cve_requested BOOLEAN NOT NULL DEFAULT FALSE,
+			token_hash VARCHAR(64) NOT NULL,
+			token_last_used DATE,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			closed_at TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_security_reports_status ON security_reports(status, created_at)`,
+		`CREATE TABLE IF NOT EXISTS security_thanks (
+			tracking_id VARCHAR(32) PRIMARY KEY,
+			credit VARCHAR(120) NOT NULL,
+			severity VARCHAR(16) NOT NULL,
+			disclosed_on DATE NOT NULL
 		)`,
 
 		// Favorites table per AI.md PART 16 progressive-enhancement rule
@@ -310,29 +473,7 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 		// API tokens per AI.md PART 11: token_hash stores the SHA-256 digest;
 		// token_enc stores the AES-256-GCM encrypted raw owner token for reveal.
 		// The operator server.token is never stored in this table.
-		`CREATE TABLE IF NOT EXISTS api_tokens (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			owner_id TEXT REFERENCES owners(id) ON DELETE CASCADE,
-			kind TEXT NOT NULL DEFAULT 'linked' CHECK (kind IN ('primary', 'linked')),
-			name TEXT,
-			token_hash TEXT NOT NULL UNIQUE,
-			token_prefix TEXT NOT NULL,
-			token_suffix TEXT NOT NULL DEFAULT '',
-			token_enc TEXT NOT NULL DEFAULT '',
-			resource_type TEXT NOT NULL,
-			resource_id TEXT NOT NULL,
-			created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-			rotated_at INTEGER,
-			expires_at INTEGER,
-			last_used_at INTEGER,
-			revoked_at INTEGER,
-			revoked_reason TEXT
-		)`,
-
-		`CREATE INDEX IF NOT EXISTS idx_api_tokens_hash     ON api_tokens(token_hash)`,
-		`CREATE INDEX IF NOT EXISTS idx_api_tokens_prefix   ON api_tokens(token_prefix)`,
-		`CREATE INDEX IF NOT EXISTS idx_api_tokens_resource ON api_tokens(resource_type, resource_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_api_tokens_active   ON api_tokens(revoked_at) WHERE revoked_at IS NULL`,
+		ownerTokenTableDDL("api_tokens"),
 
 		`CREATE TABLE IF NOT EXISTS owners (
 			id TEXT PRIMARY KEY,

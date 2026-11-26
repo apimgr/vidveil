@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"database/sql"
 	"io"
 	"net/http"
@@ -22,68 +21,6 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/system"
 	_ "modernc.org/sqlite"
 )
-
-func TestWaitForShutdownRequestRestartsAfterRestore(t *testing.T) {
-	ctx := context.Background()
-	restart := make(chan struct{}, 1)
-	waitStarted := make(chan struct{})
-	type result struct {
-		signal  os.Signal
-		restart bool
-	}
-	done := make(chan result, 1)
-	go func() {
-		sig, restartRequested := waitForShutdownRequest(ctx, restart, func(waitCtx context.Context) os.Signal {
-			close(waitStarted)
-			<-waitCtx.Done()
-			return os.Interrupt
-		})
-		done <- result{signal: sig, restart: restartRequested}
-	}()
-	select {
-	case <-waitStarted:
-	case <-time.After(time.Second):
-		t.Fatal("shutdown signal wait did not start")
-	}
-	restart <- struct{}{}
-	select {
-	case got := <-done:
-		if got.signal != os.Interrupt || !got.restart {
-			t.Fatalf("waitForShutdownRequest() = (%v, %t), want (interrupt, true)", got.signal, got.restart)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("restore restart did not interrupt shutdown wait")
-	}
-}
-
-func TestWaitForShutdownRequestDoesNotRestartOnStop(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	waitStarted := make(chan struct{})
-	done := make(chan bool, 1)
-	go func() {
-		_, restartRequested := waitForShutdownRequest(ctx, nil, func(waitCtx context.Context) os.Signal {
-			close(waitStarted)
-			<-waitCtx.Done()
-			return os.Interrupt
-		})
-		done <- restartRequested
-	}()
-	select {
-	case <-waitStarted:
-	case <-time.After(time.Second):
-		t.Fatal("shutdown signal wait did not start")
-	}
-	cancel()
-	select {
-	case got := <-done:
-		if got {
-			t.Fatal("normal service stop requested a restart")
-		}
-	case <-time.After(time.Second):
-		t.Fatal("normal service stop did not interrupt shutdown wait")
-	}
-}
 
 // ── loadInstallationSecret / pgpGenerateCore / pgpExportPublicCore ────────────
 // AI.md PART 12 GPG Keypair Management. These exercise the error-returning cores
@@ -1364,7 +1301,7 @@ func TestParseUpdateArgs(t *testing.T) {
 
 // TestApplyPortOverride verifies AI.md PART 5 Port Rules: "Once a port is
 // selected (randomly or specified), it is saved to server.yml and persists
-// across restarts." An explicit --port/VIDVEIL_PORT/PORT value must be
+// across restarts." An explicit --port/PORT value must be
 // written to server.yml immediately, not just the randomly-generated
 // first-run port.
 func TestApplyPortOverride(t *testing.T) {

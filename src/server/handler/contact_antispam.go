@@ -283,7 +283,7 @@ func (h *ServerHandler) contactFormTokenFailure(r *http.Request) string {
 		return "fill_time"
 	}
 	mac := hmac.New(sha256.New, secret)
-	_, _ = mac.Write([]byte(fmt.Sprintf("contact-form|%d|%s", issued, parts[1])))
+	_, _ = fmt.Fprintf(mac, "contact-form|%d|%s", issued, parts[1])
 	now := time.Now()
 	age := now.Unix() - issued
 	cfg := h.appConfig.Server.Pages.Contact.Antispam

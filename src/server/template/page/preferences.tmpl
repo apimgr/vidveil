@@ -6,37 +6,38 @@
 </head>
 <body>
     <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    <a href="#navigation" class="skip-link">{{ t "a11y.skip_to_nav" }}</a>
     {{template "public/site-banner" .}}
     {{template "public/header" .}}
-    <main class="preferences" id="main-content" role="main">
-        <div class="preferences-header">
-            <h1>{{ t "prefs.title" }}</h1>
-        </div>
+    <main id="main-content" role="main">
+      <div class="container container-md">
+        <header class="page-header">
+            <h1 class="page-title">{{ t "prefs.title" }}</h1>
+            <p class="page-lead">{{ t "help.preferences_storage" }}</p>
+        </header>
         {{/* The native form is the source of preference writes and works without JavaScript. */}}
         <form id="preferences-form" method="post" action="{{ path "/server/preferences" }}" data-managed="true" data-return-to="{{.ReturnTo}}">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             {{if .ReturnTo}}<input type="hidden" name="redirect" value="{{.ReturnTo}}">{{end}}
             <input type="hidden" name="engines_selection_set" value="1">
-            <section>
-                <h2>{{ t "prefs.appearance" }}</h2>
+            <section class="section-card" id="language" aria-labelledby="language-heading">
+                <h2 id="language-heading">{{ t "prefs.language" }}</h2>
+                <div class="form-group">
+                    <label for="language">{{ t "prefs.language" }}:</label>
+                    <select id="language" name="lang">
+                        <option value="auto"{{if eq .PreferenceLang "auto"}} selected{{end}}>{{ tf "prefs.language_auto" "language" .DetectedLocaleName }}</option>
+                        {{range .Languages}}<option value="{{.Code}}" lang="{{.Code}}"{{if eq $.PreferenceLang .Code}} selected{{end}}>{{.NativeName}}</option>{{end}}
+                    </select>
+                </div>
+            </section>
+            <section class="section-card" aria-labelledby="appearance-heading">
+                <h2 id="appearance-heading">{{ t "prefs.appearance" }}</h2>
                 <div class="form-group">
                     <label for="theme">{{ t "prefs.theme" }}:</label>
                     <select id="theme" name="theme">
                         <option value="auto" {{if eq .Theme "auto"}}selected{{end}}>{{ t "prefs.theme.auto" }}</option>
                         <option value="dark" {{if eq .Theme "dark"}}selected{{end}}>{{ t "prefs.theme.dark" }}</option>
                         <option value="light" {{if eq .Theme "light"}}selected{{end}}>{{ t "prefs.theme.light" }}</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="language">Language:</label>
-                    <select id="language" name="lang">
-                        <option value="en"{{if eq .Lang "en"}} selected{{end}}>English</option>
-                        <option value="ar"{{if eq .Lang "ar"}} selected{{end}}>العربية</option>
-                        <option value="de"{{if eq .Lang "de"}} selected{{end}}>Deutsch</option>
-                        <option value="es"{{if eq .Lang "es"}} selected{{end}}>Español</option>
-                        <option value="fr"{{if eq .Lang "fr"}} selected{{end}}>Français</option>
-                        <option value="ja"{{if eq .Lang "ja"}} selected{{end}}>日本語</option>
-                        <option value="zh"{{if eq .Lang "zh"}} selected{{end}}>中文</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -57,8 +58,8 @@
                 </div>
             </section>
 
-            <section>
-                <h2>{{ t "prefs.video_preview" }}</h2>
+            <section class="section-card" aria-labelledby="video-preview-heading">
+                <h2 id="video-preview-heading">{{ t "prefs.video_preview" }}</h2>
                 <div class="form-group">
                     <label class="toggle">
                         <input type="hidden" name="vidveil_pref_autoplay_preview" value="0">
@@ -78,8 +79,8 @@
                 </div>
             </section>
 
-            <section>
-                <h2>{{ t "prefs.search_settings" }}</h2>
+            <section class="section-card" aria-labelledby="search-settings-heading">
+                <h2 id="search-settings-heading">{{ t "prefs.search_settings" }}</h2>
                 <div class="form-group">
                     <label for="results-per-page">{{ t "prefs.results_page" }}:</label>
                     <select id="results-per-page" name="vidveil_pref_results_per_page">
@@ -99,8 +100,8 @@
                 </div>
             </section>
 
-            <section>
-                <h2>{{ t "prefs.default_filters" }}</h2>
+            <section class="section-card" aria-labelledby="default-filters-heading">
+                <h2 id="default-filters-heading">{{ t "prefs.default_filters" }}</h2>
                 <p class="section-description">{{ t "prefs.default_filters_desc" }}</p>
                 <div class="form-group">
                     <label class="toggle">
@@ -166,8 +167,8 @@
                 </div>
             </section>
 
-            <section>
-                <h2>{{ t "prefs.history" }}</h2>
+            <section class="section-card" aria-labelledby="history-heading">
+                <h2 id="history-heading">{{ t "prefs.history" }}</h2>
                 <div class="form-group">
                     <label for="max-history">{{ t "prefs.max_history" }}:</label>
                     <select id="max-history" name="vidveil_pref_max_history">
@@ -189,36 +190,17 @@
                 </div>
             </section>
 
-            <section>
-                <h2>{{ t "prefs.sync" }}</h2>
-                <p class="section-description">{{ t "prefs.sync_desc" }}</p>
-                <div class="form-group">
-                    <label for="sync-url">{{ t "prefs.sync_url_label" }}</label>
-                    <input class="preference-export-value" type="text" id="sync-url" readonly value="{{.PreferenceExportURL}}">
-                    <button type="button" data-action="copy-field" data-target="sync-url">{{ t "action.copy" }}</button>
-                </div>
-                <div class="form-group">
-                    <label for="sync-code">{{ t "prefs.sync_code_label" }}</label>
-                    <input class="preference-export-value" type="text" id="sync-code" readonly value="{{.PreferenceExportCode}}">
-                    <button type="button" data-action="copy-field" data-target="sync-code">{{ t "action.copy" }}</button>
-                </div>
-                <div class="form-group">
-                    <label for="sync-import-code">{{ t "prefs.sync_import_label" }}</label>
-                    <input type="text" id="sync-import-code" name="code" placeholder="{{ t "prefs.sync_import_placeholder" }}">
-                </div>
-            </section>
-
-            <section aria-labelledby="consent-heading">
+            <section class="section-card" aria-labelledby="consent-heading">
                 <h2 id="consent-heading">{{ t "privacy.cookie_preferences" }}</h2>
                 <input type="hidden" name="consent_form" value="1">
                 <label><input type="checkbox" checked disabled> {{ t "privacy.cookie_essential" }}</label>
                 <label><input type="checkbox" name="consent_preferences" value="1"{{if .ConsentPreferences}} checked{{end}}> {{ t "privacy.cookie_preferences" }}</label>
                 <label><input type="checkbox" name="consent_analytics" value="1"{{if .AnalyticsConsent}} checked{{end}}> {{ t "privacy.cookie_analytics" }}</label>
-                <label><input type="checkbox" name="ccpa_opt_out" value="1"{{if .CCPAOptedOut}} checked{{end}}> {{ t "privacy.ccpa_opt_out" }}</label>
+                {{if .DataSold}}<label><input type="checkbox" name="ccpa_opt_out" value="1"{{if .CCPAOptedOut}} checked{{end}}> {{ t "privacy.ccpa_opt_out" }}</label>{{end}}
             </section>
 
-            <section>
-                <h2>{{ t "prefs.privacy" }}</h2>
+            <section class="section-card" aria-labelledby="privacy-heading">
+                <h2 id="privacy-heading">{{ t "prefs.privacy" }}</h2>
                 <div class="form-group">
                     <label>
                         <input type="checkbox" checked disabled>
@@ -227,8 +209,8 @@
                 </div>
             </section>
 
-            <section>
-                <h2>{{ t "prefs.engines" }}</h2>
+            <section class="section-card" aria-labelledby="engines-heading">
+                <h2 id="engines-heading">{{ t "prefs.engines" }}</h2>
                 <p class="section-description">{{ t "prefs.engines_desc" }}</p>
                 <div class="engine-tiers" id="engine-tiers">
                     {{range .Engines}}
@@ -246,13 +228,15 @@
                 <button type="button" popovertarget="reset-preferences-popover">{{ t "prefs.reset" }}</button>
             </div>
             <div id="reset-preferences-popover" popover class="preferences-reset-popover">
-                <h2>{{ t "prefs.reset_confirm_title" }}</h2>
-                <p>{{ t "prefs.reset_confirm_body" }}</p>
-                <button type="button" popovertarget="reset-preferences-popover" popovertargetaction="hide">{{ t "action.cancel" }}</button>
-                <button type="submit" name="action" value="reset" class="btn-danger">{{ t "prefs.reset_confirm_action" }}</button>
+                <section class="section-card" aria-labelledby="reset-preferences-heading">
+                    <h2 id="reset-preferences-heading">{{ t "prefs.reset_confirm_title" }}</h2>
+                    <p>{{ t "prefs.reset_confirm_body" }}</p>
+                    <button type="button" popovertarget="reset-preferences-popover" popovertargetaction="hide">{{ t "action.cancel" }}</button>
+                    <button type="submit" name="action" value="reset" class="btn-danger">{{ t "prefs.reset_confirm_action" }}</button>
+                </section>
             </div>
         </form>
-        <section aria-labelledby="history-actions-heading">
+        <section class="section-card" aria-labelledby="history-actions-heading">
             <h2 id="history-actions-heading">{{ t "prefs.history" }}</h2>
             <div class="form-group form-group--buttons">
                 <button type="button" class="btn-secondary" data-action="export-history">{{ t "prefs.export_history" }}</button>
@@ -260,7 +244,7 @@
                 <button type="button" class="btn-danger" data-action="clear-history">{{ t "prefs.clear_history" }}</button>
             </div>
         </section>
-        <section aria-labelledby="favorites-heading">
+        <section class="section-card" aria-labelledby="favorites-heading">
             <h2 id="favorites-heading">{{ t "favorites.title" }}</h2>
             <p class="section-description"><span id="favorites-count" data-format="{{ t "favorites.count" }}">{{ tf "favorites.count" "count" .FavoritesCount }}</span></p>
             <div class="form-group form-group--buttons">
@@ -270,7 +254,6 @@
                 <button type="submit" form="favorites-clear-form" class="btn-danger">{{ t "favorites.clear" }}</button>
             </div>
         </section>
-        <p><a href="{{ path "/server/preferences/tokens" }}">{{ t "owner_tokens.title" }}</a></p>
         <form id="favorites-import-form" action="{{ path "/favorites/import" }}" method="post" enctype="multipart/form-data" class="favorites-import-form">
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
         </form>
@@ -278,6 +261,13 @@
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
             <input type="hidden" name="_method" value="DELETE">
         </form>
+        <section class="section-card" aria-labelledby="more-preferences-heading">
+            <h2 id="more-preferences-heading">{{ t "prefs.more" }}</h2>
+            <ul class="hub-list">
+                {{range .PreferencePages}}<li class="hub-item"><a class="hub-link" href="{{path .Path}}"><span class="hub-title">{{t .TitleKey}}</span><span class="hub-desc">{{t .DescriptionKey}}</span></a></li>{{end}}
+            </ul>
+        </section>
+      </div>
     </main>
     {{template "public/footer" .}}
     {{/* i18n strings for the preferences logic in app.js. type="application/json" is

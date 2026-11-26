@@ -147,7 +147,7 @@ _%s_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    commands="search engines bangs probe login"
+    commands="search engines bangs probe health favorites login"
     opts="--shell --server --token --token-file --config --output --color --timeout --debug -h --help -v --version"
 
     case "${prev}" in
@@ -202,6 +202,8 @@ __%s() {
         'engines:List available search engines'
         'bangs:List bang shortcuts'
         'probe:Test engine availability'
+        'health:Check server health'
+        'favorites:List and manage private favorites'
         'login:Save API token for future use'
     )
 
@@ -260,6 +262,8 @@ complete -c %s -n "__fish_use_subcommand" -a "search" -d "Search for videos"
 complete -c %s -n "__fish_use_subcommand" -a "engines" -d "List available search engines"
 complete -c %s -n "__fish_use_subcommand" -a "bangs" -d "List bang shortcuts"
 complete -c %s -n "__fish_use_subcommand" -a "probe" -d "Test engine availability"
+complete -c %s -n "__fish_use_subcommand" -a "health" -d "Check server health"
+complete -c %s -n "__fish_use_subcommand" -a "favorites" -d "List and manage private favorites"
 complete -c %s -n "__fish_use_subcommand" -a "login" -d "Save API token for future use"
 
 # Global flags
@@ -279,7 +283,7 @@ complete -c %s -s v -l version -d "Show version"
 complete -c %s -n "__fish_seen_argument -l shell; and __fish_prev_arg_in completions init" -a "bash zsh fish sh dash ksh powershell pwsh"
 `, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName,
 		BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName,
-		BinaryName, BinaryName, BinaryName, BinaryName)
+		BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName)
 	return nil
 }
 
@@ -297,6 +301,8 @@ Register-ArgumentCompleter -Native -CommandName %s -ScriptBlock {
         [CompletionResult]::new('engines', 'engines', 'ParameterValue', 'List available search engines')
         [CompletionResult]::new('bangs', 'bangs', 'ParameterValue', 'List bang shortcuts')
         [CompletionResult]::new('probe', 'probe', 'ParameterValue', 'Test engine availability')
+        [CompletionResult]::new('health', 'health', 'ParameterValue', 'Check server health')
+        [CompletionResult]::new('favorites', 'favorites', 'ParameterValue', 'List and manage private favorites')
         [CompletionResult]::new('login', 'login', 'ParameterValue', 'Save API token for future use')
     )
 

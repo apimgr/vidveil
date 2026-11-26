@@ -7,6 +7,7 @@
 <body>
     {{ trackingNoScript }}
     <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    <a href="#navigation" class="skip-link">{{ t "a11y.skip_to_nav" }}</a>
     {{template "public/site-banner" .}}
     {{template "public/header" .}}
     <main class="results" id="main-content" role="main" aria-label="{{ t "a11y.search_results" }}">
@@ -75,7 +76,7 @@
             {{$isFav := index $favs .URL}}
             <div class="video-card" role="listitem">
                 <a href="{{.URL}}" {{if $.OpenNewTab}}target="_blank" {{end}}rel="noopener noreferrer" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
-                    {{if .Thumbnail}}<img src="{{ path "/api/v1/proxy/thumbnails" }}?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{else}}<img src="{{ path "/static/images/placeholder.svg" }}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{end}}
+                    {{if .Thumbnail}}<img src="{{ path $.APIBase }}/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{else}}<img src="{{ path "/static/images/placeholder.svg" }}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{end}}
                     <div class="video-info">
                         <h3 class="video-title">{{.Title}}</h3>
                         <p class="video-meta">

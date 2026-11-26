@@ -45,13 +45,13 @@ pipeline {
             agent { label 'amd64' }
             steps {
                 script {
-                    if (env.TAG_NAME) {
+                    if (env.TAG_NAME?.endsWith('-beta')) {
+                        env.BUILD_TYPE = 'beta'
+                        env.VERSION = env.TAG_NAME
+                    } else if (env.TAG_NAME) {
                         env.BUILD_TYPE = 'release'
                         env.VERSION = env.TAG_NAME.replaceFirst('^v', '')
-                    } else if (env.BRANCH_NAME == 'beta') {
-                        env.BUILD_TYPE = 'beta'
-                        env.VERSION = sh(script: 'date -u +"%Y%m%d%H%M%S"', returnStdout: true).trim() + '-beta'
-                    } else if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master') {
+                    } else if (env.BRANCH_NAME == 'main') {
                         // Devel identity is the commit being built, not a timestamp
                         env.BUILD_TYPE = 'devel'
                         env.VERSION = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
@@ -68,6 +68,23 @@ pipeline {
                 }
                 sh 'mkdir -p ${BINDIR} ${RELDIR}'
                 echo "Build type: ${BUILD_TYPE}, Version: ${VERSION}"
+            }
+        }
+
+        stage('Generate API specifications') {
+            agent { label 'amd64' }
+            steps {
+                sh '''
+                    docker run --rm \
+                        --name "${PROJECT_NAME}-specgen-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
+                        -v ${WORKSPACE}:/app \
+                        -v ${GO_CACHE:-$HOME/go/pkg/mod}:/usr/local/share/go/pkg/mod \
+                        -v ${GO_BUILD:-$HOME/.cache/go-build/${PROJECT_NAME}}:/usr/local/share/go/cache \
+                        -w /app \
+                        -e CGO_ENABLED=0 \
+                        casjaysdev/go:latest \
+                        sh -c 'go generate ./src/swagger && git diff --exit-code -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql'
+                '''
             }
         }
 

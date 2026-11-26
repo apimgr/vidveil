@@ -214,6 +214,18 @@ func TestIsEnabledTrueWhenConnected(t *testing.T) {
 	}
 }
 
+func TestIsEnabledWhileProviderStartsOrFails(t *testing.T) {
+	for _, status := range []TorServiceStatus{TorServiceStatusStarting, TorServiceStatusDisconnected, TorServiceStatusError} {
+		t.Run(string(status), func(t *testing.T) {
+			s := newTestService(t)
+			s.status = status
+			if !s.IsEnabled() {
+				t.Errorf("IsEnabled should remain true while a discovered provider is %s", status)
+			}
+		})
+	}
+}
+
 // ---- IsRunning ----
 
 func TestIsRunningFalseInitially(t *testing.T) {

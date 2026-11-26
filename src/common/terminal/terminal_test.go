@@ -553,6 +553,15 @@ func TestASCIISymbolsSpinnerNonEmpty(t *testing.T) {
 
 // --- SizeMode.String ---
 
+func TestGetSizeModeUsesWindowDimensions(t *testing.T) {
+	if got := GetSizeMode(40, 10); got != SizeModeMinimal {
+		t.Errorf("GetSizeMode(40, 10) = %s, want minimal", got)
+	}
+	if got := GetSizeMode(120, 40); got != SizeModeWide {
+		t.Errorf("GetSizeMode(120, 40) = %s, want wide", got)
+	}
+}
+
 // All seven size mode values must produce their documented string.
 func TestSizeModeString(t *testing.T) {
 	cases := []struct {

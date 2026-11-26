@@ -25,6 +25,26 @@ const rotatedDir = "rotated"
 // keypair remains valid for in-flight report decryption.
 const graceMarkerFile = "valid_until"
 
+// CleanupRetiredPrivateKey removes the encrypted previous private key after
+// its 30-day in-flight-notification grace period.
+func CleanupRetiredPrivateKey(configDir string, now time.Time) (bool, error) {
+	path := filepath.Join(SecurityDir(configDir), RetiredPrivateKeyFile)
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("inspect retired PGP key: %w", err)
+	}
+	if now.Sub(info.ModTime()) < RotationGracePeriod {
+		return false, nil
+	}
+	if err := os.Remove(path); err != nil {
+		return false, fmt.Errorf("remove expired retired PGP key: %w", err)
+	}
+	return true, nil
+}
+
 // CrossSignPublicKey adds a certification from the old private key over every
 // identity of the new public key, then returns the re-armored new public key.
 // This lets anyone who trusts the old key trust the new one (AI.md PART 12

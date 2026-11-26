@@ -5,8 +5,46 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 )
+
+// RecoverStagedRotation completes a committed key install, or removes staged
+// files when the database fingerprint marker proves the transaction did not
+// commit. It must run before any report submission can be accepted.
+func RecoverStagedRotation(configDir string, db *sql.DB) error {
+	path := filepath.Join(SecurityDir(configDir), StagedPublicKeyFile)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		privatePath := filepath.Join(SecurityDir(configDir), StagedPrivateKeyFile)
+		if _, privateErr := os.Stat(privatePath); os.IsNotExist(privateErr) {
+			return nil
+		} else if privateErr != nil {
+			return fmt.Errorf("inspect staged PGP private key: %w", privateErr)
+		}
+		return RemoveStagedKeypair(configDir)
+	} else if err != nil {
+		return fmt.Errorf("inspect staged PGP rotation: %w", err)
+	}
+	fingerprint, err := StagedFingerprint(configDir)
+	if err != nil {
+		return fmt.Errorf("read staged PGP fingerprint: %w", err)
+	}
+	meta, err := GetKeypairMeta(db)
+	if err != nil {
+		return err
+	}
+	if meta != nil && meta.Fingerprint == fingerprint {
+		if err := InstallStagedKeypair(configDir); err != nil {
+			return fmt.Errorf("finish committed PGP rotation: %w", err)
+		}
+		return nil
+	}
+	if err := RemoveStagedKeypair(configDir); err != nil {
+		return fmt.Errorf("discard uncommitted PGP rotation: %w", err)
+	}
+	return nil
+}
 
 // storeQueryTimeout bounds every keypair-metadata query so a stalled DB cannot
 // hang a caller (backend-rules: never run a DB query without a context timeout).

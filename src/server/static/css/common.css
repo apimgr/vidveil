@@ -549,11 +549,6 @@ a:hover {
     height: 20px;
 }
 
-/* Hamburger toggle in header - visible on mobile by default */
-.header-action.nav-toggle {
-    display: flex;
-}
-
 /* Theme toggle - header, right side, last item, per AI.md PART 16 "Theme
    Toggle". The toggle is a real <form> submit (server computes .NextTheme
    via nextTheme() and cycles dark -> light -> auto -> dark), so it works
@@ -623,229 +618,11 @@ html.theme-auto .theme-button .icon-auto {
     height: 20px;
 }
 
-/* ===========================================
-   NAVIGATION - AI.md PART 13
-   Separate row below header
-   NO position: sticky - scrolls with page
-   =========================================== */
-.site-nav {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.5rem 1rem;
-    background: var(--bg-primary);
-    border-bottom: 1px solid var(--border);
-}
-
-/* Hidden on mobile; desktop shows nav links via min-width media query below */
-.nav-links {
-    display: none;
-    gap: 0.5rem;
-}
-
-.nav-link {
-    padding: 0.5rem 1rem;
-    color: var(--text-secondary);
-    text-decoration: none;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    transition: all 0.2s;
-}
-
-.nav-link:hover {
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-}
-
-.nav-link.active {
-    background: var(--accent);
-    color: var(--bg-primary);
-}
-
-/* Nav search form - full width on mobile */
-.nav-search {
-    display: flex;
-    flex: 1;
-    max-width: none;
-    margin-inline-start: 0;
-}
-
-.nav-search input {
-    flex: 1;
-    padding: 0.5rem 1rem;
-    border: 1px solid var(--border);
-    border-radius: 6px 0 0 6px;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    font-size: 0.9rem;
-}
-
-.nav-search input:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--focus-ring-shadow);
-}
-
-.nav-search button {
-    padding: 0.5rem 0.75rem;
-    background: var(--accent);
-    border: none;
-    border-radius: 0 6px 6px 0;
-    color: var(--bg-primary);
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.nav-search button:hover {
-    background: var(--accent-hover);
-}
-
-/* Mobile hamburger toggle - hidden on desktop */
-.nav-toggle {
-    display: none;
-    padding: 0.75rem;
-    min-width: 44px;
-    min-height: 44px;
-    background: none;
-    border: none;
-    color: var(--text-primary);
-    cursor: pointer;
-}
-
-/* ===========================================
-   MOBILE SLIDE-IN MENU - AI.md PART 13
-   Slides in from RIGHT edge
-   =========================================== */
-.nav-panel {
-    position: fixed;
-    top: 0;
-    inset-inline-end: -280px;
-    width: 280px;
-    height: 100vh;
-    background: var(--bg-secondary);
-    z-index: 1001;
-    transition: right 0.3s ease;
-    display: flex;
-    flex-direction: column;
-    box-shadow: -4px 0 20px var(--shadow);
-}
-
-.nav-panel.open {
-    inset-inline-end: 0;
-}
-
-.nav-panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem;
-    border-bottom: 1px solid var(--border);
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.nav-panel-close {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.75rem 1rem;
-    min-width: 44px;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.nav-panel-close:hover {
-    color: var(--error);
-}
-
-.nav-panel-link {
-    display: block;
-    padding: 1rem;
-    color: var(--text-primary);
-    text-decoration: none;
-    border-bottom: 1px solid var(--border);
-    transition: background 0.2s;
-}
-
-.nav-panel-link:hover {
-    background: var(--bg-tertiary);
-    color: var(--accent);
-}
-
-/* Overlay - dims background */
-.nav-overlay {
-    position: fixed;
-    inset: 0;
-    background: var(--color-scrim-50);
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s, visibility 0.3s;
-}
-
-.nav-overlay.open {
-    opacity: 1;
-    visibility: visible;
-}
-
-/* Hide nav bar entirely on home page (no nav on home page) */
-.home ~ .site-nav {
-    display: none;
-}
-
-/* Desktop: hide hamburger, show nav links, constrain search */
-@media (min-width: 769px) {
-    .header-action.nav-toggle {
-        display: none;
-    }
-
-    .nav-links {
-        display: flex;
-    }
-
-    .nav-search,
-    .search-form--compact {
-        flex: 0 0 auto;
-        max-width: 400px;
-        margin-inline-start: auto;
-    }
-}
-
-/* Legacy header support - for pages using old structure */
-header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.75rem 1rem;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border);
-}
-
-header .logo {
-    font-size: 1.25rem;
-    font-weight: bold;
-    color: var(--text-primary);
-    white-space: nowrap;
-}
-
-header .logo:hover {
-    color: var(--accent);
-}
-
 /* Search Form */
 .search-form {
     display: flex;
     gap: 0.5rem;
     max-width: 600px;
-}
-
-/* Only flex-grow in header context, not in home page */
-header .search-form {
-    flex: 1;
 }
 
 .search-form input {
@@ -1952,6 +1729,51 @@ header .search-form {
     margin-bottom: 1rem;
 }
 
+.section-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 0.625rem);
+    padding: var(--space-4, 1.5rem);
+}
+
+.copy-value {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
+.hub-list {
+    display: grid;
+    gap: var(--space-3, 1rem);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.hub-link {
+    display: grid;
+    gap: var(--space-1, 0.25rem);
+    overflow-wrap: anywhere;
+    padding: var(--space-3, 1rem);
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 0.625rem);
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.hub-link:hover,
+.hub-link:focus-visible {
+    border-color: var(--accent);
+}
+
+.hub-title {
+    font-weight: 600;
+}
+
+.hub-desc {
+    color: var(--text-secondary);
+}
+
 /* About Page - Uses BASE spec widths */
 .about,
 .privacy,
@@ -2119,18 +1941,6 @@ header .search-form {
     pointer-events: none;
 }
 
-/* Mobile-first base styles (already set above; these are base values) */
-header {
-    flex-wrap: wrap;
-    gap: 0.75rem;
-}
-
-header .search-form {
-    order: 3;
-    flex: 1 0 100%;
-    max-width: none;
-}
-
 .home > p {
     font-size: 1rem;
 }
@@ -2218,16 +2028,6 @@ header .search-form {
 
 /* Desktop: restore multi-column layouts */
 @media (min-width: 769px) {
-    header {
-        flex-wrap: nowrap;
-    }
-
-    header .search-form {
-        order: unset;
-        flex: 1 1 auto;
-        max-width: 400px;
-    }
-
     .video-card h3 {
         font-size: 0.85rem;
     }
@@ -3227,7 +3027,6 @@ a:focus-visible {
 
     /* Hide non-essential elements */
     .site-header,
-    .site-nav,
     .footer,
     .nav-panel,
     .nav-overlay,
@@ -4399,6 +4198,11 @@ a:focus-visible {
     font-weight: 600;
 }
 
+.status-degraded {
+    color: var(--color-warning);
+    font-weight: 600;
+}
+
 .status-disabled {
     color: var(--text-muted);
 }
@@ -4561,6 +4365,21 @@ a:focus-visible {
 .badge-primary {
     background: var(--color-primary-bg);
     color: var(--color-primary);
+}
+
+.badge-success {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.badge-warning {
+    background: var(--color-warning-bg);
+    color: var(--color-warning-text);
+}
+
+.badge-danger {
+    background: var(--color-error-bg);
+    color: var(--color-error);
 }
 
 /* Feature grid */

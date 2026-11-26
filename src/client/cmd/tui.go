@@ -4,9 +4,11 @@ package cmd
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/apimgr/vidveil/src/client/browser"
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/common/theme"
 	tea "github.com/charmbracelet/bubbletea"
@@ -22,7 +24,18 @@ const (
 	TUITruncationPadding  = 10
 	TUIMinTruncationWidth = 30
 	TUIDefaultTheme       = "dark"
+	TUICommandSearch      = "search"
+	TUICommandEngines     = "engines"
+	TUICommandBangs       = "bangs"
+	TUICommandProbe       = "probe"
+	TUICommandLogin       = "login"
 )
+
+var tuiCommandOrder = []string{TUICommandSearch, TUICommandEngines, TUICommandBangs, TUICommandProbe, TUICommandLogin}
+
+func tuiTranslate(locale, key string) string {
+	return i18n.Translate(locale, "tui."+key)
+}
 
 // TUIStyles holds lipgloss styles derived from theme.ColorPalette
 // Per AI.md PART 32: TUI Styles from Palette
@@ -221,7 +234,27 @@ var tuiStyles TUIStyles
 // TUIModel represents the TUI application state
 // Per AI.md PART 1: Type names MUST be specific - "model" is ambiguous
 type TUIModel struct {
+	language          string
+	activeView        string
+	menuIndex         int
+	viewRows          []string
+	viewScroll        int
+	loginServerURL    string
+	loginToken        string
+	loginField        int
+	probeEngines      string
+	probeQuery        string
+	probeVerbose      bool
+	engineFilter      string
+	bangFilter        string
+	viewLoading       bool
+	showHelp          bool
 	searchQuery       string
+	searchField       int
+	searchScroll      int
+	searchPage        string
+	searchLimit       string
+	searchEngines     string
 	searchResults     []TUISearchResult
 	selectedIndex     int
 	lastError         error
@@ -252,6 +285,12 @@ type TUISearchDoneMsg struct {
 	err     error
 }
 
+type TUIViewDoneMsg struct {
+	view string
+	rows []string
+	err  error
+}
+
 // createInitialTUIModel creates the initial TUI model
 // Per AI.md PART 1: Function names MUST reveal intent - "initialModel" is ambiguous
 func createInitialTUIModel() TUIModel {
@@ -274,6 +313,17 @@ func createInitialTUIModel() TUIModel {
 	layoutConfig := getTUILayoutConfig(termSize.Mode)
 
 	return TUIModel{
+		language:     resolveCLILanguage(),
+		activeView:   "menu",
+		engineFilter: "all",
+		loginServerURL: func() string {
+			if cliConfig != nil {
+				return cliConfig.Server.Address
+			}
+			return ""
+		}(),
+		probeQuery:     ProbeDefaultTestQuery,
+		probeEngines:   "*",
 		searchQuery:    "",
 		searchResults:  nil,
 		terminalWidth:  termSize.Cols,
@@ -292,6 +342,75 @@ func (m TUIModel) Init() tea.Cmd {
 func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if msg.String() == "?" {
+			if m.activeView == TUICommandSearch {
+				m.showShortcutsHelp = !m.showShortcutsHelp
+			} else {
+				m.showHelp = !m.showHelp
+			}
+			return m, nil
+		}
+		if msg.String() == "esc" && m.showHelp {
+			m.showHelp = false
+			return m, nil
+		}
+		if msg.String() == "esc" && m.showShortcutsHelp {
+			m.showShortcutsHelp = false
+			return m, nil
+		}
+		if m.activeView != "menu" && m.activeView != TUICommandProbe && m.activeView != TUICommandLogin && (msg.String() == "ctrl+c" || (msg.String() == "q" && m.activeView != TUICommandSearch)) {
+			m.isQuitting = true
+			return m, tea.Quit
+		}
+		if m.activeView == "menu" {
+			switch msg.String() {
+			case "ctrl+c", "q":
+				m.isQuitting = true
+				return m, tea.Quit
+			case "up", "k":
+				if m.menuIndex > 0 {
+					m.menuIndex--
+				}
+			case "down", "j":
+				if m.menuIndex < len(tuiCommandOrder)-1 {
+					m.menuIndex++
+				}
+			case "enter":
+				m.activeView = tuiCommandOrder[m.menuIndex]
+				m.viewRows = nil
+				m.lastError = nil
+				m.statusMessage = ""
+				if m.activeView == TUICommandEngines || m.activeView == TUICommandBangs {
+					m.viewLoading = true
+					return m, loadTUIView(m.activeView, m.language)
+				}
+			}
+			return m, nil
+		}
+		if msg.String() == "esc" && m.activeView == TUICommandSearch {
+			if m.showShortcutsHelp {
+				m.showShortcutsHelp = false
+				return m, nil
+			}
+			if m.searchQuery != "" || len(m.searchResults) > 0 {
+				m.searchQuery = ""
+				m.searchResults = nil
+				m.lastError = nil
+				m.statusMessage = ""
+				m.openedURL = ""
+				return m, nil
+			}
+		}
+		if msg.String() == "esc" {
+			m.activeView = "menu"
+			m.viewLoading = false
+			m.lastError = nil
+			m.statusMessage = ""
+			return m, nil
+		}
+		if m.activeView != TUICommandSearch {
+			return m.updateCommandViewKey(msg)
+		}
 		switch msg.String() {
 		case "ctrl+c", "q":
 			if m.searchQuery == "" || len(m.searchResults) > 0 {
@@ -308,7 +427,13 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// No results yet, perform search
 				m.isLoading = true
 				m.statusMessage = ""
-				return m, executeTUISearch(m.searchQuery)
+				page, _ := strconv.Atoi(m.searchPage)
+				limit, _ := strconv.Atoi(m.searchLimit)
+				var engines []string
+				if strings.TrimSpace(m.searchEngines) != "" {
+					engines = strings.Split(m.searchEngines, ",")
+				}
+				return m, executeTUISearchWithOptions(m.searchQuery, page, limit, engines)
 			}
 			if len(m.searchResults) > 0 && m.selectedIndex < len(m.searchResults) {
 				// Open selected result in browser
@@ -318,11 +443,11 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.lastError = err
 					} else {
 						m.openedURL = selectedURL
-						m.statusMessage = "Opened in browser"
+						m.statusMessage = tuiTranslate(m.language, "opened_browser")
 					}
 				} else {
 					// Can't open browser, show URL
-					m.statusMessage = fmt.Sprintf("URL: %s", selectedURL)
+					m.statusMessage = i18n.TranslateFormat(m.language, "tui.url", "url", selectedURL)
 				}
 				return m, nil
 			}
@@ -331,17 +456,63 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.selectedIndex > 0 {
 				m.selectedIndex--
 			}
+			ensureTUISearchSelectionVisible(&m)
 
 		case "down", "j":
 			if m.selectedIndex < len(m.searchResults)-1 {
 				m.selectedIndex++
 			}
+			ensureTUISearchSelectionVisible(&m)
 
 		case "backspace":
-			if len(m.searchQuery) > 0 {
-				m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+			switch m.searchField {
+			case 0:
+				if len(m.searchQuery) > 0 {
+					m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+				}
+			case 1:
+				if len(m.searchPage) > 0 {
+					m.searchPage = m.searchPage[:len(m.searchPage)-1]
+				}
+			case 2:
+				if len(m.searchLimit) > 0 {
+					m.searchLimit = m.searchLimit[:len(m.searchLimit)-1]
+				}
+			case 3:
+				if len(m.searchEngines) > 0 {
+					m.searchEngines = m.searchEngines[:len(m.searchEngines)-1]
+				}
 			}
-
+		case "tab":
+			m.searchField = (m.searchField + 1) % 4
+		case "g":
+			if len(m.searchResults) > 0 {
+				m.selectedIndex = 0
+				m.searchScroll = 0
+			}
+		case "G":
+			if len(m.searchResults) > 0 {
+				m.selectedIndex = len(m.searchResults) - 1
+				ensureTUISearchSelectionVisible(&m)
+			}
+		case "home":
+			m.selectedIndex = 0
+			m.searchScroll = 0
+		case "end":
+			m.selectedIndex = len(m.searchResults) - 1
+			ensureTUISearchSelectionVisible(&m)
+		case "pageup":
+			m.selectedIndex -= 10
+			if m.selectedIndex < 0 {
+				m.selectedIndex = 0
+			}
+			ensureTUISearchSelectionVisible(&m)
+		case "pagedown":
+			m.selectedIndex += 10
+			if m.selectedIndex >= len(m.searchResults) {
+				m.selectedIndex = len(m.searchResults) - 1
+			}
+			ensureTUISearchSelectionVisible(&m)
 		case "esc":
 			if m.showShortcutsHelp {
 				m.showShortcutsHelp = false
@@ -352,19 +523,17 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastError = nil
 			m.statusMessage = ""
 			m.openedURL = ""
-
 		case "/":
 			// New search - clear results and focus on query
 			m.searchResults = nil
 			m.selectedIndex = 0
+			m.searchField = 0
 			m.statusMessage = ""
 			m.openedURL = ""
 			return m, nil
-
 		case "?":
 			m.showShortcutsHelp = !m.showShortcutsHelp
 			return m, nil
-
 		case "o":
 			// Open current result without navigating
 			if len(m.searchResults) > 0 && m.selectedIndex < len(m.searchResults) {
@@ -373,15 +542,27 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if err := browser.OpenURL(selectedURL); err != nil {
 						m.lastError = err
 					} else {
-						m.statusMessage = "Opened in browser"
+						m.statusMessage = tuiTranslate(m.language, "opened_browser")
 					}
 				}
 			}
 			return m, nil
-
 		default:
 			if len(msg.String()) == 1 {
-				m.searchQuery += msg.String()
+				switch m.searchField {
+				case 0:
+					m.searchQuery += msg.String()
+				case 1:
+					if msg.String() >= "0" && msg.String() <= "9" {
+						m.searchPage += msg.String()
+					}
+				case 2:
+					if msg.String() >= "0" && msg.String() <= "9" {
+						m.searchLimit += msg.String()
+					}
+				case 3:
+					m.searchEngines += msg.String()
+				}
 			}
 		}
 
@@ -391,14 +572,25 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.terminalHeight = msg.Height
 
 		// Recalculate size mode and layout config
-		m.sizeMode = terminal.GetTerminalSize().Mode
+		m.sizeMode = terminal.GetSizeMode(msg.Width, msg.Height)
 		m.layoutConfig = getTUILayoutConfig(m.sizeMode)
+		ensureTUISearchSelectionVisible(&m)
 
 	case TUISearchDoneMsg:
 		m.isLoading = false
 		m.searchResults = msg.results
 		m.lastError = msg.err
 		m.selectedIndex = 0
+	case TUIViewDoneMsg:
+		if msg.view != m.activeView {
+			return m, nil
+		}
+		m.viewLoading = false
+		m.viewRows = msg.rows
+		m.lastError = msg.err
+		if msg.err == nil {
+			m.statusMessage = tuiTranslate(m.language, "completed")
+		}
 	}
 
 	return m, nil
@@ -413,43 +605,132 @@ func (m TUIModel) View() string {
 
 	var viewBuilder strings.Builder
 	layout := m.layoutConfig
+	if m.activeView == "menu" {
+		viewBuilder.WriteString(tuiStyles.Title.Render("VidVeil — "+tuiTranslate(m.language, "main_menu")) + "\n\n")
+		for index, command := range tuiCommandOrder {
+			line := command
+			if index == m.menuIndex {
+				line = "> " + line
+			} else {
+				line = "  " + line
+			}
+			viewBuilder.WriteString(line + "\n")
+		}
+		viewBuilder.WriteString("\n" + tuiTranslate(m.language, "menu_help"))
+		if m.showHelp {
+			viewBuilder.WriteString("\n" + tuiTranslate(m.language, "menu_help_detail"))
+		}
+		return viewBuilder.String()
+	}
+	viewTitle := tuiTranslate(m.language, "screen."+m.activeView)
+	viewBuilder.WriteString(tuiStyles.Title.Render("VidVeil — "+viewTitle) + "\n\n")
+	if m.activeView != TUICommandSearch {
+		if m.viewLoading {
+			viewBuilder.WriteString(tuiStyles.Status.Render(tuiTranslate(m.language, "loading")) + "\n")
+		}
+		if m.lastError != nil {
+			viewBuilder.WriteString(tuiStyles.Error.Render(m.lastError.Error()) + "\n")
+		}
+		for rowIndex, row := range m.viewRows {
+			if rowIndex < m.viewScroll {
+				continue
+			}
+			if m.terminalHeight > 0 && rowIndex >= m.viewScroll+m.terminalHeight-TUIReservedSpaceForUI {
+				break
+			}
+			if m.activeView == TUICommandEngines && m.engineFilter == "enabled" && !strings.Contains(row, "enabled=true") {
+				continue
+			}
+			if m.activeView == TUICommandEngines && m.engineFilter == "disabled" && !strings.Contains(row, "enabled=false") {
+				continue
+			}
+			if m.activeView == TUICommandBangs && m.bangFilter != "" && !strings.Contains(strings.ToLower(row), strings.ToLower(m.bangFilter)) {
+				continue
+			}
+			viewBuilder.WriteString(row + "\n")
+		}
+		switch m.activeView {
+		case TUICommandProbe:
+			verbose := tuiTranslate(m.language, "off")
+			if m.probeVerbose {
+				verbose = tuiTranslate(m.language, "on")
+			}
+			viewBuilder.WriteString(tuiTranslate(m.language, "engines") + ": " + m.probeEngines + "\n" + tuiTranslate(m.language, "query") + ": " + m.probeQuery + "\n" + tuiTranslate(m.language, "verbose") + ": " + verbose + "\n" + tuiTranslate(m.language, "probe_instructions"))
+		case TUICommandLogin:
+			serverPrefix, tokenPrefix := "  ", "  "
+			if m.loginField == 0 {
+				serverPrefix = "> "
+			} else {
+				tokenPrefix = "> "
+			}
+			viewBuilder.WriteString(serverPrefix + tuiTranslate(m.language, "server_url") + ": " + m.loginServerURL + "\n")
+			viewBuilder.WriteString(tokenPrefix + tuiTranslate(m.language, "api_token") + ": " + strings.Repeat("•", len(m.loginToken)) + "\n" + tuiTranslate(m.language, "login_instructions"))
+		default:
+			if m.activeView == TUICommandEngines {
+				viewBuilder.WriteString(tuiTranslate(m.language, "engines_instructions") + "\n")
+			}
+			if m.activeView == TUICommandBangs {
+				viewBuilder.WriteString(tuiTranslate(m.language, "filter") + ": " + m.bangFilter + " · " + tuiTranslate(m.language, "filter_instructions") + "\n")
+			}
+			if m.statusMessage != "" {
+				viewBuilder.WriteString(tuiStyles.Status.Render(m.statusMessage) + "\n")
+			}
+		}
+		viewBuilder.WriteString("\n" + tuiTranslate(m.language, "view_footer"))
+		if m.showHelp {
+			viewBuilder.WriteString("\n" + tuiTranslate(m.language, "view_help_detail"))
+		}
+		return viewBuilder.String()
+	}
 
 	// Title - show based on layout config
 	if layout.ShowHeader {
-		viewBuilder.WriteString(tuiStyles.Title.Render("VidVeil TUI") + "\n\n")
+		viewBuilder.WriteString(tuiStyles.Title.Render("VidVeil "+tuiTranslate(m.language, "tui_title")) + "\n\n")
 	}
 
 	// Search input
-	viewBuilder.WriteString("Search: ")
-	viewBuilder.WriteString(tuiStyles.Input.Render(m.searchQuery + "_"))
-	viewBuilder.WriteString("\n\n")
+	searchFields := []struct{ label, value string }{
+		{tuiTranslate(m.language, "query"), m.searchQuery}, {tuiTranslate(m.language, "page"), m.searchPage}, {tuiTranslate(m.language, "limit"), m.searchLimit}, {tuiTranslate(m.language, "engines"), m.searchEngines},
+	}
+	for index, field := range searchFields {
+		prefix := "  "
+		if m.searchField == index {
+			prefix = "> "
+		}
+		value := field.value
+		if m.searchField == index {
+			value += "_"
+		}
+		viewBuilder.WriteString(prefix + field.label + ": " + tuiStyles.Input.Render(value) + "\n")
+	}
+	viewBuilder.WriteString(tuiTranslate(m.language, "search_instructions") + "\n\n")
 
 	// Status
 	if m.isLoading {
-		viewBuilder.WriteString(tuiStyles.Status.Render("Searching...") + "\n\n")
+		viewBuilder.WriteString(tuiStyles.Status.Render(tuiTranslate(m.language, "searching")) + "\n\n")
 	} else if m.lastError != nil {
-		viewBuilder.WriteString(tuiStyles.Error.Render("Error: "+m.lastError.Error()) + "\n\n")
+		viewBuilder.WriteString(tuiStyles.Error.Render(tuiTranslate(m.language, "error_prefix")+": "+m.lastError.Error()) + "\n\n")
 	} else if m.statusMessage != "" {
 		viewBuilder.WriteString(tuiStyles.Status.Render(m.statusMessage) + "\n\n")
 	}
 
 	if m.showShortcutsHelp {
 		helpLines := []string{
-			"Shortcuts:",
-			"  enter  search or open selected result",
-			"  /      start a new search",
-			"  j/k    navigate results",
-			"  o      open selected result in browser",
-			"  esc    close help or clear current search",
-			"  q      quit",
-			"  ?      toggle this help",
+			tuiTranslate(m.language, "shortcuts"),
+			"  enter  " + tuiTranslate(m.language, "shortcut_search_open"),
+			"  /      " + tuiTranslate(m.language, "shortcut_new_search"),
+			"  j/k    " + tuiTranslate(m.language, "shortcut_navigate"),
+			"  o      " + tuiTranslate(m.language, "shortcut_browser"),
+			"  esc    " + tuiTranslate(m.language, "shortcut_escape"),
+			"  q      " + tuiTranslate(m.language, "shortcut_quit"),
+			"  ?      " + tuiTranslate(m.language, "shortcut_toggle_help"),
 		}
 		viewBuilder.WriteString(tuiStyles.Help.Render(strings.Join(helpLines, "\n")) + "\n\n")
 	}
 
 	// Results
 	if len(m.searchResults) > 0 {
-		fmt.Fprintf(&viewBuilder, "Results (%d):\n", len(m.searchResults))
+		fmt.Fprintf(&viewBuilder, "%s\n", i18n.TranslateFormat(m.language, "tui.results", "count", len(m.searchResults)))
 		if layout.ShowBorders {
 			viewBuilder.WriteString(strings.Repeat("-", 50) + "\n")
 		}
@@ -467,11 +748,15 @@ func (m TUIModel) View() string {
 			}
 		}
 
-		for i, result := range m.searchResults {
-			if i >= maxResults {
-				viewBuilder.WriteString(tuiStyles.Muted.Render(fmt.Sprintf("  ... and %d more\n", len(m.searchResults)-maxResults)))
-				break
-			}
+		if m.searchScroll > 0 {
+			viewBuilder.WriteString(tuiStyles.Muted.Render(i18n.TranslateFormat(m.language, "tui.results_above", "count", m.searchScroll) + "\n"))
+		}
+		end := m.searchScroll + maxResults
+		if end > len(m.searchResults) {
+			end = len(m.searchResults)
+		}
+		for i := m.searchScroll; i < end; i++ {
+			result := m.searchResults[i]
 
 			// Truncate based on layout config
 			// Per AI.md PART 1: No magic numbers - use named constants
@@ -494,6 +779,9 @@ func (m TUIModel) View() string {
 				viewBuilder.WriteString(tuiStyles.Result.Render("  "+line) + "\n")
 			}
 		}
+		if end < len(m.searchResults) {
+			viewBuilder.WriteString(tuiStyles.Muted.Render(i18n.TranslateFormat(m.language, "tui.results_below", "count", len(m.searchResults)-end) + "\n"))
+		}
 		viewBuilder.WriteString("\n")
 	}
 
@@ -501,14 +789,14 @@ func (m TUIModel) View() string {
 	if layout.ShowFooter {
 		var helpText string
 		if len(m.searchResults) > 0 {
-			helpText = "q: quit | enter/o: open | /: new search | esc: clear | j/k: navigate"
+			helpText = tuiTranslate(m.language, "footer_results")
 			if layout.UseAbbrev {
-				helpText = "q:quit | ↵/o:open | /:new | esc:clr | j/k:nav"
+				helpText = tuiTranslate(m.language, "footer_results_short")
 			}
 		} else {
-			helpText = "q: quit | enter: search | esc: clear"
+			helpText = tuiTranslate(m.language, "footer_empty")
 			if layout.UseAbbrev {
-				helpText = "q:quit | ↵:search | esc:clr"
+				helpText = tuiTranslate(m.language, "footer_empty_short")
 			}
 		}
 		viewBuilder.WriteString(tuiStyles.Help.Render(helpText))
@@ -517,11 +805,244 @@ func (m TUIModel) View() string {
 	return viewBuilder.String()
 }
 
-// executeTUISearch performs a search from TUI
-// Per AI.md PART 1: Function names MUST reveal intent - "doSearch" is ambiguous
-func executeTUISearch(searchQuery string) tea.Cmd {
+func visibleTUISearchResultCount(model TUIModel) int {
+	if model.terminalHeight <= 0 {
+		return TUIDefaultMaxResults
+	}
+	visible := model.terminalHeight - TUIReservedSpaceForUI
+	if visible < TUIMinDisplayResults {
+		visible = TUIMinDisplayResults
+	}
+	if visible > len(model.searchResults) {
+		visible = len(model.searchResults)
+	}
+	return visible
+}
+
+func ensureTUISearchSelectionVisible(model *TUIModel) {
+	if len(model.searchResults) == 0 {
+		model.searchScroll = 0
+		return
+	}
+	visible := visibleTUISearchResultCount(*model)
+	if visible < 1 {
+		visible = 1
+	}
+	if model.selectedIndex < model.searchScroll {
+		model.searchScroll = model.selectedIndex
+	}
+	if model.selectedIndex >= model.searchScroll+visible {
+		model.searchScroll = model.selectedIndex - visible + 1
+	}
+	maxScroll := len(model.searchResults) - visible
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if model.searchScroll > maxScroll {
+		model.searchScroll = maxScroll
+	}
+}
+
+func (m TUIModel) updateCommandViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch m.activeView {
+	case TUICommandEngines, TUICommandBangs:
+		if msg.String() == "q" || msg.String() == "ctrl+c" {
+			m.isQuitting = true
+			return m, tea.Quit
+		}
+		if msg.String() == "r" && !m.viewLoading {
+			m.viewLoading = true
+			return m, loadTUIView(m.activeView, m.language)
+		}
+		visibleRows := m.terminalHeight - TUIReservedSpaceForUI
+		if visibleRows < 1 {
+			visibleRows = 1
+		}
+		switch msg.String() {
+		case "up", "k":
+			if m.viewScroll > 0 {
+				m.viewScroll--
+			}
+			return m, nil
+		case "down", "j":
+			maxScroll := len(m.viewRows) - visibleRows
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
+			if m.viewScroll < maxScroll {
+				m.viewScroll++
+			}
+			return m, nil
+		case "pageup":
+			m.viewScroll -= visibleRows
+			if m.viewScroll < 0 {
+				m.viewScroll = 0
+			}
+			return m, nil
+		case "pagedown":
+			m.viewScroll += visibleRows
+			maxScroll := len(m.viewRows) - visibleRows
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
+			if m.viewScroll > maxScroll {
+				m.viewScroll = maxScroll
+			}
+			return m, nil
+		}
+		if m.activeView == TUICommandEngines {
+			switch msg.String() {
+			case "e":
+				m.engineFilter = "enabled"
+			case "d":
+				m.engineFilter = "disabled"
+			case "a":
+				m.engineFilter = "all"
+			}
+		} else {
+			switch msg.String() {
+			case "backspace":
+				if len(m.bangFilter) > 0 {
+					m.bangFilter = m.bangFilter[:len(m.bangFilter)-1]
+				}
+			case "enter":
+				m.bangFilter = ""
+			default:
+				if len(msg.String()) == 1 {
+					m.bangFilter += msg.String()
+				}
+			}
+		}
+	case TUICommandProbe:
+		switch msg.String() {
+		case "tab":
+			m.loginField = (m.loginField + 1) % 2
+		case "enter":
+			m.viewLoading = true
+			return m, runTUIProbe(m.probeEngines, m.probeQuery, m.probeVerbose, m.language)
+		case "v":
+			m.probeVerbose = !m.probeVerbose
+		case "backspace":
+			if m.loginField == 0 && len(m.probeEngines) > 0 {
+				m.probeEngines = m.probeEngines[:len(m.probeEngines)-1]
+			}
+			if m.loginField == 1 && len(m.probeQuery) > 0 {
+				m.probeQuery = m.probeQuery[:len(m.probeQuery)-1]
+			}
+		default:
+			if len(msg.String()) == 1 {
+				if m.loginField == 0 {
+					m.probeEngines += msg.String()
+				} else {
+					m.probeQuery += msg.String()
+				}
+			}
+		}
+	case TUICommandLogin:
+		switch msg.String() {
+		case "tab":
+			m.loginField = (m.loginField + 1) % 2
+		case "enter":
+			if strings.TrimSpace(m.loginServerURL) == "" || strings.TrimSpace(m.loginToken) == "" {
+				m.lastError = fmt.Errorf("%s", tuiTranslate(m.language, "error.login_required"))
+				return m, nil
+			}
+			if err := saveCLILogin(m.loginServerURL, m.loginToken); err != nil {
+				m.lastError = err
+			} else {
+				if cliConfig == nil {
+					cliConfig = &CLIConfig{}
+				}
+				cliConfig.Server.Address = m.loginServerURL
+				cliConfig.Server.Token = m.loginToken
+				initAPIClient()
+				m.loginToken = ""
+				m.statusMessage = tuiTranslate(m.language, "login_saved")
+			}
+		case "backspace":
+			if m.loginField == 0 && len(m.loginServerURL) > 0 {
+				m.loginServerURL = m.loginServerURL[:len(m.loginServerURL)-1]
+			}
+			if m.loginField == 1 && len(m.loginToken) > 0 {
+				m.loginToken = m.loginToken[:len(m.loginToken)-1]
+			}
+		default:
+			if len(msg.String()) == 1 {
+				if m.loginField == 0 {
+					m.loginServerURL += msg.String()
+				} else {
+					m.loginToken += msg.String()
+				}
+			}
+		}
+	}
+	return m, nil
+}
+
+func loadTUIView(view, language string) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := apiClient.Search(searchQuery, 0, 20, nil)
+		var rows []string
+		switch view {
+		case TUICommandEngines:
+			data, err := FetchEnginesList()
+			if err != nil {
+				return TUIViewDoneMsg{view: view, err: err}
+			}
+			for _, item := range data.Engines {
+				rows = append(rows, i18n.TranslateFormat(language, "tui.engine_summary", "display_name", item.DisplayName, "tier", item.Tier, "enabled", item.Enabled, "available", item.Available, "capabilities", item.Capabilities))
+			}
+		case TUICommandBangs:
+			data, err := fetchBangsList()
+			if err != nil {
+				return TUIViewDoneMsg{view: view, err: err}
+			}
+			for _, item := range data.Bangs {
+				rows = append(rows, i18n.TranslateFormat(language, "tui.bang_summary", "bang", item.Bang, "display_name", item.DisplayName, "engine", item.EngineName))
+			}
+		}
+		return TUIViewDoneMsg{view: view, rows: rows}
+	}
+}
+
+func runTUIProbe(engineList, query string, verbose bool, language string) tea.Cmd {
+	return func() tea.Msg {
+		if strings.TrimSpace(engineList) == "" {
+			return TUIViewDoneMsg{view: TUICommandProbe, err: fmt.Errorf("%s", tuiTranslate(language, "error.engines_required"))}
+		}
+		if strings.TrimSpace(query) == "" {
+			return TUIViewDoneMsg{view: TUICommandProbe, err: fmt.Errorf("%s", tuiTranslate(language, "error.probe_query_required"))}
+		}
+		engineNames := strings.Split(engineList, ",")
+		if strings.TrimSpace(engineList) == "*" {
+			var err error
+			engineNames, err = fetchEngineList()
+			if err != nil {
+				return TUIViewDoneMsg{view: TUICommandProbe, err: err}
+			}
+		}
+		var rows []string
+		for _, name := range engineNames {
+			result := probeEngineByName(strings.TrimSpace(name), query)
+			state := "unavailable"
+			if result.Available {
+				state = "available"
+			}
+			if result.Error != "" {
+				rows = append(rows, i18n.TranslateFormat(language, "tui.probe_error", "name", result.Name, "state", tuiTranslate(language, state), "error", result.Error))
+			} else {
+				rows = append(rows, i18n.TranslateFormat(language, "tui.probe_summary", "name", result.Name, "state", tuiTranslate(language, state), "count", result.ResultCount, "milliseconds", result.ResponseTimeMS))
+			}
+			if verbose && result.Capabilities != nil {
+				rows = append(rows, i18n.TranslateFormat(language, "tui.probe_details", "capabilities", result.Capabilities, "fields", result.FieldStats))
+			}
+		}
+		return TUIViewDoneMsg{view: TUICommandProbe, rows: rows}
+	}
+}
+
+func executeTUISearchWithOptions(searchQuery string, page, limit int, engines []string) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := apiClient.Search(searchQuery, page, limit, engines)
 		if err != nil {
 			return TUISearchDoneMsg{err: err}
 		}

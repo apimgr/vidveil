@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -21,6 +22,24 @@ func newTestService(t *testing.T) *BlocklistService {
 		subnets:  make([]*net.IPNet, 0),
 		domains:  make(map[string]bool),
 		dataDir:  t.TempDir(),
+	}
+}
+
+func TestBlocklistHealthKeysAvoidNormalizedNameCollisions(t *testing.T) {
+	sources := []config.BlocklistSource{
+		{Name: "foo-bar", Enabled: true},
+		{Name: "foo_bar", Enabled: true},
+		{Name: "Disabled", Enabled: false},
+	}
+	want := blocklistHealthKeys(sources)
+	if want[0] == "" || want[1] == "" || want[0] == want[1] {
+		t.Fatalf("colliding source names produced non-unique keys: %#v", want)
+	}
+	if want[2] != "" {
+		t.Fatalf("disabled source received health key %q", want[2])
+	}
+	if got := blocklistHealthKeys(sources); !reflect.DeepEqual(got, want) {
+		t.Fatalf("health keys are not stable: got %#v, want %#v", got, want)
 	}
 }
 

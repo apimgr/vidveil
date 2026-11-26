@@ -1,0 +1,26 @@
+{{define "nojs/error"}}
+<!DOCTYPE html>
+<html lang="{{.Lang}}" dir="{{.Dir}}" class="theme-{{.Theme}}">
+<head>{{template "public/head" .}}</head>
+<body>
+    <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    <a href="#navigation" class="skip-link">{{ t "a11y.skip_to_nav" }}</a>
+    {{ trackingNoScript }}
+    {{template "public/site-banner" .}}
+    {{template "public/header" .}}
+    <main id="main-content" role="main">
+        <div class="container container-sm">
+            <header class="page-header">
+                <h1 class="page-title">{{.Title}}</h1>
+                <p class="page-lead">{{.Message}}</p>
+            </header>
+            <section class="section-card" aria-labelledby="error-code">
+                <h2 id="error-code">{{.Code}}</h2>
+                <a href="{{ path "/" }}" class="btn btn-primary">{{ t "error.go_home" }}</a>
+            </section>
+        </div>
+    </main>
+    {{template "public/footer" .}}
+</body>
+</html>
+{{end}}

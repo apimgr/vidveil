@@ -677,6 +677,15 @@ func TestHealthCheck_TextFormat_ReturnsText(t *testing.T) {
 	if !strings.Contains(ct, "text/plain") {
 		t.Errorf("HealthCheck text: Content-Type = %q, want text/plain", ct)
 	}
+	body := rr.Body.String()
+	for _, required := range []string{"Status:", "Version:", "Uptime:", "Features", "Component Status", "Database:", "Statistics"} {
+		if !strings.Contains(body, required) {
+			t.Errorf("HealthCheck text missing human-readable label %q: %s", required, body)
+		}
+	}
+	if strings.Contains(body, "project.name:") || strings.Contains(body, "checks.database:") {
+		t.Errorf("HealthCheck frontend text contains machine field names: %s", body)
+	}
 }
 
 // HealthCheck with browser UA exercises the default case (HTML via renderHealthzHTML).
@@ -802,8 +811,8 @@ func TestHealthCheck_TextFormat_PendingRestart(t *testing.T) {
 		t.Errorf("HealthCheck text pending_restart: status = %d, want 200", rr.Code)
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, "pending_restart") {
-		t.Errorf("HealthCheck text pending_restart: missing field in body: %s", body)
+	if !strings.Contains(body, "Restart:") || !strings.Contains(body, "required") || !strings.Contains(body, "cfg") {
+		t.Errorf("HealthCheck text pending restart is not human-readable: %s", body)
 	}
 }
 
@@ -1240,9 +1249,8 @@ func TestHealthCheck_WithTorRunning_JSON(t *testing.T) {
 	}
 }
 
-// HealthCheck with Tor enabled but not running adds "tor": "error" and triggers
-// the unhealthy path (lines 1169, 1170, 1173, 1181–1183).
-func TestHealthCheck_WithTorNotRunning_Unhealthy_JSON(t *testing.T) {
+// An enabled Tor provider that is not running is degraded, per PART 13.
+func TestHealthCheck_WithTorUnavailable_Degraded_JSON(t *testing.T) {
 	h := newMiscTestHandler()
 	h.torSvc = &testTorChecker{enabled: true, running: false}
 
@@ -1252,11 +1260,11 @@ func TestHealthCheck_WithTorNotRunning_Unhealthy_JSON(t *testing.T) {
 
 	h.HealthCheck(rr, req)
 
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Errorf("HealthCheck Tor not-running JSON: status=%d want 503", rr.Code)
+	if rr.Code != http.StatusOK {
+		t.Errorf("HealthCheck Tor not-running JSON: status=%d want 200", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "unhealthy") {
-		t.Errorf("HealthCheck Tor not-running JSON: expected unhealthy in body: %s", rr.Body.String())
+	if !strings.Contains(rr.Body.String(), "degraded") {
+		t.Errorf("HealthCheck Tor not-running JSON: expected degraded in body: %s", rr.Body.String())
 	}
 }
 
@@ -1272,12 +1280,12 @@ func TestHealthCheck_TextFormat_WithTorRunning(t *testing.T) {
 	h.HealthCheck(rr, req)
 
 	body := rr.Body.String()
-	if !strings.Contains(body, "features.tor.hostname") {
-		t.Logf("HealthCheck text Tor running: body excerpt: %s", body[:min(len(body), 300)])
+	if !strings.Contains(body, "Tor: healthy") || strings.Contains(body, "features.tor.hostname") {
+		t.Errorf("HealthCheck frontend text Tor line is not human-readable: %s", body)
 	}
 }
 
-// HealthCheck plain-text with Tor enabled but not running covers checks.tor
+// HealthCheck plain-text with Tor unavailable covers checks.tor
 // output branch (lines 1298–1299).
 func TestHealthCheck_TextFormat_WithTorNotRunning(t *testing.T) {
 	h := newMiscTestHandler()
@@ -1290,8 +1298,8 @@ func TestHealthCheck_TextFormat_WithTorNotRunning(t *testing.T) {
 	h.HealthCheck(rr, req)
 
 	body := rr.Body.String()
-	if !strings.Contains(body, "checks.tor") {
-		t.Logf("HealthCheck text Tor not-running: body excerpt: %s", body[:min(len(body), 300)])
+	if !strings.Contains(body, "Tor: unavailable") || strings.Contains(body, "checks.tor") {
+		t.Errorf("HealthCheck frontend text Tor check is not human-readable: %s", body)
 	}
 }
 

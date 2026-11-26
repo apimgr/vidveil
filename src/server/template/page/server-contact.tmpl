@@ -3,24 +3,25 @@
 {{end}}
 
 {{define "content"}}
-<div class="content">
-    <div class="prose">
-        <h1>{{ t "contact.title" }}</h1>
-
-        <p>This form is only for security reports, terms violations at a URL on this site, DMCA notices and privacy requests. It cannot be used for support, bug reports, feature requests or general questions.</p>
+<div class="container container-sm">
+    <header class="page-header">
+        <h1 class="page-title">{{ t "contact.title" }}</h1>
+        <p class="page-lead">{{ t "contact.report_disclaimer" }}</p>
+    </header>
+    <section class="section-card" aria-labelledby="contact-card-title">
+        <h2 id="contact-card-title">{{if .SecurityMode}}{{ t "contact.security_report_title" }}{{else if .ContactType}}{{if eq .ContactType "abuse"}}{{ t "contact.report_abuse" }}{{else if eq .ContactType "dmca"}}{{ t "contact.send_dmca_notice" }}{{else}}{{ t "contact.make_privacy_request" }}{{end}}{{else}}{{ t "contact.choose_report_type" }}{{end}}</h2>
         {{if .Message}}
         <div class="alert alert-{{.MessageType}}" role="status">{{.Message}}</div>
         {{end}}
 
         {{if .SecurityMode}}
-        <h2>{{ t "contact.security_report_title" }}</h2>
         <p>{{ t "contact.security_report_body" }}</p>
         {{if .ReviewMode}}
-        <section class="contact-review" aria-labelledby="contact-review-title">
-            <h3 id="contact-review-title">Review your report</h3>
-            <p><strong>Email</strong>: {{index .FormValues "email"}}</p>
-            <p><strong>Type</strong>: Security</p>
-            <p><strong>Subject</strong>: {{index .FormValues "subject"}}</p>
+        <div class="contact-review">
+            <h3 id="contact-review-title">{{ t "contact.review_title" }}</h3>
+            <p><strong>{{ t "contact.review_email" }}</strong>: {{index .FormValues "email"}}</p>
+            <p><strong>{{ t "contact.review_type" }}</strong>: {{ t "contact.security_type" }}</p>
+            <p><strong>{{ t "contact.label_subject" }}</strong>: {{index .FormValues "subject"}}</p>
             <form method="POST" action="{{ path "/server/contact" }}?security_id={{.SecurityID}}">
                 {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
                 <input type="hidden" name="form_token" value="{{.ContactFormToken}}">
@@ -28,8 +29,8 @@
                 <input type="hidden" name="type" value="security">
                 <input type="hidden" name="step" value="confirm">
                 <input type="hidden" name="review_token" value="{{.ReviewToken}}">
-                <label><input type="checkbox" name="confirmed" value="true" required> This email address is correct, and this is a genuine report, not an advertisement, a solicitation or spam</label>
-                <button type="submit" class="search-button">Confirm report</button>
+                <label><input type="checkbox" name="confirmed" value="true" required> {{ t "contact.confirm_truth" }}</label>
+                <button type="submit" class="btn btn-primary">{{ t "contact.confirm_report" }}</button>
             </form>
             <form method="POST" action="{{ path "/server/contact" }}?security_id={{.SecurityID}}">
                 {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
@@ -37,9 +38,9 @@
                 {{range $key, $value := .FormValues}}{{if and (ne $key "form_token") (ne $key "step") (ne $key "type")}}<input type="hidden" name="{{$key}}" value="{{$value}}">{{end}}{{end}}
                 <input type="hidden" name="type" value="security">
                 <input type="hidden" name="step" value="edit">
-                <button type="submit" class="btn-secondary">Edit report</button>
+                <button type="submit" class="btn btn-secondary">{{ t "contact.edit_report" }}</button>
             </form>
-        </section>
+        </div>
         {{else}}
         <form method="POST" action="{{ path "/server/contact" }}?security_id={{.SecurityID}}" class="preferences-form">
             {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
@@ -47,8 +48,8 @@
             <input type="hidden" name="security_id" value="{{.SecurityID}}">
             <input type="hidden" name="type" value="security">
             <input type="hidden" name="step" value="submit">
-            <div style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden" aria-hidden="true">
-                <label for="website">Leave this field empty</label>
+            <div class="visually-hidden" aria-hidden="true">
+                <label for="website">{{ t "contact.label_honeypot" }}</label>
                 <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
             </div>
             <div class="form-group">
@@ -74,11 +75,12 @@
                     <option value="other">{{ t "contact.option_other" }}</option>
                 </select>
                 <p id="component-error" class="field-error" role="alert" hidden></p>
+                <label class="form-label" for="component_other">{{ t "contact.option_other" }}</label>
                 <input class="form-input" type="text" id="component_other" name="component_other" maxlength="255" placeholder="{{ t "contact.placeholder_component_other" }}">
             </div>
             <div class="form-group">
                 <label class="form-label" for="endpoint">{{ t "contact.label_endpoint" }}</label>
-                <input class="form-input" type="text" id="endpoint" name="endpoint" maxlength="2048" placeholder="/api/v1/search">
+                <input class="form-input" type="text" id="endpoint" name="endpoint" maxlength="2048" placeholder="{{.APIBase}}/search">
             </div>
             <div class="form-group">
                 <label class="form-label" for="severity">{{ t "contact.label_severity" }}</label>
@@ -162,43 +164,41 @@
                 </div>
             </noscript>
             {{ end }}
-            <button type="submit" class="search-button" data-loading-text="{{ t "action.submitting" }}">{{ t "contact.submit_security_report" }}</button>
+            <button type="submit" class="btn btn-primary" data-loading-text="{{ t "action.submitting" }}">{{ t "contact.submit_security_report" }}</button>
         </form>
         {{end}}
         {{else}}
         {{if .ContactEnabled}}
         {{if .ContactType}}
-        {{if eq .ContactType "abuse"}}<h2>Report abuse</h2>{{else if eq .ContactType "dmca"}}<h2>Send a DMCA notice</h2>{{else}}<h2>Make a privacy request</h2>{{end}}
         {{else}}
-        <h2>Choose a report type</h2>
         <ul>
             {{range .ContactTypes}}
-            <li>{{if eq . "abuse"}}<a href="{{ path "/server/contact" }}?type=abuse">Report abuse</a>{{else if eq . "dmca"}}<a href="{{ path "/server/contact" }}?type=dmca">Send a DMCA notice</a>{{else if eq . "privacy"}}<a href="{{ path "/server/contact" }}?type=privacy">Make a privacy request</a>{{else if eq . "security"}}<a href="{{ path "/server/contact" }}?type=security&amp;security_id={{$.SecurityID}}">Report a security vulnerability</a>{{end}}</li>
+            <li>{{if eq . "abuse"}}<a href="{{ path "/server/contact" }}?type=abuse">{{ t "contact.report_abuse" }}</a>{{else if eq . "dmca"}}<a href="{{ path "/server/contact" }}?type=dmca">{{ t "contact.send_dmca_notice" }}</a>{{else if eq . "privacy"}}<a href="{{ path "/server/contact" }}?type=privacy">{{ t "contact.make_privacy_request" }}</a>{{else if eq . "security"}}<a href="{{ path "/server/contact" }}?type=security&amp;security_id={{$.SecurityID}}">{{ t "contact.security_report_title" }}</a>{{end}}</li>
             {{end}}
         </ul>
         {{end}}
         {{if .ReviewMode}}
-        <section class="contact-review" aria-labelledby="contact-review-title">
-            <h3 id="contact-review-title">Review your report</h3>
+        <div class="contact-review">
+            <h3 id="contact-review-title">{{ t "contact.review_title" }}</h3>
             <p class="contact-review-email">{{index .FormValues "email"}}</p>
-            <p><strong>Type</strong>: {{index .FormValues "type"}}</p>
-            <p><strong>Subject</strong>: {{index .FormValues "subject"}}</p>
+            <p><strong>{{ t "contact.review_type" }}</strong>: {{index .FormValues "type"}}</p>
+            <p><strong>{{ t "contact.label_subject" }}</strong>: {{index .FormValues "subject"}}</p>
             <form method="POST" action="{{ path "/server/contact" }}">
                 {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
                 <input type="hidden" name="form_token" value="{{.ContactFormToken}}">
                 {{range $key, $value := .FormValues}}{{if and (ne $key "form_token") (ne $key "step")}}<input type="hidden" name="{{$key}}" value="{{$value}}">{{end}}{{end}}
                 <input type="hidden" name="step" value="confirm">
                 <input type="hidden" name="review_token" value="{{.ReviewToken}}">
-                <label><input type="checkbox" name="confirmed" value="true" required> This email address is correct, and this is a genuine report, not an advertisement, a solicitation or spam</label>
-                <button type="submit" class="search-button">Confirm report</button>
+                <label><input type="checkbox" name="confirmed" value="true" required> {{ t "contact.confirm_truth" }}</label>
+                <button type="submit" class="btn btn-primary">{{ t "contact.confirm_report" }}</button>
             </form>
             <form method="POST" action="{{ path "/server/contact" }}">
                 {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
                 {{range $key, $value := .FormValues}}{{if ne $key "step"}}<input type="hidden" name="{{$key}}" value="{{$value}}">{{end}}{{end}}
                 <input type="hidden" name="step" value="edit">
-                <button type="submit" class="btn-secondary">Edit report</button>
+                <button type="submit" class="btn btn-secondary">{{ t "contact.edit_report" }}</button>
             </form>
-        </section>
+        </div>
         {{else}}
         {{if .ContactType}}
         <form method="POST" action="{{ path "/server/contact" }}" class="preferences-form">
@@ -206,8 +206,8 @@
             <input type="hidden" name="form_token" value="{{.ContactFormToken}}">
             <input type="hidden" name="step" value="submit">
             <input type="hidden" name="type" value="{{.ContactType}}">
-            <div style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden" aria-hidden="true">
-                <label for="website">Leave this field empty</label>
+            <div class="visually-hidden" aria-hidden="true">
+                <label for="website">{{ t "contact.label_honeypot" }}</label>
                 <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
             </div>
             <div class="form-group">
@@ -220,34 +220,34 @@
             </div>
             {{if eq .ContactType "abuse"}}
             <div class="form-group">
-                <label class="form-label" for="reported_url">Reported URL (required)</label>
+                <label class="form-label" for="reported_url">{{ t "contact.reported_url_required" }}</label>
                 <input class="form-input" type="url" id="reported_url" name="reported_url" required maxlength="2048" value="{{index .FormValues "reported_url"}}">
                 <p>A page on this site, for example https://{{.FQDN}}/...</p>
             </div>
             <div class="form-group">
-                <label class="form-label" for="reason">Reason (required)</label>
+                <label class="form-label" for="reason">{{ t "contact.reason_required" }}</label>
                 <select class="form-input" id="reason" name="reason" required>
-                    <option value="illegal_content">Illegal content</option><option value="terms_violation">Terms violation</option><option value="harassment">Harassment</option><option value="malware_phishing">Malware or phishing</option><option value="other">Other</option>
+                    <option value="illegal_content">{{ t "contact.reason_illegal_content" }}</option><option value="terms_violation">{{ t "contact.reason_terms_violation" }}</option><option value="harassment">{{ t "contact.reason_harassment" }}</option><option value="malware_phishing">{{ t "contact.reason_malware_phishing" }}</option><option value="other">{{ t "contact.option_other" }}</option>
                 </select>
             </div>
             {{else if eq .ContactType "dmca"}}
             <div class="form-group">
-                <label class="form-label" for="reported_url">Reported URL (required)</label>
+                <label class="form-label" for="reported_url">{{ t "contact.reported_url_required" }}</label>
                 <input class="form-input" type="url" id="reported_url" name="reported_url" required maxlength="2048" value="{{index .FormValues "reported_url"}}">
                 <p>A page on this site, for example https://{{.FQDN}}/...</p>
             </div>
-            <div class="form-group"><label class="form-label" for="copyrighted_work">Copyrighted work (required)</label><textarea class="form-input" id="copyrighted_work" name="copyrighted_work" required maxlength="2000" rows="3">{{index .FormValues "copyrighted_work"}}</textarea></div>
-            <div class="form-group"><label class="form-label"><input type="checkbox" name="good_faith" value="true" required> I have a good-faith belief that this use is not authorized by the copyright owner, its agent or the law (required)</label></div>
-            <div class="form-group"><label class="form-label"><input type="checkbox" name="accuracy" value="true" required> The information is accurate and, under penalty of perjury, I am the owner or authorized to act for the owner (required)</label></div>
+            <div class="form-group"><label class="form-label" for="copyrighted_work">{{ t "contact.copyrighted_work_required" }}</label><textarea class="form-input" id="copyrighted_work" name="copyrighted_work" required maxlength="2000" rows="3">{{index .FormValues "copyrighted_work"}}</textarea></div>
+            <div class="form-group"><label class="form-label"><input type="checkbox" name="good_faith" value="true" required> {{ t "contact.dmca_good_faith" }}</label></div>
+            <div class="form-group"><label class="form-label"><input type="checkbox" name="accuracy" value="true" required> {{ t "contact.dmca_accuracy" }}</label></div>
             <div class="form-group">
-                <label class="form-label" for="signature">Signature (required)</label>
+                <label class="form-label" for="signature">{{ t "contact.signature_required" }}</label>
                 <input class="form-input" type="text" id="signature" name="signature" required maxlength="100" value="{{index .FormValues "signature"}}">
             </div>
             {{else}}
             <div class="form-group">
-                <label class="form-label" for="request_kind">Request kind (required)</label>
+                <label class="form-label" for="request_kind">{{ t "contact.request_kind_required" }}</label>
                 <select class="form-input" id="request_kind" name="request_kind" required>
-                    <option value="access">Access</option><option value="export">Export</option><option value="deletion">Deletion</option><option value="correction">Correction</option><option value="opt_out">Opt out</option><option value="other">Other</option>
+                    <option value="access">{{ t "contact.request_access" }}</option><option value="export">{{ t "contact.request_export" }}</option><option value="deletion">{{ t "contact.request_deletion" }}</option><option value="correction">{{ t "contact.request_correction" }}</option><option value="opt_out">{{ t "contact.request_opt_out" }}</option><option value="other">{{ t "contact.option_other" }}</option>
                 </select>
             </div>
             {{end}}
@@ -288,14 +288,14 @@
                 </div>
             </noscript>
             {{ end }}
-            <button type="submit" class="search-button" data-loading-text="{{ t "action.sending" }}">{{ t "contact.submit_message" }}</button>
+            <button type="submit" class="btn btn-primary" data-loading-text="{{ t "action.sending" }}">{{ t "contact.submit_message" }}</button>
         </form>
         {{else}}
         {{end}}
         {{end}}
-        <p>To report a security vulnerability, see <a href="{{ path "/server/security" }}">/server/security</a>.</p>
+        <p>{{ t "contact.security_redirect" }} <a href="{{ path "/server/security" }}">/server/security</a>.</p>
         {{end}}
-    </div>
+    </section>
 </div>
 {{end}}
 {{end}}

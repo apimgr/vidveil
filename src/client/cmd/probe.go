@@ -8,16 +8,18 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+
+	"github.com/apimgr/vidveil/src/client/api"
 )
 
 // Probe field stats key constants
 // Per AI.md PART 1: No magic strings - use named constants
 const (
-	ProbeFieldStatHasThumbnail   = "has_thumbnail"
-	ProbeFieldStatHasPreviewURL  = "has_preview_url"
-	ProbeFieldStatHasDownloadURL = "has_download_url"
-	ProbeFieldStatHasDuration    = "has_duration"
-	ProbeFieldStatHasViews       = "has_views"
+	ProbeFieldStatHasThumbnail   = api.SearchFieldStatHasThumbnail
+	ProbeFieldStatHasPreviewURL  = api.SearchFieldStatHasPreviewURL
+	ProbeFieldStatHasDownloadURL = api.SearchFieldStatHasDownloadURL
+	ProbeFieldStatHasDuration    = api.SearchFieldStatHasDuration
+	ProbeFieldStatHasViews       = api.SearchFieldStatHasViews
 	ProbeDefaultTestQuery        = "test"
 )
 
@@ -169,29 +171,7 @@ func probeEngineByName(name, query string) EngineProbeResult {
 
 	// Count field stats
 	// Per AI.md PART 1: No magic strings - use named constants
-	fieldStats := map[string]int{
-		ProbeFieldStatHasThumbnail:   0,
-		ProbeFieldStatHasPreviewURL:  0,
-		ProbeFieldStatHasDownloadURL: 0,
-		ProbeFieldStatHasDuration:    0,
-		ProbeFieldStatHasViews:       0,
-	}
-
-	for _, r := range searchResp.Results {
-		if r.Thumbnail != "" {
-			fieldStats[ProbeFieldStatHasThumbnail]++
-		}
-		if r.Duration != "" {
-			fieldStats[ProbeFieldStatHasDuration]++
-		}
-		if r.Views != "" {
-			fieldStats[ProbeFieldStatHasViews]++
-		}
-		// Note: preview_url and download_url would need to be added to SearchResult
-		// For now, we track what's available
-	}
-
-	result.FieldStats = fieldStats
+	result.FieldStats = api.CountSearchResultFields(searchResp.Results)
 
 	// Try to get engine info for capabilities
 	if infoURL := fmt.Sprintf("%s/engines/%s", apiClient.GetAPIBaseURL(), name); infoURL != "" {

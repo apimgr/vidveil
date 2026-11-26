@@ -438,20 +438,20 @@ func TestURLConstants_NonEmpty(t *testing.T) {
 // Close on a freshly created service (all DB readers nil) must not panic.
 func TestClose_NilDBs_NoPanic(t *testing.T) {
 	svc := newDisabledService(t)
-	svc.Close()
+	_ = svc.Close()
 }
 
 // Close on an enabled service with no DB files open must not panic.
 func TestClose_EnabledNoDB_NoPanic(t *testing.T) {
 	svc := newEnabledService(t)
-	svc.Close()
+	_ = svc.Close()
 }
 
 // Calling Close twice must not panic (idempotency).
 func TestClose_Idempotent(t *testing.T) {
 	svc := newDisabledService(t)
-	svc.Close()
-	svc.Close()
+	_ = svc.Close()
+	_ = svc.Close()
 }
 
 // --- Concurrency ---
@@ -569,7 +569,7 @@ func TestRestrictionResult_FieldsAccessible(t *testing.T) {
 // Close must not affect IsEnabled; the value comes from config, not DB state.
 func TestIsEnabled_AfterClose_Unchanged(t *testing.T) {
 	svc := newEnabledService(t)
-	svc.Close()
+	_ = svc.Close()
 	if !svc.IsEnabled() {
 		t.Error("IsEnabled() = false after Close(), want true (config unchanged)")
 	}

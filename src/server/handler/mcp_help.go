@@ -32,7 +32,7 @@ type mcpHelpAuth struct {
 
 // HelpMCPPage renders MCP connection guidance for the always-enabled endpoint.
 func (h *ServerHandler) HelpMCPPage(w http.ResponseWriter, r *http.Request) {
-	tools := mcpAnonymousTools(h.appConfig, r)
+	tools := mcpPublicTools(h.appConfig, r)
 	canonical := h.appConfig.APIBasePath() + "/server/mcp"
 	h.renderServerTemplate(w, r, "server-help-mcp", map[string]interface{}{
 		"MCPProjectName": "vidveil",
@@ -44,7 +44,7 @@ func (h *ServerHandler) HelpMCPPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIHelpMCP returns connection metadata and the live anonymous tool list.
+// APIHelpMCP returns connection metadata and the live public-operation list.
 func (h *ServerHandler) APIHelpMCP(w http.ResponseWriter, r *http.Request) {
 	canonical := h.appConfig.APIBasePath() + "/server/mcp"
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
@@ -54,15 +54,15 @@ func (h *ServerHandler) APIHelpMCP(w http.ResponseWriter, r *http.Request) {
 			URL:     urlvar.BuildURL(r, canonical),
 			Aliases: []string{urlvar.BuildURL(r, "/api/mcp"), urlvar.BuildURL(r, "/mcp")},
 			Auth:    mcpHelpAuth{Scheme: "Bearer"},
-			Tools:   mcpAnonymousTools(h.appConfig, r),
+			Tools:   mcpPublicTools(h.appConfig, r),
 			Project: h.appConfig.Server.Pages.Help.MCP,
 		},
 	})
 }
 
-// mcpAnonymousTools derives the unauthenticated MCP list from the live
-// OpenAPI document so help cannot drift from the registry used by tools/list.
-func mcpAnonymousTools(appConfig *config.AppConfig, r *http.Request) []mcpHelpTool {
+// mcpPublicTools derives public API operations from the live OpenAPI document.
+// MCP still requires a Bearer token to call every operation.
+func mcpPublicTools(appConfig *config.AppConfig, r *http.Request) []mcpHelpTool {
 	if appConfig == nil {
 		return []mcpHelpTool{}
 	}
@@ -77,6 +77,9 @@ func mcpAnonymousTools(appConfig *config.AppConfig, r *http.Request) []mcpHelpTo
 	var tools []mcpHelpTool
 	for path, operations := range document.Paths {
 		if !strings.HasPrefix(path, appConfig.APIBasePath()+"/") {
+			continue
+		}
+		if strings.Contains(path, "/server/preferences") || strings.Contains(path, "/server/mcp") {
 			continue
 		}
 		for method, raw := range operations {

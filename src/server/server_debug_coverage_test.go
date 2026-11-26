@@ -421,15 +421,10 @@ func TestDebugRoutesRequireOperatorToken(t *testing.T) {
 	s := &Server{appConfig: cfg, router: chi.NewRouter()}
 	s.RefreshOperatorTokenHash()
 	s.registerDebugRoutes(s.router)
-	searchHandler := handler.NewSearchHandler(cfg, engine.NewEngineManager(cfg))
-	s.registerDebugAPIRoutes(s.router, "/api/debug", searchHandler)
-	s.registerDebugAPIRoutes(s.router, "/api/v1/debug", searchHandler)
 
 	paths := []string{
 		"/debug/config",
 		"/debug/pprof/goroutine",
-		"/api/debug/engines",
-		"/api/v1/debug/engines",
 	}
 	for _, path := range paths {
 		path := path
@@ -467,20 +462,6 @@ func TestDebugRoutesRequireOperatorToken(t *testing.T) {
 		})
 	}
 
-	t.Run("query and alternate headers do not authorize", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/debug/engines?token=operator-secret", nil)
-		req.Header.Set("Authorization", "Bearer wrong-secret")
-		req.Header.Set("X-API-Key", "operator-secret")
-		rec := httptest.NewRecorder()
-		s.router.ServeHTTP(rec, req)
-		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("invalid higher-priority credential status = %d, want 401", rec.Code)
-		}
-
-		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("alternate credentials status = %d, want 401", rec.Code)
-		}
-	})
 }
 
 func TestDebugRoutesFailClosedWithoutConfiguredOperatorToken(t *testing.T) {

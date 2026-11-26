@@ -19,6 +19,25 @@ func newTestEmailService(t *testing.T) *EmailService {
 	}
 }
 
+func TestBuildRawAttachmentMessageEncodesEncryptedPayloadSafely(t *testing.T) {
+	message, err := BuildRawAttachmentMessage("Vidveil", "server@example.com", "security@example.com", "Security report", "Encrypted attachment.", "sec_123.enc", "application/octet-stream", []byte("ciphertext"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(message)
+	for _, want := range []string{"multipart/mixed", "Content-Disposition: attachment; filename=sec_123.enc", "Y2lwaGVydGV4dA=="} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("MIME message missing %q", want)
+		}
+	}
+	if _, err := BuildRawAttachmentMessage("", "", "", "subject", "body", "../private.txt", "application/octet-stream", []byte("ciphertext")); err != nil {
+		t.Fatalf("safe basename should be accepted: %v", err)
+	}
+	if _, err := BuildRawAttachmentMessage("", "", "", "subject", "body", "x\r\nBcc: bad", "application/octet-stream", []byte("ciphertext")); err == nil {
+		t.Fatal("expected attachment header injection to be rejected")
+	}
+}
+
 // --- parseTemplate ---
 
 func TestParseTemplate_ValidFormat(t *testing.T) {

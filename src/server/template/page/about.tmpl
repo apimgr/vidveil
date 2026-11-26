@@ -6,6 +6,7 @@
 </head>
 <body>
     <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    <a href="#navigation" class="skip-link">{{ t "a11y.skip_to_nav" }}</a>
     {{template "public/site-banner" .}}
     {{template "public/header" .}}
     <main class="about" id="main-content" role="main">
@@ -32,10 +33,10 @@
             <h2>{{ t "about.api" }}</h2>
             <p>{{ t "about.api_desc" }}</p>
             <div class="api-endpoints">
-                <code>GET /api/v1/search?q={query}&amp;page={page}</code>
-                <code>GET /api/v1/engines</code>
-                <code>GET /api/v1/server/healthz</code>
-                <code>POST /api/v1/server/graphql</code>
+                <code>GET {{.APIBase}}/search?q={query}&amp;page={page}</code>
+                <code>GET {{.APIBase}}/engines</code>
+                <code>GET {{.APIBase}}/server/healthz</code>
+                <code>POST {{.APIBase}}/server/graphql</code>
             </div>
             <p><a href="{{ path "/server/docs/swagger" }}">{{ t "about.api_docs" }}</a></p>
         </section>

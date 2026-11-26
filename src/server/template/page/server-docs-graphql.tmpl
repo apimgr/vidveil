@@ -1,0 +1,27 @@
+{{define "server-docs-graphql"}}
+{{template "public" .}}
+{{end}}
+
+{{define "content"}}
+<div class="container container-lg">
+    <header class="page-header">
+        <h1 class="page-title">{{ t "help.graphiql_link" }}</h1>
+        <p class="page-lead">{{ t "help.api_documentation_intro" }}</p>
+    </header>
+    <section class="section-card" aria-labelledby="graphiql-heading">
+        <h2 id="graphiql-heading">{{ t "help.graphiql_link" }}</h2>
+        <div id="graphiql" data-graphql-url="{{.DocsEndpointURL}}" aria-label="{{ t "help.graphiql_link" }}"></div>
+    </section>
+    <noscript>
+        <section class="section-card" aria-labelledby="graphiql-nojs-heading">
+            <h2 id="graphiql-nojs-heading">{{ t "help.graphiql_link" }}</h2>
+            <p>{{ t "docs.javascript_required" }}</p>
+            <p><a href="{{.DocsEndpointURL}}">{{ t "help.graphiql_link" }}</a></p>
+        </section>
+    </noscript>
+</div>
+<script src="{{ asset "/static/vendor/graphiql/react.production.min.js" }}" defer></script>
+<script src="{{ asset "/static/vendor/graphiql/react-dom.production.min.js" }}" defer></script>
+<script src="{{ asset "/static/vendor/graphiql/graphiql.min.js" }}" defer></script>
+<script src="{{ asset "/static/js/docs-graphql.js" }}" defer></script>
+{{end}}

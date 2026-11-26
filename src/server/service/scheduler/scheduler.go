@@ -1142,6 +1142,8 @@ type BuiltinTaskFuncs struct {
 	BackupHourly TaskFunc
 	// healthcheck.self - Every 5 minutes, self-health check
 	HealthcheckSelf TaskFunc
+	// DatasetHealthRefresh - Every minute, refresh cached dataset health checks.
+	DatasetHealthRefresh TaskFunc
 	// tor.health - Every 10 minutes, check Tor connectivity
 	TorHealth TaskFunc
 	// i2p_health - Every 10 minutes per AI.md PART 18: registered whenever I2P
@@ -1237,6 +1239,11 @@ func (s *Scheduler) RegisterBuiltinTasks(funcs BuiltinTaskFuncs) error {
 	if err := register("healthcheck_self", "Self Health Check",
 		"Perform internal health verification",
 		"@every 5m", funcs.HealthcheckSelf); err != nil {
+		return err
+	}
+	if err := register("dataset_health_refresh", "Dataset Health Refresh",
+		"Refresh cached dataset and dependency health checks",
+		"@every 1m", funcs.DatasetHealthRefresh); err != nil {
 		return err
 	}
 

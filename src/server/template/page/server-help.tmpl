@@ -3,15 +3,19 @@
 {{end}}
 
 {{define "content"}}
-<div class="content">
-    <div class="prose">
-        <h1>{{ t "help.title" }}</h1>
-        <p>{{ tf "help.intro" "app_name" .AppName }}</p>
+<div class="container container-md">
+        <header class="page-header">
+            <h1 class="page-title">{{ t "help.title" }}</h1>
+            <p class="page-lead">{{ tf "help.intro" "app_name" .AppName }}</p>
+        </header>
 
-        <h2>{{ t "help.basic_search" }}</h2>
+        <section class="section-card" aria-labelledby="help-basic_search-heading">
+        <h2 id="help-basic_search-heading">{{ t "help.basic_search" }}</h2>
         <p>{{ t "help.basic_search_body" }}</p>
 
-        <h2>{{ t "help.search_operators" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-search_operators-heading">
+        <h2 id="help-search_operators-heading">{{ t "help.search_operators" }}</h2>
         <p>{{ t "help.search_operators_intro" }}</p>
         <ul>
             <li><code>+word</code> - {{ t "help.op_require" }}</li>
@@ -20,7 +24,9 @@
         </ul>
         <p>{{ t "help.search_operators_example" }} <code>+lesbian -amateur "hot tub"</code></p>
 
-        <h2>{{ t "help.bang_shortcuts" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-bang_shortcuts-heading">
+        <h2 id="help-bang_shortcuts-heading">{{ t "help.bang_shortcuts" }}</h2>
         <p>{{ t "help.bang_shortcuts_intro" }}</p>
         <ul>
             <li><code>!ph nature</code> - {{ t "help.bang_example_ph" }}</li>
@@ -29,15 +35,23 @@
         </ul>
         <p>{{ t "help.bang_shortcuts_body" }}</p>
 
-        <h2>{{ t "help.available_bangs" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-available_bangs-heading">
+        <h2 id="help-available_bangs-heading">{{ t "help.available_bangs" }}</h2>
         <p>{{ t "help.available_bangs_intro_1" }} <a href="{{ path "/search" }}?q=!">{{ t "help.search_page_link" }}</a> {{ t "help.available_bangs_intro_2" }}</p>
-        <pre><code>curl {{.BaseURL}}{{.APIBase}}/bangs</code></pre>
+        <pre class="code-block"><code>curl {{.BaseURL}}{{.APIBase}}/bangs</code></pre>
+        <button type="button" class="copy-btn" aria-label="{{ t "action.copy" }}"><span aria-live="polite">{{ t "action.copy" }}</span></button>
 
-        <h2>{{ t "help.autocomplete" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-autocomplete-heading">
+        <h2 id="help-autocomplete-heading">{{ t "help.autocomplete" }}</h2>
         <p>{{ t "help.autocomplete_body" }}</p>
-        <pre><code>curl "{{.BaseURL}}{{.APIBase}}/bangs/autocomplete?q=!p"</code></pre>
+        <pre class="code-block"><code>curl "{{.BaseURL}}{{.APIBase}}/bangs/autocomplete?q=!p"</code></pre>
+        <button type="button" class="copy-btn" aria-label="{{ t "action.copy" }}"><span aria-live="polite">{{ t "action.copy" }}</span></button>
 
-        <h2>{{ t "help.preferences" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-preferences-heading">
+        <h2 id="help-preferences-heading">{{ t "help.preferences" }}</h2>
         <p>{{ t "help.preferences_intro" }} <a href="{{ path "/server/preferences" }}">{{ t "help.preferences_link" }}</a>:</p>
         <ul>
             <li>{{ t "help.pref_theme" }}</li>
@@ -47,33 +61,47 @@
         </ul>
         <p>{{ t "help.preferences_storage" }}</p>
 
-        <h2>{{ t "help.history_favorites" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-history_favorites-heading">
+        <h2 id="help-history_favorites-heading">{{ t "help.history_favorites" }}</h2>
         <p><a href="{{ path "/favorites" }}">{{ t "help.favorites_link" }}</a> {{ t "help.history_favorites_body" }}</p>
 
-        <h2>{{ t "help.video_preview" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-video_preview-heading">
+        <h2 id="help-video_preview-heading">{{ t "help.video_preview" }}</h2>
         <p>{{ t "help.video_preview_body" }}</p>
 
-        <h2>{{ t "help.thumbnail_proxy" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-thumbnail_proxy-heading">
+        <h2 id="help-thumbnail_proxy-heading">{{ t "help.thumbnail_proxy" }}</h2>
         <p>{{ t "help.thumbnail_proxy_body" }}</p>
 
-        <h2>{{ t "help.tor_hidden_service" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-tor_hidden_service-heading">
+        <h2 id="help-tor_hidden_service-heading">{{ t "help.tor_hidden_service" }}</h2>
         <p>{{if .TorOnionAddr}}{{ tf "help.tor_reachable" "onion_address" .TorOnionAddr }}{{else}}{{ t "help.tor_auto" }}{{end}}</p>
 
-        <h2>{{ t "help.age_verification" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-age_verification-heading">
+        <h2 id="help-age_verification-heading">{{ t "help.age_verification" }}</h2>
         <p>{{ t "help.age_verification_body" }}</p>
 
-        <h2>{{ t "help.keyboard_shortcuts" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-keyboard_shortcuts-heading">
+        <h2 id="help-keyboard_shortcuts-heading">{{ t "help.keyboard_shortcuts" }}</h2>
         <ul>
             <li><kbd>/</kbd> - {{ t "help.kbd_focus_search" }}</li>
             <li><kbd>Esc</kbd> - {{ t "help.kbd_close" }}</li>
             <li><kbd>?</kbd> - {{ t "help.kbd_show_help" }}</li>
         </ul>
 
-        <h2>{{ t "help.api_access" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-api_access-heading">
+        <h2 id="help-api_access-heading">{{ t "help.api_access" }}</h2>
         <p>{{ tf "help.api_access_body" "app_name" .AppName }}</p>
 
-        <table>
-            <thead><tr><th>{{ t "help.table_endpoint" }}</th><th>{{ t "help.table_purpose" }}</th></tr></thead>
+        <div class="table-wrapper"><table class="data-table">
+            <thead><tr><th scope="col">{{ t "help.table_endpoint" }}</th><th scope="col">{{ t "help.table_purpose" }}</th></tr></thead>
             <tbody>
                 <tr><td><code>GET {{.APIBase}}/search?q={query}</code></td><td>{{ t "help.endpoint_search" }}</td></tr>
                 <tr><td><code>POST {{.APIBase}}/search/batch</code></td><td>{{ t "help.endpoint_batch" }}</td></tr>
@@ -88,10 +116,10 @@
                 <tr><td><code>GET {{.APIBase}}/server/healthz</code></td><td>{{ t "help.endpoint_healthz" }}</td></tr>
                 <tr><td><code>GET {{.APIBase}}/version</code></td><td>{{ t "help.endpoint_version" }}</td></tr>
             </tbody>
-        </table>
+        </table></div>
 
         <h3>{{ t "help.examples" }}</h3>
-        <pre><code>curl "{{.BaseURL}}{{.APIBase}}/search?q=+lesbian+-amateur"
+        <pre class="code-block"><code>curl "{{.BaseURL}}{{.APIBase}}/search?q=+lesbian+-amateur"
 
 curl -H "Accept: text/event-stream" "{{.BaseURL}}{{.APIBase}}/search?q=sunset"
 
@@ -102,16 +130,18 @@ curl "{{.BaseURL}}{{.APIBase}}/engines"
 curl "{{.BaseURL}}{{.APIBase}}/server/healthz"
 
 curl "{{.BaseURL}}{{.APIBase}}/search.txt?q=sunset"</code></pre>
+        <button type="button" class="copy-btn" aria-label="{{ t "action.copy" }}"><span aria-live="polite">{{ t "action.copy" }}</span></button>
 
         <h3>{{ t "help.api_documentation" }}</h3>
         <p>{{ tf "help.api_documentation_intro" "app_name" .AppName }}</p>
         <ul>
             <li><a href="{{ path "/server/docs/swagger" }}">{{ t "help.swagger_link" }}</a> — {{ t "help.swagger_desc" }} <code>/api/swagger</code></li>
             <li><a href="{{ path "/server/docs/graphql" }}">{{ t "help.graphiql_link" }}</a> — {{ t "help.graphiql_desc" }} <code>/api/graphql</code></li>
-            {{if .MCPEnabled}}<li><a href="{{ path "/server/help/mcp" }}">{{ t "help.mcp_link" }}</a></li>{{end}}
         </ul>
 
-        <h2>{{ t "help.faq" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-faq-heading">
+        <h2 id="help-faq-heading">{{ t "help.faq" }}</h2>
 
         <h3>{{ tf "help.faq_hosts_q" "app_name" .AppName }}</h3>
         <p>{{ tf "help.faq_hosts_a" "app_name" .AppName }}</p>
@@ -131,7 +161,9 @@ curl "{{.BaseURL}}{{.APIBase}}/search.txt?q=sunset"</code></pre>
         <h3>{{ t "help.faq_specific_sites_q" }}</h3>
         <p>{{ t "help.faq_specific_sites_a" }} <a href="{{ path "/server/preferences" }}">{{ t "help.preferences_link" }}</a>.</p>
 
-        <h2>{{ t "help.troubleshooting" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-troubleshooting-heading">
+        <h2 id="help-troubleshooting-heading">{{ t "help.troubleshooting" }}</h2>
 
         <h3>{{ t "help.ts_no_results_q" }}</h3>
         <p>{{ t "help.ts_no_results_a" }}</p>
@@ -163,9 +195,17 @@ curl "{{.BaseURL}}{{.APIBase}}/search.txt?q=sunset"</code></pre>
         <h3>{{ t "help.ts_tor_q" }}</h3>
         <p>{{ t "help.ts_tor_a" }}</p>
 
-        <h2>{{ t "help.need_more_help" }}</h2>
+        </section>
+        <section class="section-card" aria-labelledby="help-need_more_help-heading">
+        <h2 id="help-need_more_help-heading">{{ t "help.need_more_help" }}</h2>
         <p>{{ t "help.need_more_help_body_1" }} <a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">{{ t "help.github_link" }}</a> {{ t "help.need_more_help_body_2" }} <a href="{{ path "/server/security" }}">{{ t "security.title" }}</a>.</p>
-        {{ with .PageContent }}<section class="page-custom-content">{{ . | markdownToHTML }}</section>{{ end }}
-    </div>
+        {{ with .PageContent }}<div>{{ . | markdownToHTML }}</div>{{ end }}
+        </section>
+        <section class="section-card" aria-labelledby="more-help-heading">
+            <h2 id="more-help-heading">{{ t "help.more" }}</h2>
+            <ul class="hub-list">
+                {{range .HelpPages}}<li class="hub-item"><a class="hub-link" href="{{path .Path}}"><span class="hub-title">{{t .TitleKey}}</span><span class="hub-desc">{{t .DescriptionKey}}</span></a></li>{{end}}
+            </ul>
+        </section>
 </div>
 {{end}}

@@ -18,8 +18,14 @@ var errGUIUnsupportedBSD = errors.New("GUI not available: no gogpu/gogpu backend
 type Config struct {
 	ServerURL  string
 	Token      string
+	APIVersion string
+	Timeout    int
 	Version    string
 	BinaryName string
+	Language   string
+	FirstRun   bool
+	SaveLogin  func(serverURL, token string) error
+	SaveServer func(serverURL, token string) error
 }
 
 // IsAvailable always returns false on BSD — no GUI backend is implemented.

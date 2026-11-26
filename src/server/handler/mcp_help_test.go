@@ -27,6 +27,8 @@ func TestHelpMCPPageRendersResolvedConnectionGuide(t *testing.T) {
 		`https://vidveil.example/api/v1/server/mcp`,
 		`https://vidveil.example/api/mcp`, `https://vidveil.example/mcp`,
 		`searchVideos`, `claude mcp add --transport http vidveil`, "$MCP_TOKEN",
+		`MCP-Protocol-Version: 2026-07-28`, `Mcp-Method: initialize`,
+		`io.modelcontextprotocol/protocolVersion`, `2026-07-28`,
 	} {
 		if !strings.Contains(rr.Body.String(), want) {
 			t.Errorf("MCP help page does not contain %q", want)
@@ -64,7 +66,7 @@ func TestHelpMCPPageAndAPIAlwaysAvailable(t *testing.T) {
 	}
 }
 
-func TestAPIHelpMCPReturnsFixedEnvelopeAndAnonymousTools(t *testing.T) {
+func TestAPIHelpMCPReturnsFixedEnvelopeAndPublicOperations(t *testing.T) {
 	t.Setenv("DOMAIN", "vidveil.example")
 	h := newServerHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "https://vidveil.example/api/v1/server/help/mcp", nil)
@@ -105,15 +107,22 @@ func TestAPIHelpMCPReturnsFixedEnvelopeAndAnonymousTools(t *testing.T) {
 		t.Errorf("project help = %q, want VidVeil-specific MCP guidance", response.Data.Project)
 	}
 	foundSearch := false
+	foundMCPHelp := false
 	for _, tool := range response.Data.Tools {
 		if tool.Name == "searchVideos" && tool.Description != "" {
 			foundSearch = true
 		}
-		if strings.Contains(tool.Name, "Token") || strings.Contains(tool.Name, "token") {
-			t.Errorf("token management operation %q must not appear in anonymous tools", tool.Name)
+		if tool.Name == "getServerHelpMCP" {
+			foundMCPHelp = true
+		}
+		if strings.Contains(tool.Name, "Token") || strings.Contains(tool.Name, "token") || strings.Contains(tool.Name, "Preferences") {
+			t.Errorf("excluded operation %q appeared in MCP help metadata", tool.Name)
 		}
 	}
 	if !foundSearch {
-		t.Errorf("anonymous tools = %#v, missing searchVideos", response.Data.Tools)
+		t.Errorf("public API operations = %#v, missing searchVideos", response.Data.Tools)
+	}
+	if !foundMCPHelp {
+		t.Errorf("public API operations = %#v, missing getServerHelpMCP", response.Data.Tools)
 	}
 }

@@ -66,6 +66,25 @@ func TestDefaultAppConfig(t *testing.T) {
 	}
 }
 
+func TestPrivacyPageTextIsBuiltIn(t *testing.T) {
+	cfg := DefaultAppConfig()
+	want := cfg.Server.Privacy.Content
+	contents := []byte("server:\n  privacy:\n    content:\n      data_collection: Operator override\n      data_usage: Operator override\n      data_usage_if_sold: Operator override\n      data_security: Operator override\n")
+	if err := yaml.Unmarshal(contents, cfg); err != nil {
+		t.Fatalf("unmarshal privacy config: %v", err)
+	}
+	if cfg.Server.Privacy.Content != want {
+		t.Fatalf("server.privacy.content changed built-in privacy text: got %+v, want %+v", cfg.Server.Privacy.Content, want)
+	}
+	encoded, err := marshalYAML(cfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if strings.Contains(string(encoded), "data_collection:") || strings.Contains(string(encoded), "data_usage_if_sold:") || strings.Contains(string(encoded), "data_security:") {
+		t.Fatal("built-in privacy text is serialized as server.yml configuration")
+	}
+}
+
 func TestValidateTorConfigStartupTimeoutRange(t *testing.T) {
 	defaults := DefaultTorConfig()
 	for _, invalid := range []int{0, 9, 301} {
@@ -203,16 +222,6 @@ func TestValidateRestoreConfigUsesSpecDefaults(t *testing.T) {
 	validateRestoreConfig(&cfg, defaults)
 	if cfg != defaults {
 		t.Fatalf("validated restore config = %+v, want %+v", cfg, defaults)
-	}
-}
-
-func TestRestoreLimitEnvironmentOverridesAreValidated(t *testing.T) {
-	t.Setenv("VIDVEIL_SERVER_RESTORE_MAX_FILES", "0")
-	config := DefaultAppConfig()
-	applyEnvOverrides(config)
-	validateRestoreConfig(&config.Server.Restore, DefaultRestoreConfig())
-	if config.Server.Restore.MaxFiles != DefaultRestoreConfig().MaxFiles {
-		t.Fatalf("restore.max_files = %d, want default %d", config.Server.Restore.MaxFiles, DefaultRestoreConfig().MaxFiles)
 	}
 }
 
@@ -1108,5 +1117,23 @@ func TestParsePorts(t *testing.T) {
 					tc.port, tc.sslEnabled, gotHTTP, gotHTTPS, tc.wantHTTP, tc.wantHTTPS)
 			}
 		})
+	}
+}
+
+func TestBearerTokenPrefixesAndFormat(t *testing.T) {
+	for _, prefix := range []string{"adm_", "mtr_"} {
+		token, err := newBearerToken(prefix)
+		if err != nil {
+			t.Fatalf("newBearerToken(%q): %v", prefix, err)
+		}
+		if !strings.HasPrefix(token, prefix) || len(token) != 36 {
+			t.Errorf("newBearerToken(%q) = %q, want prefix and 32 base62 characters", prefix, token)
+		}
+		for _, char := range token[len(prefix):] {
+			if !strings.ContainsRune(bearerAlphabet, char) {
+				t.Errorf("newBearerToken(%q) contains non-base62 character %q", prefix, char)
+				break
+			}
+		}
 	}
 }

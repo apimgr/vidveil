@@ -310,20 +310,14 @@ func TestHealthCheck_PlainTextFormat(t *testing.T) {
 		t.Errorf("HealthCheck plain: status = %d, want %d", rr.Code, http.StatusOK)
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, "status: ") {
-		t.Errorf("HealthCheck plain: missing 'status:' line, got %q", body)
+	for _, label := range []string{"Status:", "Features", "I2P: disabled", "Component Status", "Database:"} {
+		if !strings.Contains(body, label) {
+			t.Errorf("HealthCheck plain: missing human-readable %q, got %q", label, body)
+		}
 	}
-	if !strings.Contains(body, "checks.database: ") {
-		t.Errorf("HealthCheck plain: missing 'checks.database:' line, got %q", body)
-	}
-	for _, field := range []string{
-		"features.i2p.enabled: false",
-		"features.i2p.running: false",
-		"features.i2p.status: disabled",
-		"features.i2p.provider: none",
-	} {
-		if !strings.Contains(body, field) {
-			t.Errorf("HealthCheck plain: missing %q, got %q", field, body)
+	for _, machineField := range []string{"status:", "checks.database:", "features.i2p.enabled:"} {
+		if strings.Contains(body, machineField) {
+			t.Errorf("HealthCheck plain: includes machine field %q, got %q", machineField, body)
 		}
 	}
 }
@@ -371,8 +365,8 @@ func TestHealthCheck_PendingRestart_PlainText(t *testing.T) {
 	h.HealthCheck(rr, req)
 
 	body := rr.Body.String()
-	if !strings.Contains(body, "pending_restart: true") {
-		t.Errorf("HealthCheck plain: missing pending_restart line, got %q", body)
+	if !strings.Contains(body, "Restart:") || !strings.Contains(body, "required") {
+		t.Errorf("HealthCheck plain: missing human-readable restart status, got %q", body)
 	}
 }
 

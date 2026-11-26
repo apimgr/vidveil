@@ -69,6 +69,7 @@ func TestParseAcceptLanguage(t *testing.T) {
 		{"en", []string{"en"}},
 		{"fr-FR,fr;q=0.9,en;q=0.8", []string{"fr-fr", "fr", "en"}},
 		{"de-DE", []string{"de-de"}},
+		{"fr;q=0.3,de;q=0.8,en;q=0", []string{"de", "fr"}},
 		{"", nil},
 	}
 
@@ -80,6 +81,16 @@ func TestParseAcceptLanguage(t *testing.T) {
 			}
 			if len(tt.expected) > 0 && len(result) == 0 {
 				t.Errorf("parseAcceptLanguage(%q) returned empty, want %v", tt.header, tt.expected)
+			}
+			if len(result) != len(tt.expected) {
+				t.Errorf("parseAcceptLanguage(%q) = %v, want %v", tt.header, result, tt.expected)
+			} else {
+				for i := range result {
+					if result[i] != tt.expected[i] {
+						t.Errorf("parseAcceptLanguage(%q) = %v, want %v", tt.header, result, tt.expected)
+						break
+					}
+				}
 			}
 		})
 	}
@@ -105,6 +116,27 @@ func TestAvailableLocales(t *testing.T) {
 
 	if !found {
 		t.Error("English should be available")
+	}
+}
+
+func TestLanguageRegistryMatchesEmbeddedLocales(t *testing.T) {
+	locales := newTranslator().AvailableLocales()
+	translator := newTranslator()
+	if len(locales) != len(SupportedLanguageRegistry) {
+		t.Fatalf("embedded locales = %v, registry has %d entries", locales, len(SupportedLanguageRegistry))
+	}
+	for _, locale := range locales {
+		if _, ok := LocaleInfoFor(locale); !ok {
+			t.Errorf("embedded locale %q is missing registry metadata", locale)
+		}
+	}
+	for _, info := range SupportedLanguageRegistry {
+		if !translator.HasLocale(info.Code) {
+			t.Errorf("registry locale %q has no embedded locale file", info.Code)
+		}
+		if info.NativeName == "" || (info.Direction != "ltr" && info.Direction != "rtl") || len(info.PluralCategories) == 0 {
+			t.Errorf("incomplete locale registry entry: %#v", info)
+		}
 	}
 }
 
@@ -241,17 +273,18 @@ func TestDirection(t *testing.T) {
 	}{
 		// RTL base locales
 		{"ar", "rtl"},
-		{"fa", "rtl"},
-		{"he", "rtl"},
-		{"ur", "rtl"},
-		{"ps", "rtl"},
-		{"sd", "rtl"},
-		{"yi", "rtl"},
+		// The supported registry currently contains Arabic as its only RTL locale.
+		{"fa", "ltr"},
+		{"he", "ltr"},
+		{"ur", "ltr"},
+		{"ps", "ltr"},
+		{"sd", "ltr"},
+		{"yi", "ltr"},
 		// RTL with subtag (hyphen separator)
 		{"ar-SA", "rtl"},
-		{"he-IL", "rtl"},
+		{"he-IL", "ltr"},
 		// RTL with underscore separator
-		{"fa_IR", "rtl"},
+		{"fa_IR", "ltr"},
 		// LTR locales
 		{"en", "ltr"},
 		{"fr", "ltr"},
@@ -263,7 +296,7 @@ func TestDirection(t *testing.T) {
 		{"en-US", "ltr"},
 		// Mixed case normalised
 		{"AR", "rtl"},
-		{"HE-IL", "rtl"},
+		{"HE-IL", "ltr"},
 		// Empty input
 		{"", "ltr"},
 	}
@@ -304,8 +337,8 @@ func TestDetectLocale(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Accept-Language", "FR-FR,fr;q=0.9,en;q=0.8")
 		got := DetectLocale(req)
-		if got != "fr-fr" {
-			t.Errorf("DetectLocale() Accept-Language = %q, want %q", got, "fr-fr")
+		if got != "fr" {
+			t.Errorf("DetectLocale() Accept-Language = %q, want %q", got, "fr")
 		}
 	})
 
@@ -466,10 +499,11 @@ func TestGetLocaleAllPaths(t *testing.T) {
 
 	t.Run("query_param_unknown_locale_skipped", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/?lang=xx", nil)
+		req.AddCookie(&http.Cookie{Name: "lang", Value: "de"})
 		req.Header.Set("Accept-Language", "en")
 		got := tr.GetLocale(req)
-		if got != "en" {
-			t.Errorf("GetLocale() unknown ?lang=xx should fall to Accept-Language, got %q", got)
+		if got != "de" {
+			t.Errorf("GetLocale() unknown ?lang=xx should fall to the valid cookie, got %q", got)
 		}
 	})
 
@@ -638,6 +672,9 @@ func TestMiddlewareAllPaths(t *testing.T) {
 		found := false
 		for _, c := range rr.Result().Cookies() {
 			if c.Name == "lang" && c.Value == "ar" {
+				if c.HttpOnly {
+					t.Error("lang preference cookie must remain available to browser clients")
+				}
 				found = true
 				break
 			}
@@ -749,7 +786,8 @@ func TestTemplateFuncWithArgs(t *testing.T) {
 
 // TestLocalesFS verifies all required locale files are embedded in the binary.
 func TestLocalesFS(t *testing.T) {
-	for _, name := range []string{"en", "es", "fr", "de", "zh", "ar", "ja"} {
+	for _, info := range SupportedLanguageRegistry {
+		name := info.Code
 		if _, err := localesFS.ReadFile("locales/" + name + ".json"); err != nil {
 			t.Errorf("required embedded locale %s.json is unavailable: %v", name, err)
 		}

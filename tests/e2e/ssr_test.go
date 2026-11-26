@@ -245,7 +245,7 @@ func TestSSRStandardServerPages(t *testing.T) {
 	}
 }
 
-func TestSSRMCPHelpAndOwnerTokenRestorePages(t *testing.T) {
+func TestSSRMCPHelpAndOwnerTokenPages(t *testing.T) {
 	client := httpClient(t)
 	resp, body := get(t, client, "/server/help/mcp", nil)
 	if resp.StatusCode != http.StatusOK {

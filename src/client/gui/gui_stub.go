@@ -16,8 +16,14 @@ var errGUIUnsupported = errors.New("GUI not available: binary was not built with
 type Config struct {
 	ServerURL  string
 	Token      string
+	APIVersion string
+	Timeout    int
 	Version    string
 	BinaryName string
+	Language   string
+	FirstRun   bool
+	SaveLogin  func(serverURL, token string) error
+	SaveServer func(serverURL, token string) error
 }
 
 // IsAvailable returns false in standard (non-GUI) builds.

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
   schedule:
     # Weekly security run (Monday 06:00 UTC) — only security jobs run on schedule
     - cron: '0 6 * * 1'
@@ -20,19 +20,23 @@ concurrency:
 jobs:
   lint:
     if: forgejo.event_name != 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     container:
       image: casjaysdev/go:latest
       options: "--user 0:0"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Regenerate embedded API specifications
+        run: go generate ./src/swagger
+      - name: Verify generated API specifications are current
+        run: git diff --exit-code -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
       - run: go vet ./...
       - run: staticcheck ./...
 
   secret-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # Full history — truffleHog scans the commit range
           fetch-depth: 0
@@ -46,19 +50,20 @@ jobs:
           elif [ "${{ forgejo.event_name }}" = "pull_request" ]; then
             BASE="${{ forgejo.event.pull_request.base.sha }}"; HEAD="${{ forgejo.event.pull_request.head.sha }}"
           fi
-          echo "base=$BASE" >> "$FORGEJO_OUTPUT"
-          echo "head=$HEAD" >> "$FORGEJO_OUTPUT"
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "head=$HEAD" >> "$GITHUB_OUTPUT"
       - name: Scan for secrets (truffleHog)
         uses: trufflesecurity/trufflehog@b2b0a92070f206ab7b5a1105d82a7f2f48d92341  # v3.99.0
         with:
           base: ${{ steps.range.outputs.base }}
           head: ${{ steps.range.outputs.head }}
-          extra_args: --results=verified,unknown
+          # Range scans (push/PR) block on verified AND unknown; a full-history scan (empty base) blocks only on verified
+          extra_args: --results=${{ steps.range.outputs.base == '' && 'verified' || 'verified,unknown' }}
 
   workflow-policy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Enforce SHA-pinned third-party actions
         run: |
           # Every third-party action must be pinned to a full 40-char commit SHA
@@ -71,14 +76,18 @@ jobs:
 
   test:
     if: forgejo.event_name != 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     container:
       image: casjaysdev/go:latest
       options: "--user 0:0"
     env:
       CGO_ENABLED: "0"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Regenerate embedded API specifications
+        run: go generate ./src/swagger
+      - name: Verify generated API specifications are current
+        run: git diff --exit-code -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
       - name: Run tests with coverage
         run: |
           mkdir -p "/tmp/${{ forgejo.repository_owner }}"
@@ -97,31 +106,35 @@ jobs:
   build:
     if: forgejo.event_name != 'schedule'
     needs: [lint, test]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     container:
       image: casjaysdev/go:latest
       options: "--user 0:0"
     env:
       CGO_ENABLED: "0"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-      - run: go build -trimpath -buildvcs=false ./...
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Regenerate embedded API specifications
+        run: go generate ./src/swagger
+      - name: Verify generated API specifications are current
+        run: git diff --exit-code -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
+      - run: go build -buildvcs=false ./...
 
   vuln-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     container:
       image: casjaysdev/go:latest
       options: "--user 0:0"
     env:
       GOFLAGS: -buildvcs=false
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - run: govulncheck ./...
 
   image-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Build image for scanning
         # Only when the project ships a Docker image
         if: hashFiles('docker/Dockerfile') != ''

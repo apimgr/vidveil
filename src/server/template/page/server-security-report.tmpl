@@ -3,20 +3,27 @@
 {{end}}
 
 {{define "content"}}
-<div class="content">
-    <div class="prose">
-        <h1>{{ t "security.report_title" }}</h1>
+<div class="container container-md">
+        <header class="page-header">
+            <nav class="breadcrumb" aria-label="{{ t "a11y.breadcrumb" }}"><a href="{{ path "/server/security" }}">{{ t "security.title" }}</a></nav>
+            <h1 class="page-title">{{ t "security.report_title" }}</h1>
+            <p class="page-lead">{{ t "security.report_status" }}: {{.Status}}</p>
+        </header>
 
-        <p><strong>{{ t "security.report_tracking_id" }}</strong> {{.TrackingID}}</p>
+        <section class="section-card" aria-labelledby="security-report-details-heading">
+        <h2 id="security-report-details-heading">{{ t "security.report_tracking_id" }}</h2>
+        <p><code>{{.TrackingID}}</code></p>
         <p><strong>{{ t "security.report_status" }}</strong> {{.Status}}</p>
         <p><strong>{{ t "security.report_submitted" }}</strong> {{.CreatedAt}}</p>
+        </section>
 
         {{if .MaintainerComments}}
-        <h2>{{ t "security.report_maintainer_comments" }}</h2>
+        <section class="section-card" aria-labelledby="security-report-comments-heading">
+        <h2 id="security-report-comments-heading">{{ t "security.report_maintainer_comments" }}</h2>
         <p>{{.MaintainerComments}}</p>
+        </section>
         {{end}}
 
         <p><a href="{{ path "/server/security" }}">{{ t "security.back_to_security" }}</a></p>
-    </div>
 </div>
 {{end}}

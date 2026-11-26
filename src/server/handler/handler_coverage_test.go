@@ -1260,7 +1260,7 @@ func TestRenderErrorPage_FallsBackToPlainText(t *testing.T) {
 		t.Errorf("RenderErrorPage status = %d, want %d", rr.Code, http.StatusNotFound)
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, "Not Found") {
+	if !strings.Contains(body, "NOT FOUND") {
 		t.Errorf("RenderErrorPage body missing title: %q", body)
 	}
 }

@@ -19,6 +19,19 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 )
 
+func TestEnabledRequiresResolvedProvider(t *testing.T) {
+	svc := NewService(config.I2PConfig{Enabled: true}, t.TempDir(), t.TempDir(), t.TempDir(), nil)
+	if svc.Enabled() {
+		t.Fatal("Enabled() = true without a resolved provider")
+	}
+	svc.mu.Lock()
+	svc.provider = ProviderI2PD
+	svc.mu.Unlock()
+	if !svc.Enabled() {
+		t.Fatal("Enabled() = false after provider resolution")
+	}
+}
+
 func TestDisabledServiceDoesNotCreateRuntimeState(t *testing.T) {
 	root := t.TempDir()
 	svc := NewService(config.DefaultI2PConfig(), filepath.Join(root, "config"), filepath.Join(root, "data"), filepath.Join(root, "logs"), nil)
@@ -54,7 +67,7 @@ func TestNewBackendListenerIsLoopbackOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect to accepting I2P listener: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	accepted, err := listener.Accept()
 	if err != nil {
 		t.Fatalf("accept queued backend connection: %v", err)
@@ -97,7 +110,7 @@ func TestSAMHealthCheckUsesIndependentHelloProbe(t *testing.T) {
 		if acceptErr != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		reader := bufio.NewReader(conn)
 		if _, readErr := reader.ReadString('\n'); readErr == nil {
 			_, _ = conn.Write([]byte("HELLO REPLY RESULT=OK VERSION=3.3\n"))
@@ -106,8 +119,8 @@ func TestSAMHealthCheckUsesIndependentHelloProbe(t *testing.T) {
 	}()
 	control, controlPeer := net.Pipe()
 	forward, forwardPeer := net.Pipe()
-	defer controlPeer.Close()
-	defer forwardPeer.Close()
+	defer func() { _ = controlPeer.Close() }()
+	defer func() { _ = forwardPeer.Close() }()
 	svc := &Service{cfg: config.I2PConfig{Enabled: true, SAMAddress: listener.Addr().String()}, listener: listener, provider: ProviderSAM, address: "stable.b32.i2p", sam: control, forward: forward}
 	if err := svc.CheckHealth(context.Background()); err != nil {
 		t.Fatalf("CheckHealth with a live SAM session: %v", err)
@@ -202,7 +215,7 @@ func TestStartSAMUsesSeparateForwardSocketAndPersistsPrivateKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	private := make([]byte, 600)
 	binary.BigEndian.PutUint16(private[385:387], 4)
 	privateKey := strings.NewReplacer("+", "-", "/", "~").Replace(base64.StdEncoding.EncodeToString(private))
@@ -214,7 +227,7 @@ func TestStartSAMUsesSeparateForwardSocketAndPersistsPrivateKey(t *testing.T) {
 			serverErr <- acceptErr
 			return
 		}
-		defer control.Close()
+		defer func() { _ = control.Close() }()
 		reader := bufio.NewReader(control)
 		if err := samTestHello(reader, control); err != nil {
 			serverErr <- err
@@ -252,7 +265,7 @@ func TestStartSAMUsesSeparateForwardSocketAndPersistsPrivateKey(t *testing.T) {
 			serverErr <- acceptErr
 			return
 		}
-		defer forward.Close()
+		defer func() { _ = forward.Close() }()
 		forwardReader := bufio.NewReader(forward)
 		if err := samTestHello(forwardReader, forward); err != nil {
 			serverErr <- err
@@ -276,8 +289,8 @@ func TestStartSAMUsesSeparateForwardSocketAndPersistsPrivateKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("startSAM: %v", err)
 	}
-	defer control.Close()
-	defer forward.Close()
+	defer func() { _ = control.Close() }()
+	defer func() { _ = forward.Close() }()
 	if err := <-serverErr; err != nil {
 		t.Fatalf("fake SAM server: %v", err)
 	}

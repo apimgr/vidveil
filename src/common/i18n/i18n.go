@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -38,29 +39,15 @@ var localesFS embed.FS
 // DefaultLocale is the default locale per AI.md
 const DefaultLocale = "en"
 
-// rtlLocales lists locale prefixes that render right-to-left per AI.md PART 30.
-var rtlLocales = map[string]bool{
-	"ar": true,
-	"fa": true,
-	"he": true,
-	"ur": true,
-	"ps": true,
-	"sd": true,
-	"yi": true,
-}
-
 // Direction returns "rtl" for right-to-left locales and "ltr" otherwise per
 // AI.md PART 30 (<html lang dir> A11Y requirement).
 func Direction(locale string) string {
-	if locale == "" {
-		return "ltr"
-	}
 	base := strings.ToLower(locale)
 	if idx := strings.IndexAny(base, "-_"); idx > 0 {
 		base = base[:idx]
 	}
-	if rtlLocales[base] {
-		return "rtl"
+	if info, ok := LocaleInfoFor(base); ok {
+		return info.Direction
 	}
 	return "ltr"
 }
@@ -69,25 +56,7 @@ func Direction(locale string) string {
 // It checks the "lang" query parameter, then the "lang" cookie, then the Accept-Language header.
 // Falls back to DefaultLocale ("en") if none match.
 func DetectLocale(r *http.Request) string {
-	if v := strings.TrimSpace(r.URL.Query().Get("lang")); v != "" {
-		return strings.ToLower(v)
-	}
-	for _, c := range r.Cookies() {
-		if c.Name == "lang" && c.Value != "" {
-			return strings.ToLower(c.Value)
-		}
-	}
-	if al := r.Header.Get("Accept-Language"); al != "" {
-		first := al
-		if idx := strings.IndexAny(first, ",;"); idx > 0 {
-			first = first[:idx]
-		}
-		first = strings.TrimSpace(first)
-		if first != "" {
-			return strings.ToLower(first)
-		}
-	}
-	return DefaultLocale
+	return GlobalTranslator().GetLocale(r)
 }
 
 // Translator handles translations per AI.md PART 30
@@ -410,15 +379,15 @@ func replaceNamedValues(translation string, args ...interface{}) string {
 func (t *Translator) GetLocale(r *http.Request) string {
 	// Check query parameter first
 	if locale := r.URL.Query().Get("lang"); locale != "" {
-		if t.HasLocale(locale) {
-			return locale
+		if matched, ok := t.matchLocale(locale); ok {
+			return matched
 		}
 	}
 
 	// Check cookie (name: "lang" per AI.md PART 30)
 	if cookie, err := r.Cookie("lang"); err == nil && cookie.Value != "" {
-		if t.HasLocale(cookie.Value) {
-			return cookie.Value
+		if matched, ok := t.matchLocale(cookie.Value); ok {
+			return matched
 		}
 	}
 
@@ -427,14 +396,8 @@ func (t *Translator) GetLocale(r *http.Request) string {
 	if acceptLang != "" {
 		locales := parseAcceptLanguage(acceptLang)
 		for _, locale := range locales {
-			if t.HasLocale(locale) {
-				return locale
-			}
-			// Try language part
-			if idx := strings.Index(locale, "-"); idx > 0 {
-				if t.HasLocale(locale[:idx]) {
-					return locale[:idx]
-				}
+			if matched, ok := t.matchLocale(locale); ok {
+				return matched
 			}
 		}
 	}
@@ -442,19 +405,64 @@ func (t *Translator) GetLocale(r *http.Request) string {
 	return t.fallback
 }
 
+func (t *Translator) matchLocale(value string) (string, bool) {
+	value = strings.TrimSpace(strings.ReplaceAll(value, "_", "-"))
+	for _, locale := range t.AvailableLocales() {
+		if strings.EqualFold(locale, value) {
+			return locale, true
+		}
+	}
+	if idx := strings.IndexByte(value, '-'); idx > 0 {
+		for _, locale := range t.AvailableLocales() {
+			if strings.EqualFold(locale, value[:idx]) {
+				return locale, true
+			}
+		}
+	}
+	return "", false
+}
+
 // parseAcceptLanguage parses the Accept-Language header
 func parseAcceptLanguage(header string) []string {
-	var locales []string
-	parts := strings.Split(header, ",")
-	for _, part := range parts {
-		// Remove quality value
-		if idx := strings.Index(part, ";"); idx > 0 {
-			part = part[:idx]
+	type candidate struct {
+		locale  string
+		quality float64
+		order   int
+	}
+	var candidates []candidate
+	for order, part := range strings.Split(header, ",") {
+		fields := strings.Split(part, ";")
+		locale := strings.ToLower(strings.TrimSpace(fields[0]))
+		if locale == "" || locale == "*" {
+			continue
 		}
-		locale := strings.TrimSpace(part)
-		if locale != "" {
-			locales = append(locales, strings.ToLower(locale))
+		quality := 1.0
+		valid := true
+		for _, parameter := range fields[1:] {
+			name, value, ok := strings.Cut(strings.TrimSpace(parameter), "=")
+			if !ok || !strings.EqualFold(strings.TrimSpace(name), "q") {
+				continue
+			}
+			parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+			if err != nil || parsed < 0 || parsed > 1 {
+				valid = false
+				break
+			}
+			quality = parsed
 		}
+		if valid && quality > 0 {
+			candidates = append(candidates, candidate{locale: locale, quality: quality, order: order})
+		}
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].quality == candidates[j].quality {
+			return candidates[i].order < candidates[j].order
+		}
+		return candidates[i].quality > candidates[j].quality
+	})
+	locales := make([]string, len(candidates))
+	for i, item := range candidates {
+		locales[i] = item.locale
 	}
 	return locales
 }
@@ -525,47 +533,56 @@ func (t *Translator) GetAllTranslations(locale string) map[string]string {
 // it via cookie when ?lang= is provided, and adds the locale to the request context
 // per AI.md PART 30: ?lang= → lang cookie → Accept-Language → default (en).
 func (t *Translator) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		locale := ""
+	return t.MiddlewareWithSecure(func(r *http.Request) bool { return r.TLS != nil })(next)
+}
 
-		// 1. ?lang= query parameter — highest priority; also sets the lang cookie
-		if q := strings.TrimSpace(r.URL.Query().Get("lang")); q != "" {
-			if t.HasLocale(q) {
-				locale = q
-				http.SetCookie(w, &http.Cookie{
-					Name:  "lang",
-					Value: locale,
-					Path:  "/",
-					// 1 year retention
-					MaxAge:   365 * 24 * 60 * 60,
-					SameSite: http.SameSiteLaxMode,
-					Secure:   r.TLS != nil,
-					HttpOnly: true,
-				})
+// MiddlewareWithSecure resolves language preferences and lets the application
+// supply its trusted request-scheme decision for cookie security attributes.
+func (t *Translator) MiddlewareWithSecure(isSecure func(*http.Request) bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			locale := ""
+
+			// 1. ?lang= query parameter — highest priority; also sets the lang cookie
+			if q := strings.TrimSpace(r.URL.Query().Get("lang")); q != "" {
+				if matched, ok := t.matchLocale(q); ok {
+					locale = matched
+					http.SetCookie(w, &http.Cookie{
+						Name:  "lang",
+						Value: locale,
+						Path:  "/",
+						// 1 year retention
+						MaxAge:   365 * 24 * 60 * 60,
+						SameSite: http.SameSiteLaxMode,
+						Secure:   isSecure != nil && isSecure(r),
+					})
+				}
 			}
-		}
 
-		// 2. lang cookie
-		if locale == "" {
-			if c, err := r.Cookie("lang"); err == nil && t.HasLocale(c.Value) {
-				locale = c.Value
+			// 2. lang cookie
+			if locale == "" {
+				if c, err := r.Cookie("lang"); err == nil {
+					if matched, ok := t.matchLocale(c.Value); ok {
+						locale = matched
+					}
+				}
 			}
-		}
 
-		// 3. Accept-Language header
-		if locale == "" {
-			locale = t.GetLocale(r)
-		}
+			// 3. Accept-Language header
+			if locale == "" {
+				locale = t.GetLocale(r)
+			}
 
-		// 4. Default
-		if locale == "" {
-			locale = t.fallback
-		}
+			// 4. Default
+			if locale == "" {
+				locale = t.fallback
+			}
 
-		// Store resolved locale in request context per AI.md PART 30.
-		ctx := context.WithValue(r.Context(), langKey, locale)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+			// Store resolved locale in request context per AI.md PART 30.
+			ctx := context.WithValue(r.Context(), langKey, locale)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }
 
 // TemplateFunc returns a template function for use in Go templates

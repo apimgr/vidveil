@@ -3,37 +3,45 @@
 {{end}}
 
 {{define "content"}}
-<div class="content">
-    <div class="prose">
-        <h1>{{ t "security.policy_title" }}</h1>
+<div class="container container-md">
+        <header class="page-header">
+            <nav class="breadcrumb" aria-label="{{ t "a11y.breadcrumb" }}"><a href="{{ path "/server/security" }}">{{ t "security.title" }}</a></nav>
+            <h1 class="page-title">{{ t "security.policy_title" }}</h1>
+            <p class="page-lead">{{ tf "security.policy_window_body" "days" .DisclosureDays }}</p>
+        </header>
 
         {{if .PolicyText}}
+        <section class="section-card" aria-labelledby="security-policy-heading">
+        <h2 id="security-policy-heading">{{ t "security.policy_window_title" }}</h2>
         <p>{{.PolicyText}}</p>
+        </section>
         {{else}}
-        <h2>{{ t "security.policy_window_title" }}</h2>
-        <p>{{tf "security.policy_window_body" "days" .DisclosureDays}}</p>
-
-        <h2>{{ t "security.policy_in_scope_title" }}</h2>
+        <section class="section-card" aria-labelledby="security-policy-in-scope-heading">
+        <h2 id="security-policy-in-scope-heading">{{ t "security.policy_in_scope_title" }}</h2>
         <ul>
             <li>{{ t "security.policy_in_scope_1" }}</li>
             <li>{{ t "security.policy_in_scope_2" }}</li>
             <li>{{ t "security.policy_in_scope_3" }}</li>
         </ul>
+        </section>
 
-        <h2>{{ t "security.policy_out_of_scope_title" }}</h2>
+        <section class="section-card" aria-labelledby="security-policy-out-of-scope-heading">
+        <h2 id="security-policy-out-of-scope-heading">{{ t "security.policy_out_of_scope_title" }}</h2>
         <ul>
             <li>{{ t "security.policy_out_of_scope_1" }}</li>
             <li>{{ t "security.policy_out_of_scope_2" }}</li>
             <li>{{ t "security.policy_out_of_scope_3" }}</li>
             <li>{{ t "security.policy_out_of_scope_4" }}</li>
         </ul>
+        </section>
 
-        <h2>{{ t "security.policy_safe_harbor_title" }}</h2>
+        <section class="section-card" aria-labelledby="security-policy-safe-harbor-heading">
+        <h2 id="security-policy-safe-harbor-heading">{{ t "security.policy_safe_harbor_title" }}</h2>
         <p>{{ t "security.policy_safe_harbor_body_pre" }}
         <a href="{{ path "/server/security" }}">{{ t "security.policy_safe_harbor_link" }}</a>{{ t "security.policy_safe_harbor_body_post" }}</p>
+        </section>
         {{end}}
 
         <p><a href="{{ path "/server/security" }}">{{ t "security.back_to_security" }}</a></p>
-    </div>
 </div>
 {{end}}

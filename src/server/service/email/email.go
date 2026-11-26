@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"crypto/tls"
 	"embed"
+	"encoding/base64"
 	"fmt"
+	"mime"
 	"net"
 	"net/smtp"
 	"os"
@@ -258,6 +260,84 @@ func (s *EmailService) SendRaw(to, subject, body string) error {
 		return fmt.Errorf("email is not enabled")
 	}
 	return s.sendEmail(to, subject, body)
+}
+
+// SendRawAttachment sends an untemplated text message with one MIME-safe
+// attachment. The caller supplies already-encrypted bytes; this method never
+// transforms or logs the attachment payload.
+func (s *EmailService) SendRawAttachment(to, subject, body, filename, contentType string, payload []byte) error {
+	if !s.appConfig.Server.Notifications.Email.Enabled {
+		return fmt.Errorf("email is not enabled")
+	}
+	_, _, _, _, fromAddr, fromName, _ := s.effectiveEmailConfig()
+	message, err := BuildRawAttachmentMessage(fromName, fromAddr, to, subject, body, filename, contentType, payload)
+	if err != nil {
+		return err
+	}
+	return s.sendPrepared(to, message)
+}
+
+// BuildRawAttachmentMessage returns a MIME-safe message with one encrypted
+// attachment. It is shared by SMTP delivery and the security export command.
+func BuildRawAttachmentMessage(fromName, fromAddr, to, subject, body, filename, contentType string, payload []byte) ([]byte, error) {
+	if len(payload) == 0 {
+		return nil, fmt.Errorf("email attachment is empty")
+	}
+	filename = filepath.Base(strings.ReplaceAll(filename, "\\", "/"))
+	if filename == "." || filename == "" || strings.ContainsAny(filename, "\r\n\x00") {
+		return nil, fmt.Errorf("invalid email attachment filename")
+	}
+	if contentType == "" || strings.ContainsAny(contentType, "\r\n") {
+		return nil, fmt.Errorf("invalid email attachment content type")
+	}
+	boundary := fmt.Sprintf("vidveil-%x", time.Now().UnixNano())
+	var msg bytes.Buffer
+	fromHeader := sanitizeEmailHeader(fromAddr)
+	if fromName != "" {
+		fromHeader = sanitizeEmailHeader(fromName) + " <" + fromHeader + ">"
+	}
+	fmt.Fprintf(&msg, "From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=%q\r\n\r\n", fromHeader, sanitizeEmailHeader(to), sanitizeEmailHeader(subject), boundary)
+	fmt.Fprintf(&msg, "--%s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s\r\n", boundary, body)
+	params := mime.FormatMediaType("attachment", map[string]string{"filename": filename})
+	fmt.Fprintf(&msg, "--%s\r\nContent-Type: %s\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: %s\r\n\r\n", boundary, contentType, params)
+	for offset := 0; offset < len(payload); offset += 57 {
+		end := offset + 57
+		if end > len(payload) {
+			end = len(payload)
+		}
+		msg.WriteString(base64.StdEncoding.EncodeToString(payload[offset:end]))
+		msg.WriteString("\r\n")
+	}
+	fmt.Fprintf(&msg, "--%s--\r\n", boundary)
+	return msg.Bytes(), nil
+}
+
+func (s *EmailService) sendPrepared(to string, message []byte) error {
+	host, port, username, password, fromAddr, _, tlsMode := s.effectiveEmailConfig()
+	if host == "" {
+		if h, p := s.autodetectSMTP(); h != "" {
+			host, port = h, p
+		}
+	}
+	if host == "" {
+		return fmt.Errorf("no SMTP server configured")
+	}
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
+	var auth smtp.Auth
+	if username != "" {
+		auth = smtp.PlainAuth("", username, password, host)
+	}
+	if tlsMode == "" || tlsMode == "auto" {
+		if port == 465 {
+			tlsMode = "tls"
+		} else {
+			tlsMode = "starttls"
+		}
+	}
+	if tlsMode == "tls" {
+		return s.sendTLS(addr, host, auth, fromAddr, to, message)
+	}
+	return smtp.SendMail(addr, auth, fromAddr, []string{to}, message)
 }
 
 // SendContact sends a plain-text contact message from the configured server

@@ -274,11 +274,16 @@ func TestServer_Unknown_Returns404(t *testing.T) {
 
 func TestServer_MCPAliasesShareStatelessEndpoint(t *testing.T) {
 	s := newTestServer(t)
+	s.appConfig.Server.Token = "mcp-test-operator-token"
+	s.RefreshOperatorTokenHash()
 	paths := []string{"/api/v1/server/mcp", "/api/mcp", "/mcp"}
 	for _, path := range paths {
-		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/clientCapabilities":{"sampling":{}},"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}`))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json, text/event-stream")
+		req.Header.Set("Authorization", "Bearer mcp-test-operator-token")
+		req.Header.Set("MCP-Protocol-Version", "2026-07-28")
+		req.Header.Set("Mcp-Method", "tools/list")
 		rr := httptest.NewRecorder()
 		s.router.ServeHTTP(rr, req)
 		if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"name":"searchVideos"`) {
@@ -304,13 +309,15 @@ func TestServer_MCPAliasesShareStatelessEndpoint(t *testing.T) {
 		{name: "X-API-Key", value: s.appConfig.Server.Token, want: false},
 		{name: "Authorization", value: "Bearer " + s.appConfig.Server.Token, want: true},
 	} {
-		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/clientCapabilities":{"sampling":{}},"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}`))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json, text/event-stream")
+		req.Header.Set("MCP-Protocol-Version", "2026-07-28")
+		req.Header.Set("Mcp-Method", "tools/list")
 		req.Header.Set(credential.name, credential.value)
 		rr := httptest.NewRecorder()
 		s.router.ServeHTTP(rr, req)
-		listed := strings.Contains(rr.Body.String(), "restoreServerBackup")
+		listed := strings.Contains(rr.Body.String(), "getOperatorStatus")
 		if listed != credential.want {
 			t.Errorf("MCP operator tool visibility with %s = %t, want %t", credential.name, listed, credential.want)
 		}
@@ -320,12 +327,15 @@ func TestServer_MCPAliasesShareStatelessEndpoint(t *testing.T) {
 func TestServer_GuestPreferenceAPIUsesCanonicalRoutesWithoutCSRF(t *testing.T) {
 	s := newTestServer(t)
 	get := httptest.NewRecorder()
-	s.router.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/api/v1/server/preferences", nil))
+	getRequest := httptest.NewRequest(http.MethodGet, "/api/v1/server/preferences", nil)
+	getRequest.Header.Set("Accept", "application/json")
+	s.router.ServeHTTP(get, getRequest)
 	if get.Code != http.StatusOK || !strings.Contains(get.Body.String(), `"prefs"`) {
 		t.Fatalf("GET preferences: status=%d body=%s", get.Code, get.Body.String())
 	}
 	post := httptest.NewRequest(http.MethodPost, "/api/v1/server/preferences", strings.NewReader(`{"theme":"light"}`))
 	post.Header.Set("Content-Type", "application/json")
+	post.Header.Set("Accept", "application/json")
 	updated := httptest.NewRecorder()
 	s.router.ServeHTTP(updated, post)
 	if updated.Code != http.StatusOK || !strings.Contains(updated.Body.String(), `"applied"`) {

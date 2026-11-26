@@ -367,8 +367,8 @@ func TestResolveLocale_QueryParam(t *testing.T) {
 func TestResolveLocale_QueryParamUpperCase(t *testing.T) {
 	r := httptest.NewRequest("GET", "/?lang=ZH-TW", nil)
 	got := resolveLocale(r)
-	if got != "zh-tw" {
-		t.Errorf("resolveLocale ?lang=ZH-TW = %q, want zh-tw", got)
+	if got != "zh" {
+		t.Errorf("resolveLocale ?lang=ZH-TW = %q, want zh", got)
 	}
 }
 
@@ -387,8 +387,8 @@ func TestResolveLocale_AcceptLanguage(t *testing.T) {
 	r := httptest.NewRequest("GET", "/", nil)
 	r.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	got := resolveLocale(r)
-	if got != "en-us" {
-		t.Errorf("resolveLocale Accept-Language = %q, want en-us", got)
+	if got != "en" {
+		t.Errorf("resolveLocale Accept-Language = %q, want en", got)
 	}
 }
 
@@ -417,8 +417,8 @@ func TestResolveLocale_CookieOverridesAcceptLanguage(t *testing.T) {
 	r.AddCookie(&http.Cookie{Name: "lang", Value: "pt"})
 	r.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	got := resolveLocale(r)
-	if got != "pt" {
-		t.Errorf("resolveLocale cookie overrides Accept-Language = %q, want pt", got)
+	if got != "en" {
+		t.Errorf("resolveLocale unsupported cookie falls back = %q, want en", got)
 	}
 }
 

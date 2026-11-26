@@ -50,6 +50,7 @@ type testTorChecker struct {
 	allowIPForward bool
 	useNetwork     bool
 	outbound       bool
+	info           map[string]interface{}
 }
 
 func (t *testTorChecker) IsEnabled() bool          { return t.enabled }
@@ -59,6 +60,9 @@ func (t *testTorChecker) AllowUserIPForward() bool { return t.allowIPForward }
 func (t *testTorChecker) UseNetworkEnabled() bool  { return t.useNetwork }
 func (t *testTorChecker) OutboundEnabled() bool    { return t.outbound }
 func (t *testTorChecker) GetInfo() map[string]interface{} {
+	if t.info != nil {
+		return t.info
+	}
 	return map[string]interface{}{"status": "disabled"}
 }
 func (t *testTorChecker) GetHTTPClient(_ bool) *http.Client {
@@ -937,14 +941,14 @@ func TestGetTorStatus_NoStatusInInfo_Running_ReturnsHealthy(t *testing.T) {
 	}
 }
 
-func TestGetTorStatus_NoStatusInInfo_NotRunning_ReturnsDisabled(t *testing.T) {
+func TestGetTorStatus_NoStatusInInfo_NotRunning_ReturnsUnavailable(t *testing.T) {
 	h := &SearchHandler{
 		appConfig: createTestConfig(),
 		torSvc:    &torCheckerNoStatus{running: false},
 	}
 	status := h.getTorStatus()
-	if status != "disabled" {
-		t.Errorf("getTorStatus(no status, not running): got %q, want disabled", status)
+	if status != "unavailable" {
+		t.Errorf("getTorStatus(no status, not running): got %q, want unavailable", status)
 	}
 }
 
@@ -975,13 +979,12 @@ func TestGetTorStatus_NormalizesProviderStates(t *testing.T) {
 
 // ── getTorHostname — covers lines 305-308 ────────────────────────────────────
 
-func TestGetTorHostname_WithHostname_ReturnsIt(t *testing.T) {
+func TestGetTorHostname_FromOnionAddress_ReturnsIt(t *testing.T) {
 	h := &SearchHandler{
 		appConfig: createTestConfig(),
-		torSvc:    &testTorChecker{enabled: true, running: true},
+		torSvc:    &testTorChecker{enabled: true, running: true, info: map[string]interface{}{"onion_address": "abcdefghijklmnopabcdefghijklmnopabcdefghijklmnopabcdefgh.onion"}},
 	}
-	// testTorChecker.GetInfo returns {"status": "disabled"}, no hostname
-	hostname := h.getTorHostname()
-	// With no "hostname" key, returns ""
-	_ = hostname
+	if got := h.getTorHostname(); got != "abcdefghijklmnopabcdefghijklmnopabcdefghijklmnopabcdefgh.onion" {
+		t.Errorf("getTorHostname() = %q", got)
+	}
 }

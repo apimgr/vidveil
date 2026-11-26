@@ -209,9 +209,17 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	s.serverPort = serverPort
+
+	// Confirm the provider before creating files or allocating a listener.
+	torPath := findTorBinary(s.torConfig)
+	if torPath == "" {
+		s.status = TorServiceStatusNoTorBinary
+		s.logger.Info("Tor binary not found, hidden service disabled", nil)
+		return nil
+	}
 	s.status = TorServiceStatusStarting
 	s.startTime = time.Now()
-	s.serverPort = serverPort
 
 	// Ensure data directories exist per AI.md PART 31 spec.
 	// DataDir = {data_dir}/tor/ (s.dataDir); siteDir = {data_dir}/tor/site/
@@ -248,22 +256,6 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 				return fmt.Errorf("chmod tor dir %s: %w", dir, err)
 			}
 		}
-	}
-
-	// Find Tor binary per AI.md PART 31: config server.tor.binary -> PATH -> OS common locations
-	torPath := findTorBinary(s.torConfig)
-	if torPath == "" {
-		// Tor binary not found - fall back to key-only mode
-		s.logger.Info("Tor binary not found, running in key-only mode", nil)
-		s.status = TorServiceStatusNoTorBinary
-
-		// Still load/generate keys for address generation
-		if err := s.loadOrGenerateKeys(); err != nil {
-			s.status = TorServiceStatusError
-			return fmt.Errorf("failed to load/generate keys: %w", err)
-		}
-		s.onionAddress = s.generateOnionAddress()
-		return nil
 	}
 
 	s.logger.Info("Found Tor binary", map[string]interface{}{"path": torPath})
@@ -693,7 +685,7 @@ func (s *TorService) GetUptime() string {
 func (s *TorService) IsEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.status == TorServiceStatusConnected
+	return s.status != TorServiceStatusDisabled && s.status != TorServiceStatusNoTorBinary
 }
 
 // IsRunning returns whether Tor process is actually running
@@ -1024,7 +1016,7 @@ func (s *TorService) GetInfo() map[string]interface{} {
 
 	// A generated onion key is retained for later use, but without the Tor
 	// binary the hidden-service feature is disabled per AI.md PART 31.
-	enabled := s.status == TorServiceStatusConnected
+	enabled := s.status != TorServiceStatusDisabled && s.status != TorServiceStatusNoTorBinary
 
 	info := map[string]interface{}{
 		"enabled": enabled,

@@ -9,7 +9,6 @@
     <a href="#navigation" class="skip-link">{{ t "a11y.skip_to_nav" }}</a>
     {{template "public/site-banner" .}}
     {{template "public/header" .}}
-    {{template "public/nav" .}}
     <main class="favorites-page" id="main-content" role="main">
         <div class="favorites-toolbar">
             <h1>{{ t "favorites.title" }}</h1>
@@ -48,7 +47,7 @@
             {{range .Favorites}}
             <div class="video-card" role="listitem" data-source="{{.Source}}" data-fav-id="{{.ID}}">
                 <a href="{{.URL}}" rel="noopener noreferrer nofollow" aria-label="{{.Title}} - {{.Source}}">
-                    {{if .Thumbnail}}<img src="{{ path "/api/v1/proxy/thumbnails" }}?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{else}}<img src="{{ path "/static/images/placeholder.svg" }}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{end}}
+                    {{if .Thumbnail}}<img src="{{ path $.APIBase }}/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{else}}<img src="{{ path "/static/images/placeholder.svg" }}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{end}}
                     <div class="video-info">
                         <h3 class="video-title">{{.Title}}</h3>
                         <p class="video-source">{{.Source}}</p>

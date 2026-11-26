@@ -7,12 +7,11 @@ on:
   push:
     branches:
       - main
-      - master
   workflow_dispatch:
 
 concurrency:
   group: devel-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/devel' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/beta' }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -40,7 +39,7 @@ jobs:
           echo "build_epoch=$(date -u +%s)" >> "$GITHUB_OUTPUT"
 
   build:
-    if: github.event_name == 'schedule' || (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
     needs: [version]
     runs-on: ubuntu-26.04
     container:
@@ -70,6 +69,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Regenerate embedded API specifications
+        run: go generate ./src/swagger
+      - name: Verify generated API specifications are current
+        run: git diff --exit-code -- src/swagger/openapi_generated.json src/graphql/schema_generated.graphql
 
       - name: Set build info
         run: |

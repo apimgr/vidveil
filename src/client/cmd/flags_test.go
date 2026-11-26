@@ -202,6 +202,22 @@ func TestParseCLIGlobalFlagsSupportsGlobalFlagsAfterCommand(t *testing.T) {
 	}
 }
 
+func TestParseCLIGlobalFlagsAcceptsUpdateConsentWithCommand(t *testing.T) {
+	for _, args := range [][]string{
+		{"--update", "yes", "search", "demo"},
+		{"search", "demo", "--update", "yes"},
+	} {
+		updateConsentProvided = false
+		remaining := ParseCLIGlobalFlags(args)
+		if !updateConsentProvided {
+			t.Errorf("ParseCLIGlobalFlags(%q) did not record update consent", args)
+		}
+		if len(remaining) == 0 || remaining[0] != "search" {
+			t.Errorf("ParseCLIGlobalFlags(%q) = %q, want search command retained", args, remaining)
+		}
+	}
+}
+
 func TestParseCLIGlobalFlagsResolvesNamedConfigFiles(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
@@ -1479,6 +1495,7 @@ func TestWriteCLIConfigFileWritesDurationTimeoutString(t *testing.T) {
 
 func TestTUIQuestionMarkTogglesShortcutsHelp(t *testing.T) {
 	model := createInitialTUIModel()
+	model.activeView = TUICommandSearch
 
 	updatedModel, command := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
 	if command != nil {
@@ -1509,13 +1526,14 @@ func TestTUIQuestionMarkTogglesShortcutsHelp(t *testing.T) {
 
 func TestTUIViewShowsShortcutsHelp(t *testing.T) {
 	model := createInitialTUIModel()
+	model.activeView = TUICommandSearch
 	model.showShortcutsHelp = true
 
 	viewOutput := model.View()
-	if !strings.Contains(viewOutput, "Shortcuts:") {
+	if !strings.Contains(viewOutput, tuiTranslate(model.language, "shortcuts")) {
 		t.Fatalf("view missing shortcuts heading:\n%s", viewOutput)
 	}
-	if !strings.Contains(viewOutput, "  ?      toggle this help") {
+	if !strings.Contains(viewOutput, "  ?      "+tuiTranslate(model.language, "shortcut_toggle_help")) {
 		t.Fatalf("view missing shortcuts help line:\n%s", viewOutput)
 	}
 }

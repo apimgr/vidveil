@@ -37,11 +37,51 @@ type SearchResult struct {
 	Title       string   `json:"title"`
 	URL         string   `json:"url"`
 	Thumbnail   string   `json:"thumbnail"`
+	PreviewURL  string   `json:"preview_url"`
+	DownloadURL string   `json:"download_url"`
 	Duration    string   `json:"duration"`
 	Views       string   `json:"views"`
 	Engine      string   `json:"source"`
 	Description string   `json:"description,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
+}
+
+const (
+	SearchFieldStatHasThumbnail   = "has_thumbnail"
+	SearchFieldStatHasPreviewURL  = "has_preview_url"
+	SearchFieldStatHasDownloadURL = "has_download_url"
+	SearchFieldStatHasDuration    = "has_duration"
+	SearchFieldStatHasViews       = "has_views"
+)
+
+// CountSearchResultFields reports how many results provide each optional
+// media field; CLI and GUI probe screens use the same field definitions.
+func CountSearchResultFields(results []SearchResult) map[string]int {
+	counts := map[string]int{
+		SearchFieldStatHasThumbnail:   0,
+		SearchFieldStatHasPreviewURL:  0,
+		SearchFieldStatHasDownloadURL: 0,
+		SearchFieldStatHasDuration:    0,
+		SearchFieldStatHasViews:       0,
+	}
+	for _, result := range results {
+		if result.Thumbnail != "" {
+			counts[SearchFieldStatHasThumbnail]++
+		}
+		if result.PreviewURL != "" {
+			counts[SearchFieldStatHasPreviewURL]++
+		}
+		if result.DownloadURL != "" {
+			counts[SearchFieldStatHasDownloadURL]++
+		}
+		if result.Duration != "" {
+			counts[SearchFieldStatHasDuration]++
+		}
+		if result.Views != "" {
+			counts[SearchFieldStatHasViews]++
+		}
+	}
+	return counts
 }
 
 // SearchResponse is the API response for search.

@@ -3,13 +3,14 @@
 {{end}}
 
 {{define "content"}}
-<div class="content">
-    <div class="prose">
-        <h1>{{ t "security.title" }}</h1>
+<div class="container container-md">
+        <header class="page-header">
+            <h1 class="page-title">{{ t "security.title" }}</h1>
+            <p class="page-lead">{{ t "security.intro" }}</p>
+        </header>
 
-        <p>{{ t "security.intro" }}</p>
-
-        <h2>{{ t "security.channels_title" }}</h2>
+        <section class="section-card" aria-labelledby="security-channels-heading">
+        <h2 id="security-channels-heading">{{ t "security.channels_title" }}</h2>
         <p>{{ t "security.channels_intro" }}</p>
         <ul>
             {{range .Contacts}}
@@ -24,24 +25,28 @@
         {{if .HasPGPKey}}
         <p>{{ t "security.pgp_intro" }} <a href="{{ path "/.well-known/pgp-key.asc" }}">{{ t "security.pgp_link_text" }}</a>.</p>
         {{end}}
+        </section>
 
-        <h2>{{ t "security.how_to_report_title" }}</h2>
+        <section class="section-card" aria-labelledby="security-report-heading">
+        <h2 id="security-report-heading">{{ t "security.how_to_report_title" }}</h2>
         <p>{{tf "security.how_to_report_body" "days" .DisclosureDays}}</p>
         {{if .ContactEnabled}}
         {{if .SecurityContactURL}}
-        <p><a href="{{.SecurityContactURL}}">Submit a security report</a></p>
+        <p><a href="{{.SecurityContactURL}}">{{ t "contact.submit_security_report" }}</a></p>
         {{end}}
         {{if .ContactReportURL}}
-        <p>For terms violations, DMCA notices and privacy requests, use <a href="{{.ContactReportURL}}">the report form</a>.</p>
+        <p>{{ t "security.contact_other_reports" }} <a href="{{.ContactReportURL}}">{{ t "security.contact_report_form" }}</a>.</p>
         {{end}}
         {{end}}
+        </section>
 
-        <h2>{{ t "security.more_info_title" }}</h2>
+        <section class="section-card" aria-labelledby="security-more-heading">
+        <h2 id="security-more-heading">{{ t "security.more_info_title" }}</h2>
         <ul>
             <li><a href="{{ path "/server/security/policy" }}">{{ t "security.policy_link" }}</a></li>
             <li><a href="{{ path "/server/security/thanks" }}">{{ t "security.thanks_link" }}</a></li>
             <li><a href="{{ path "/.well-known/security.txt" }}">{{ t "security.txt_link" }}</a> {{ t "security.txt_link_suffix" }}</li>
         </ul>
-    </div>
+        </section>
 </div>
 {{end}}

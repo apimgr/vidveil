@@ -17,6 +17,7 @@ import (
 	"github.com/apimgr/vidveil/src/client/gui"
 	paths "github.com/apimgr/vidveil/src/client/paths"
 	"github.com/apimgr/vidveil/src/common/display"
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
 	"gopkg.in/yaml.v3"
@@ -193,6 +194,7 @@ func (cliServerConfig CLIServerConfig) MarshalYAML() (interface{}, error) {
 // CLIConfig holds CLI configuration
 // Per AI.md PART 1: Type names MUST be specific - "Config" is ambiguous
 type CLIConfig struct {
+	Lang    string           `yaml:"lang"`
 	Server  CLIServerConfig  `yaml:"server"`
 	Auth    CLIAuthConfig    `yaml:"auth"`
 	Token   string           `yaml:"token,omitempty"`
@@ -225,6 +227,7 @@ var (
 	requestTimeoutSeconds int
 	debugModeEnabled      bool
 	debugFlagProvided     bool
+	updateConsentProvided bool
 )
 
 // Global config and client
@@ -278,30 +281,19 @@ func ExecuteCLI() error {
 
 		// Priority 1: GUI mode — local display, not a remote session
 		if displayEnv.IsAutoDetectDisplayModeGUI() && gui.IsAvailable() {
-			// Per AI.md PART 32: CLI First-Run Flow — run setup wizard if unconfigured
-			if !IsServerConfigured() {
-				if err := runSetupWizard(); err != nil {
-					return err
-				}
-				if err := LoadCLIConfigFromFile(); err != nil {
-					return err
-				}
-				if err := initializeCLILogging(); err != nil {
-					return err
-				}
-				initAPIClient()
-				if err := checkCLIUpdateBeforeRequests(displayEnv.IsTerminal); err != nil {
-					return err
-				}
-				startCLIBackgroundDiscovery()
-			}
 			guiCfg := &gui.Config{
 				BinaryName: BinaryName,
 				Version:    Version,
+				Language:   resolveCLILanguage(),
+				FirstRun:   !IsServerConfigured(),
+				SaveLogin:  saveCLILogin,
+				SaveServer: saveCLIServerConfiguration,
 			}
 			if cliConfig != nil {
 				guiCfg.ServerURL = cliConfig.Server.Address
 				guiCfg.Token = cliConfig.Server.Token
+				guiCfg.APIVersion = cliConfig.Server.APIVersion
+				guiCfg.Timeout = cliConfig.Server.Timeout
 			}
 			return gui.Launch(guiCfg)
 		}
@@ -360,6 +352,10 @@ func ExecuteCLI() error {
 	case "probe":
 		// Probe command tests connection itself
 		return RunProbeCommand(args[1:])
+	case "health":
+		return RunHealthCommand(args[1:])
+	case "favorites":
+		return RunFavoritesCommand(args[1:])
 	default:
 		// Treat first arg as search query
 		// Check server connection before search
@@ -434,6 +430,7 @@ func closeCLILogging() {
 // Per AI.md PART 32: NO --tui/--cli/--gui flags - UI mode is auto-detected
 // Note: -h/--help and -v/--version only trigger exit if they appear BEFORE any command
 func ParseCLIGlobalFlags(args []string) []string {
+	updateConsentProvided = false
 	var remaining []string
 	commandSeen := false
 	i := 0
@@ -533,15 +530,24 @@ func ParseCLIGlobalFlags(args []string) []string {
 			// Per AI.md PART 32: --update [check|yes|branch <name>|--help]
 			updateArgs := make([]string, 0, 2)
 			j := i + 1
-			for j < len(args) && !strings.HasPrefix(args[j], "-") {
+			_, inlineUpdateValue, hasInlineUpdateValue := parseCLILongFlagArgument(args[i])
+			if hasInlineUpdateValue {
+				updateArgs = append(updateArgs, inlineUpdateValue)
+			} else if j < len(args) && !strings.HasPrefix(args[j], "-") {
 				updateArgs = append(updateArgs, args[j])
 				j++
-				if len(updateArgs) >= 2 {
-					break
-				}
+			}
+			if len(updateArgs) == 1 && updateArgs[0] == "branch" && j < len(args) && !strings.HasPrefix(args[j], "-") {
+				updateArgs = append(updateArgs, args[j])
+				j++
 			}
 			if j < len(args) && (args[j] == "--help" || args[j] == "-h") {
 				updateArgs = append(updateArgs, args[j])
+			}
+			if len(updateArgs) == 1 && updateArgs[0] == "yes" && (commandSeen || hasCLICommandAfter(args, j)) {
+				updateConsentProvided = true
+				i = j
+				continue
 			}
 			if err := RunCLIUpdateCommand(updateArgs); err != nil {
 				fmt.Fprintln(os.Stderr, err)
@@ -574,6 +580,32 @@ func ParseCLIGlobalFlags(args []string) []string {
 	return remaining
 }
 
+// hasCLICommandAfter reports whether a command follows a global update-consent flag.
+func hasCLICommandAfter(args []string, start int) bool {
+	for index := start; index < len(args); {
+		argument := args[index]
+		if !strings.HasPrefix(argument, "-") {
+			return true
+		}
+		flagName, _, inlineValue := parseCLILongFlagArgument(argument)
+		if !inlineValue && cliFlagTakesValue(flagName) && index+1 < len(args) {
+			index += 2
+			continue
+		}
+		index++
+	}
+	return false
+}
+
+func cliFlagTakesValue(flagName string) bool {
+	switch flagName {
+	case "--server", "--token", "--token-file", "--output", "--config", "--color", "--lang", "--timeout":
+		return true
+	default:
+		return false
+	}
+}
+
 // LoadCLIConfigFromFile loads CLI configuration from file
 // Per AI.md PART 1: Function names MUST reveal intent - "loadConfig" is ambiguous
 func LoadCLIConfigFromFile() error {
@@ -582,6 +614,7 @@ func LoadCLIConfigFromFile() error {
 	cliConfigHasSavedServerAddress = false
 
 	// Default config
+	cliConfig.Lang = "auto"
 	cliConfig.Server.APIVersion = "v1"
 	cliConfig.Server.Timeout = 30
 	cliConfig.Server.Retry = 3
@@ -1011,7 +1044,33 @@ func initAPIClient() {
 	// Per AI.md PART 8: --lang {code} selects the Accept-Language header sent
 	// with every CLI API request. Read from the environment so both the flag
 	// and a pre-set env var apply.
-	apiClient.SetLanguage(os.Getenv("VIDVEIL_LANG"))
+	apiClient.SetLanguage(resolveCLILanguage())
+}
+
+func resolveCLILanguage() string {
+	if language := strings.TrimSpace(os.Getenv("VIDVEIL_LANG")); language != "" {
+		return language
+	}
+	if cliConfig != nil && cliConfig.Lang != "" && cliConfig.Lang != "auto" {
+		return cliConfig.Lang
+	}
+	for _, variable := range []string{"LC_ALL", "LANG"} {
+		value := strings.TrimSpace(os.Getenv(variable))
+		if value == "" {
+			continue
+		}
+		value = strings.SplitN(value, ".", 2)[0]
+		value = strings.ReplaceAll(value, "_", "-")
+		if i18n.GlobalTranslator().HasLocale(value) {
+			return value
+		}
+		if prefix, _, found := strings.Cut(value, "-"); found {
+			if i18n.GlobalTranslator().HasLocale(prefix) {
+				return prefix
+			}
+		}
+	}
+	return i18n.DefaultLocale
 }
 
 // CheckServerConnection checks if the server is reachable
@@ -1124,6 +1183,8 @@ Commands:
   engines                           List available search engines
   bangs                             List bang shortcuts
   probe                             Test engine availability
+  health                            Check server health
+  favorites                         List and manage private favorites
   login                             Save API token for future use
 
 Shells: bash, zsh, fish, sh, dash, ksh, powershell, pwsh
@@ -1140,12 +1201,14 @@ Examples:
   %s search --limit 20 "test"     Search with limit
   %s engines --enabled            List enabled engines
   %s bangs                        List bang shortcuts
+  %s health                       Check server health
+  %s favorites list               List private favorites
   %s --output json "query"        Output as JSON
   %s login                        Save token interactively
   %s --shell completions bash     Output bash completions
 
 Run '%s <command> --help' for more information about a command.
-`, BinaryName, Version, BinaryName, BinaryName, GetCLIHelpServerDefault(), BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName)
+`, BinaryName, Version, BinaryName, BinaryName, GetCLIHelpServerDefault(), BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName)
 }
 
 func GetCLIHelpServerDefault() string {

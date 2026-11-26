@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"net/mail"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,13 +43,11 @@ type ServerHandler struct {
 	db         *sql.DB
 	secretsMgr *secret.Manager
 	configDir  string
-	dataDir    string
 	logger     *logging.AppLogger
 	emailSvc   SecurityReportEmailSender
 	// notifyDispatcher routes contact-form and other events to the configured
 	// PART 12 webhook transports. Nil until wired via SetNotifyDispatcher.
 	notifyDispatcher *notify.Dispatcher
-	restoreRestart   func()
 	captchaMu        sync.Mutex
 	captchaAnswers   map[string]captchaChallenge
 	captchaAttempts  map[string]captchaRateWindow
@@ -63,6 +63,7 @@ type ServerHandler struct {
 type SecurityReportEmailSender interface {
 	Send(templateName, to string, vars map[string]string) error
 	SendRaw(to, subject, body string) error
+	SendRawAttachment(to, subject, body, filename, contentType string, payload []byte) error
 }
 
 type contactEmailSender interface {
@@ -118,22 +119,6 @@ func (h *ServerHandler) SetConfigDir(dir string) {
 	h.configDir = dir
 }
 
-// SetDataDir wires the data directory used by authenticated restore operations.
-func (h *ServerHandler) SetDataDir(dir string) {
-	h.dataDir = dir
-}
-
-// SetRestoreRestartHandler schedules a full server restart after a successful restore.
-func (h *ServerHandler) SetRestoreRestartHandler(restart func()) {
-	h.restoreRestart = restart
-}
-
-func (h *ServerHandler) restartAfterRestore() {
-	if h.restoreRestart != nil {
-		h.restoreRestart()
-	}
-}
-
 // SetLogger wires the app logger so security-report events can be recorded
 // to security.log per AI.md PART 11.
 func (h *ServerHandler) SetLogger(l *logging.AppLogger) {
@@ -150,6 +135,17 @@ func (h *ServerHandler) SetEmailService(e SecurityReportEmailSender) {
 // non-security /server/contact submissions to the general contact role.
 func (h *ServerHandler) SetNotifyDispatcher(d *notify.Dispatcher) {
 	h.notifyDispatcher = d
+}
+
+func serverDocsStylesheets(r *http.Request) []string {
+	switch r.URL.Path {
+	case "/server/docs/swagger":
+		return []string{"/static/vendor/swagger-ui/swagger-ui.css", "/static/css/swagger.css"}
+	case "/server/docs/graphql":
+		return []string{"/static/vendor/graphiql/graphiql.min.css", "/static/css/graphql.css"}
+	default:
+		return nil
+	}
 }
 
 // renderServerTemplate renders a server page template with common data
@@ -170,6 +166,10 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		templateFile = "template/page/server-help.tmpl"
 	case "server-help-mcp":
 		templateFile = "template/page/server-help-mcp.tmpl"
+	case "server-docs-swagger":
+		templateFile = "template/page/server-docs-swagger.tmpl"
+	case "server-docs-graphql":
+		templateFile = "template/page/server-docs-graphql.tmpl"
 	case "server-terms":
 		templateFile = "template/page/server-terms.tmpl"
 	case "server-security":
@@ -180,8 +180,6 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		templateFile = "template/page/server-security-thanks.tmpl"
 	case "server-security-report":
 		templateFile = "template/page/server-security-report.tmpl"
-	case "server-restore":
-		templateFile = "template/page/server-restore.tmpl"
 	default:
 		writeGuaranteedErrorPage(w, r, http.StatusInternalServerError, i18n.Translate(i18n.DetectLocale(r), "error.server"), i18n.Translate(i18n.DetectLocale(r), "error.generic"))
 		return
@@ -218,6 +216,7 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		"path": func(value string) string {
 			return templatePath(r, value)
 		},
+		"docsStylesheets":           func() []string { return serverDocsStylesheets(r) },
 		"operatorHTML":              func(name string) template.HTML { return operatorHTML(r, name) },
 		"operatorContentConfigured": func(name string) bool { return operatorContentConfigured(r, name) },
 		// asset appends the version-busting stamp per AI.md PART 9:
@@ -231,9 +230,8 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		"trackingNoScript": func() template.HTML {
 			return trackingNoScriptMarkup(h.appConfig.Server.Tracking, r)
 		},
-		// markdownToHTML renders the operator-supplied Markdown bodies in
-		// server.privacy.content.* per AI.md PART 12; output is sanitized
-		// through the strict bluemonday allowlist before reaching the page.
+		// markdownToHTML converts supported project and operator Markdown to
+		// sanitized HTML before it reaches a rendered page.
 		"markdownToHTML": markdown.ToHTML,
 	})
 
@@ -437,14 +435,8 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 
 func (h *ServerHandler) pageContent(templateName string) string {
 	switch templateName {
-	case "server-about":
-		return h.appConfig.Server.Pages.About.Content
-	case "server-privacy":
-		return h.appConfig.Server.Pages.Privacy.Content
 	case "server-help":
 		return h.appConfig.Server.Pages.Help.Content
-	case "server-terms":
-		return h.appConfig.Server.Pages.Terms.Content
 	default:
 		return ""
 	}
@@ -458,6 +450,20 @@ func (h *ServerHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 // PrivacyPage renders /server/privacy web page
 func (h *ServerHandler) PrivacyPage(w http.ResponseWriter, r *http.Request) {
 	h.renderServerTemplate(w, r, "server-privacy", nil)
+}
+
+// SwaggerDocsPage renders the interactive OpenAPI explorer inside the shared page shell.
+func (h *ServerHandler) SwaggerDocsPage(w http.ResponseWriter, r *http.Request) {
+	h.renderServerTemplate(w, r, "server-docs-swagger", map[string]interface{}{
+		"DocsEndpointURL": templatePath(r, h.appConfig.APIBasePath()+"/server/swagger"),
+	})
+}
+
+// GraphQLDocsPage renders GraphiQL inside the shared page shell.
+func (h *ServerHandler) GraphQLDocsPage(w http.ResponseWriter, r *http.Request) {
+	h.renderServerTemplate(w, r, "server-docs-graphql", map[string]interface{}{
+		"DocsEndpointURL": templatePath(r, h.appConfig.APIBasePath()+"/server/graphql"),
+	})
 }
 
 // DPOPage renders /server/dpo using the configured DPO/general contact fallback.
@@ -578,14 +584,24 @@ func (h *ServerHandler) securityIDFromRequest(r *http.Request) string {
 // validSecurityID re-validates the security_id server-side per AI.md PART 11
 // step 1 of the Submission Flow — the form value can be tampered with.
 func (h *ServerHandler) validSecurityID(r *http.Request, id string) bool {
+	_, valid := h.securityIDWindow(r, id)
+	return valid
+}
+
+func (h *ServerHandler) securityIDWindow(r *http.Request, id string) (int64, bool) {
 	if id == "" || h.secretsMgr == nil {
-		return false
+		return 0, false
 	}
+	var window int64
 	now := time.Now()
 	valid, err := h.secretsMgr.ValidateDerivedWithPrevious(r.Context(), secret.InstallationSecret, func(secretBytes []byte) bool {
-		return secreport.ValidateSecurityID(secretBytes, id, now)
+		candidate, accepted := secreport.SecurityIDWindow(secretBytes, id, now)
+		if accepted {
+			window = candidate
+		}
+		return accepted
 	})
-	return err == nil && valid
+	return window, err == nil && valid
 }
 
 // defaultDisclosureDays returns the configured default coordinated-disclosure
@@ -681,6 +697,32 @@ func securityCreditName(preference, researcherName, handle string) string {
 	}
 }
 
+func storedSecurityCreditPreference(preference string) string {
+	switch preference {
+	case "real_name":
+		return "name"
+	case "anonymous":
+		return "anon"
+	case "none":
+		return "no"
+	default:
+		return preference
+	}
+}
+
+func securityReportBody(severity, component, endpoint, summary, steps, impact, suggestedFix string) []byte {
+	var body strings.Builder
+	fmt.Fprintf(&body, "Severity: %s\nComponent: %s\n", severity, component)
+	if endpoint != "" {
+		fmt.Fprintf(&body, "Endpoint: %s\n", endpoint)
+	}
+	fmt.Fprintf(&body, "Summary: %s\n\nSteps to reproduce:\n%s\n\nImpact:\n%s\n", summary, steps, impact)
+	if suggestedFix != "" {
+		fmt.Fprintf(&body, "\nSuggested fix:\n%s\n", suggestedFix)
+	}
+	return []byte(body.String())
+}
+
 // logSecurityEvent writes to security.log per AI.md PART 11 when a logger is
 // wired; silently no-ops otherwise (e.g. in tests that don't set one up).
 func (h *ServerHandler) logSecurityEvent(event string, r *http.Request, details map[string]interface{}) {
@@ -771,7 +813,7 @@ func (h *ServerHandler) renderContactFailure(w http.ResponseWriter, r *http.Requ
 // HelpPage renders /server/help web page
 func (h *ServerHandler) HelpPage(w http.ResponseWriter, r *http.Request) {
 	h.renderServerTemplate(w, r, "server-help", map[string]interface{}{
-		"MCPEnabled": true,
+		"HelpPages": pagesForHub("help", h.appConfig),
 	})
 }
 
@@ -927,22 +969,25 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		disclosureDays = v
 	}
 
-	body := "Researcher name: " + name + "\nResearcher email: " + email + "\n\nSteps to reproduce:\n" + steps + "\n\nImpact:\n" + impact
-	if fix := r.FormValue("suggested_fix"); fix != "" {
-		body += "\n\nSuggested fix:\n" + fix
+	endpoint := strings.TrimSpace(r.FormValue("endpoint"))
+	suggestedFix := strings.TrimSpace(r.FormValue("suggested_fix"))
+	idWindow, validID := h.securityIDWindow(r, securityID)
+	if !validID {
+		h.renderSecurityContactFeedback(w, r, securityID, "Invalid form submission.", "error")
+		return
 	}
+	body := securityReportBody(severity, component, endpoint, summary, steps, impact, suggestedFix)
 
 	submission, err := secreport.CreateReport(r.Context(), h.db, h.configDir, h.appConfig.Server.Security.EncryptionKey, secreport.Input{
+		IDWindow:                 idWindow,
 		Severity:                 severity,
 		Component:                component,
-		Endpoint:                 r.FormValue("endpoint"),
-		Summary:                  summary,
-		Body:                     []byte(body),
+		Body:                     body,
 		ResearcherEmail:          email,
 		ResearcherGPGFingerprint: r.FormValue("researcher_gpg"),
 		CVERequested:             r.FormValue("cve_requested") != "",
 		DisclosureWindowDays:     disclosureDays,
-		CreditPreference:         creditPref,
+		CreditPreference:         storedSecurityCreditPreference(creditPref),
 		CreditName:               securityCreditName(creditPref, name, r.FormValue("credit_handle")),
 		AppVersion:               version.GetVersion(),
 		CommitHash:               version.GetVersionInfo()["commit"],
@@ -961,7 +1006,7 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 		return
 	}
 
-	h.notifyMaintainer(submission.TrackingID, severity, component, r.FormValue("endpoint"), summary)
+	h.notifyMaintainer(submission, severity, component)
 	acknowledgmentSent := h.acknowledgeResearcher(r, email, r.FormValue("researcher_gpg"), submission.TrackingID, submission.ReportToken)
 
 	h.logSecurityEvent("security.report_received", r, map[string]interface{}{
@@ -980,11 +1025,10 @@ func (h *ServerHandler) handleSecurityReportSubmit(w http.ResponseWriter, r *htt
 	})
 }
 
-// notifyMaintainer sends the maintainer notification per Submission Flow
-// step 4 — PGP-encrypted to server.contact.security.email when a project
-// keypair exists, otherwise a plaintext fallback with a warning.
-func (h *ServerHandler) notifyMaintainer(trackingID, severity, component, endpoint, summary string) {
-	if h.emailSvc == nil {
+// notifyMaintainer sends the report ciphertext to the configured security
+// contact, using PGP in the message body or AES-GCM as a ciphertext attachment.
+func (h *ServerHandler) notifyMaintainer(submission *secreport.Submission, severity, component string) {
+	if h.emailSvc == nil || submission == nil || len(submission.EncryptedBody) == 0 {
 		return
 	}
 	to := h.appConfig.Server.Contact.Security.Email
@@ -994,26 +1038,21 @@ func (h *ServerHandler) notifyMaintainer(trackingID, severity, component, endpoi
 	if to == "" {
 		return
 	}
-	vars := map[string]string{
-		"tracking_id": trackingID,
-		"severity":    severity,
-		"component":   component,
-		"endpoint":    endpoint,
-		"summary":     summary,
-	}
-	if pub, err := pgp.LoadPublicKey(h.configDir); err == nil && len(pub) > 0 {
-		plaintext := fmt.Sprintf("Tracking ID: %s\nSeverity: %s\nComponent: %s\nEndpoint: %s\nSummary: %s\n",
-			trackingID, severity, component, endpoint, summary)
-		if encrypted, encErr := pgp.EncryptMessageToPublicKey(pub, []byte(plaintext)); encErr == nil {
-			subject := fmt.Sprintf("[Security Report] %s - %s (%s)", severity, component, trackingID)
-			if err := h.emailSvc.SendRaw(to, subject, string(encrypted)); err != nil {
-				log.Printf("security report: send maintainer notification: %v", err)
-			}
-			return
+	subject := fmt.Sprintf("[Security Report] %s - %s (%s)", severity, component, submission.TrackingID)
+	if submission.BodyAlgorithm == secreport.EncryptionMethodPGP {
+		if err := h.emailSvc.SendRaw(to, subject, string(submission.EncryptedBody)); err != nil {
+			log.Printf("security report: send PGP-encrypted maintainer notification: %v", err)
 		}
+		return
 	}
-	if err := h.emailSvc.Send("security_report_maintainer", to, vars); err != nil {
-		log.Printf("security report: send maintainer notification (plaintext fallback): %v", err)
+	if submission.BodyAlgorithm != secreport.EncryptionMethodAES {
+		log.Printf("security report: unknown encrypted body algorithm %q; maintainer notice skipped", submission.BodyAlgorithm)
+		return
+	}
+	warning := "The security report is attached as AES-256-GCM ciphertext. Decrypt it with the configured server.security.encryption_key. The attachment contains no plaintext fallback."
+	filename := "security-report-" + submission.TrackingID + ".aesgcm"
+	if err := h.emailSvc.SendRawAttachment(to, subject, warning, filename, "application/octet-stream", submission.EncryptedBody); err != nil {
+		log.Printf("security report: send AES-encrypted maintainer attachment: %v", err)
 	}
 }
 
@@ -1058,41 +1097,84 @@ func (h *ServerHandler) acknowledgeResearcher(r *http.Request, to, rawResearcher
 // and the Encryption key when a keypair exists. Per AI.md PART 11 "Public
 // Pages", rendered from live config — nothing to edit.
 func (h *ServerHandler) SecurityPage(w http.ResponseWriter, r *http.Request) {
-	var contacts []string
-	if reportURL := h.appConfig.Web.Security.ReportURL; reportURL != "" {
-		contacts = append(contacts, reportURL)
-	}
-	var securityContactURL string
-	if h.appConfig.Server.Pages.Contact.Enabled && h.secretsMgr != nil {
-		if secret, err := h.secretsMgr.GetInstallationSecret(r.Context()); err == nil {
-			id := secreport.GenerateSecurityID(secret, time.Now())
-			securityContactURL = urlvar.BuildURL(r, "/server/contact") + "?security_id=" + id
-			contacts = append(contacts, securityContactURL)
-		}
-	}
-	mailto := h.appConfig.Web.Security.Contact
-	if mailto == "" {
-		mailto = h.appConfig.Server.Contact.Security.Email
-	}
-	if mailto == "" {
-		mailto = "security@" + h.appConfig.Server.FQDN
-	}
-	contacts = append(contacts, "mailto:"+strings.TrimPrefix(mailto, "mailto:"))
+	details := h.securityOverview(r)
 
 	h.renderServerTemplate(w, r, "server-security", map[string]interface{}{
-		"Contacts":           contacts,
-		"Expires":            h.appConfig.Web.Security.Expires,
-		"HasPGPKey":          h.appConfig.Web.Security.PublishPGPKey,
+		"Contacts":           details.contacts,
+		"Expires":            details.expires,
+		"HasPGPKey":          details.pgpAvailable,
 		"DisclosureDays":     h.defaultDisclosureDays(),
 		"ContactEnabled":     h.appConfig.Server.Pages.Contact.Enabled,
-		"SecurityContactURL": securityContactURL,
-		"ContactReportURL": func() string {
-			if h.appConfig.Server.Pages.Contact.Enabled {
-				return urlvar.BuildURL(r, "/server/contact")
-			}
-			return ""
-		}(),
+		"SecurityContactURL": details.securityContactURL,
+		"ContactReportURL":   details.reportURL,
 	})
+}
+
+type securityOverviewDetails struct {
+	contacts           []string
+	contactValues      []map[string]string
+	securityContactURL string
+	reportURL          string
+	expires            string
+	pgpAvailable       bool
+	pgpURL             *string
+	pgpFingerprint     *string
+	policyURL          string
+	thanksURL          string
+}
+
+// securityOverview resolves every public security-contact value once for the
+// HTML and JSON mirrors so they cannot advertise different channels.
+func (h *ServerHandler) securityOverview(r *http.Request) securityOverviewDetails {
+	details := securityOverviewDetails{
+		contacts: make([]string, 0, 3), contactValues: make([]map[string]string, 0, 3),
+		policyURL: urlvar.BuildURL(r, "/server/security/policy"),
+		thanksURL: urlvar.BuildURL(r, "/server/security/thanks"),
+	}
+	if reportURL := strings.TrimSpace(h.appConfig.Web.Security.ReportURL); reportURL != "" {
+		details.contacts = append(details.contacts, reportURL)
+		details.contactValues = append(details.contactValues, map[string]string{"type": "github", "value": reportURL})
+	}
+	if h.appConfig.Server.Pages.Contact.Enabled && h.secretsMgr != nil {
+		if installationSecret, err := h.secretsMgr.GetInstallationSecret(r.Context()); err == nil {
+			id := secreport.GenerateSecurityID(installationSecret, time.Now())
+			details.securityContactURL = urlvar.BuildURL(r, "/server/contact") + "?security_id=" + id
+			details.reportURL = urlvar.BuildURL(r, "/server/contact")
+			details.contacts = append(details.contacts, details.securityContactURL)
+			details.contactValues = append(details.contactValues, map[string]string{"type": "contact_form", "value": details.securityContactURL})
+		}
+	}
+	mail := strings.TrimSpace(h.appConfig.Server.Contact.Security.Email)
+	if urlvar.IsTorRequest(r) {
+		mail = strings.TrimSpace(h.appConfig.Server.Tor.ContactEmail)
+	} else if mail == "" {
+		mail = strings.TrimSpace(h.appConfig.Server.Contact.Admin.Email)
+	}
+	mail = strings.TrimPrefix(mail, "mailto:")
+	if mail != "" {
+		mailto := "mailto:" + mail
+		details.contacts = append(details.contacts, mailto)
+		details.contactValues = append(details.contactValues, map[string]string{"type": "email", "value": mail})
+	}
+	details.expires = strings.TrimSpace(h.appConfig.Web.Security.Expires)
+	if details.expires == "" {
+		details.expires = time.Now().AddDate(1, 0, 0).Format(time.RFC3339)
+	}
+	if h.appConfig.Web.Security.PublishPGPKey && h.db != nil {
+		meta, err := pgp.GetKeypairMeta(h.db)
+		publicKeyPath := filepath.Join(h.configDir, "security", pgp.PublicKeyFile)
+		if err == nil && meta != nil && !meta.Revoked && meta.Fingerprint != "" {
+			if _, statErr := os.Stat(publicKeyPath); statErr == nil {
+				details.pgpAvailable = true
+				keyURL, fingerprint := urlvar.BuildURL(r, "/.well-known/pgp-key.asc"), strings.ToUpper(meta.Fingerprint)
+				details.pgpURL, details.pgpFingerprint = &keyURL, &fingerprint
+			}
+		}
+	}
+	if h.appConfig.Server.Pages.Contact.Enabled {
+		details.reportURL = urlvar.BuildURL(r, "/server/contact")
+	}
+	return details
 }
 
 // SecurityPolicyPage renders /server/security/policy. Content is config-file
@@ -1114,32 +1196,87 @@ func (h *ServerHandler) SecurityThanksPage(w http.ResponseWriter, r *http.Reques
 	}
 	var credits []credit
 	if h.db != nil {
-		rows, err := h.db.QueryContext(r.Context(), `
-			SELECT credit_preference, credit_name, created_at
-			FROM security_reports
-			WHERE disclosed = 1 AND credit_preference != 'none'
-			ORDER BY created_at DESC`)
-		if err == nil {
-			defer func() { _ = rows.Close() }()
-			n := 0
-			for rows.Next() {
-				var pref, name string
-				var createdAt time.Time
-				if err := rows.Scan(&pref, &name, &createdAt); err != nil {
-					continue
+		entries, err := secreport.ListThanks(r.Context(), h.db)
+		if err != nil {
+			log.Printf("security thanks: load entries: %v", err)
+		} else {
+			for _, entry := range entries {
+				year := entry.DisclosedOn
+				if len(year) >= 4 {
+					year = year[:4]
 				}
-				n++
-				display := name
-				if pref == "anonymous" || display == "" {
-					display = fmt.Sprintf("Anonymous Researcher #%d", n)
-				}
-				credits = append(credits, credit{Name: display, Year: createdAt.Format("2006")})
+				credits = append(credits, credit{Name: entry.Credit, Year: year})
 			}
 		}
 	}
 	h.renderServerTemplate(w, r, "server-security-thanks", map[string]interface{}{
 		"Credits": credits,
 	})
+}
+
+// APISecurity returns the JSON mirror of the public security overview.
+func (h *ServerHandler) APISecurity(w http.ResponseWriter, r *http.Request) {
+	details := h.securityOverview(r)
+	pgpInfo := map[string]any{"available": details.pgpAvailable, "url": details.pgpURL, "fingerprint": details.pgpFingerprint}
+	data := map[string]any{
+		"contacts":   details.contactValues,
+		"expires":    details.expires,
+		"pgp":        pgpInfo,
+		"policy_url": details.policyURL,
+		"thanks_url": details.thanksURL,
+	}
+	if h.appConfig.Server.Pages.Contact.Enabled {
+		data["report_url"] = details.reportURL
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "data": data})
+}
+
+// APISecurityPolicy returns the disclosure policy as Markdown source.
+func (h *ServerHandler) APISecurityPolicy(w http.ResponseWriter, r *http.Request) {
+	policy := strings.TrimSpace(h.appConfig.Web.Security.PolicyText)
+	if policy == "" {
+		lang := i18n.DetectLocale(r)
+		var b strings.Builder
+		fmt.Fprintf(&b, "# %s\n\n", i18n.Translate(lang, "security.policy_title"))
+		fmt.Fprintf(&b, "## %s\n\n%s\n\n", i18n.Translate(lang, "security.policy_in_scope_title"), strings.Join([]string{
+			i18n.Translate(lang, "security.policy_in_scope_1"),
+			i18n.Translate(lang, "security.policy_in_scope_2"),
+			i18n.Translate(lang, "security.policy_in_scope_3"),
+		}, "\n\n"))
+		fmt.Fprintf(&b, "## %s\n\n%s\n\n", i18n.Translate(lang, "security.policy_out_of_scope_title"), strings.Join([]string{
+			i18n.Translate(lang, "security.policy_out_of_scope_1"),
+			i18n.Translate(lang, "security.policy_out_of_scope_2"),
+			i18n.Translate(lang, "security.policy_out_of_scope_3"),
+			i18n.Translate(lang, "security.policy_out_of_scope_4"),
+		}, "\n\n"))
+		fmt.Fprintf(&b, "## %s\n\n%s [%s](%s)%s\n", i18n.Translate(lang, "security.policy_safe_harbor_title"),
+			i18n.Translate(lang, "security.policy_safe_harbor_body_pre"), i18n.Translate(lang, "security.policy_safe_harbor_link"),
+			urlvar.BuildURL(r, "/server/security"), i18n.Translate(lang, "security.policy_safe_harbor_body_post"))
+		policy = strings.TrimSpace(b.String())
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "data": map[string]string{"policy": policy}})
+}
+
+// APISecurityThanks returns the ordered public hall of fame.
+func (h *ServerHandler) APISecurityThanks(w http.ResponseWriter, r *http.Request) {
+	if h.db == nil {
+		WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "data": map[string]any{"entries": []map[string]string{}}})
+		return
+	}
+	entries, err := secreport.ListThanks(r.Context(), h.db)
+	if err != nil {
+		SendError(w, CodeServerError, "Could not load security acknowledgments")
+		return
+	}
+	data := make([]map[string]string, 0, len(entries))
+	for _, entry := range entries {
+		data = append(data, map[string]string{
+			"credit":   entry.Credit,
+			"date":     entry.DisclosedOn,
+			"severity": entry.Severity,
+		})
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "data": map[string]any{"entries": data}})
 }
 
 // SecurityReportStatusPage renders /server/security/report/{tracking_id} —
@@ -1363,22 +1500,25 @@ func (h *ServerHandler) apiSecurityReportSubmit(w http.ResponseWriter, r *http.R
 		disclosureDays = v
 	}
 
-	body := "Researcher name: " + name + "\nResearcher email: " + email + "\n\nSteps to reproduce:\n" + steps + "\n\nImpact:\n" + impact
-	if fix := r.FormValue("suggested_fix"); fix != "" {
-		body += "\n\nSuggested fix:\n" + fix
+	endpoint := strings.TrimSpace(r.FormValue("endpoint"))
+	suggestedFix := strings.TrimSpace(r.FormValue("suggested_fix"))
+	idWindow, validID := h.securityIDWindow(r, securityID)
+	if !validID {
+		SendError(w, CodeValidation, "Invalid security report identifier")
+		return
 	}
+	body := securityReportBody(severity, component, endpoint, summary, steps, impact, suggestedFix)
 
 	submission, err := secreport.CreateReport(r.Context(), h.db, h.configDir, h.appConfig.Server.Security.EncryptionKey, secreport.Input{
+		IDWindow:                 idWindow,
 		Severity:                 severity,
 		Component:                component,
-		Endpoint:                 r.FormValue("endpoint"),
-		Summary:                  summary,
-		Body:                     []byte(body),
+		Body:                     body,
 		ResearcherEmail:          email,
 		ResearcherGPGFingerprint: r.FormValue("researcher_gpg"),
 		CVERequested:             r.FormValue("cve_requested") != "",
 		DisclosureWindowDays:     disclosureDays,
-		CreditPreference:         creditPref,
+		CreditPreference:         storedSecurityCreditPreference(creditPref),
 		CreditName:               securityCreditName(creditPref, name, r.FormValue("credit_handle")),
 		AppVersion:               version.GetVersion(),
 		CommitHash:               version.GetVersionInfo()["commit"],
@@ -1390,7 +1530,7 @@ func (h *ServerHandler) apiSecurityReportSubmit(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	h.notifyMaintainer(submission.TrackingID, severity, component, r.FormValue("endpoint"), summary)
+	h.notifyMaintainer(submission, severity, component)
 	h.acknowledgeResearcher(r, email, r.FormValue("researcher_gpg"), submission.TrackingID, submission.ReportToken)
 
 	h.logSecurityEvent("security.report_received", r, map[string]interface{}{
@@ -1424,6 +1564,7 @@ func (h *ServerHandler) APIHelp(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ok": true,
 		"data": map[string]interface{}{
+			"pages": pagePayload(pagesForHub("help", h.appConfig), i18n.DetectLocale(r)),
 			"search": map[string]interface{}{
 				"endpoint":    apiBase + "/search",
 				"method":      "GET",

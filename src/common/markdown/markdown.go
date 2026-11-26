@@ -1,5 +1,5 @@
-// Package markdown renders the small Markdown subset used by operator-supplied
-// configuration prose (server.privacy.content.*) into sanitized HTML.
+// Package markdown renders the small Markdown subset used by project and
+// operator-authored prose into sanitized HTML.
 // Only paragraphs, "-" bullet lists and **bold** are supported — the output is
 // always piped through sanitize.HTML, so no untrusted markup can escape.
 package markdown

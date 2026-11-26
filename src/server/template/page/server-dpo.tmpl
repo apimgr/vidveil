@@ -3,10 +3,13 @@
 {{end}}
 
 {{define "content"}}
-<div class="content">
-    <div class="prose">
-        <h1>{{ t "dpo.title" }}</h1>
-        {{ if .DPOName }}<p>{{ .DPOName }}</p>{{ end }}
+<div class="container container-md">
+    <header class="page-header">
+        <h1 class="page-title">{{ t "dpo.title" }}</h1>
+        {{if .DPOName}}<p class="page-lead">{{.DPOName}}</p>{{else}}<p class="page-lead">{{ t "dpo.no_email" }}</p>{{end}}
+    </header>
+    <section class="section-card" aria-labelledby="dpo-contact-heading">
+        <h2 id="dpo-contact-heading">{{ t "privacy.questions" }}</h2>
         {{ if .DPOEmail }}
         <p><a href="mailto:{{ .DPOEmail }}">{{ .DPOEmail }}</a></p>
         {{ else }}
@@ -14,6 +17,6 @@
         {{ end }}
         <p><a href="{{ .PrivacyURL }}">{{ t "dpo.privacy_policy" }}</a></p>
         <p><a href="{{ path "/server/security" }}">{{ t "security.title" }}</a></p>
-    </div>
+    </section>
 </div>
 {{end}}

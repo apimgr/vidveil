@@ -12,7 +12,7 @@ import (
 
 func TestEncryptDecryptHash(t *testing.T) {
 	key := strings.Repeat("01", 32)
-	hash := HashToken("tok_private-value")
+	hash := HashToken("own_0123456789abcdefghijkmnpqrstuv")
 	stored, err := EncryptHash(key, hash)
 	if err != nil {
 		t.Fatal(err)
@@ -31,7 +31,7 @@ func TestEncryptDecryptHash(t *testing.T) {
 
 func TestEncryptDecryptToken(t *testing.T) {
 	key := strings.Repeat("04", 32)
-	token := "tok_0123456789abcdefghijkmnpqrstuv"
+	token := "own_" + strings.Repeat("a", 32)
 	stored, err := EncryptToken(key, token)
 	if err != nil {
 		t.Fatal(err)
@@ -48,6 +48,19 @@ func TestEncryptDecryptToken(t *testing.T) {
 	}
 	if _, err := DecryptToken(strings.Repeat("05", 32), stored); err == nil {
 		t.Fatal("DecryptToken() accepted the wrong key")
+	}
+}
+
+func TestEncryptDecryptLegacyOwnerToken(t *testing.T) {
+	key := strings.Repeat("06", 32)
+	const token = "tok_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	stored, err := EncryptToken(key, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := DecryptToken(key, stored)
+	if err != nil || got != token {
+		t.Fatalf("DecryptToken() = (%q, %v), want legacy credential", got, err)
 	}
 }
 

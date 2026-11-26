@@ -494,6 +494,142 @@ func DiskSpace(path string) (total, free uint64, err error) {
 	return diskSpace(path)
 }
 
+// CleanupDiskPressure removes only expired runtime files and applies the
+// configured PART 21 backup retention policy to the startup-resolved directory.
+func (m *MaintenanceManager) CleanupDiskPressure(retention config.BackupRetentionConfig, logDir string, logRetentionDays int) (int64, error) {
+	var freed int64
+	err := m.withMaintenanceOperation(func() error {
+		var failures []error
+		cutoff := time.Now().AddDate(0, 0, -logRetentionDays)
+		logFreed, err := removeExpiredRegularFiles(logDir, cutoff)
+		freed += logFreed
+		if err != nil {
+			failures = append(failures, fmt.Errorf("clean expired logs: %w", err))
+		}
+
+		tempRoot := filepath.Join(os.TempDir(), projectpath.ProjectOrg)
+		tempFreed, err := cleanupProjectTemporaryFiles(tempRoot, projectpath.ProjectName, time.Now().Add(-24*time.Hour))
+		freed += tempFreed
+		if err != nil {
+			failures = append(failures, fmt.Errorf("clean expired temporary files: %w", err))
+		}
+
+		backupBytesBefore, _ := directoryRegularFileBytes(m.paths.Backup)
+		maxBackups := retention.MaxBackups
+		if maxBackups < 1 {
+			maxBackups = 1
+		}
+		if err := m.applyRetentionWithOptions(maxBackups, retention.KeepWeekly, retention.KeepMonthly, retention.KeepYearly, retention.MaxTotalSize); err != nil {
+			failures = append(failures, fmt.Errorf("apply backup retention during disk cleanup: %w", err))
+		} else {
+			backupBytesAfter, _ := directoryRegularFileBytes(m.paths.Backup)
+			if backupBytesBefore > backupBytesAfter {
+				freed += backupBytesBefore - backupBytesAfter
+			}
+		}
+		return errors.Join(failures...)
+	})
+	return freed, err
+}
+
+func removeExpiredRegularFiles(root string, cutoff time.Time) (int64, error) {
+	var freed int64
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			if errors.Is(walkErr, os.ErrNotExist) && path == root {
+				return nil
+			}
+			return walkErr
+		}
+		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() || !info.ModTime().Before(cutoff) {
+			return nil
+		}
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+		freed += info.Size()
+		return nil
+	})
+	return freed, err
+}
+
+func cleanupProjectTemporaryFiles(root, prefix string, cutoff time.Time) (int64, error) {
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	var freed int64
+	var failures []error
+	var directories []string
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), prefix+"-") || entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		path := filepath.Join(root, entry.Name())
+		if entry.IsDir() {
+			directories = append(directories, path)
+			removed, err := removeExpiredRegularFiles(path, cutoff)
+			freed += removed
+			if err != nil {
+				failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), err))
+				continue
+			}
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), err))
+			continue
+		}
+		if !info.Mode().IsRegular() || !info.ModTime().Before(cutoff) {
+			continue
+		}
+		if err := os.Remove(path); err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", entry.Name(), err))
+			continue
+		}
+		freed += info.Size()
+	}
+	for index := len(directories) - 1; index >= 0; index-- {
+		_ = os.Remove(directories[index])
+	}
+	return freed, errors.Join(failures...)
+}
+
+func directoryRegularFileBytes(root string) (int64, error) {
+	var total int64
+	err := filepath.WalkDir(root, func(_ string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			if errors.Is(walkErr, os.ErrNotExist) {
+				return nil
+			}
+			return walkErr
+		}
+		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if info.Mode().IsRegular() {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total, err
+}
+
 func (m *MaintenanceManager) checkDiskSpace(backupDir string) error {
 	total, free, err := diskSpace(backupDir)
 	if err != nil {
@@ -1803,10 +1939,13 @@ func (m *MaintenanceManager) SetMaintenanceMode(enabled bool) error {
 			return fmt.Errorf("failed to close maintenance flag: %w", err)
 		}
 		fmt.Println(terminal.StatusIcon(true) + " Maintenance mode enabled")
-		fmt.Println("   Server will return 503 for all requests")
+		fmt.Println("   Server will reject writes and keep health and read-only requests available")
 	} else {
 		if err := os.Remove(modeFile); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to disable maintenance mode: %w", err)
+		}
+		if err := ClearMaintenanceStatus(m.paths.Data); err != nil {
+			return fmt.Errorf("failed to clear maintenance status: %w", err)
 		}
 		fmt.Println(terminal.StatusIcon(true) + " Maintenance mode disabled")
 	}

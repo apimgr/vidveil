@@ -17,17 +17,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/apimgr/vidveil/src/client/api"
 	"github.com/gogpu/gg"
 	_ "github.com/gogpu/gg/gpu"
 	"github.com/gogpu/gg/integration/ggcanvas"
 	"github.com/gogpu/gogpu"
 	"github.com/gogpu/ui/app"
-	"github.com/gogpu/ui/primitives"
 	"github.com/gogpu/ui/render"
 	"github.com/gogpu/ui/theme/material3"
 	"github.com/gogpu/ui/widget"
 
 	"github.com/apimgr/vidveil/src/common/display"
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/theme"
 )
 
@@ -35,8 +36,14 @@ import (
 type Config struct {
 	ServerURL  string
 	Token      string
+	APIVersion string
+	Timeout    int
 	Version    string
 	BinaryName string
+	Language   string
+	FirstRun   bool
+	SaveLogin  func(serverURL, token string) error
+	SaveServer func(serverURL, token string) error
 }
 
 // IsAvailable reports whether a native GUI can be launched in the current environment.
@@ -68,7 +75,18 @@ func Launch(cfg *Config) error {
 		app.WithPlatformProvider(gogpuApp),
 		app.WithEventSource(gogpuApp.EventSource()),
 	)
-	uiApp.SetRoot(buildMainWindow(cfg, m3))
+	if cfg.Language == "" {
+		cfg.Language = i18n.DefaultLocale
+	}
+	session := &guiSession{cfg: cfg, app: uiApp, theme: m3, api: api.NewAPIClient(cfg.ServerURL, cfg.Token, cfg.Timeout, cfg.APIVersion)}
+	session.api.SetLanguage(cfg.Language)
+	if cfg.FirstRun {
+		session.screen = "setup"
+		session.values = make(map[string]string)
+		uiApp.SetRoot(session.buildCommandScreen())
+	} else {
+		uiApp.SetRoot(session.buildMainWindow())
+	}
 
 	var canvas *ggcanvas.Canvas
 	gogpuApp.OnDraw(func(dc *gogpu.Context) {
@@ -140,23 +158,4 @@ func hexToWidgetColor(hex string) widget.Color {
 		return widget.Hex(0x000000)
 	}
 	return widget.Hex(uint32(v))
-}
-
-// buildMainWindow renders the main window content.
-func buildMainWindow(cfg *Config, m3 *material3.Theme) *primitives.BoxWidget {
-	version := cfg.Version
-	if version == "" {
-		version = "dev"
-	}
-	server := cfg.ServerURL
-	if server == "" {
-		server = "(no server configured)"
-	}
-
-	// Content area — extend based on CLI functionality (PART 32).
-	return primitives.Box(
-		primitives.Text(cfg.BinaryName).FontSize(24).Bold(),
-		primitives.Text("Version "+version).FontSize(14),
-		primitives.Text("Server: "+server).FontSize(14),
-	).Padding(24).Gap(12)
 }

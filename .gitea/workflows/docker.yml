@@ -2,48 +2,53 @@ name: Docker Build
 
 on:
   push:
-    branches: ['**']
+    branches: [main]
     tags:
       - 'v*'
       - '*.*.*'
+      - '*-beta'
   schedule:
     - cron: '0 4 * * *'
   workflow_dispatch:
 
 concurrency:
   group: docker-${{ gitea.ref }}
-  cancel-in-progress: ${{ gitea.ref == 'refs/heads/main' || gitea.ref == 'refs/heads/master' || gitea.ref == 'refs/heads/devel' || gitea.ref == 'refs/heads/dev' || gitea.ref == 'refs/heads/beta' }}
+  cancel-in-progress: ${{ gitea.ref == 'refs/heads/main' || startsWith(gitea.ref, 'refs/tags/') }}
 
 env:
   PROJECT_NAME: vidveil
+  # Registry auto-detected from Gitea instance (works with self-hosted)
+  # Format: {gitea-server}/owner/repo -> extracts server for registry
   IMAGE_NAME: ${{ gitea.repository }}
 
 jobs:
   build-standard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     if: gitea.event_name != 'schedule'
     permissions:
       contents: read
       packages: write
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3  # v4.1.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
       - name: Set registry from server URL
         run: |
+          # Extract registry from Gitea server URL (works with self-hosted)
+          # Example: https://git.example.com -> git.example.com
           SERVER_URL="${{ gitea.server_url }}"
           REGISTRY="${SERVER_URL#https://}"
           REGISTRY="${REGISTRY#http://}"
-          echo "REGISTRY=${REGISTRY}" >> "$GITEA_ENV"
+          echo "REGISTRY=${REGISTRY}" >> $GITEA_ENV
 
       - name: Log in to Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ gitea.actor }}
@@ -51,37 +56,49 @@ jobs:
 
       - name: Set build info
         run: |
-          echo "COMMIT_ID=$(git rev-parse --short=7 HEAD)" >> "$GITEA_ENV"
-          echo "YYMM=$(date +"%y%m")" >> "$GITEA_ENV"
+          echo "COMMIT_ID=$(git rev-parse --short=7 HEAD)" >> $GITEA_ENV
+          # OFFICIAL_SITE (optional): site.txt wins; otherwise use repository secrets or leave empty
+          if [ -f site.txt ]; then
+            echo "OFFICIAL_SITE=$(cat site.txt)" >> $GITEA_ENV
+          else
+            echo "OFFICIAL_SITE=${{ secrets.OFFICIAL_SITE }}" >> $GITEA_ENV
+          fi
+          echo "YYMM=$(date +"%y%m")" >> $GITEA_ENV
           if [[ "${{ gitea.ref }}" == refs/tags/* ]]; then
             VERSION="${GITEA_REF_NAME}"
-            echo "VERSION=${VERSION#v}" >> "$GITEA_ENV"
-            echo "IS_TAG=true" >> "$GITEA_ENV"
+            # Strip 'v' prefix
+            echo "VERSION=${VERSION#v}" >> $GITEA_ENV
+            echo "IS_TAG=true" >> $GITEA_ENV
           else
-            echo "VERSION=$(git rev-parse --short=7 HEAD)" >> "$GITEA_ENV"
-            echo "IS_TAG=false" >> "$GITEA_ENV"
+            echo "VERSION=$(git rev-parse --short=7 HEAD)" >> $GITEA_ENV
+            echo "IS_TAG=false" >> $GITEA_ENV
           fi
-          BUILD_EPOCH="$(date -u +%s)"
-          echo "BUILD_EPOCH=${BUILD_EPOCH}" >> "$GITEA_ENV"
-          echo "BUILD_DATE=$(date -u -d "@${BUILD_EPOCH}" +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITEA_ENV"
+          BUILD_EPOCH=$(date -u +%s)
+          echo "BUILD_EPOCH=${BUILD_EPOCH}" >> $GITEA_ENV
+          echo "BUILD_DATE=$(date -u -d @${BUILD_EPOCH} +"%Y-%m-%dT%H:%M:%SZ")" >> $GITEA_ENV
 
       - name: Determine tags (standard)
         id: tags
         run: |
+          # Use self-hosted registry URL
           TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.COMMIT_ID }}"
+
           if [[ "${{ env.IS_TAG }}" == "true" ]]; then
+            # Release tag - version, latest, YYMM
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}"
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
             TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.YYMM }}"
           else
+            # Beta branch also gets beta tag
             if [[ "${{ gitea.ref }}" == refs/heads/beta ]]; then
               TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:beta"
             fi
           fi
-          echo "tags=$TAGS" >> "$GITEA_OUTPUT"
+
+          echo "tags=$TAGS" >> $GITEA_OUTPUT
 
       - name: Build and push (standard)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
           context: .
           file: docker/Dockerfile
@@ -94,11 +111,8 @@ jobs:
             BUILD_DATE=${{ env.BUILD_DATE }}
             BUILD_EPOCH=${{ env.BUILD_EPOCH }}
             COMMIT_ID=${{ env.COMMIT_ID }}
+            OFFICIAL_SITE=${{ env.OFFICIAL_SITE }}
           labels: |
-            maintainer=apimgr
-            org.opencontainers.image.schema-version=${{ env.VERSION }}
-            org.opencontainers.image.vcs-type=Git
-            com.github.containers.toolbox=false
             org.opencontainers.image.vendor=apimgr
             org.opencontainers.image.authors=apimgr
             org.opencontainers.image.title=${{ env.PROJECT_NAME }}
@@ -112,10 +126,6 @@ jobs:
             org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
             org.opencontainers.image.licenses=MIT
           annotations: |
-            manifest:maintainer=apimgr
-            manifest:org.opencontainers.image.schema-version=${{ env.VERSION }}
-            manifest:org.opencontainers.image.vcs-type=Git
-            manifest:com.github.containers.toolbox=false
             manifest:org.opencontainers.image.vendor=apimgr
             manifest:org.opencontainers.image.authors=apimgr
             manifest:org.opencontainers.image.title=${{ env.PROJECT_NAME }}
@@ -130,30 +140,30 @@ jobs:
             manifest:org.opencontainers.image.licenses=MIT
 
   build-devel:
-    runs-on: ubuntu-latest
-    if: gitea.event_name == 'schedule' || ((gitea.event_name == 'workflow_dispatch' || gitea.event_name == 'push') && (gitea.ref == 'refs/heads/main' || gitea.ref == 'refs/heads/master'))
+    runs-on: ubuntu-26.04
+    if: (gitea.event_name == 'schedule' || gitea.event_name == 'workflow_dispatch' || gitea.event_name == 'push') && gitea.ref == 'refs/heads/main'
     permissions:
       contents: read
       packages: write
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3  # v4.1.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
       - name: Set registry from server URL
         run: |
           SERVER_URL="${{ gitea.server_url }}"
           REGISTRY="${SERVER_URL#https://}"
           REGISTRY="${REGISTRY#http://}"
-          echo "REGISTRY=${REGISTRY}" >> "$GITEA_ENV"
+          echo "REGISTRY=${REGISTRY}" >> $GITEA_ENV
 
       - name: Log in to Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ gitea.actor }}
@@ -161,13 +171,19 @@ jobs:
 
       - name: Set build info
         run: |
-          echo "COMMIT_ID=$(git rev-parse --short=7 HEAD)" >> "$GITEA_ENV"
-          BUILD_EPOCH="$(date -u +%s)"
-          echo "BUILD_EPOCH=${BUILD_EPOCH}" >> "$GITEA_ENV"
-          echo "BUILD_DATE=$(date -u -d "@${BUILD_EPOCH}" +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITEA_ENV"
+          echo "COMMIT_ID=$(git rev-parse --short=7 HEAD)" >> $GITEA_ENV
+          # OFFICIAL_SITE (optional): site.txt wins; otherwise use repository secrets or leave empty
+          if [ -f site.txt ]; then
+            echo "OFFICIAL_SITE=$(cat site.txt)" >> $GITEA_ENV
+          else
+            echo "OFFICIAL_SITE=${{ secrets.OFFICIAL_SITE }}" >> $GITEA_ENV
+          fi
+          BUILD_EPOCH=$(date -u +%s)
+          echo "BUILD_EPOCH=${BUILD_EPOCH}" >> $GITEA_ENV
+          echo "BUILD_DATE=$(date -u -d @${BUILD_EPOCH} +"%Y-%m-%dT%H:%M:%SZ")" >> $GITEA_ENV
 
       - name: Build and push (devel)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
           context: .
           file: docker/Dockerfile.dev
@@ -176,21 +192,16 @@ jobs:
           provenance: false
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:devel
           build-args: |
-            VERSION=${{ env.COMMIT_ID }}
             BUILD_DATE=${{ env.BUILD_DATE }}
             BUILD_EPOCH=${{ env.BUILD_EPOCH }}
             COMMIT_ID=${{ env.COMMIT_ID }}
+            OFFICIAL_SITE=${{ env.OFFICIAL_SITE }}
           labels: |
-            maintainer=apimgr
-            org.opencontainers.image.schema-version=${{ env.COMMIT_ID }}
-            org.opencontainers.image.vcs-type=Git
-            com.github.containers.toolbox=false
             org.opencontainers.image.vendor=apimgr
             org.opencontainers.image.authors=apimgr
             org.opencontainers.image.title=${{ env.PROJECT_NAME }}
             org.opencontainers.image.base.name=${{ env.PROJECT_NAME }}
             org.opencontainers.image.description=${{ env.PROJECT_NAME }} - development image (alpine, debug mode)
-            org.opencontainers.image.version=${{ env.COMMIT_ID }}
             org.opencontainers.image.created=${{ env.BUILD_DATE }}
             org.opencontainers.image.revision=${{ env.COMMIT_ID }}
             org.opencontainers.image.url=${{ gitea.server_url }}/${{ gitea.repository }}
@@ -198,16 +209,11 @@ jobs:
             org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
             org.opencontainers.image.licenses=MIT
           annotations: |
-            manifest:maintainer=apimgr
-            manifest:org.opencontainers.image.schema-version=${{ env.COMMIT_ID }}
-            manifest:org.opencontainers.image.vcs-type=Git
-            manifest:com.github.containers.toolbox=false
             manifest:org.opencontainers.image.vendor=apimgr
             manifest:org.opencontainers.image.authors=apimgr
             manifest:org.opencontainers.image.title=${{ env.PROJECT_NAME }}
             manifest:org.opencontainers.image.base.name=${{ env.PROJECT_NAME }}
             manifest:org.opencontainers.image.description=${{ env.PROJECT_NAME }} - development image (alpine, debug mode)
-            manifest:org.opencontainers.image.version=${{ env.COMMIT_ID }}
             manifest:org.opencontainers.image.created=${{ env.BUILD_DATE }}
             manifest:org.opencontainers.image.revision=${{ env.COMMIT_ID }}
             manifest:org.opencontainers.image.url=${{ gitea.server_url }}/${{ gitea.repository }}

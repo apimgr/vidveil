@@ -1,0 +1,26 @@
+{{define "server-docs-swagger"}}
+{{template "public" .}}
+{{end}}
+
+{{define "content"}}
+<div class="container container-lg">
+    <header class="page-header">
+        <h1 class="page-title">{{ t "help.swagger_link" }}</h1>
+        <p class="page-lead">{{ tf "help.api_documentation_intro" "app_name" .AppName }}</p>
+    </header>
+    <section class="section-card" aria-labelledby="swagger-ui-heading">
+        <h2 id="swagger-ui-heading">{{ t "help.swagger_link" }}</h2>
+        <div id="swagger-ui" data-spec-url="{{.DocsEndpointURL}}" aria-label="{{ t "help.swagger_link" }}"></div>
+    </section>
+    <noscript>
+        <section class="section-card" aria-labelledby="swagger-nojs-heading">
+            <h2 id="swagger-nojs-heading">{{ t "help.api_documentation" }}</h2>
+            <p>{{ t "docs.javascript_required" }}</p>
+            <p><a href="{{.DocsEndpointURL}}">{{ t "help.api_documentation" }}</a></p>
+        </section>
+    </noscript>
+</div>
+<script src="{{ asset "/static/vendor/swagger-ui/swagger-ui-bundle.js" }}" defer></script>
+<script src="{{ asset "/static/vendor/swagger-ui/swagger-ui-standalone-preset.js" }}" defer></script>
+<script src="{{ asset "/static/js/docs-swagger.js" }}" defer></script>
+{{end}}

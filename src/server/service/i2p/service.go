@@ -96,6 +96,9 @@ func (s *Service) Start(ctx context.Context) error {
 		s.setState("no_provider")
 		return failed(err)
 	}
+	s.mu.Lock()
+	s.provider = provider
+	s.mu.Unlock()
 	if err := s.ensureDirs(); err != nil {
 		return failed(err)
 	}
@@ -465,7 +468,7 @@ func (s *Service) loadOrCreateSAMKeys(conn net.Conn, reader *bufio.Reader, keyPa
 		return "", nil, fmt.Errorf("create temporary I2P destination key: %w", err)
 	}
 	name := tmp.Name()
-	defer os.Remove(name)
+	defer func() { _ = os.Remove(name) }()
 	if err := tmp.Chmod(0600); err != nil {
 		_ = tmp.Close()
 		return "", nil, err
@@ -676,7 +679,11 @@ func stopProcess(cmd *exec.Cmd, done <-chan struct{}) {
 func (s *Service) Listener() net.Listener { s.mu.RLock(); defer s.mu.RUnlock(); return s.listener }
 
 // Enabled reports the configured opt-in state.
-func (s *Service) Enabled() bool { return s.cfg.Enabled }
+func (s *Service) Enabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Enabled && s.provider != ProviderNone
+}
 
 // IsRunning reports whether the eepsite has an active backend and provider.
 func (s *Service) IsRunning() bool {
@@ -711,7 +718,9 @@ func (s *Service) Status() string {
 		return "unavailable"
 	case "starting", "building":
 		return "starting"
-	case "no_provider", "error":
+	case "no_provider":
+		return "disabled"
+	case "error":
 		return "unavailable"
 	}
 	return "unavailable"
@@ -777,7 +786,7 @@ func (s *Service) CheckHealth(ctx context.Context) error {
 		s.state = "error"
 		return fmt.Errorf("connect I2P SAM health probe: %w", err)
 	}
-	defer probe.Close()
+	defer func() { _ = probe.Close() }()
 	if err := probe.SetDeadline(deadline); err != nil {
 		return err
 	}
@@ -859,7 +868,7 @@ func (s *Service) stopProvider() error {
 	s.address = ""
 	s.provider = ProviderNone
 	if s.cfg.Enabled {
-		s.state = "starting"
+		s.state = "no_provider"
 	} else {
 		s.state = "disabled"
 	}

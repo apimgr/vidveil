@@ -5,14 +5,97 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
+	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/apimgr/vidveil/src/common/terminal"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // newTestTUIModel creates a TUIModel for testing.
 func newTestTUIModel() TUIModel {
-	return createInitialTUIModel()
+	model := createInitialTUIModel()
+	model.activeView = TUICommandSearch
+	return model
+}
+
+func TestTUICommandTreeMatchesHelpOrder(t *testing.T) {
+	want := []string{TUICommandSearch, TUICommandEngines, TUICommandBangs, TUICommandProbe, TUICommandLogin}
+	if !reflect.DeepEqual(tuiCommandOrder, want) {
+		t.Fatalf("TUI command order = %v, want %v", tuiCommandOrder, want)
+	}
+}
+
+func TestTUIModel_MainMenuNavigatesToEveryCommandView(t *testing.T) {
+	model := createInitialTUIModel()
+	if model.activeView != "menu" {
+		t.Fatalf("initial view = %q, want menu", model.activeView)
+	}
+	for index, command := range tuiCommandOrder {
+		model.menuIndex = index
+		updatedModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		opened := updatedModel.(TUIModel)
+		if opened.activeView != command {
+			t.Errorf("menu item %d opened %q, want %q", index, opened.activeView, command)
+		}
+		updatedModel, _ = opened.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		model = updatedModel.(TUIModel)
+	}
+}
+
+func TestTUIModel_MenuViewListsCommandsInHelpOrder(t *testing.T) {
+	view := createInitialTUIModel().View()
+	last := -1
+	for _, command := range tuiCommandOrder {
+		index := strings.Index(view, command)
+		if index < 0 || index <= last {
+			t.Fatalf("menu view does not list %q in help order: %q", command, view)
+		}
+		last = index
+	}
+}
+
+func TestTUIModel_SearchSupportsCLIOptionsAndSmallTerminalScrolling(t *testing.T) {
+	model := createInitialTUIModel()
+	model.activeView = TUICommandSearch
+	model.terminalHeight = 10
+	for index := 0; index < 8; index++ {
+		model.searchResults = append(model.searchResults, TUISearchResult{Title: fmt.Sprintf("result %d", index)})
+	}
+	for index := 0; index < 6; index++ {
+		updatedModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyDown})
+		model = updatedModel.(TUIModel)
+	}
+	if model.selectedIndex != 6 || model.searchScroll == 0 {
+		t.Fatalf("selection/scroll = %d/%d, want selected result 6 visible after scrolling", model.selectedIndex, model.searchScroll)
+	}
+	if view := model.View(); !strings.Contains(view, "result 6") || !strings.Contains(view, tuiTranslate(model.language, "page")+":") || !strings.Contains(view, tuiTranslate(model.language, "limit")+":") || !strings.Contains(view, tuiTranslate(model.language, "engines")+":") {
+		t.Fatalf("search view is missing the selected result or CLI option fields: %q", view)
+	}
+
+	model.searchField = 1
+	updatedModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	model = updatedModel.(TUIModel)
+	model.searchField = 2
+	updatedModel, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'5'}})
+	model = updatedModel.(TUIModel)
+	model.searchField = 3
+	updatedModel, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	model = updatedModel.(TUIModel)
+	if model.searchPage != "2" || model.searchLimit != "5" || model.searchEngines != "p" {
+		t.Fatalf("search options page=%q limit=%q engines=%q", model.searchPage, model.searchLimit, model.searchEngines)
+	}
+}
+
+func TestTUIModel_WindowResizeRecalculatesMode(t *testing.T) {
+	model := createInitialTUIModel()
+	updatedModel, _ := model.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
+	resized := updatedModel.(TUIModel)
+	if resized.sizeMode != terminal.SizeModeMinimal {
+		t.Fatalf("resized size mode = %s, want minimal", resized.sizeMode)
+	}
 }
 
 // ── TUIModel.Update — key messages ───────────────────────────────────────────

@@ -4,7 +4,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="{{.ThemeColor}}">
 {{- if .BrandingDescription}}<meta name="description" content="{{.BrandingDescription}}">
-{{- else}}<meta name="description" content="Privacy-focused video search engine">
+{{- else}}<meta name="description" content="{{ t "app.description" }}">
 {{- end}}
 {{- if .SEOKeywords}}<meta name="keywords" content="{{.SEOKeywords}}">
 {{- end}}
@@ -17,6 +17,8 @@
 {{- range $name, $content := .SEOMetaTags}}<meta name="{{$name}}" content="{{$content}}">
 {{- end}}
 <title>{{.Title}}{{if .BrandingTagline}}{{.TitleSeparator}}{{.BrandingTagline}}{{end}}</title>
+{{range docsStylesheets}}<link rel="stylesheet" href="{{asset .}}">
+{{end}}
 {{ trackingScript }}
 
 {{- if .SEOOpenGraphEnabled}}
@@ -26,7 +28,7 @@
 {{- if .BrandingDescription}}
 <meta property="og:description" content="{{.BrandingDescription}}">
 {{- else}}
-<meta property="og:description" content="Privacy-focused video search engine">
+<meta property="og:description" content="{{ t "app.description" }}">
 {{- end}}
 {{- if .SEOOGImage}}<meta property="og:image" content="{{.SEOOGImage}}">{{- end}}
 {{- if .CanonicalURL}}<meta property="og:url" content="{{.CanonicalURL}}">{{- end}}
@@ -40,7 +42,7 @@
 {{- if .BrandingDescription}}
 <meta name="twitter:description" content="{{.BrandingDescription}}">
 {{- else}}
-<meta name="twitter:description" content="Privacy-focused video search engine">
+<meta name="twitter:description" content="{{ t "app.description" }}">
 {{- end}}
 {{- if .SEOOGImage}}<meta name="twitter:image" content="{{.SEOOGImage}}">{{- end}}
 {{- if .SEOTwitterHandle}}<meta name="twitter:site" content="{{.SEOTwitterHandle}}">{{- end}}
@@ -53,7 +55,7 @@
     "@context": "https://schema.org",
     "@type": "WebSite",
     "name": "{{.Title}}",
-    "description": "{{if .BrandingDescription}}{{.BrandingDescription}}{{else}}Privacy-focused video search engine{{end}}",
+    "description": "{{if .BrandingDescription}}{{.BrandingDescription}}{{else}}{{ t "app.description" }}{{end}}",
     "url": "{{if .CanonicalURL}}{{.CanonicalURL}}{{else}}{{.AppURL}}{{end}}"
 }</script>
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/health"
 )
 
 // CVEService manages CVE (Common Vulnerabilities and Exposures) database per PART 11
@@ -23,7 +24,8 @@ type CVEService struct {
 	dataDir   string
 	mu        sync.RWMutex
 	// cveData maps CVE-ID to CVE details
-	cveData map[string]CVEItem
+	cveData      map[string]CVEItem
+	updateFailed bool
 }
 
 // CVEItem represents a CVE entry
@@ -89,11 +91,51 @@ func (s *CVEService) Initialize() error {
 	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create CVE directory: %w", err)
 	}
+	if s.appConfig == nil || !s.appConfig.Server.Security.CVE.Enabled {
+		return nil
+	}
+	filename := filepath.Join(s.dataDir, "nvd.json")
+	if _, err := os.Stat(filename); err == nil {
+		if err := s.loadCVEData(filename); err != nil {
+			return fmt.Errorf("load cached CVE feed: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect cached CVE feed: %w", err)
+	}
 	return nil
 }
 
+// RegisterHealthChecks registers the enabled NVD dataset check.
+func (s *CVEService) RegisterHealthChecks(registry *health.Registry) {
+	if registry == nil || s.appConfig == nil || !s.appConfig.Server.Security.CVE.Enabled {
+		return
+	}
+	_ = registry.Register("cve_nvd", false, func() string {
+		s.mu.RLock()
+		loaded := len(s.cveData) > 0
+		updateFailed := s.updateFailed
+		s.mu.RUnlock()
+		if !loaded {
+			return health.StatusError
+		}
+		lastUpdate := s.LastUpdate()
+		if lastUpdate.IsZero() {
+			return health.StatusError
+		}
+		if updateFailed || time.Since(lastUpdate) > 72*time.Hour {
+			return health.StatusDegraded
+		}
+		return health.StatusOK
+	})
+}
+
 // Update downloads and updates CVE database per PART 11
-func (s *CVEService) Update(ctx context.Context) error {
+func (s *CVEService) Update(ctx context.Context) (retErr error) {
+	defer func() {
+		s.mu.Lock()
+		s.updateFailed = retErr != nil
+		s.mu.Unlock()
+	}()
 	if !s.appConfig.Server.Security.CVE.Enabled {
 		return nil
 	}

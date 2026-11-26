@@ -12,7 +12,7 @@ func TestListenTCPIPv4WildcardStaysIPv4(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	if got := listener.Addr().(*net.TCPAddr).IP; got.To4() == nil {
 		t.Fatalf("listener address = %v, want an IPv4 address", got)
 	}
@@ -23,7 +23,7 @@ func TestListenTCPDefaultAddressIsDualStack(t *testing.T) {
 	if err != nil {
 		t.Skipf("dual-stack IPv6 listener unavailable: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	for _, address := range []string{net.JoinHostPort("::1", strconv.Itoa(port)), net.JoinHostPort("127.0.0.1", strconv.Itoa(port))} {

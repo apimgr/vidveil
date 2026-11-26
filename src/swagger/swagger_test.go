@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	sharedtheme "github.com/apimgr/vidveil/src/common/theme"
 	"github.com/apimgr/vidveil/src/config"
 )
 
@@ -96,6 +97,24 @@ func TestDetectThemeEmptyURL(t *testing.T) {
 	}
 }
 
+func TestThemeClassAndPaletteUseSharedThemeTokens(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	if got := ThemeClass(request); got != "theme-auto" {
+		t.Fatalf("ThemeClass without preference = %q, want theme-auto", got)
+	}
+	if got := Palette(DetectTheme(request)); got != sharedtheme.Dark {
+		t.Errorf("auto theme palette = %+v, want the shared dark default", got)
+	}
+
+	request.AddCookie(&http.Cookie{Name: "theme", Value: "light"})
+	if got := ThemeClass(request); got != "theme-light" {
+		t.Errorf("ThemeClass with light cookie = %q, want theme-light", got)
+	}
+	if got := Palette(DetectTheme(request)); got != sharedtheme.Light {
+		t.Errorf("light theme palette = %+v, want the shared light palette", got)
+	}
+}
+
 // TestGenerateSpecNilConfig covers the nil-config path: must return non-empty
 // valid JSON containing the "openapi" key.
 func TestGenerateSpecNilConfig(t *testing.T) {
@@ -142,6 +161,7 @@ func TestGenerateSpecContainsRequiredPaths(t *testing.T) {
 		"/api/v1/search",
 		"/api/v1/engines",
 		"/api/v1/server/preferences/tokens",
+		"/api/v1/server/preferences/tokens/primary",
 		"/api/v1/server/preferences/tokens/primary/reveal",
 		"/api/v1/server/preferences/tokens/{id}",
 		"/api/v1/server/help/mcp",
@@ -170,19 +190,21 @@ func TestGenerateSpecDocumentsImplementedAPIOperations(t *testing.T) {
 		t.Fatalf("unmarshal OpenAPI document: %v", err)
 	}
 	operations := map[string]string{
-		"get /api/v1/server/help/mcp":           "getServerHelpMCP",
-		"get /api/v1/server/dpo":                "getServerDPO",
-		"get /api/v1/bangs":                     "listBangs",
-		"get /api/v1/bangs/autocomplete":        "autocompleteBangs",
-		"get /api/v1/engines/{name}":            "getEngineDetails",
-		"get /api/v1/stats":                     "getServerStats",
-		"get /api/v1/version":                   "getServerVersion",
-		"post /api/v1/server/contact":           "submitServerContact",
-		"post /api/v1/server/reports/default":   "submitDefaultReport",
-		"get /api/v1/server/preferences/export": "exportPreferences",
-		"get /api/v1/server/preferences/import": "importPreferences",
-		"get /api/v1/proxy/thumbnails":          "proxyThumbnail",
-		"get /api/v1/proxy/videos":              "proxyVideo",
+		"get /api/v1/server/help/mcp":                "getServerHelpMCP",
+		"get /api/v1/server/graphql":                 "executeGraphQLQuery",
+		"post /api/v1/server/graphql":                "executeGraphQL",
+		"get /api/v1/server/dpo":                     "getServerDPO",
+		"get /api/v1/bangs":                          "listBangs",
+		"get /api/v1/bangs/autocomplete":             "autocompleteBangs",
+		"get /api/v1/engines/{name}":                 "getEngineDetails",
+		"get /api/v1/stats":                          "getServerStats",
+		"get /api/v1/version":                        "getServerVersion",
+		"post /api/v1/server/contact":                "submitServerContact",
+		"post /api/v1/server/reports/default":        "submitDefaultReport",
+		"get /api/v1/server/preferences/sync":        "exportPreferences",
+		"get /api/v1/server/preferences/sync/import": "importPreferences",
+		"get /api/v1/proxy/thumbnails":               "proxyThumbnail",
+		"get /api/v1/proxy/videos":                   "proxyVideo",
 	}
 	for endpoint, operationID := range operations {
 		parts := strings.SplitN(endpoint, " ", 2)
@@ -194,6 +216,30 @@ func TestGenerateSpecDocumentsImplementedAPIOperations(t *testing.T) {
 		}
 		if got := operation["operationId"]; got != operationID {
 			t.Errorf("OpenAPI %s %s operationId = %v, want %s", method, path, got, operationID)
+		}
+	}
+}
+
+func TestGenerateSpecDocumentsGraphQLGETParameters(t *testing.T) {
+	var document struct {
+		Paths map[string]map[string]map[string]interface{} `json:"paths"`
+	}
+	if err := json.Unmarshal([]byte(GenerateSpec(config.DefaultAppConfig(), httptest.NewRequest(http.MethodGet, "/", nil))), &document); err != nil {
+		t.Fatalf("unmarshal OpenAPI document: %v", err)
+	}
+	operation := document.Paths["/api/v1/server/graphql"]["get"]
+	parameters, ok := operation["parameters"].([]interface{})
+	if !ok || len(parameters) != 3 {
+		t.Fatalf("GraphQL GET parameters = %#v, want query, variables, operationName", operation["parameters"])
+	}
+	got := make(map[string]bool, len(parameters))
+	for _, raw := range parameters {
+		parameter := raw.(map[string]interface{})
+		got[parameter["name"].(string)] = true
+	}
+	for _, name := range []string{"query", "variables", "operationName"} {
+		if !got[name] {
+			t.Errorf("GraphQL GET parameter %q is missing", name)
 		}
 	}
 }
@@ -236,105 +282,6 @@ func TestGenerateSpecIsIdempotent(t *testing.T) {
 	second := GenerateSpec(cfg, req)
 	if first != second {
 		t.Error("GenerateSpec is not idempotent: two calls with the same config produced different output")
-	}
-}
-
-// TestHandlerReturns200 verifies that Handler returns HTTP 200 with a text/html
-// Content-Type for a basic GET request.
-func TestHandlerReturns200(t *testing.T) {
-	cfg := config.DefaultAppConfig()
-	h := Handler(cfg)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/swagger/ui", nil)
-	rr := httptest.NewRecorder()
-	h(rr, r)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("Handler() status = %d, want %d", rr.Code, http.StatusOK)
-	}
-
-	ct := rr.Header().Get("Content-Type")
-	if !strings.Contains(ct, "text/html") {
-		t.Errorf("Handler() Content-Type = %q, want text/html", ct)
-	}
-}
-
-// TestHandlerBodyContainsVidVeil verifies the rendered HTML mentions VidVeil so
-// that a broken template substitution is caught.
-func TestHandlerBodyContainsVidVeil(t *testing.T) {
-	cfg := config.DefaultAppConfig()
-	h := Handler(cfg)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/swagger/ui", nil)
-	rr := httptest.NewRecorder()
-	h(rr, r)
-
-	body := rr.Body.String()
-	if !strings.Contains(body, "VidVeil") {
-		t.Error("Handler() body does not contain \"VidVeil\"")
-	}
-}
-
-// TestHandlerThemeFromCookie verifies that the theme cookie is respected and
-// the light-theme CSS variables appear in the rendered page.
-func TestHandlerThemeFromCookie(t *testing.T) {
-	cfg := config.DefaultAppConfig()
-	h := Handler(cfg)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/swagger/ui", nil)
-	r.AddCookie(&http.Cookie{Name: "theme", Value: "light"})
-	rr := httptest.NewRecorder()
-	h(rr, r)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("Handler() with light theme cookie: status = %d, want %d", rr.Code, http.StatusOK)
-	}
-
-	body := rr.Body.String()
-	// Theme is applied via the shared theme-{dark,light,auto} class on <html>
-	// (AI.md PART 16) — colors come from common.css custom properties, not
-	// an inline style attribute or a hardcoded per-page palette.
-	if !strings.Contains(body, `class="theme-light"`) {
-		t.Error("Handler() with light theme cookie: theme-light class not found on <html>")
-	}
-}
-
-// TestHandlerDarkThemeDefault verifies that without a cookie the dark-theme
-// CSS variables are rendered (dark is the project default).
-func TestHandlerDarkThemeDefault(t *testing.T) {
-	cfg := config.DefaultAppConfig()
-	h := Handler(cfg)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/swagger/ui", nil)
-	rr := httptest.NewRecorder()
-	h(rr, r)
-
-	body := rr.Body.String()
-	// Without a cookie, DetectTheme falls back to "auto"; the shared
-	// theme-auto class on <html> lets prefers-color-scheme (default dark) apply.
-	if !strings.Contains(body, `class="theme-auto"`) {
-		t.Error("Handler() without cookie: theme-auto class not found on <html>")
-	}
-}
-
-// TestHandlerNilConfig verifies that Handler does not panic when passed a nil
-// AppConfig (GenerateSpec handles nil gracefully).
-func TestHandlerNilConfig(t *testing.T) {
-	h := Handler(nil)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/swagger/ui", nil)
-	rr := httptest.NewRecorder()
-
-	defer func() {
-		if rec := recover(); rec != nil {
-			t.Errorf("Handler(nil) panicked: %v", rec)
-		}
-	}()
-
-	h(rr, r)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("Handler(nil) status = %d, want %d", rr.Code, http.StatusOK)
 	}
 }
 

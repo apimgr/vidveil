@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/server/service/database"
+	"github.com/google/uuid"
 )
 
 func TestCookieMaxAgeParsesConfiguredUnits(t *testing.T) {
@@ -38,8 +39,12 @@ func TestIssuePrimaryAndAuthenticate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(issued.Token, "tok_") || len(issued.Token) != 36 {
+	if !strings.HasPrefix(issued.Token, "own_") || len(issued.Token) != 36 {
 		t.Fatalf("issued token format = %q", issued.Token)
+	}
+	tokenID, err := uuid.Parse(issued.TokenID)
+	if err != nil || tokenID.Version() != 7 {
+		t.Fatalf("issued token ID = %q, want UUIDv7 (parse error: %v)", issued.TokenID, err)
 	}
 	principal, err := manager.Authenticate(context.Background(), issued.Token)
 	if err != nil {
@@ -50,6 +55,40 @@ func TestIssuePrimaryAndAuthenticate(t *testing.T) {
 	}
 	if _, err := manager.Authenticate(context.Background(), "tok_invalid"); err == nil {
 		t.Fatal("Authenticate accepted an unknown token")
+	}
+}
+
+func TestAuthenticateAcceptsLegacyOwnerTokenPrefix(t *testing.T) {
+	schema, err := database.NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = schema.Close() }()
+	if err := schema.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewManager(schema.GetDB(), strings.Repeat("ef", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := manager.IssuePrimary(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyToken := "tok_0123456789abcdefghijkmnpqrstuvWX"
+	hash, encrypted, err := manager.encrypt(legacyToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := schema.GetDB().Exec(`UPDATE api_tokens SET token_hash = ?, token_prefix = ?, token_last4 = ?, token_enc = ? WHERE id = ?`, hash, legacyToken[:12], legacyToken[len(legacyToken)-4:], encrypted, issued.TokenID); err != nil {
+		t.Fatal(err)
+	}
+	principal, err := manager.Authenticate(context.Background(), legacyToken)
+	if err != nil {
+		t.Fatalf("Authenticate rejected legacy token: %v", err)
+	}
+	if principal.OwnerID != issued.OwnerID || principal.TokenID != issued.TokenID {
+		t.Fatalf("legacy token principal = %+v, want issued owner and token", principal)
 	}
 }
 

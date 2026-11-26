@@ -4,6 +4,8 @@ package database
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestEnsureSchemaPreservesLegacyTokensAsOwners(t *testing.T) {
@@ -43,9 +45,13 @@ func TestEnsureSchemaPreservesLegacyTokensAsOwners(t *testing.T) {
 	if err := migrated.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	var ownerID, kind, name, encrypted string
-	if err := migrated.GetDB().QueryRow(`SELECT owner_id, kind, COALESCE(name, ''), token_enc FROM api_tokens WHERE token_prefix = 'tok_legacy'`).Scan(&ownerID, &kind, &name, &encrypted); err != nil {
+	var id, ownerID, kind, name, encrypted string
+	if err := migrated.GetDB().QueryRow(`SELECT id, owner_id, kind, COALESCE(name, ''), token_enc FROM api_tokens WHERE token_prefix = 'tok_legacy'`).Scan(&id, &ownerID, &kind, &name, &encrypted); err != nil {
 		t.Fatal(err)
+	}
+	parsedID, err := uuid.Parse(id)
+	if err != nil || parsedID.Version() != 7 {
+		t.Fatalf("migrated token ID = %q, want UUIDv7", id)
 	}
 	if ownerID == "" || kind != "linked" || name != "" || encrypted != "" {
 		t.Fatalf("migrated token = owner %q, kind %q, name %q, encrypted %q", ownerID, kind, name, encrypted)
@@ -56,6 +62,13 @@ func TestEnsureSchemaPreservesLegacyTokensAsOwners(t *testing.T) {
 	}
 	if owners != 1 {
 		t.Fatalf("legacy owner count = %d, want 1", owners)
+	}
+	columns, idType, err := apiTokenColumns(t.Context(), migrated.GetDB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if idType != "TEXT" || !columns["token_last4"] || columns["token_suffix"] || columns["resource_type"] || columns["resource_id"] {
+		t.Fatalf("migrated API-token schema: id type %q, columns %#v", idType, columns)
 	}
 }
 

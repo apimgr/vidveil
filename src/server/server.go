@@ -26,6 +26,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/cors"
 
+	"github.com/apimgr/vidveil/src/common/apiroute"
 	"github.com/apimgr/vidveil/src/common/authpad"
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/netutil"
@@ -42,17 +43,21 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/branding"
 	"github.com/apimgr/vidveil/src/server/service/email"
 	"github.com/apimgr/vidveil/src/server/service/engine"
+	"github.com/apimgr/vidveil/src/server/service/health"
 	"github.com/apimgr/vidveil/src/server/service/logging"
+	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	svcmetrics "github.com/apimgr/vidveil/src/server/service/metric"
+	"github.com/apimgr/vidveil/src/server/service/pgp"
 	"github.com/apimgr/vidveil/src/server/service/ratelimit"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
+	"github.com/apimgr/vidveil/src/server/service/secreport"
 	"github.com/apimgr/vidveil/src/server/service/secret"
 	"github.com/apimgr/vidveil/src/server/service/ssl"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 	"github.com/apimgr/vidveil/src/swagger"
 )
 
-//go:embed static/css/* static/js/* static/images/* static/icons/* static/splash/* static/screenshots/* static/manifest.json static/offline.html template/page/*.tmpl template/partial/public/*.tmpl template/layout/*.tmpl template/component/*.tmpl template/nojs/*.tmpl
+//go:embed static template
 var embeddedFS embed.FS
 
 // GetTemplatesFS returns the embedded templates filesystem
@@ -88,6 +93,7 @@ type Server struct {
 	scheduler          *scheduler.Scheduler
 	logger             *logging.AppLogger
 	router             *chi.Mux
+	apiRoutes          *apiroute.Registry
 	srv                *http.Server
 	rateLimiter        *ratelimit.RateLimiter
 	tokenActionLimiter *ratelimit.RateLimiter
@@ -122,7 +128,7 @@ type Server struct {
 
 type tokenRevealFlash struct {
 	token     string
-	id        int64
+	id        string
 	primary   bool
 	expiresAt time.Time
 }
@@ -246,6 +252,24 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 		}); err != nil {
 			log.Printf("idle owner purge task registration failed: %v", err)
 		}
+		if err := sched.RegisterTask("security_cleanup", "Security Report Cleanup", "Delete closed security reports after the configured retention period", "30 3 * * *", func(ctx context.Context) error {
+			if _, err := pgp.CleanupRetiredPrivateKey(configDir, time.Now().UTC()); err != nil {
+				return err
+			}
+			if s.migrationMgr == nil || s.migrationMgr.GetDB() == nil {
+				return nil
+			}
+			if _, err := secret.RetirePreviousEncryptionKey(ctx, s.migrationMgr.GetDB(), time.Now().UTC()); err != nil {
+				return err
+			}
+			deleted, err := secreport.CleanupClosedReports(ctx, s.migrationMgr.GetDB(), appConfig.Server.Security.Reports.RetentionDays, time.Now().UTC())
+			if err == nil && deleted > 0 {
+				log.Printf("deleted %d expired security reports", deleted)
+			}
+			return err
+		}); err != nil {
+			log.Printf("security report cleanup task registration failed: %v", err)
+		}
 		if s.secretsMgr != nil {
 			if err := sched.RegisterTask("csrf_secret_rotation", "CSRF Secret Rotation", "Rotate the CSRF token HMAC secret every 180 days", "@daily", func(ctx context.Context) error {
 				rotated, err := s.secretsMgr.RotateIfDue(ctx, secret.CSRFTokenSecret, 180*24*time.Hour)
@@ -284,12 +308,12 @@ func (s *Server) RefreshBrandingImages(ctx context.Context) error {
 	return s.brandingImages.Refresh(ctx)
 }
 
-// SetRestoreRestartHandler wires the callback that restarts the process after
-// an API or WebUI restore has completed successfully.
-func (s *Server) SetRestoreRestartHandler(restart func()) {
-	if s.serverHandler != nil {
-		s.serverHandler.SetRestoreRestartHandler(restart)
+// APIRoutes returns the per-server API route definitions bound to live handlers.
+func (s *Server) APIRoutes() []apiroute.Route {
+	if s == nil || s.apiRoutes == nil {
+		return nil
 	}
+	return s.apiRoutes.Routes()
 }
 
 func (s *Server) serveBrandingAsset(w http.ResponseWriter, r *http.Request) {
@@ -332,6 +356,71 @@ func (s *Server) SetI2PService(service handler.I2PStatusChecker) {
 	}
 	if s.serverHandler != nil {
 		s.serverHandler.SetI2PService(service)
+	}
+}
+
+// SetHealthRegistry wires cached dataset checks into the public health pages.
+func (s *Server) SetHealthRegistry(registry *health.Registry) {
+	if s.searchHandler != nil {
+		s.searchHandler.SetHealthRegistry(registry)
+	}
+}
+
+func (s *Server) SetMaintenanceStatus(status *maintenance.MaintenanceStatus) {
+	if s.searchHandler != nil {
+		s.searchHandler.SetMaintenanceStatus(status)
+	}
+}
+
+// NotifyMaintenance sends operator notifications for automatic maintenance
+// transitions when the corresponding settings and transports are configured.
+func (s *Server) NotifyMaintenance(entered bool, reason string, duration time.Duration) {
+	if s.appConfig == nil {
+		return
+	}
+	settings := s.appConfig.Server.Maintenance.Notify
+	event := "admin.maintenance_recovered"
+	subject := "Server recovered from maintenance mode"
+	body := fmt.Sprintf("The server recovered from maintenance mode after %s. Cause: %s.", duration.Round(time.Second), reason)
+	enabled := settings.OnExit
+	if entered {
+		event = "admin.maintenance_entered"
+		subject = "Server entered read-only maintenance mode"
+		body = "The server entered read-only maintenance mode. Cause: " + reason + ". Self-healing retries continue in the background."
+		enabled = settings.OnEnter
+	}
+	if !enabled {
+		return
+	}
+	if s.notifyDispatcher != nil {
+		s.notifyDispatcher.Send(context.Background(), notify.RoleAdmin, notify.Payload{
+			Event: event, Subject: subject, Body: body, Severity: notify.SeverityCritical,
+		})
+	}
+	if s.emailService != nil && s.appConfig.Server.Notifications.Email.Enabled && s.appConfig.Server.Contact.Admin.Email != "" {
+		if err := s.emailService.SendRaw(s.appConfig.Server.Contact.Admin.Email, subject, body); err != nil && s.logger != nil {
+			s.logger.Warn("maintenance notification email failed", map[string]interface{}{"event": event, "error": err.Error()})
+		}
+	}
+}
+
+// NotifySelfHealingExhausted asks the configured operator channels to act after
+// the maintenance retry limit is reached.
+func (s *Server) NotifySelfHealingExhausted(reason string, attempts uint64) {
+	if s.appConfig == nil {
+		return
+	}
+	subject := "Server self-healing exhausted"
+	body := fmt.Sprintf("The server remains in read-only maintenance mode after %d failed recovery attempts. Cause: %s. Correct the cause and restart the service to resume recovery.", attempts, reason)
+	if s.notifyDispatcher != nil {
+		s.notifyDispatcher.Send(context.Background(), notify.RoleAdmin, notify.Payload{
+			Event: "admin.self_healing_exhausted", Subject: subject, Body: body, Severity: notify.SeverityCritical,
+		})
+	}
+	if s.emailService != nil && s.appConfig.Server.Notifications.Email.Enabled && s.appConfig.Server.Contact.Admin.Email != "" {
+		if err := s.emailService.SendRaw(s.appConfig.Server.Contact.Admin.Email, subject, body); err != nil && s.logger != nil {
+			s.logger.Warn("self-healing exhaustion notification email failed", map[string]interface{}{"error": err.Error()})
+		}
 	}
 }
 
@@ -506,11 +595,6 @@ func (s *Server) setupMiddleware() {
 	s.router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestLimit := maxBodyBytes
-			if r.Method == http.MethodPost && strings.HasSuffix(strings.TrimSuffix(r.URL.Path, "/"), "/server/restore") {
-				if archiveLimit, err := config.ParseSizeBytes(s.appConfig.Server.Restore.MaxArchiveSize); err == nil && archiveLimit <= uint64(^uint64(0)>>1)-(1<<20) {
-					requestLimit = int64(archiveLimit) + (1 << 20)
-				}
-			}
 			r.Body = http.MaxBytesReader(w, r.Body, requestLimit)
 			next.ServeHTTP(w, r)
 		})
@@ -546,6 +630,13 @@ func (s *Server) setupMiddleware() {
 	// Extension stripping middleware per AI.md PART 14
 	// Strips .txt and .json extensions from API paths for routing
 	s.router.Use(extensionStripMiddleware)
+
+	// Resolve locale after URL normalization and before handlers render templates.
+	// Query-selected languages persist as the visitor's one-year preference.
+	s.router.Use(i18n.GlobalTranslator().MiddlewareWithSecure(func(r *http.Request) bool {
+		proto, _, _ := urlvar.GetURLVars(r)
+		return strings.EqualFold(proto, "https")
+	}))
 
 	// 10. Logger — LAST (innermost) per AI.md PART 5/16 spec so logs carry
 	// request_id and only log requests that reached the handler chain.
@@ -980,6 +1071,11 @@ func (s *Server) setupRoutes() {
 		if err != nil {
 			log.Printf("owner-token manager could not be initialized: %v", err)
 		} else {
+			manager.SetDecryptionFailureLogger(func(table, rowID string) {
+				if s.logger != nil {
+					s.logger.Security("security.decrypt_failed", "", map[string]interface{}{"table": table, "row_id": rowID})
+				}
+			})
 			s.tokenManager = manager
 		}
 	}
@@ -1152,42 +1248,56 @@ func (s *Server) setupRoutes() {
 	// Versioned API: {api_version}/server/swagger  {api_version}/server/graphql
 	// Unversioned aliases (same handler, no redirect): /api/swagger  /api/graphql
 	apiBase := s.appConfig.APIBasePath()
+	var server *handler.ServerHandler
 	gql := graphql.NewHandler(s.appConfig, s.engineMgr)
 	gql.SetSearchRecorder(h.RecordRecentSearch)
-
-	// Swagger UI (HTML)
-	s.router.Get("/server/docs/swagger", swagger.Handler(s.appConfig))
-	// GraphiQL UI (HTML)
-	s.router.Get("/server/docs/graphql", gql.GraphiQL)
-
-	// Versioned OpenAPI JSON spec
-	s.router.Get(apiBase+"/server/swagger", swagger.SpecHandler(s.appConfig))
-	// Versioned GraphQL endpoint
-	s.router.Post(apiBase+"/server/graphql", gql.Handle)
-
-	// Unversioned aliases — SAME handler, not redirects (PART 14)
-	s.router.Get("/api/swagger", swagger.SpecHandler(s.appConfig))
-	s.router.Post("/api/graphql", gql.Handle)
-	// /api/healthz is the unversioned direct JSON alias for {api_version}/server/healthz
-	s.router.Get("/api/healthz", h.APIHealthCheck)
-
-	// Metrics — INTERNAL ONLY, per-service bearer token auth, SAME handler at
-	// every alias, never a redirect (AI.md PART 20).
-	if s.appConfig.Server.Metrics.Enabled {
-		metricsHandler := svcmetrics.ServiceHandler(s.appConfig, s.logger)
-
-		s.router.Get("/server/metrics", metricsHandler)
-		s.router.Get("/server/metrics/{service}", metricsHandler)
-		s.router.Get(apiBase+"/server/metrics", metricsHandler)
-		s.router.Get(apiBase+"/server/metrics/{service}", metricsHandler)
-		s.router.Get("/api/metrics", metricsHandler)
-		s.router.Get("/api/metrics/{service}", metricsHandler)
-
-		if s.appConfig.Server.Metrics.Root.Enabled {
-			s.router.Get("/metrics", metricsHandler)
-			s.router.Get("/metrics/{service}", metricsHandler)
-		}
+	// GraphQL read fields reuse the REST handlers so their response shapes,
+	// authentication scopes, cookie behavior, and owner isolation stay aligned.
+	registerGraphQLRead := func(name string, endpoint http.HandlerFunc) {
+		gql.SetReadOperation(name, func(request *http.Request, args map[string]any) (string, error) {
+			if name == "engineDetails" {
+				routeContext := chi.NewRouteContext()
+				name, _ := args["name"].(string)
+				routeContext.URLParams.Add("name", name)
+				request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, routeContext))
+			}
+			if name == "searchBatch" {
+				return graphql.CaptureJSONPost(endpoint, request, map[string]any{"queries": args["queries"]})
+			}
+			if name == "operatorStatus" {
+				return graphql.CaptureResponse(func(w http.ResponseWriter, r *http.Request) {
+					s.requireOperatorToken(endpoint).ServeHTTP(w, r)
+				}, request)
+			}
+			return graphql.CaptureResponse(endpoint, request)
+		})
 	}
+	registerGraphQLRead("engineHealth", h.APIEngineHealth)
+	registerGraphQLRead("engineDetails", h.APIEngineDetails)
+	registerGraphQLRead("searchBatch", h.BatchSearch)
+	registerGraphQLRead("stats", h.APIStats)
+	registerGraphQLRead("version", h.APIVersion)
+	registerGraphQLRead("healthz", h.APIHealthCheck)
+	registerGraphQLRead("operatorStatus", h.OperatorStatus)
+	registerGraphQLRead("serverAbout", func(w http.ResponseWriter, r *http.Request) { s.serverHandler.APIAbout(w, r) })
+	registerGraphQLRead("serverPrivacy", func(w http.ResponseWriter, r *http.Request) { s.serverHandler.APIPrivacy(w, r) })
+	registerGraphQLRead("serverDpo", func(w http.ResponseWriter, r *http.Request) { s.serverHandler.APIDPO(w, r) })
+	registerGraphQLRead("serverContact", func(w http.ResponseWriter, r *http.Request) { s.serverHandler.APIContact(w, r) })
+	registerGraphQLRead("serverHelp", func(w http.ResponseWriter, r *http.Request) { s.serverHandler.APIHelp(w, r) })
+	registerGraphQLRead("serverHelpMcp", func(w http.ResponseWriter, r *http.Request) { s.serverHandler.APIHelpMCP(w, r) })
+	registerGraphQLRead("serverTerms", func(w http.ResponseWriter, r *http.Request) { s.serverHandler.APITerms(w, r) })
+	registerGraphQLRead("serverSecurity", func(w http.ResponseWriter, r *http.Request) { s.serverHandler.APISecurity(w, r) })
+	registerGraphQLRead("serverSecurityPolicy", func(w http.ResponseWriter, r *http.Request) { s.serverHandler.APISecurityPolicy(w, r) })
+	registerGraphQLRead("serverSecurityThanks", func(w http.ResponseWriter, r *http.Request) { s.serverHandler.APISecurityThanks(w, r) })
+	registerGraphQLRead("preferences", h.PreferencesAPIGet)
+	registerGraphQLRead("preferenceSync", h.PreferencesExport)
+	registerGraphQLRead("preferenceTokens", s.ownerTokensAPIList)
+	registerGraphQLRead("favorites", h.FavoritesAPIList)
+	registerGraphQLRead("openAPI", swagger.SpecHandler(s.appConfig))
+
+	// Interactive documentation pages use the shared server-rendered shell.
+	s.router.Get("/server/docs/swagger", func(w http.ResponseWriter, r *http.Request) { s.serverHandler.SwaggerDocsPage(w, r) })
+	s.router.Get("/server/docs/graphql", func(w http.ResponseWriter, r *http.Request) { s.serverHandler.GraphQLDocsPage(w, r) })
 
 	// Routes that require age verification (project-specific per PART 14)
 	s.router.Group(func(r chi.Router) {
@@ -1201,9 +1311,13 @@ func (s *Server) setupRoutes() {
 		r.Get("/search.rss", h.SearchRSSFeed)
 		r.Get("/search.atom", h.SearchAtomFeed)
 		r.Get("/server/preferences", h.PreferencesPage)
+		r.Get("/server/preferences/sync", h.PreferencesExport)
+		r.Post("/server/preferences/sync", h.PreferencesSyncSave)
+		r.Get("/server/preferences/sync/import", h.PreferencesImport)
 		r.With(s.ownerTokenRevealMiddleware).Get("/server/preferences/tokens", h.OwnerTokensPage)
 		r.Post("/server/preferences", h.PreferencesSave)
 		r.Post("/server/preferences/token/restore", s.ownerTokenRestore)
+		r.Post("/server/preferences/token/create", s.ownerTokenWebIssuePrimary)
 		r.Post("/server/preferences/token/forget", s.ownerTokenWebForget)
 		r.Post("/server/preferences/token/reveal", s.ownerTokenWebRevealPrimary)
 		r.Post("/server/preferences/token/rotate", s.ownerTokenWebRotatePrimary)
@@ -1212,11 +1326,6 @@ func (s *Server) setupRoutes() {
 		r.Post("/server/preferences/tokens/{id}/rotate", s.ownerTokenWebRotateLinked)
 		r.Post("/server/preferences/tokens/{id}/update", s.ownerTokenWebUpdateLinked)
 		r.Post("/server/preferences/tokens/{id}/revoke", s.ownerTokenWebRevokeLinked)
-		// Cross-device preference sync (stateless, no preferences table) per
-		// AI.md PART 16 — sub-routes of /server/preferences, never a
-		// standalone /prefs/* path nor bare /preferences.
-		r.Get("/server/preferences/export", h.PreferencesExport)
-		r.Get("/server/preferences/import", h.PreferencesImport)
 		r.Get("/favorites", h.FavoritesPage)
 		r.Post("/favorites", h.FavoritesSave)
 		r.Get("/favorites/export", h.FavoritesExport)
@@ -1225,11 +1334,10 @@ func (s *Server) setupRoutes() {
 	})
 
 	// Server routes per AI.md PART 14 (Route Scopes)
-	server := handler.NewServerHandler(s.appConfig)
+	server = handler.NewServerHandler(s.appConfig)
 	server.SetDB(s.migrationMgr.GetDB())
 	server.SetSecretsManager(secretsMgr)
 	server.SetConfigDir(s.configDir)
-	server.SetDataDir(s.dataDir)
 	server.SetLogger(s.logger)
 	s.emailService = email.NewEmailService(s.appConfig)
 	server.SetEmailService(s.emailService)
@@ -1267,125 +1375,81 @@ func (s *Server) setupRoutes() {
 		r.Get("/security/policy", server.SecurityPolicyPage)
 		r.Get("/security/thanks", server.SecurityThanksPage)
 		r.Get("/security/report/{tracking_id}", server.SecurityReportStatusPage)
-		r.Get("/restore", server.RestorePage)
-		r.Post("/restore", server.RestoreSubmit)
 	})
 
-	// API autodiscover endpoint (non-versioned per AI.md PART 14)
-	// Clients need this BEFORE they know the API version
-	s.router.Get("/api/autodiscover", h.Autodiscover)
 	if s.appConfig.CLI.BinaryDownload.RequireAuth {
 		s.router.With(s.requireOperatorToken).Get("/cli/binaries/{filename}", h.CLIBinaryDownload)
 	} else {
 		s.router.Get("/cli/binaries/{filename}", h.CLIBinaryDownload)
 	}
 
-	// Versioned API routes per AI.md PART 14 ({api_version}, default "v1")
-	s.router.Route(apiBase, func(r chi.Router) {
-		// Search endpoint (public) - content negotiation for JSON, SSE, text
-		// Accept: application/json (default) - JSON response with caching
-		// Accept: text/event-stream - SSE streaming results as engines respond
-		// Accept: text/plain or .txt extension - plain text format
-		r.Get("/search", h.APISearch)
-		r.Post("/search/batch", h.BatchSearch)
-
-		// Bang endpoints (public) - per AI.md PART 14
-		r.Get("/bangs", h.APIBangs)
-		r.Get("/bangs/autocomplete", h.APIAutocomplete)
-
-		// Engine endpoints (public)
-		r.Get("/engines", h.APIEngines)
-		r.Get("/engines/health", h.APIEngineHealth)
-		r.Get("/engines/{name}", h.APIEngineDetails)
-
-		// Stats (public)
-		r.Get("/stats", h.APIStats)
-
-		// Debug endpoints (development only per IDEA.md) — gated on debug mode
-		// and operator-token authorization, matching registerDebugRoutes.
-		if mode.IsDebugEnabled() {
-			s.registerDebugAPIRoutes(r, "/debug", h)
-		}
-
-		// Per AI.md PART 14: canonical health route is /api/{api_version}/server/healthz.
-		// Legacy /api/{api_version}/healthz alias removed — spec requires no shims.
-		r.Get("/version", h.APIVersion)
-
-		// Server API per AI.md PART 14
-		r.Route("/server", func(r chi.Router) {
-			r.Get("/healthz", h.APIHealthCheck)
-			r.Get("/about", server.APIAbout)
-			r.Get("/privacy", server.APIPrivacy)
-			r.Get("/dpo", server.APIDPO)
-			r.Get("/auth/check", s.APIAuthCheck)
-			r.Get("/contact", server.APIContact)
-			r.Post("/contact", server.APIContact)
-			r.With(s.requireOperatorToken).Post("/restore", server.APIRestore)
-			r.Get("/help", server.APIHelp)
-			r.Get("/help/mcp", server.APIHelpMCP)
-			r.Get("/terms", server.APITerms)
-
-			// Browser-emitted report ingestion per AI.md PART 11 "Reporting API
-			// (Modern + Legacy)". These back the Reporting-Endpoints, Report-To,
-			// and NEL response headers set in the security-headers middleware, and
-			// the CSP report-to/report-uri directives. Each accepts a bounded POST,
-			// logs a sanitized summary to security.log, and returns 204.
-			r.Route("/reports", func(r chi.Router) {
-				r.Post("/default", server.ReportsDefault)
-				r.Post("/nel", server.ReportsNEL)
-				r.Post("/csp", server.ReportsCSP)
-			})
-			// Cross-device preference sync, API-mirrored per AI.md PART 16 —
-			// same stateless handlers as the frontend
-			// /server/preferences/{export,import}.
-			r.Route("/preferences", func(r chi.Router) {
-				r.Get("/export", h.PreferencesExport)
-				r.Get("/import", h.PreferencesImport)
-			})
-		})
-
-		// Proxy endpoints (plural per PART 14)
-		r.Get("/proxy/thumbnails", h.ProxyThumbnail)
-		r.Get("/proxy/videos", h.ProxyVideo)
-
-		// Favorites (public, owner-token cookie — no account) per
-		// AI.md PART 16 progressive enhancement; server-side storage in
-		// server.db, see favorites.go.
-		r.Route("/favorites", func(r chi.Router) {
-			r.Get("/", h.FavoritesAPIList)
-			r.Post("/", h.FavoritesAPIAdd)
-			r.Post("/import", h.FavoritesImport)
-			r.Delete("/{id}", h.FavoritesAPIRemove)
-			r.Delete("/", h.FavoritesAPIClear)
-		})
-
-	})
-
-	s.router.Get(apiBase+"/server/preferences", h.PreferencesAPIGet)
-	s.router.Post(apiBase+"/server/preferences", h.PreferencesAPISet)
-	tokensPath := apiBase + "/server/preferences/tokens"
-	s.router.Get(tokensPath, s.ownerTokensAPIList)
-	s.router.Post(tokensPath, s.ownerTokensAPICreate)
-	s.router.Post(tokensPath+"/primary/reveal", s.ownerTokensAPIRevealPrimary)
-	s.router.Post(tokensPath+"/primary/rotate", s.ownerTokensAPIRotatePrimary)
-	s.router.Post(tokensPath+"/{id}/reveal", s.ownerTokensAPIRevealLinked)
-	s.router.Post(tokensPath+"/{id}/rotate", s.ownerTokensAPIRotateLinked)
-	s.router.Patch(tokensPath+"/{id}", s.ownerTokensAPIUpdateLinked)
-	s.router.Delete(tokensPath+"/{id}", s.ownerTokensAPIRevokeLinked)
-
-	// The unversioned operational alias uses the same debug handlers and
-	// operator-token protection as the versioned API endpoints.
-	if mode.IsDebugEnabled() {
-		s.registerDebugAPIRoutes(s.router, "/api/debug", h)
+	// Every API route is bound and mounted from the shared contract registry.
+	metricsHandler := svcmetrics.ServiceHandler(s.appConfig, s.logger)
+	mcpHandler := mcpserver.OriginMiddleware(s.appConfig, mcpserver.Handler(s.appConfig, s.router, s.isBearerOperatorToken, func(r *http.Request) bool {
+		return s.bearerTokenKind(r) != ""
+	}))
+	apiRoutes := apiroute.NewRegistry()
+	apiHandlers := map[string]http.HandlerFunc{
+		"searchVideos": h.APISearch, "batchSearch": h.BatchSearch,
+		"listBangs": h.APIBangs, "autocompleteBangs": h.APIAutocomplete,
+		"listEngines": h.APIEngines, "getEngineHealth": h.APIEngineHealth,
+		"getEngineDetails": h.APIEngineDetails, "getServerStats": h.APIStats,
+		"getServerVersion": h.APIVersion, "getServerHealth": h.APIHealthCheck,
+		"getOperatorStatus": func(w http.ResponseWriter, r *http.Request) {
+			s.requireOperatorToken(http.HandlerFunc(h.OperatorStatus)).ServeHTTP(w, r)
+		},
+		"getServerAbout": server.APIAbout, "getServerPrivacy": server.APIPrivacy, "getServerDPO": server.APIDPO,
+		"checkServerToken": s.APIAuthCheck, "getServerContactForm": server.APIContact, "submitServerContact": server.APIContact,
+		"getServerHelp": server.APIHelp, "getServerHelpMCP": server.APIHelpMCP,
+		"getServerTerms": server.APITerms, "getServerSecurity": server.APISecurity,
+		"getServerSecurityPolicy": server.APISecurityPolicy, "getServerSecurityThanks": server.APISecurityThanks,
+		"submitDefaultReport": server.ReportsDefault, "submitNetworkErrorReport": server.ReportsNEL, "submitCSPReport": server.ReportsCSP,
+		"proxyThumbnail": h.ProxyThumbnail, "proxyVideo": h.ProxyVideo,
+		"listFavorites": h.FavoritesAPIList, "addFavorite": h.FavoritesAPIAdd,
+		"importFavorites": h.FavoritesImport, "removeFavorite": h.FavoritesAPIRemove,
+		"clearFavorites": h.FavoritesAPIClear,
+		"getPreferences": h.PreferencesAPIGet, "savePreferences": h.PreferencesAPISet,
+		"exportPreferences": h.PreferencesExport, "importPreferences": h.PreferencesImport,
+		"listOwnerTokens": s.ownerTokensAPIList, "createLinkedToken": s.ownerTokensAPICreate,
+		"issuePrimaryOwnerToken": s.ownerTokensAPIIssuePrimary, "revealPrimaryToken": s.ownerTokensAPIRevealPrimary,
+		"rotatePrimaryToken": s.ownerTokensAPIRotatePrimary, "revealLinkedToken": s.ownerTokensAPIRevealLinked,
+		"rotateLinkedToken": s.ownerTokensAPIRotateLinked, "updateLinkedToken": s.ownerTokensAPIUpdateLinked,
+		"revokeLinkedToken": s.ownerTokensAPIRevokeLinked,
+		"getOpenAPISpec":    swagger.SpecHandler(s.appConfig), "executeGraphQL": gql.Handle, "executeGraphQLQuery": gql.Handle,
+		"getMetrics": metricsHandler, "getServiceMetrics": metricsHandler,
+		"debugEngines": func(w http.ResponseWriter, r *http.Request) {
+			s.requireOperatorToken(http.HandlerFunc(h.DebugEnginesList)).ServeHTTP(w, r)
+		},
+		"debugEngine": func(w http.ResponseWriter, r *http.Request) {
+			s.requireOperatorToken(http.HandlerFunc(h.DebugEngine)).ServeHTTP(w, r)
+		},
+		"autodiscover": h.Autodiscover, "executeMCP": mcpHandler.ServeHTTP,
 	}
-
-	// MCP aliases share the same stateless Streamable HTTP handler. The
-	// handler dispatches tool calls in-process through this router.
-	mcpHandler := mcpserver.OriginMiddleware(s.appConfig, mcpserver.Handler(s.appConfig, s.router, s.isBearerOperatorToken))
-	apiBase = s.appConfig.APIBasePath()
-	s.router.Post(apiBase+"/server/mcp", mcpHandler.ServeHTTP)
-	s.router.Post("/api/mcp", mcpHandler.ServeHTTP)
-	s.router.Post("/mcp", mcpHandler.ServeHTTP)
+	for _, definition := range apiroute.Definitions() {
+		handlerFunc := apiHandlers[definition.OperationID]
+		if handlerFunc == nil {
+			panic(fmt.Errorf("missing API route handler for operation %q", definition.OperationID))
+		}
+		if err := apiRoutes.Add(apiroute.Route{Definition: definition, Handler: handlerFunc}); err != nil {
+			panic(fmt.Errorf("register API route %q: %w", definition.OperationID, err))
+		}
+	}
+	conditionEnabled := func(condition string) bool {
+		switch condition {
+		case "debug":
+			return mode.IsDebugEnabled()
+		case "server.metrics.enabled":
+			return s.appConfig.Server.Metrics.Enabled
+		case "server.metrics.root.enabled":
+			return s.appConfig.Server.Metrics.Enabled && s.appConfig.Server.Metrics.Root.Enabled
+		default:
+			return false
+		}
+	}
+	if err := apiRoutes.Mount(s.router, apiBase, conditionEnabled, handler.RouteResponseMiddleware); err != nil {
+		panic(fmt.Errorf("mount API route registry: %w", err))
+	}
+	s.apiRoutes = apiRoutes
 
 	// Custom 404 handler per AI.md PART 14
 	s.router.NotFound(h.NotFoundHandler)
@@ -1452,33 +1516,28 @@ func (s *Server) sslCertificateInfo() (*ssl.CertInfo, error) {
 	return provider.GetCertInfo()
 }
 
-// registerDebugAPIRoutes mounts debug APIs behind the operator-token check.
-func (s *Server) registerDebugAPIRoutes(r chi.Router, path string, h *handler.SearchHandler) {
-	r.Route(path, func(r chi.Router) {
-		r.Use(s.requireOperatorToken)
-		r.Get("/engines", h.DebugEnginesList)
-		r.Get("/engines/{name}", h.DebugEngine)
-	})
-}
-
 // requireOperatorToken protects diagnostics with the configured server token.
 // It compares fixed-length SHA-256 digests in constant time per AI.md PART 11.
 func (s *Server) requireOperatorToken(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		deny := func(invalid bool) {
-			if invalid {
-				handler.SetBearerChallenge(w, "invalid_token")
-			} else {
-				handler.SetBearerChallenge(w, "")
-			}
+		deny := func(code, message, challenge string) {
+			handler.SetBearerChallenge(w, challenge)
 			authpad.Wait(start)
-			handler.SendNegotiatedError(w, r, handler.CodeUnauthorized, handler.MsgUnauthorized)
+			handler.SendNegotiatedError(w, r, code, message)
 		}
-		if !s.isBearerOperatorToken(r) {
+		kind := s.bearerTokenKind(r)
+		if kind == "owner" {
+			deny(handler.CodeForbidden, handler.MsgForbidden, "insufficient_scope")
+			return
+		}
+		if kind != "operator" {
+			challenge := ""
 			header := strings.TrimSpace(r.Header.Get("Authorization"))
-			invalid := strings.HasPrefix(strings.ToLower(header), "bearer ") && strings.TrimSpace(header[len("Bearer "):]) != ""
-			deny(invalid)
+			if strings.HasPrefix(strings.ToLower(header), "bearer ") && strings.TrimSpace(header[len("Bearer "):]) != "" {
+				challenge = "invalid_token"
+			}
+			deny(handler.CodeUnauthorized, handler.MsgUnauthorized, challenge)
 			return
 		}
 		response := authpad.WrapResponse(w, start)
@@ -1495,6 +1554,24 @@ func (s *Server) isBearerOperatorToken(r *http.Request) bool {
 	return s.matchesOperatorToken(strings.TrimSpace(value[len("Bearer "):]))
 }
 
+// bearerTokenKind validates the same operator and owner credentials accepted
+// by the API. It does not update token-use metadata.
+func (s *Server) bearerTokenKind(r *http.Request) string {
+	provided, ok := bearerToken(strings.TrimSpace(r.Header.Get("Authorization")))
+	if !ok {
+		return ""
+	}
+	if s.matchesOperatorToken(provided) {
+		return "operator"
+	}
+	if s.tokenManager != nil {
+		if _, err := s.tokenManager.ValidateOnly(r.Context(), provided); err == nil {
+			return "owner"
+		}
+	}
+	return ""
+}
+
 func (s *Server) matchesOperatorToken(providedToken string) bool {
 	if providedToken == "" {
 		return false
@@ -1506,25 +1583,16 @@ func (s *Server) matchesOperatorToken(providedToken string) bool {
 
 func (s *Server) APIAuthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	provided, ok := bearerToken(strings.TrimSpace(r.Header.Get("Authorization")))
-	if !ok {
+	kind := s.bearerTokenKind(r)
+	if kind == "" {
 		handler.SetBearerChallenge(w, "")
+		if header := strings.TrimSpace(r.Header.Get("Authorization")); strings.HasPrefix(strings.ToLower(header), "bearer ") && strings.TrimSpace(header[len("Bearer "):]) != "" {
+			handler.SetBearerChallenge(w, "invalid_token")
+		}
 		handler.SendError(w, handler.CodeUnauthorized, handler.MsgUnauthorized)
 		return
 	}
-	if s.matchesOperatorToken(provided) {
-		handler.SendOK(w, map[string]string{"kind": "operator"})
-		return
-	}
-	if s.tokenManager != nil {
-		_, err := s.tokenManager.ValidateOnly(r.Context(), provided)
-		if err == nil {
-			handler.SendOK(w, map[string]string{"kind": "owner"})
-			return
-		}
-	}
-	handler.SetBearerChallenge(w, "invalid_token")
-	handler.SendError(w, handler.CodeUnauthorized, handler.MsgUnauthorized)
+	handler.SendOK(w, map[string]string{"kind": kind})
 }
 
 // extractRequestToken accepts only the native Bearer credential form.
@@ -1547,6 +1615,14 @@ func (s *Server) RefreshOperatorTokenHash() {
 	}
 	s.operatorTokenHash = sha256.Sum256([]byte(s.appConfig.Server.Token))
 	s.operatorTokenSet = true
+}
+
+// RefreshEncryptionKey applies the key from a live secrets.yml reload. The
+// database fingerprint marker independently rejects writes from stale workers.
+func (s *Server) RefreshEncryptionKey(key string) {
+	if s != nil && s.tokenManager != nil && key != "" {
+		s.tokenManager.SetEncryptionKey(key)
+	}
 }
 
 func (s *Server) getOperatorTokenHash() ([sha256.Size]byte, bool) {

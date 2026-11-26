@@ -203,6 +203,54 @@ func TestBrowserSkipLinksAreFirstFocusable(t *testing.T) {
 	}
 }
 
+func TestBrowserNavigationKeyboardControls(t *testing.T) {
+	tb := newTab(t)
+	var opened, closed, desktopCollapsed, resizedClosed, resizedFocus bool
+	err := chromedp.Run(tb.ctx,
+		chromedp.EmulateViewport(375, 812),
+		chromedp.Navigate(s.browserBase+"/"),
+		chromedp.WaitReady("body", chromedp.ByQuery),
+		chromedp.Click(".nav-toggle", chromedp.ByQuery),
+		chromedp.Evaluate(`(function () {
+			const checkbox = document.getElementById('nav-toggle');
+			return checkbox.checked && document.getElementById('nav-panel').contains(document.activeElement);
+		})()`, &opened),
+		chromedp.KeyEvent("\u001b"),
+		chromedp.Evaluate(`(function () {
+			const checkbox = document.getElementById('nav-toggle');
+			return !checkbox.checked && document.activeElement === checkbox;
+		})()`, &closed),
+		chromedp.Evaluate(`document.documentElement.classList.contains('nav-collapsed')`, &desktopCollapsed),
+		chromedp.Click(".nav-toggle", chromedp.ByQuery),
+		chromedp.EmulateViewport(1024, 812),
+		chromedp.Sleep(100*time.Millisecond),
+		chromedp.Evaluate(`(function () {
+			const checkbox = document.getElementById('nav-toggle');
+			const panel = document.getElementById('nav-panel');
+			return !checkbox.checked && getComputedStyle(panel).display === 'none';
+		})()`, &resizedClosed),
+		chromedp.Evaluate(`document.querySelector('.site-header .nav-links').contains(document.activeElement)`, &resizedFocus),
+	)
+	if err != nil {
+		t.Fatalf("navigation keyboard controls: %v", err)
+	}
+	if !opened {
+		t.Error("opening the mobile menu did not move focus into the panel")
+	}
+	if !closed {
+		t.Error("Escape did not close the menu and return focus to its toggle")
+	}
+	if desktopCollapsed {
+		t.Error("a fitting mobile navigation unexpectedly enabled desktop overflow mode")
+	}
+	if !resizedClosed {
+		t.Error("resizing to desktop did not close the hidden mobile menu")
+	}
+	if !resizedFocus {
+		t.Error("resizing to desktop did not return focus to the visible navigation")
+	}
+}
+
 func TestBrowserDocsPagesLoad(t *testing.T) {
 	for _, path := range []string{"/server/docs/swagger", "/server/docs/graphql"} {
 		tb := newTab(t)
@@ -224,7 +272,7 @@ func TestBrowserDocsPagesLoad(t *testing.T) {
 	}
 }
 
-func TestBrowserMCPHelpAndOwnerTokenRestorePages(t *testing.T) {
+func TestBrowserMCPHelpAndOwnerTokenPages(t *testing.T) {
 	for _, path := range []string{"/server/help/mcp", "/server/preferences/tokens"} {
 		tb := newTab(t)
 		var body string

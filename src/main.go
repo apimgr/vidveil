@@ -42,12 +42,14 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/email"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
+	"github.com/apimgr/vidveil/src/server/service/health"
 	"github.com/apimgr/vidveil/src/server/service/i2p"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	svcmetrics "github.com/apimgr/vidveil/src/server/service/metric"
 	"github.com/apimgr/vidveil/src/server/service/pgp"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
+	"github.com/apimgr/vidveil/src/server/service/secreport"
 	"github.com/apimgr/vidveil/src/server/service/secret"
 	"github.com/apimgr/vidveil/src/server/service/ssl"
 	"github.com/apimgr/vidveil/src/server/service/system"
@@ -67,8 +69,6 @@ var (
 	OfficialSite = ""
 )
 
-var errRestoreRestartRequested = errors.New("restore completed; restart server")
-
 // buildEpoch parses BuildEpoch into a Unix timestamp, returning 0 on any
 // parse failure (e.g. the default "0" or a dev build with no ldflags set).
 func buildEpoch() int64 {
@@ -77,6 +77,60 @@ func buildEpoch() int64 {
 		return 0
 	}
 	return n
+}
+
+func pingDatabaseForRecovery(db *sql.DB) error {
+	if db == nil {
+		return fmt.Errorf("database handle is unavailable")
+	}
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		lastErr = db.PingContext(ctx)
+		cancel()
+		if lastErr == nil {
+			return nil
+		}
+		if attempt < 2 {
+			time.Sleep(time.Duration(attempt+1) * time.Second)
+		}
+	}
+	return fmt.Errorf("database unavailable after 3 recovery probes: %w", lastErr)
+}
+
+func probeDataDirectoryWrite(dataDir string) error {
+	probe, err := os.CreateTemp(dataDir, ".vidveil-write-probe-*")
+	if err != nil {
+		return fmt.Errorf("create data-directory write probe: %w", err)
+	}
+	probePath := probe.Name()
+	if err := probe.Chmod(0600); err != nil {
+		_ = probe.Close()
+		_ = os.Remove(probePath)
+		return fmt.Errorf("secure data-directory write probe: %w", err)
+	}
+	if _, err := probe.Write([]byte("probe")); err != nil {
+		_ = probe.Close()
+		_ = os.Remove(probePath)
+		return fmt.Errorf("write data-directory probe: %w", err)
+	}
+	if err := probe.Sync(); err != nil {
+		_ = probe.Close()
+		_ = os.Remove(probePath)
+		return fmt.Errorf("sync data-directory probe: %w", err)
+	}
+	if err := probe.Close(); err != nil {
+		_ = os.Remove(probePath)
+		return fmt.Errorf("close data-directory probe: %w", err)
+	}
+	if err := os.Remove(probePath); err != nil {
+		return fmt.Errorf("remove data-directory write probe: %w", err)
+	}
+	return nil
+}
+
+func maintenanceDiagnostic(databaseErr, fileWriteErr error) string {
+	return errors.Join(databaseErr, fileWriteErr).Error()
 }
 
 func formatServerStartupTime(started time.Time) string {
@@ -169,7 +223,7 @@ func splitSubcommand(args []string) (global, sub []string) {
 }
 
 // applyPortOverride sets cfg.Server.Port from an explicit port value
-// (--port flag, VIDVEIL_PORT, or PORT env var) and persists the change to
+// (--port flag or PORT env var) and persists the change to
 // server.yml immediately. Per AI.md PART 5 Port Rules: "Once a port is
 // selected (randomly or specified), it is saved to server.yml and persists
 // across restarts" - so an explicit override must be written to disk right
@@ -191,56 +245,16 @@ func applyPortOverride(cfg *config.AppConfig, port, configPath string) (bool, er
 
 func main() {
 	if system.IsWindowsService() {
-		if err := system.RunAsWindowsService(runUntilRestart); err != nil {
+		if err := system.RunAsWindowsService(run); err != nil {
 			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Windows service failed: "+err.Error())
 			os.Exit(1)
 		}
 		return
 	}
-	if err := runUntilRestart(context.Background()); err != nil {
+	if err := run(context.Background()); err != nil {
 		fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Server failed: "+err.Error())
 		os.Exit(1)
 	}
-}
-
-func runUntilRestart(ctx context.Context) error {
-	for {
-		err := run(ctx)
-		if errors.Is(err, errRestoreRestartRequested) {
-			continue
-		}
-		return err
-	}
-}
-
-func waitForShutdownRequest(ctx context.Context, restart <-chan struct{}, waitForSignal func(context.Context) os.Signal) (os.Signal, bool) {
-	waitCtx, cancelWait := context.WithCancel(ctx)
-	watchStop := make(chan struct{})
-	watchDone := make(chan struct{})
-	restartRequested := false
-	go func() {
-		defer close(watchDone)
-		select {
-		case _, open := <-restart:
-			restartRequested = open
-			if open {
-				cancelWait()
-			}
-		case <-ctx.Done():
-		case <-watchStop:
-		}
-	}()
-
-	sig := waitForSignal(waitCtx)
-	close(watchStop)
-	cancelWait()
-	<-watchDone
-	select {
-	case _, open := <-restart:
-		restartRequested = restartRequested || open
-	default:
-	}
-	return sig, restartRequested
 }
 
 func run(ctx context.Context) error {
@@ -334,10 +348,7 @@ func run(ctx context.Context) error {
 	if pidFile == "" && os.Getenv("PID_FILE") != "" {
 		pidFile = os.Getenv("PID_FILE")
 	}
-	// Port chain per AI.md: --port > VIDVEIL_PORT > PORT > config > random
-	if port == "" && os.Getenv("VIDVEIL_PORT") != "" {
-		port = os.Getenv("VIDVEIL_PORT")
-	}
+	// Port chain per AI.md: --port > PORT > config > random
 	if port == "" && os.Getenv("PORT") != "" {
 		port = os.Getenv("PORT")
 	}
@@ -454,7 +465,7 @@ func run(ctx context.Context) error {
 				// Per AI.md PART 21: no --password flag; the password is prompted
 				// interactively, so only a non-flag operand is taken here.
 				maintArg := ""
-				if rest[0] == "data" && len(rest) > 1 {
+				if (rest[0] == "data" || rest[0] == "security") && len(rest) > 1 {
 					maintArg = strings.Join(rest[1:], " ")
 				} else if len(rest) > 1 && !strings.HasPrefix(rest[1], "--") {
 					maintArg = rest[1]
@@ -614,12 +625,6 @@ func run(ctx context.Context) error {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to run migrations: %v\n", err)
 		os.Exit(1)
 	}
-	tokenHashCtx, cancelTokenHashMigration := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancelTokenHashMigration()
-	if err := apitoken.NormalizeLegacyHashes(tokenHashCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey); err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to migrate stored API-token digests: %v\n", err)
-		os.Exit(1)
-	}
 	if err := config.ImportLegacyAppSecrets(migrationMgr.GetDB(), configPath, appConfig); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to import legacy application secrets: %v\n", err)
 		os.Exit(1)
@@ -630,6 +635,78 @@ func run(ctx context.Context) error {
 	secretsMgr := secret.NewManager(migrationMgr.GetDB())
 	if err := secretsMgr.EnsureSecrets(context.Background()); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to initialize secrets: %v\n", err)
+		os.Exit(1)
+	}
+	legacySecret, err := secretsMgr.GetInstallationSecret(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load installation secret for security-report migration: %v\n", err)
+		os.Exit(1)
+	}
+	if err := secreport.MigrateLegacySchema(context.Background(), migrationMgr.GetDB(), paths.Config, appConfig.Server.Security.EncryptionKey, legacySecret); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to migrate legacy security reports: %v\n", err)
+		os.Exit(1)
+	}
+	if err := pgp.RecoverStagedRotation(paths.Config, migrationMgr.GetDB()); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to recover PGP key rotation: %v\n", err)
+		os.Exit(1)
+	}
+	keyRecoveryCtx, cancelKeyRecovery := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancelKeyRecovery()
+	if err := secret.ImportLegacyPreviousEncryptionKey(keyRecoveryCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to migrate legacy previous encryption key: %v\n", err)
+		os.Exit(1)
+	}
+	pendingKey, pending, err := secret.LoadPendingEncryptionKey(keyRecoveryCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey, time.Now().UTC())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to recover staged encryption key: %v\n", err)
+		os.Exit(1)
+	}
+	if pending && pendingKey != appConfig.Server.Security.EncryptionKey {
+		appConfig.Server.Security.EncryptionKey = pendingKey
+		if err := config.SaveAppConfig(appConfig, configPath); err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to install staged encryption key: %v\n", err)
+			os.Exit(1)
+		}
+	}
+	previousKey, hasPreviousKey, err := secret.LoadPreviousEncryptionKey(keyRecoveryCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey, time.Now().UTC())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load previous encryption key: %v\n", err)
+		os.Exit(1)
+	}
+	if !hasPreviousKey {
+		previousKey = ""
+	}
+	if err := secret.EnsureCurrentEncryptionKeyMarker(keyRecoveryCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to verify current encryption key: %v\n", err)
+		os.Exit(1)
+	}
+	if err := completeEncryptionKeyRotation(keyRecoveryCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey, previousKey); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to finish encryption-key rotation: %v\n", err)
+		os.Exit(1)
+	}
+	if pending {
+		if err := emitSecretRotationAudit(paths.Config, paths.Data, "security.encryption_key_rotated"); err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to audit recovered encryption-key rotation: %v\n", err)
+			os.Exit(1)
+		}
+		cleanupTx, err := migrationMgr.GetDB().BeginTx(keyRecoveryCtx, nil)
+		if err == nil {
+			err = secret.DeletePendingEncryptionKey(keyRecoveryCtx, cleanupTx)
+		}
+		if err == nil {
+			err = cleanupTx.Commit()
+		} else if cleanupTx != nil {
+			_ = cleanupTx.Rollback()
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to clear encryption-key recovery marker: %v\n", err)
+			os.Exit(1)
+		}
+	}
+	tokenHashCtx, cancelTokenHashMigration := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelTokenHashMigration()
+	if err := apitoken.NormalizeLegacyHashes(tokenHashCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey); err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to migrate stored API-token digests: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -706,6 +783,11 @@ func run(ctx context.Context) error {
 	if err := cveSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" CVE service initialization failed: %v\n", err)
 	}
+	healthRegistry := health.NewRegistry()
+	geoipSvc.RegisterHealthChecks(healthRegistry)
+	blocklistSvc.RegisterHealthChecks(healthRegistry)
+	cveSvc.RegisterHealthChecks(healthRegistry)
+	healthRegistry.Refresh()
 
 	// Initialize scheduler with database persistence per AI.md PART 18
 	// Task state (run_count, fail_count, last_run) survives restarts
@@ -750,15 +832,25 @@ func run(ctx context.Context) error {
 			if !appConfig.Server.GeoIP.Enabled {
 				return nil
 			}
-			return geoipSvc.Update()
+			err := geoipSvc.Update()
+			healthRegistry.Refresh()
+			return err
 		},
 		BlocklistUpdate: func(ctx context.Context) error {
 			// IP/domain blocklist update per PART 11
-			return blocklistSvc.Update(ctx)
+			err := blocklistSvc.Update(ctx)
+			healthRegistry.Refresh()
+			return err
 		},
 		CVEUpdate: func(ctx context.Context) error {
 			// CVE/security database update per PART 11
-			return cveSvc.Update(ctx)
+			err := cveSvc.Update(ctx)
+			healthRegistry.Refresh()
+			return err
+		},
+		DatasetHealthRefresh: func(context.Context) error {
+			healthRegistry.Refresh()
+			return nil
 		},
 		TokenCleanup: func(ctx context.Context) error {
 			cleanupCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -898,18 +990,12 @@ func run(ctx context.Context) error {
 	}
 
 	// Create server with migration manager, scheduler, and logger per AI.md PART 11
-	restoreRestart := make(chan struct{}, 1)
 	srv := server.NewServer(appConfig, configDir, dataDir, engineMgr, migrationMgr, sched, logger)
-	srv.SetRestoreRestartHandler(func() {
-		select {
-		case restoreRestart <- struct{}{}:
-		default:
-		}
-	})
 
 	// Set Tor service for handlers per AI.md PART 31
 	srv.SetTorService(torSvc)
 	srv.SetI2PService(i2pSvc)
+	srv.SetHealthRegistry(healthRegistry)
 
 	// Wire the internal loopback-only Tor control channel used by the
 	// `{project_name} tor ...` CLI subcommand per AI.md PART 31
@@ -942,6 +1028,7 @@ func run(ctx context.Context) error {
 		// Config has been reloaded - the shared appConfig pointer is already updated
 		// Refresh token-auth state so server.token changes take effect immediately.
 		srv.RefreshOperatorTokenHash()
+		srv.RefreshEncryptionKey(newCfg.Server.Security.EncryptionKey)
 		go func() {
 			if err := srv.RefreshBrandingImages(context.Background()); err != nil {
 				logger.Warn("branding image refresh after config reload failed", nil)
@@ -1197,33 +1284,81 @@ func run(ctx context.Context) error {
 	// Self-heals continuously (retry every 30s) — no human intervention required.
 	maintMgr := maintenance.NewMaintenanceManager(configDir, dataDir, version.GetVersion())
 	go func() {
-		const healInterval = 30 * time.Second
+		healInterval, parseErr := time.ParseDuration(appConfig.Server.Maintenance.SelfHealing.RetryInterval)
+		if parseErr != nil || healInterval <= 0 {
+			healInterval = maintenance.MaintenanceRetryInterval
+		}
 		inMaintenance := false
+		var maintenanceSince time.Time
+		var healingAttempts uint64
+		if persisted, active := maintenance.ReadMaintenanceStatus(dataDir); active && persisted != nil && (persisted.Reason == "database_connection" || persisted.Reason == "file_write") {
+			inMaintenance = true
+			maintenanceSince = persisted.Since
+		}
 		for {
-			// Test DB connectivity
-			dbErr := migrationMgr.GetDB().Ping()
-			// Test file-write ability (write to a probe file in the data dir)
-			probeFile := filepath.Join(paths.Data, ".write_probe")
-			writeErr := os.WriteFile(probeFile, []byte("probe"), 0o600)
-			if writeErr == nil {
-				_ = os.Remove(probeFile)
-			}
+			// Probe database access with the PART 13 retry schedule and verify
+			// that the data directory can durably create and remove a file.
+			dbErr := pingDatabaseForRecovery(migrationMgr.GetDB())
+			writeErr := probeDataDirectoryWrite(paths.Data)
 			unhealthy := dbErr != nil || writeErr != nil
 
 			if unhealthy && !inMaintenance {
 				// Auto-enter maintenance mode
-				if enterErr := maintMgr.SetMaintenanceMode(true); enterErr == nil {
-					inMaintenance = true
-					if dbErr != nil {
-						fmt.Fprintf(os.Stderr, "[WARN] DB unavailable (%v) — entering maintenance mode; retrying every %s\n", dbErr, healInterval)
-					} else {
-						fmt.Fprintf(os.Stderr, "[WARN] File-write failure (%v) — entering maintenance mode; retrying every %s\n", writeErr, healInterval)
+				if enterErr := maintMgr.SetMaintenanceMode(true); enterErr != nil {
+					fmt.Fprintf(os.Stderr, "[WARN] Unable to persist maintenance mode: %v\n", enterErr)
+				}
+				inMaintenance = true
+				maintenanceSince = time.Now().UTC()
+				healingAttempts = 0
+				srv.NotifyMaintenance(true, "database_connection or file_write", 0)
+				if dbErr != nil {
+					fmt.Fprintf(os.Stderr, "[WARN] DB unavailable (%v) — entering maintenance mode; retrying every %s\n", dbErr, healInterval)
+				} else {
+					fmt.Fprintf(os.Stderr, "[WARN] File-write failure (%v) — entering maintenance mode; retrying every %s\n", writeErr, healInterval)
+				}
+			}
+			if unhealthy && inMaintenance {
+				healingAttempts++
+				lastAttempt := time.Now().UTC()
+				nextAttempt := lastAttempt.Add(healInterval)
+				if total, free, diskErr := maintenance.DiskSpace(paths.Data); diskErr == nil && total > 0 {
+					usedPercent := int((total - free) * 100 / total)
+					if usedPercent >= appConfig.Server.Maintenance.Cleanup.DiskThreshold {
+						retention := appConfig.Server.Backup.Retention
+						freed, cleanupErr := maintMgr.CleanupDiskPressure(retention, paths.Log, appConfig.Server.Maintenance.Cleanup.LogRetentionDays)
+						if cleanupErr != nil {
+							logger.Warn("maintenance disk cleanup failed", map[string]interface{}{"error": cleanupErr.Error(), "used_percent": usedPercent})
+						} else {
+							logger.Info("maintenance disk cleanup completed", map[string]interface{}{"bytes_freed": freed, "used_percent": usedPercent})
+						}
 					}
+				}
+				reason := "file_write"
+				message := "The server cannot write to its data directory. It is read-only while recovery is attempted."
+				if dbErr != nil {
+					reason = "database_connection"
+					message = "The server cannot connect to its database. It is read-only while recovery is attempted."
+				}
+				selfHealing := maintenance.SelfHealingAttemptStatus(healingAttempts, appConfig.Server.Maintenance.SelfHealing.MaxAttempts, lastAttempt, nextAttempt)
+				status := maintenance.MaintenanceStatus{
+					Reason: reason, Message: message, Diagnostic: maintenanceDiagnostic(dbErr, writeErr), Since: maintenanceSince,
+					SelfHealing: selfHealing,
+				}
+				if statusErr := maintenance.WriteMaintenanceStatus(dataDir, status); statusErr != nil {
+					fmt.Fprintf(os.Stderr, "[WARN] Unable to persist maintenance recovery status: %v\n", statusErr)
+				}
+				srv.SetMaintenanceStatus(&status)
+				if selfHealing.Exhausted {
+					logger.Audit("server.self_healing_exhausted", "system", "system", "", "failure", map[string]interface{}{"reason": reason, "attempts": healingAttempts})
+					srv.NotifySelfHealingExhausted(reason, healingAttempts)
+					return
 				}
 			} else if !unhealthy && inMaintenance {
 				// Self-heal: condition cleared, exit maintenance mode
 				if exitErr := maintMgr.SetMaintenanceMode(false); exitErr == nil {
 					inMaintenance = false
+					srv.SetMaintenanceStatus(nil)
+					srv.NotifyMaintenance(false, "database and file checks recovered", time.Since(maintenanceSince))
 					fmt.Println("[INFO] Health restored — exiting maintenance mode")
 				}
 			}
@@ -1248,7 +1383,7 @@ func run(ctx context.Context) error {
 	// Wait for shutdown signal per AI.md PART 8
 	// Handles: SIGTERM(15), SIGINT(2), SIGQUIT(3), SIGRTMIN+3(37)
 	// Ignores: SIGHUP(1) - config auto-reloads via file watcher
-	sig, restartRequested := waitForShutdownRequest(ctx, restoreRestart, signalpkg.WaitForShutdown)
+	sig := signalpkg.WaitForShutdown(ctx)
 	fmt.Printf("\n%s Received %v, shutting down gracefully...\n", terminal.StopIcon(), sig)
 	signalpkg.BeginShutdown()
 	cancelI2P()
@@ -1262,9 +1397,6 @@ func run(ctx context.Context) error {
 	}
 
 	fmt.Printf("%s Server stopped\n", terminal.StatusIcon(true))
-	if restartRequested {
-		return errRestoreRestartRequested
-	}
 	return nil
 }
 
@@ -1343,17 +1475,15 @@ func checkStatus() int {
 	}
 
 	// Resolve the effective port the same way the running server does
-	// (Port chain per AI.md: --port > VIDVEIL_PORT > PORT > config > random).
+	// (Port chain per AI.md: --port > PORT > config > random).
 	// The server never persists an env-resolved port back to server.yml, so
 	// reading statusConfig.Server.Port alone would report a stale/wrong port
-	// whenever VIDVEIL_PORT or PORT overrides the config file (e.g. the
+	// whenever PORT overrides the config file (e.g. the
 	// standard Docker deployment sets PORT=80) — causing --status, and thus
 	// the Docker HEALTHCHECK, to falsely report "Stopped" against a healthy
 	// server listening on a different port.
 	statusPort := statusConfig.Server.Port
-	if envPort := os.Getenv("VIDVEIL_PORT"); envPort != "" {
-		statusPort = envPort
-	} else if envPort := os.Getenv("PORT"); envPort != "" {
+	if envPort := os.Getenv("PORT"); envPort != "" {
 		statusPort = envPort
 	}
 
@@ -1690,7 +1820,7 @@ func handleServiceCommand(cmd, configDir, dataDir, language string) {
 		}
 
 		fmt.Println(serviceText(locale, "cli.service.uninstalling"))
-		if err := svc.Uninstall(); err != nil {
+		if err := svc.UninstallConfirmed(); err != nil {
 			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.uninstall_error", "{error}", err.Error()))
 			os.Exit(1)
 		}
@@ -2139,6 +2269,12 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 			os.Exit(1)
 		}
 
+	case "security":
+		if err := handleMaintenanceSecurity(arg, configDir, dataDir); err != nil {
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" "+err.Error())
+			os.Exit(1)
+		}
+
 	case "--help", "help", "-h":
 		// Per AI.md PART 8: --maintenance --help prints help and exits 0
 		fmt.Printf(`Maintenance Commands:
@@ -2150,6 +2286,7 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
   %s --maintenance pgp <action>       Manage the security PGP keypair
   %s --maintenance secret rotate <n>  Rotate installation_secret or encryption_key
   %s --maintenance token list         List active API tokens (prefix + resource)
+  %s --maintenance security <action>  Manage coordinated-disclosure reports
   %s --maintenance token revoke <pfx> Revoke a specific API token by prefix
   %s --maintenance data export --owner <prefix> [--output FILE]
                                       Export one owner's data (GDPR)
@@ -2193,13 +2330,13 @@ Examples:
   %s --maintenance pgp publish        # Publish the public key to keyservers
 `, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
 			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
-			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
+			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
 			binaryName, binaryName)
 		os.Exit(0)
 
 	default:
 		fmt.Printf(terminal.StatusIcon(false)+" Unknown maintenance command: %s\n", cmd)
-		fmt.Printf("\nUsage: %s --maintenance [backup|restore|update|mode|compliance|pgp|setup|--help]\n\nRun '%s --maintenance --help' for detailed help.\n", binaryName, binaryName)
+		fmt.Printf("\nUsage: %s --maintenance [backup|restore|update|mode|compliance|pgp|secret|token|security|setup|--help]\n\nRun '%s --maintenance --help' for detailed help.\n", binaryName, binaryName)
 		os.Exit(1)
 	}
 }
@@ -2377,6 +2514,11 @@ func pgpRotate(configDir, dataDir string) {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 		os.Exit(1)
 	}
+	if publishResult, publishErr := pgpPublishCore(configDir, dataDir); publishErr != nil {
+		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Rotation succeeded; keyserver publication will retry: %v\n", publishErr)
+	} else if len(publishResult.published) == 0 {
+		fmt.Println(terminal.WarningIcon() + " No keyservers configured; rotation key was not published.")
+	}
 	fmt.Println(terminal.StatusIcon(true) + " Security PGP keypair rotated.")
 	fmt.Printf("   Identity:        %s <%s>\n", res.identityName, res.securityContact)
 	fmt.Printf("   New fingerprint: %s\n", res.newFingerprint)
@@ -2464,20 +2606,49 @@ func pgpRotateCore(configDir, dataDir string) (*pgpRotateResult, error) {
 	}
 	newKP.PublicArmored = crossSigned
 
-	rotatedAt := time.Now()
-	archiveDir, err := pgp.ArchiveCurrentKeys(paths.Config, oldFingerprint, rotatedAt, pgp.RotationGracePeriod)
+	rotatedAt := time.Now().UTC()
+	unlockSubmissions := secreport.LockKeyRotation()
+	defer unlockSubmissions()
+	if _, err := pgp.CleanupRetiredPrivateKey(paths.Config, rotatedAt); err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(filepath.Join(pgp.SecurityDir(paths.Config), pgp.RetiredPrivateKeyFile)); err == nil {
+		return nil, fmt.Errorf("previous PGP key is still inside its 30-day retention window")
+	}
+	if err := pgp.WriteStagedKeypair(paths.Config, newKP, secret); err != nil {
+		return nil, fmt.Errorf("failed to stage rotated keypair: %w", err)
+	}
+	tx, err := dbMgr.GetDB().BeginTx(context.Background(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to archive previous keypair: %w", err)
+		_ = pgp.RemoveStagedKeypair(paths.Config)
+		return nil, fmt.Errorf("begin PGP rotation transaction: %w", err)
 	}
-	if err := pgp.WriteKeypair(paths.Config, newKP, secret); err != nil {
-		return nil, fmt.Errorf("failed to write new keypair: %w", err)
+	rollback := func(cause error) (*pgpRotateResult, error) {
+		_ = tx.Rollback()
+		_ = pgp.RemoveStagedKeypair(paths.Config)
+		return nil, cause
 	}
-	if err := pgp.SaveKeypairMeta(dbMgr.GetDB(), newKP); err != nil {
-		return nil, fmt.Errorf("failed to record new keypair metadata: %w", err)
+	rotationCtx, cancelRotation := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancelRotation()
+	if _, err := tx.ExecContext(rotationCtx, `UPDATE security_reports SET updated_at = updated_at WHERE tracking_id = ''`); err != nil {
+		return rollback(fmt.Errorf("lock security report key rotation: %w", err))
 	}
-	if err := pgp.SetLastRotated(dbMgr.GetDB(), rotatedAt); err != nil {
-		return nil, fmt.Errorf("failed to stamp rotation time: %w", err)
+	if err := secreport.ReencryptPGPBodies(rotationCtx, tx, oldPriv, newKP.PublicArmored); err != nil {
+		return rollback(err)
 	}
+	if _, err := tx.ExecContext(rotationCtx, `DELETE FROM pgp_keypair`); err != nil {
+		return rollback(fmt.Errorf("update PGP rotation marker: %w", err))
+	}
+	if _, err := tx.ExecContext(rotationCtx, `INSERT INTO pgp_keypair (fingerprint,created_at,expires_at,last_rotated_at,keyservers_published,revoked) VALUES (?,?,?,?,?,0)`, newKP.Fingerprint, newKP.CreatedAt.UTC(), newKP.ExpiresAt.UTC(), rotatedAt, "[]"); err != nil {
+		return rollback(fmt.Errorf("write PGP rotation fingerprint marker: %w", err))
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("PGP rotation transaction outcome is uncertain; staged recovery will reconcile it: %w", err)
+	}
+	if err := pgp.InstallStagedKeypair(paths.Config); err != nil {
+		return nil, fmt.Errorf("PGP rotation committed but staged key install is pending startup recovery: %w", err)
+	}
+	archiveDir := filepath.Join(pgp.SecurityDir(paths.Config), pgp.RetiredPrivateKeyFile)
 
 	appConfig.Web.Security.PublishPGPKey = true
 	appConfig.Web.Security.PGPKeyURL = strings.TrimRight(appConfig.GetPublicURL(), "/") + "/.well-known/pgp-key.asc"

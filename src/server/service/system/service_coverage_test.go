@@ -162,27 +162,27 @@ func TestInstallWindows_NoPanic(t *testing.T) {
 // All removes are no-ops because the service was never installed.
 func TestUninstallLinux_NoPanic(t *testing.T) {
 	sm := newCovSM(t)
-	_ = sm.uninstallLinux()
+	_ = sm.uninstallLinux(true)
 }
 
 // TestUninstallDarwin_NoPanic runs launchctl unload (not found on Linux) and
 // removes the plist (also not present) — both error paths covered.
 func TestUninstallDarwin_NoPanic(t *testing.T) {
 	sm := newCovSM(t)
-	_ = sm.uninstallDarwin()
+	_ = sm.uninstallDarwin(true)
 }
 
 // TestUninstallBSD_NoPanic calls Stop() and removes the rc.d script.
 func TestUninstallBSD_NoPanic(t *testing.T) {
 	sm := newCovSM(t)
-	_ = sm.uninstallBSD()
+	_ = sm.uninstallBSD(true)
 }
 
 // TestUninstallWindows_NoPanic calls Stop() and "sc delete" — sc not available
 // on Linux; errors ignored.
 func TestUninstallWindows_NoPanic(t *testing.T) {
 	sm := newCovSM(t)
-	_ = sm.uninstallWindows()
+	_ = sm.uninstallWindows(true)
 }
 
 // ── createLinuxUser / createDarwinUser / createBSDUser ───────────────────────

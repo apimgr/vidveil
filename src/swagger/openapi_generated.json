@@ -1,0 +1,4393 @@
+{
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "bearerFormat": "VidVeil bearer token",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "OperatorTokenAuth": {
+        "bearerFormat": "adm_ token",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "OwnerTokenAuth": {
+        "bearerFormat": "own_ token",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "ServiceTokenAuth": {
+        "bearerFormat": "mtr_ token",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Privacy-respecting meta search for adult video content",
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "title": "VidVeil API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/.well-known/vidveil.json": {
+      "get": {
+        "description": "Machine-readable server metadata and capability discovery",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Server metadata"
+          }
+        },
+        "summary": "Well-known metadata"
+      }
+    },
+    "/api/autodiscover": {
+      "get": {
+        "operationId": "autodiscover",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "api_version": {
+                      "type": "string"
+                    },
+                    "cli_min_version": {
+                      "type": "string"
+                    },
+                    "cli_versions": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "primary": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "type": "integer"
+                    },
+                    "retry_delay": {
+                      "type": "integer"
+                    },
+                    "timeout": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "primary",
+                    "api_version",
+                    "timeout",
+                    "retry",
+                    "retry_delay",
+                    "cli_min_version",
+                    "cli_versions"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Discover API version and endpoints",
+        "x-listed": true
+      }
+    },
+    "/api/debug/engines": {
+      "get": {
+        "description": "Operator-only engine diagnostics.",
+        "operationId": "debugEnginesAliasApiDebugEngines",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OperatorTokenAuth": []
+          }
+        ],
+        "summary": "Get debug engine diagnostics",
+        "x-admin-only": true,
+        "x-listed": false,
+        "x-mounted-when": "debug"
+      }
+    },
+    "/api/debug/engines/{name}": {
+      "get": {
+        "description": "Operator-only engine diagnostics.",
+        "operationId": "debugEngineAliasApiDebugEnginesName",
+        "parameters": [
+          {
+            "description": "Engine identifier",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OperatorTokenAuth": []
+          }
+        ],
+        "summary": "Get debug engine details",
+        "x-admin-only": true,
+        "x-listed": false,
+        "x-mounted-when": "debug"
+      }
+    },
+    "/api/graphql": {
+      "post": {
+        "description": "Execute a GraphQL query against the service schema.",
+        "operationId": "executeGraphQLAliasApiGraphql",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "operationName": {
+                    "description": "Name of the operation to execute",
+                    "type": "string"
+                  },
+                  "query": {
+                    "description": "GraphQL query document",
+                    "type": "string"
+                  },
+                  "variables": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "query"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": {
+                          "type": "object"
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Execute a read-only GraphQL operation",
+        "x-listed": true
+      }
+    },
+    "/api/healthz": {
+      "get": {
+        "description": "Get API health status (per AI.md PART 13)",
+        "operationId": "getServerHealthAliasApiHealthz",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "build": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "checks": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "features": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "go_version": {
+                      "type": "string"
+                    },
+                    "maintenance": {
+                      "type": "object"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "pending_restart": {
+                      "type": "boolean"
+                    },
+                    "project": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "restart_reason": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "stats": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    },
+                    "uptime": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "status",
+                    "version",
+                    "go_version",
+                    "build",
+                    "uptime",
+                    "mode",
+                    "timestamp",
+                    "features",
+                    "checks",
+                    "stats"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Healthy"
+          }
+        },
+        "summary": "Health check",
+        "x-listed": true
+      }
+    },
+    "/api/mcp": {
+      "post": {
+        "description": "Streamable HTTP endpoint for the Model Context Protocol.",
+        "operationId": "executeMCPAliasApiMcp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "required": null,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "nullable": true,
+                      "properties": {
+                        "code": {
+                          "type": "integer"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "id": {
+                      "type": "object"
+                    },
+                    "jsonrpc": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "items": {
+                        "type": "integer"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "jsonrpc"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Use the Model Context Protocol endpoint",
+        "x-listed": true
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "description": "Prometheus metrics endpoint.",
+        "operationId": "getMetricsAliasApiMetrics",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          }
+        ],
+        "summary": "Get internal server metrics",
+        "x-listed": false,
+        "x-mounted-when": "server.metrics.enabled"
+      }
+    },
+    "/api/metrics/{service}": {
+      "get": {
+        "description": "Prometheus metrics endpoint.",
+        "operationId": "getServiceMetricsAliasApiMetricsService",
+        "parameters": [
+          {
+            "description": "Metrics service",
+            "in": "path",
+            "name": "service",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          }
+        ],
+        "summary": "Get internal service metrics",
+        "x-listed": false,
+        "x-mounted-when": "server.metrics.enabled"
+      }
+    },
+    "/api/swagger": {
+      "get": {
+        "description": "Return the generated OpenAPI JSON document.",
+        "operationId": "getOpenAPISpecAliasApiSwagger",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "object"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get the OpenAPI specification",
+        "x-listed": true
+      }
+    },
+    "/api/v1/bangs": {
+      "get": {
+        "description": "Return all available bang shortcuts and their search engines.",
+        "operationId": "listBangs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "bang": {
+                            "type": "string"
+                          },
+                          "display_name": {
+                            "type": "string"
+                          },
+                          "engine_name": {
+                            "type": "string"
+                          },
+                          "short_code": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "bang",
+                          "engine_name",
+                          "display_name",
+                          "short_code"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data",
+                    "count"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "List search bangs",
+        "x-listed": true
+      }
+    },
+    "/api/v1/bangs/autocomplete": {
+      "get": {
+        "description": "Return popular search terms or matching bang shortcuts.",
+        "operationId": "autocompleteBangs",
+        "parameters": [
+          {
+            "description": "Search text or bang prefix",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "replace": {
+                      "type": "string"
+                    },
+                    "suggestions": {
+                      "type": "object"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "suggestions",
+                    "type"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Autocomplete search bangs",
+        "x-listed": true
+      }
+    },
+    "/api/v1/debug/engines": {
+      "get": {
+        "description": "Operator-only engine diagnostics.",
+        "operationId": "debugEngines",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OperatorTokenAuth": []
+          }
+        ],
+        "summary": "Get debug engine diagnostics",
+        "x-admin-only": true,
+        "x-listed": false,
+        "x-mounted-when": "debug"
+      }
+    },
+    "/api/v1/debug/engines/{name}": {
+      "get": {
+        "description": "Operator-only engine diagnostics.",
+        "operationId": "debugEngine",
+        "parameters": [
+          {
+            "description": "Engine identifier",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OperatorTokenAuth": []
+          }
+        ],
+        "summary": "Get debug engine details",
+        "x-admin-only": true,
+        "x-listed": false,
+        "x-mounted-when": "debug"
+      }
+    },
+    "/api/v1/engines": {
+      "get": {
+        "description": "Get all search engines with status and privacy scores",
+        "operationId": "listEngines",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Engine list with privacy metadata"
+          }
+        },
+        "summary": "List search engines",
+        "x-listed": true
+      }
+    },
+    "/api/v1/engines/health": {
+      "get": {
+        "description": "Get health status including circuit breaker state for each engine",
+        "operationId": "getEngineHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Engine health data"
+          }
+        },
+        "summary": "Engine health",
+        "x-listed": true
+      }
+    },
+    "/api/v1/engines/{name}": {
+      "get": {
+        "description": "Return the status and capabilities of a named search engine.",
+        "operationId": "getEngineDetails",
+        "parameters": [
+          {
+            "description": "Engine identifier",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "capabilities": {
+                          "nullable": true,
+                          "properties": {
+                            "has_download": {
+                              "type": "boolean"
+                            },
+                            "has_duration": {
+                              "type": "boolean"
+                            },
+                            "has_preview": {
+                              "type": "boolean"
+                            },
+                            "has_views": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "has_preview",
+                            "has_download",
+                            "has_duration",
+                            "has_views"
+                          ],
+                          "type": "object"
+                        },
+                        "display_name": {
+                          "type": "string"
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "features": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "privacy": {
+                          "properties": {
+                            "has_tracking": {
+                              "type": "boolean"
+                            },
+                            "requires_js": {
+                              "type": "boolean"
+                            },
+                            "sets_cookies": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "requires_js",
+                            "sets_cookies",
+                            "has_tracking"
+                          ],
+                          "type": "object"
+                        },
+                        "tier": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "display_name",
+                        "enabled",
+                        "available",
+                        "features",
+                        "tier",
+                        "privacy"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get search engine details",
+        "x-listed": true
+      }
+    },
+    "/api/v1/favorites": {
+      "delete": {
+        "operationId": "clearFavorites",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "Clear saved favorites",
+        "x-listed": true
+      },
+      "get": {
+        "operationId": "listFavorites",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "favorites": {
+                          "items": {
+                            "properties": {
+                              "created_at": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "integer"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "thumbnail": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "url",
+                              "title",
+                              "created_at"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "favorites"
+                      ],
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "List saved favorites",
+        "x-listed": true
+      },
+      "post": {
+        "operationId": "addFavorite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "source": {
+                    "type": "string"
+                  },
+                  "thumbnail": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url",
+                  "title"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        },
+                        "owner_token": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "Save a favorite",
+        "x-listed": true
+      }
+    },
+    "/api/v1/favorites/import": {
+      "post": {
+        "description": "Import private favorites from an export payload.",
+        "operationId": "importFavorites",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "favorites": {
+                    "items": {
+                      "properties": {
+                        "source": {
+                          "description": "Canonical source name",
+                          "type": "string"
+                        },
+                        "thumbnail": {
+                          "description": "Thumbnail URL",
+                          "type": "string"
+                        },
+                        "title": {
+                          "description": "Result title",
+                          "type": "string"
+                        },
+                        "url": {
+                          "description": "Result URL",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "url",
+                        "title"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "favorites"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "imported": {
+                          "type": "integer"
+                        },
+                        "owner_token": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "Import saved favorites",
+        "x-listed": true
+      }
+    },
+    "/api/v1/favorites/{id}": {
+      "delete": {
+        "description": "Remove one private favorite belonging to the current anonymous owner.",
+        "operationId": "removeFavorite",
+        "parameters": [
+          {
+            "description": "Favorite identifier",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "Remove a saved favorite",
+        "x-listed": true
+      }
+    },
+    "/api/v1/proxy/thumbnails": {
+      "get": {
+        "description": "Fetch a validated public HTTP or HTTPS thumbnail URL through the server.",
+        "operationId": "proxyThumbnail",
+        "parameters": [
+          {
+            "description": "Remote thumbnail URL",
+            "in": "query",
+            "name": "url",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Fetch a remote thumbnail"
+          }
+        },
+        "summary": "Fetch a remote thumbnail",
+        "x-listed": true
+      }
+    },
+    "/api/v1/proxy/videos": {
+      "get": {
+        "description": "Fetch a validated public HTTP or HTTPS video URL through the server.",
+        "operationId": "proxyVideo",
+        "parameters": [
+          {
+            "description": "Remote video URL",
+            "in": "query",
+            "name": "url",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "video/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Fetch a remote video stream"
+          }
+        },
+        "summary": "Fetch a remote video stream",
+        "x-listed": true
+      }
+    },
+    "/api/v1/search": {
+      "get": {
+        "description": "Search across multiple adult video engines",
+        "operationId": "searchVideos",
+        "parameters": [
+          {
+            "description": "Search query (supports bang syntax: !ph, !xv, etc.)",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page number (default: 1)",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "bang_engines": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "cached": {
+                          "type": "boolean"
+                        },
+                        "display": {
+                          "additionalProperties": {
+                            "type": "object"
+                          },
+                          "type": "object"
+                        },
+                        "engine_stats": {
+                          "additionalProperties": {
+                            "type": "object"
+                          },
+                          "type": "object"
+                        },
+                        "engines_failed": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "engines_used": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "has_bang": {
+                          "type": "boolean"
+                        },
+                        "invalid_bang": {
+                          "type": "string"
+                        },
+                        "query": {
+                          "type": "string"
+                        },
+                        "related_searches": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "results": {
+                          "items": {
+                            "properties": {
+                              "description": {
+                                "type": "string"
+                              },
+                              "download_url": {
+                                "type": "string"
+                              },
+                              "duration": {
+                                "type": "string"
+                              },
+                              "duration_seconds": {
+                                "type": "integer"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "performer": {
+                                "type": "string"
+                              },
+                              "preview_url": {
+                                "type": "string"
+                              },
+                              "published": {
+                                "type": "string"
+                              },
+                              "quality": {
+                                "type": "string"
+                              },
+                              "rating": {
+                                "type": "number"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "source_display": {
+                                "type": "string"
+                              },
+                              "tags": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "thumbnail": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "views": {
+                                "type": "string"
+                              },
+                              "views_count": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "url",
+                              "thumbnail",
+                              "duration",
+                              "duration_seconds",
+                              "views",
+                              "views_count",
+                              "source",
+                              "source_display"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "search_query": {
+                          "type": "string"
+                        },
+                        "search_time_ms": {
+                          "type": "integer"
+                        },
+                        "spell_suggestion": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "query",
+                        "results",
+                        "engines_used",
+                        "engines_failed",
+                        "search_time_ms"
+                      ],
+                      "type": "object"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "pagination": {
+                      "additionalProperties": {
+                        "type": "integer"
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data",
+                    "pagination"
+                  ],
+                  "type": "object"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Search results with optional spell suggestion"
+          }
+        },
+        "summary": "Search videos",
+        "x-listed": true
+      }
+    },
+    "/api/v1/search/batch": {
+      "post": {
+        "description": "Search multiple queries in one request (max 5 queries)",
+        "operationId": "batchSearch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "queries": {
+                    "description": "List of search queries",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "queries"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "data": {
+                            "properties": {
+                              "bang_engines": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "cached": {
+                                "type": "boolean"
+                              },
+                              "display": {
+                                "additionalProperties": {
+                                  "type": "object"
+                                },
+                                "type": "object"
+                              },
+                              "engine_stats": {
+                                "additionalProperties": {
+                                  "type": "object"
+                                },
+                                "type": "object"
+                              },
+                              "engines_failed": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "engines_used": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "has_bang": {
+                                "type": "boolean"
+                              },
+                              "invalid_bang": {
+                                "type": "string"
+                              },
+                              "query": {
+                                "type": "string"
+                              },
+                              "related_searches": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "results": {
+                                "items": {
+                                  "properties": {
+                                    "description": {
+                                      "type": "string"
+                                    },
+                                    "download_url": {
+                                      "type": "string"
+                                    },
+                                    "duration": {
+                                      "type": "string"
+                                    },
+                                    "duration_seconds": {
+                                      "type": "integer"
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "performer": {
+                                      "type": "string"
+                                    },
+                                    "preview_url": {
+                                      "type": "string"
+                                    },
+                                    "published": {
+                                      "type": "string"
+                                    },
+                                    "quality": {
+                                      "type": "string"
+                                    },
+                                    "rating": {
+                                      "type": "number"
+                                    },
+                                    "source": {
+                                      "type": "string"
+                                    },
+                                    "source_display": {
+                                      "type": "string"
+                                    },
+                                    "tags": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "thumbnail": {
+                                      "type": "string"
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    },
+                                    "url": {
+                                      "type": "string"
+                                    },
+                                    "views": {
+                                      "type": "string"
+                                    },
+                                    "views_count": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "title",
+                                    "url",
+                                    "thumbnail",
+                                    "duration",
+                                    "duration_seconds",
+                                    "views",
+                                    "views_count",
+                                    "source",
+                                    "source_display"
+                                  ],
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "search_query": {
+                                "type": "string"
+                              },
+                              "search_time_ms": {
+                                "type": "integer"
+                              },
+                              "spell_suggestion": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "query",
+                              "results",
+                              "engines_used",
+                              "engines_failed",
+                              "search_time_ms"
+                            ],
+                            "type": "object"
+                          },
+                          "error": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "ok": {
+                            "type": "boolean"
+                          },
+                          "pagination": {
+                            "additionalProperties": {
+                              "type": "integer"
+                            },
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "ok",
+                          "data",
+                          "pagination"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Batch search results"
+          }
+        },
+        "summary": "Batch search",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/about": {
+      "get": {
+        "description": "Return the public server name, version, and description.",
+        "operationId": "getServerAbout",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "features": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "links": {
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "tagline": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "tagline",
+                        "description",
+                        "version",
+                        "features",
+                        "links"
+                      ],
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get server about information",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/auth/check": {
+      "get": {
+        "description": "Return the kind of a valid bearer token without updating token use metadata or echoing the credential.",
+        "operationId": "checkServerToken",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Token is valid; response data contains the token kind"
+          },
+          "401": {
+            "description": "Bearer token is missing or invalid"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Check server authentication status",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/contact": {
+      "get": {
+        "description": "Return the public contact form fields and captcha descriptor without exposing recipients.",
+        "operationId": "getServerContactForm",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "abuse_email": {
+                          "type": "string"
+                        },
+                        "captcha": {
+                          "additionalProperties": {
+                            "type": "object"
+                          },
+                          "type": "object"
+                        },
+                        "fields": {
+                          "items": {
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "form_token": {
+                          "type": "string"
+                        },
+                        "security_url": {
+                          "type": "string"
+                        },
+                        "types": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get contact form description",
+        "x-listed": true
+      },
+      "post": {
+        "description": "Submit a message to the server contact form; exactly one configured or built-in CAPTCHA response is required.",
+        "operationId": "submitServerContact",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "required": [
+                      "captcha_id",
+                      "captcha_answer"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "g-recaptcha-response"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "h-captcha-response"
+                    ]
+                  }
+                ],
+                "properties": {
+                  "captcha_answer": {
+                    "description": "Answer to the simple captcha challenge",
+                    "type": "string"
+                  },
+                  "captcha_id": {
+                    "description": "Single-use captcha challenge id",
+                    "type": "string"
+                  },
+                  "email": {
+                    "description": "Reply address",
+                    "format": "email",
+                    "maxLength": 254,
+                    "type": "string"
+                  },
+                  "g-recaptcha-response": {
+                    "description": "Required when the configured provider is reCAPTCHA",
+                    "type": "string"
+                  },
+                  "h-captcha-response": {
+                    "description": "Required when the configured provider is hCaptcha",
+                    "type": "string"
+                  },
+                  "message": {
+                    "description": "Message body",
+                    "maxLength": 5000,
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Sender name",
+                    "maxLength": 100,
+                    "type": "string"
+                  },
+                  "subject": {
+                    "description": "Message subject",
+                    "maxLength": 200,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "email",
+                  "subject",
+                  "message"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        },
+                        "tracking_id": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Submit a contact or security report",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/dpo": {
+      "get": {
+        "description": "Return the configured DPO contact and privacy policy URL.",
+        "operationId": "getServerDPO",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "email": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "privacy_url": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get data protection officer information",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/graphql": {
+      "get": {
+        "description": "Execute a query-only GraphQL operation. Omit query to receive endpoint usage.",
+        "operationId": "executeGraphQLQuery",
+        "parameters": [
+          {
+            "description": "GraphQL query document",
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "JSON object of GraphQL variable values",
+            "in": "query",
+            "name": "variables",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Name of the operation to execute",
+            "in": "query",
+            "name": "operationName",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": {
+                          "type": "object"
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Execute a query-only GraphQL operation",
+        "x-listed": true
+      },
+      "post": {
+        "description": "Execute a GraphQL query against the service schema.",
+        "operationId": "executeGraphQL",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "operationName": {
+                    "description": "Name of the operation to execute",
+                    "type": "string"
+                  },
+                  "query": {
+                    "description": "GraphQL query document",
+                    "type": "string"
+                  },
+                  "variables": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "query"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": {
+                          "type": "object"
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Execute a read-only GraphQL operation",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/healthz": {
+      "get": {
+        "description": "Get API health status (per AI.md PART 13)",
+        "operationId": "getServerHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "build": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "checks": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "features": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "go_version": {
+                      "type": "string"
+                    },
+                    "maintenance": {
+                      "type": "object"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "pending_restart": {
+                      "type": "boolean"
+                    },
+                    "project": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "restart_reason": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "stats": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    },
+                    "uptime": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "status",
+                    "version",
+                    "go_version",
+                    "build",
+                    "uptime",
+                    "mode",
+                    "timestamp",
+                    "features",
+                    "checks",
+                    "stats"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Healthy"
+          }
+        },
+        "summary": "Health check",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/help": {
+      "get": {
+        "description": "Return usage and help information for this server.",
+        "operationId": "getServerHelp",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get server help",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/help/mcp": {
+      "get": {
+        "description": "Return MCP endpoint metadata, connection guidance, and tools available to a valid Bearer token.",
+        "operationId": "getServerHelpMCP",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get MCP integration help",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/mcp": {
+      "post": {
+        "description": "Streamable HTTP endpoint for the Model Context Protocol.",
+        "operationId": "executeMCP",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "required": null,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "nullable": true,
+                      "properties": {
+                        "code": {
+                          "type": "integer"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "id": {
+                      "type": "object"
+                    },
+                    "jsonrpc": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "items": {
+                        "type": "integer"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "jsonrpc"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Use the Model Context Protocol endpoint",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/metrics": {
+      "get": {
+        "description": "Prometheus metrics endpoint.",
+        "operationId": "getMetrics",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          }
+        ],
+        "summary": "Get internal server metrics",
+        "x-listed": false,
+        "x-mounted-when": "server.metrics.enabled"
+      }
+    },
+    "/api/v1/server/metrics/{service}": {
+      "get": {
+        "description": "Prometheus metrics endpoint.",
+        "operationId": "getServiceMetrics",
+        "parameters": [
+          {
+            "description": "Metrics service",
+            "in": "path",
+            "name": "service",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          }
+        ],
+        "summary": "Get internal service metrics",
+        "x-listed": false,
+        "x-mounted-when": "server.metrics.enabled"
+      }
+    },
+    "/api/v1/server/preferences": {
+      "get": {
+        "description": "Return effective guest preferences from cookies.",
+        "operationId": "getPreferences",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "lang": {
+                          "type": "string"
+                        },
+                        "prefs": {
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "theme": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "theme",
+                        "lang",
+                        "prefs"
+                      ],
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get preferences",
+        "x-listed": true
+      },
+      "post": {
+        "description": "Apply a partial guest preference update.",
+        "operationId": "savePreferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "lang": {
+                    "description": "Supported language tag",
+                    "type": "string"
+                  },
+                  "theme": {
+                    "enum": [
+                      "dark",
+                      "light",
+                      "auto"
+                    ],
+                    "type": "string"
+                  },
+                  "vidveil_pref_open_new_tab": {
+                    "enum": [
+                      "0",
+                      "1"
+                    ],
+                    "type": "string"
+                  },
+                  "vidveil_pref_results_per_page": {
+                    "enum": [
+                      "0",
+                      "20",
+                      "50",
+                      "100"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": null,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "applied": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "ignored": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "lang": {
+                          "type": "string"
+                        },
+                        "prefs": {
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "theme": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "theme",
+                        "lang",
+                        "prefs"
+                      ],
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Set preferences",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/preferences/sync": {
+      "get": {
+        "description": "Return effective preferences as a shareable import URL and code.",
+        "operationId": "exportPreferences",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "lang": {
+                          "type": "string"
+                        },
+                        "prefs": {
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "theme": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "theme",
+                        "lang",
+                        "prefs",
+                        "url",
+                        "code"
+                      ],
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Export preferences",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/preferences/sync/import": {
+      "get": {
+        "description": "Apply preference values or a share code to the current browser.",
+        "operationId": "importPreferences",
+        "parameters": [
+          {
+            "description": "Theme value",
+            "in": "query",
+            "name": "theme",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Language code",
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Results per page preference",
+            "in": "query",
+            "name": "vidveil_pref_results_per_page",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Open links in new tab preference",
+            "in": "query",
+            "name": "vidveil_pref_open_new_tab",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exported preferences code or URL",
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "applied": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "ignored": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "lang": {
+                          "type": "string"
+                        },
+                        "prefs": {
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "theme": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "theme",
+                        "lang",
+                        "prefs"
+                      ],
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get preference import descriptor",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/preferences/tokens": {
+      "get": {
+        "description": "Return masked primary and linked-token metadata.",
+        "operationId": "listOwnerTokens",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "linked": {
+                          "items": {
+                            "properties": {
+                              "created_at": {
+                                "type": "object"
+                              },
+                              "expires_at": {
+                                "type": "object"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "last_used_at": {
+                                "type": "object"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "prefix": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "suffix": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "prefix",
+                              "suffix",
+                              "created_at",
+                              "last_used_at"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "primary": {
+                          "properties": {
+                            "created_at": {
+                              "type": "object"
+                            },
+                            "expires_at": {
+                              "type": "object"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "last_used_at": {
+                              "type": "object"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "prefix": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "suffix": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "prefix",
+                            "suffix",
+                            "created_at",
+                            "last_used_at"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "primary",
+                        "linked"
+                      ],
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "List owner tokens",
+        "x-listed": true
+      },
+      "post": {
+        "description": "Create a linked owner token. The raw value is returned only in this response.",
+        "operationId": "createLinkedToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "expires": {
+                    "description": "never, 7d, 30d, 90d, 1y, or YYYY-MM-DD",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Token name",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "owner_token": {
+                          "type": "string"
+                        },
+                        "prefix": {
+                          "type": "string"
+                        },
+                        "revoked": {
+                          "nullable": true,
+                          "type": "boolean"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "updated": {
+                          "nullable": true,
+                          "type": "boolean"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "Create a linked owner token",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/preferences/tokens/primary": {
+      "post": {
+        "description": "Create a new anonymous owner and return its primary token once. No bearer token is required; a valid existing token receives 409.",
+        "operationId": "issuePrimaryOwnerToken",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "owner_token": {
+                          "type": "string"
+                        },
+                        "prefix": {
+                          "type": "string"
+                        },
+                        "revoked": {
+                          "nullable": true,
+                          "type": "boolean"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "updated": {
+                          "nullable": true,
+                          "type": "boolean"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "owner_token": {
+                          "description": "Raw primary owner token; store securely",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Primary owner token issued once"
+          },
+          "409": {
+            "description": "A valid bearer token is already present"
+          },
+          "429": {
+            "description": "The strict token-action rate limit was exceeded"
+          }
+        },
+        "summary": "Issue the primary owner token",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/preferences/tokens/primary/reveal": {
+      "post": {
+        "description": "Decrypt and return the primary token for this explicit reveal action.",
+        "operationId": "revealPrimaryToken",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "owner_token": {
+                          "type": "string"
+                        },
+                        "prefix": {
+                          "type": "string"
+                        },
+                        "revoked": {
+                          "nullable": true,
+                          "type": "boolean"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "updated": {
+                          "nullable": true,
+                          "type": "boolean"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "Reveal the primary owner token once",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/preferences/tokens/primary/rotate": {
+      "post": {
+        "description": "Replace the primary token in place; linked tokens remain active.",
+        "operationId": "rotatePrimaryToken",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "owner_token": {
+                          "type": "string"
+                        },
+                        "prefix": {
+                          "type": "string"
+                        },
+                        "revoked": {
+                          "nullable": true,
+                          "type": "boolean"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "updated": {
+                          "nullable": true,
+                          "type": "boolean"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "Rotate the primary owner token",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/preferences/tokens/{id}": {
+      "delete": {
+        "description": "Permanently revoke a linked token.",
+        "operationId": "revokeLinkedToken",
+        "parameters": [
+          {
+            "description": "Linked token ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "revoked": {
+                          "type": "boolean"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "Revoke a linked owner token",
+        "x-listed": true
+      },
+      "patch": {
+        "description": "Change a linked token name or expiry.",
+        "operationId": "updateLinkedToken",
+        "parameters": [
+          {
+            "description": "Linked token ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "expires": {
+                    "description": "never, 7d, 30d, 90d, 1y, or YYYY-MM-DD",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Token name",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "updated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "Update a linked owner token",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/preferences/tokens/{id}/reveal": {
+      "post": {
+        "description": "Decrypt and return the linked token for this explicit reveal action.",
+        "operationId": "revealLinkedToken",
+        "parameters": [
+          {
+            "description": "Linked token ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "owner_token": {
+                          "type": "string"
+                        },
+                        "prefix": {
+                          "type": "string"
+                        },
+                        "revoked": {
+                          "nullable": true,
+                          "type": "boolean"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "updated": {
+                          "nullable": true,
+                          "type": "boolean"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "Reveal a linked owner token once",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/preferences/tokens/{id}/rotate": {
+      "post": {
+        "description": "Replace a linked token in place.",
+        "operationId": "rotateLinkedToken",
+        "parameters": [
+          {
+            "description": "Linked token ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "owner_token": {
+                          "type": "string"
+                        },
+                        "prefix": {
+                          "type": "string"
+                        },
+                        "revoked": {
+                          "nullable": true,
+                          "type": "boolean"
+                        },
+                        "token": {
+                          "type": "string"
+                        },
+                        "updated": {
+                          "nullable": true,
+                          "type": "boolean"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "OwnerTokenAuth": []
+          }
+        ],
+        "summary": "Rotate a linked owner token",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/privacy": {
+      "get": {
+        "description": "Return the server privacy policy and privacy signals.",
+        "operationId": "getServerPrivacy",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "client_side_storage": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "cookies_used": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "data_collection": {
+                          "properties": {
+                            "browser_fingerprint": {
+                              "type": "boolean"
+                            },
+                            "data_sold": {
+                              "type": "boolean"
+                            },
+                            "third_party_sharing": {
+                              "type": "boolean"
+                            },
+                            "user_accounts": {
+                              "type": "boolean"
+                            },
+                            "user_profiles": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "user_accounts",
+                            "browser_fingerprint",
+                            "user_profiles",
+                            "third_party_sharing",
+                            "data_sold"
+                          ],
+                          "type": "object"
+                        },
+                        "last_updated": {
+                          "type": "string"
+                        },
+                        "policy_version": {
+                          "type": "string"
+                        },
+                        "server_side_storage": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "summary": {
+                          "properties": {
+                            "data_sold": {
+                              "type": "boolean"
+                            },
+                            "data_stored_on_server": {
+                              "type": "boolean"
+                            },
+                            "user_control": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "data_stored_on_server",
+                            "data_sold",
+                            "user_control"
+                          ],
+                          "type": "object"
+                        },
+                        "third_party_sent": {
+                          "type": "string"
+                        },
+                        "thumbnail_proxy": {
+                          "type": "boolean"
+                        },
+                        "tor_supported": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "policy_version",
+                        "last_updated",
+                        "summary",
+                        "data_collection",
+                        "client_side_storage",
+                        "server_side_storage",
+                        "cookies_used",
+                        "thumbnail_proxy",
+                        "tor_supported",
+                        "third_party_sent"
+                      ],
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get server privacy information",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/reports/csp": {
+      "post": {
+        "description": "Submit a content security policy report payload for security monitoring.",
+        "operationId": "submitCSPReport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "required": null,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Submit a content security policy report",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/reports/default": {
+      "post": {
+        "description": "Submit a browser security report payload for security monitoring.",
+        "operationId": "submitDefaultReport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "required": null,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Submit a browser default error report",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/reports/nel": {
+      "post": {
+        "description": "Submit a network error report payload for security monitoring.",
+        "operationId": "submitNetworkErrorReport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "required": null,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Submit a network error report",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/security": {
+      "get": {
+        "description": "Return public security contacts, disclosure policy links, and published key metadata.",
+        "operationId": "getServerSecurity",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "contacts": {
+                      "items": {
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "value"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "expires": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "pgp": {
+                      "properties": {
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "fingerprint": {
+                          "nullable": true,
+                          "type": "string"
+                        },
+                        "url": {
+                          "format": "uri",
+                          "nullable": true,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "available",
+                        "url",
+                        "fingerprint"
+                      ],
+                      "type": "object"
+                    },
+                    "policy_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "report_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "thanks_url": {
+                      "format": "uri",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "contacts",
+                    "expires",
+                    "pgp",
+                    "policy_url",
+                    "thanks_url"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get server security contact information",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/security/policy": {
+      "get": {
+        "description": "Return the configured or built-in disclosure policy as Markdown.",
+        "operationId": "getServerSecurityPolicy",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "policy": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "policy"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get the security disclosure policy",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/security/thanks": {
+      "get": {
+        "description": "Return opted-in security researchers in newest-first order.",
+        "operationId": "getServerSecurityThanks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "entries": {
+                      "items": {
+                        "properties": {
+                          "credit": {
+                            "type": "string"
+                          },
+                          "date": {
+                            "format": "date",
+                            "type": "string"
+                          },
+                          "severity": {
+                            "enum": [
+                              "critical",
+                              "high",
+                              "medium",
+                              "low",
+                              "informational"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "credit",
+                          "date",
+                          "severity"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "entries"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "List credited security researchers",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/swagger": {
+      "get": {
+        "description": "Return the generated OpenAPI JSON document.",
+        "operationId": "getOpenAPISpec",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "object"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get the OpenAPI specification",
+        "x-listed": true
+      }
+    },
+    "/api/v1/server/terms": {
+      "get": {
+        "description": "Return the server terms of service.",
+        "operationId": "getServerTerms",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "last_updated": {
+                          "type": "string"
+                        },
+                        "sections": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "terms_version": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "terms_version",
+                        "last_updated",
+                        "summary",
+                        "sections"
+                      ],
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get server terms",
+        "x-listed": true
+      }
+    },
+    "/api/v1/stats": {
+      "get": {
+        "description": "Return enabled and total search engine counts.",
+        "operationId": "getServerStats",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "engines_enabled": {
+                          "type": "integer"
+                        },
+                        "engines_total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "engines_enabled",
+                        "engines_total"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get search statistics",
+        "x-listed": true
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "description": "Return maintenance diagnostics and recovery guidance. Requires the configured server operator bearer token.",
+        "operationId": "getOperatorStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Operator status and maintenance recovery guidance"
+          },
+          "401": {
+            "description": "Operator bearer token required"
+          }
+        },
+        "security": [
+          {
+            "OperatorTokenAuth": []
+          }
+        ],
+        "summary": "Get operator status",
+        "x-admin-only": true,
+        "x-listed": false
+      }
+    },
+    "/api/v1/version": {
+      "get": {
+        "description": "Return version, commit, build date, and official site.",
+        "operationId": "getServerVersion",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "build_date": {
+                      "type": "string"
+                    },
+                    "commit": {
+                      "type": "string"
+                    },
+                    "official_site": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "version",
+                    "commit",
+                    "build_date",
+                    "official_site"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "summary": "Get server version",
+        "x-listed": true
+      }
+    },
+    "/mcp": {
+      "post": {
+        "description": "Streamable HTTP endpoint for the Model Context Protocol.",
+        "operationId": "executeMCPAliasMcp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "required": null,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "nullable": true,
+                      "properties": {
+                        "code": {
+                          "type": "integer"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "id": {
+                      "type": "object"
+                    },
+                    "jsonrpc": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "items": {
+                        "type": "integer"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "jsonrpc"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Use the Model Context Protocol endpoint",
+        "x-listed": true
+      }
+    },
+    "/metrics": {
+      "get": {
+        "description": "Prometheus metrics endpoint.",
+        "operationId": "getMetricsAliasMetrics",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          }
+        ],
+        "summary": "Get internal server metrics",
+        "x-listed": false,
+        "x-mounted-when": "server.metrics.root.enabled"
+      }
+    },
+    "/metrics/{service}": {
+      "get": {
+        "description": "Prometheus metrics endpoint.",
+        "operationId": "getServiceMetricsAliasMetricsService",
+        "parameters": [
+          {
+            "description": "Metrics service",
+            "in": "path",
+            "name": "service",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          }
+        ],
+        "summary": "Get internal service metrics",
+        "x-listed": false,
+        "x-mounted-when": "server.metrics.root.enabled"
+      }
+    },
+    "/search.atom": {
+      "get": {
+        "description": "Search results as Atom 1.0 feed",
+        "parameters": [
+          {
+            "description": "Search query",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/atom+xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Atom feed"
+          }
+        },
+        "summary": "Atom feed"
+      }
+    },
+    "/search.rss": {
+      "get": {
+        "description": "Search results as RSS 2.0 feed",
+        "parameters": [
+          {
+            "description": "Search query",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/rss+xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "RSS feed"
+          }
+        },
+        "summary": "RSS feed"
+      }
+    },
+    "/server/healthz": {
+      "get": {
+        "description": "Frontend health endpoint with smart content negotiation (per AI.md PART 13)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Health check (frontend)"
+      }
+    },
+    "/server/metrics": {
+      "get": {
+        "description": "Prometheus metrics endpoint.",
+        "operationId": "getMetricsAliasServerMetrics",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          }
+        ],
+        "summary": "Get internal server metrics",
+        "x-listed": false,
+        "x-mounted-when": "server.metrics.enabled"
+      }
+    },
+    "/server/metrics/{service}": {
+      "get": {
+        "description": "Prometheus metrics endpoint.",
+        "operationId": "getServiceMetricsAliasServerMetricsService",
+        "parameters": [
+          {
+            "description": "Metrics service",
+            "in": "path",
+            "name": "service",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful response"
+          }
+        },
+        "security": [
+          {
+            "ServiceTokenAuth": []
+          }
+        ],
+        "summary": "Get internal service metrics",
+        "x-listed": false,
+        "x-mounted-when": "server.metrics.enabled"
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Current server",
+      "url": "http://48aa8fb07e2b"
+    }
+  ]
+}

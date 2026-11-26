@@ -398,7 +398,7 @@ func checkCLIUpdateBeforeRequests(interactive bool) error {
 		return nil
 	}
 
-	install := shouldAutoUpdateCLI(true, cliConfig.Update.Auto, interactive)
+	install := shouldAutoUpdateCLI(true, cliConfig.Update.Auto && updateConsentProvided, interactive)
 	if interactive {
 		install, err = promptForCLIUpdate(os.Stdin, os.Stderr)
 		if err != nil {

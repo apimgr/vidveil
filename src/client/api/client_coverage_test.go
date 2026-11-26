@@ -94,6 +94,25 @@ func TestSearch_ServerError(t *testing.T) {
 	}
 }
 
+func TestCountSearchResultFields(t *testing.T) {
+	counts := CountSearchResultFields([]SearchResult{
+		{Thumbnail: "thumb", PreviewURL: "preview", DownloadURL: "download", Duration: "1:20", Views: "4"},
+		{Thumbnail: "thumb", Duration: "2:10"},
+	})
+	want := map[string]int{
+		SearchFieldStatHasThumbnail:   2,
+		SearchFieldStatHasPreviewURL:  1,
+		SearchFieldStatHasDownloadURL: 1,
+		SearchFieldStatHasDuration:    2,
+		SearchFieldStatHasViews:       1,
+	}
+	for key, expected := range want {
+		if counts[key] != expected {
+			t.Errorf("CountSearchResultFields[%q] = %d, want %d", key, counts[key], expected)
+		}
+	}
+}
+
 // ── GetVersion ───────────────────────────────────────────────────────────────
 
 func TestGetVersion_ReturnsVersion(t *testing.T) {

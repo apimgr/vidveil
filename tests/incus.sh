@@ -1,405 +1,554 @@
 #!/usr/bin/env bash
-# @@License : WTFPL
-# Vidveil Integration Tests - Incus Runtime (Full OS + systemd)
-# Per AI.md PART 29: Testing & Development
+set -eo pipefail
 
-set -euo pipefail
+# Check if incus is available
+if ! command -v incus &>/dev/null; then
+    echo "ERROR: incus not found. Install incus or use tests/docker.sh" >&2
+    exit 69
+fi
+
+# Usage: tests/incus.sh [systemd|openrc|all]   (default: all)
+# systemd runs in a Debian container, openrc in an Alpine container; each gets the full test run
+MODE="${1:-all}"
+case "$MODE" in
+    systemd|openrc) MODES="$MODE" ;;
+    all) MODES="systemd openrc" ;;
+    *) echo "Usage: $0 [systemd|openrc|all]" >&2; exit 2 ;;
+esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-PROJECT_NAME="vidveil"
-PROJECT_ORG="apimgr"
-# Frozen on-disk identity (AI.md PART 25/29) — used for tempdir naming only,
-# distinct from PROJECT_NAME (the compiled binary's actual filename)
-INTERNAL_NAME="vidveil"
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-# Test counters
-TESTS_RUN=0
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-# Per PART 13: ALWAYS create org directory first, then use temp directories with org/project structure
+cd "${PROJECT_ROOT}"
+PROJECT_NAME="$(awk '$1 == "project_name:" {print $2; exit}' IDEA.md)"
+PROJECT_ORG="$(awk '$1 == "project_org:" {print $2; exit}' IDEA.md)"
+INTERNAL_NAME="${INTERNAL_NAME:-$(awk '$1 == "internal_name:" {print $2; exit}' IDEA.md)}"
+INTERNAL_ORG="${INTERNAL_ORG:-$(awk '$1 == "internal_org:" {print $2; exit}' IDEA.md)}"
+CONTAINER_PREFIX="${PROJECT_NAME}-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+CONTAINERS=()
+CONTAINER_CANDIDATES=()
 mkdir -p "${TMPDIR:-/tmp}/${PROJECT_ORG}"
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX")
-INSTANCE_SUFFIX="$(printf '%08x' "$(((RANDOM << 15) | RANDOM))")"
-INSTANCE_NAME="test-${PROJECT_NAME}-${INSTANCE_SUFFIX}"
-trap 'rm -rf "${TEMP_DIR}"; incus delete -f "${INSTANCE_NAME}" 2>/dev/null || true' EXIT
+INCUS_TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX")"
+BIN_DIR="${BINDIR:-${INCUS_TEMP_DIR}/binaries}"
+INCUS_GO_CACHE="${GO_CACHE:-${HOME}/go/pkg/mod}"
+INCUS_GO_BUILD="${GO_BUILD:-${HOME}/.cache/go-build/${PROJECT_NAME}}"
+INCUS_BUILD_NAME="${CONTAINER_PREFIX}-build"
+mkdir -p "${INCUS_GO_CACHE}" "${INCUS_GO_BUILD}"
 
-echo "Vidveil Incus Integration Tests (Debian + systemd)"
-echo "===================================================="
-echo "Temp dir: ${TEMP_DIR}"
-echo "Instance: ${INSTANCE_NAME}"
-echo
+# Incus images, one per init system: systemd uses the latest Debian stable, OpenRC uses the
+# latest stable Alpine release (update both when new stable releases ship)
+INCUS_IMAGE_SYSTEMD="images:debian/trixie"
+INCUS_IMAGE_OPENRC="images:alpine/3.24"
 
-# Helper functions
-pass() {
-    echo -e "${GREEN}+${NC} $1"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-    TESTS_RUN=$((TESTS_RUN + 1))
+# Resource caps for every instance (the counterparts of DOCKER_CPUS and DOCKER_MEM); override from the environment
+INCUS_CPUS="${INCUS_CPUS:-2}"
+INCUS_MEM="${INCUS_MEM:-4GiB}"
+INCUS_CPU_PRIORITY="${INCUS_CPU_PRIORITY:-2}"
+INCUS_OP_TIMEOUT="${INCUS_OP_TIMEOUT:-60}"
+INCUS_INSTALL_TIMEOUT="${INCUS_INSTALL_TIMEOUT:-900}"
+INCUS_RUN_TIMEOUT="${INCUS_RUN_TIMEOUT:-3600}"
+INCUS_OPERATION_TIMEOUT="${INCUS_OPERATION_TIMEOUT:-600}"
+INCUS_BOOT_WAIT="${INCUS_BOOT_WAIT:-180}"
+incus_op() {
+	timeout -k 30 "${INCUS_OPERATION_TIMEOUT}" incus "$@"
+}
+iexec() {
+	local secs="$1" container="$2"
+	shift 2
+	timeout "$secs" incus exec "$container" -- "$@"
+}
+incus_probe() {
+	iexec 5 "$@"
 }
 
-fail() {
-    echo -e "${RED}x${NC} $1"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    TESTS_RUN=$((TESTS_RUN + 1))
+cleanup() {
+    local c failed=0
+    local -a remaining=()
+    for c in "${CONTAINER_CANDIDATES[@]}"; do
+        if [ "$(incus_op config get "$c" user.vidveil.test-run 2>/dev/null || true)" = "$CONTAINER_PREFIX" ]; then
+            CONTAINERS+=("$c")
+        fi
+    done
+    for c in "${CONTAINERS[@]}"; do
+        incus_op delete "$c" --force 2>/dev/null || true
+        if incus_op info "$c" >/dev/null 2>&1; then
+            echo "ERROR: Incus instance remains after cleanup: ${c}" >&2
+            failed=1
+            remaining+=("$c")
+        fi
+    done
+    CONTAINERS=("${remaining[@]}")
+    if [ -n "${INCUS_TEMP_DIR:-}" ]; then
+        rm -rf "${INCUS_TEMP_DIR}"
+        INCUS_TEMP_DIR=""
+    fi
+    return "$failed"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# make build begins with clean, so never let its default target overwrite project binaries.
+if [ -n "${BINDIR:-}" ] && { [ -e "${BIN_DIR}" ] || [ -L "${BIN_DIR}" ]; }; then
+    echo "ERROR: refusing to replace existing BINDIR ${BIN_DIR}" >&2
+    exit 73
+fi
+
+if [ ! -f "${PROJECT_ROOT}/Makefile" ]; then
+    echo "ERROR: tests/incus.sh requires the project's Makefile build target" >&2
+    exit 69
+fi
+echo "Building with make build..."
+make -C "$PROJECT_ROOT" build \
+    BINDIR="$BIN_DIR" RELDIR="$INCUS_TEMP_DIR/releases" \
+    GO_CACHE="$INCUS_GO_CACHE" GO_BUILD="$INCUS_GO_BUILD" \
+    _GO_OPTS="timeout -k 30 3600 docker run --rm --name ${INCUS_BUILD_NAME} --memory=4g --cpus=2 -v ${PROJECT_ROOT}:/app -v ${INCUS_GO_CACHE}:/usr/local/share/go/pkg/mod -v ${INCUS_GO_BUILD}:/usr/local/share/go/cache -v ${INCUS_TEMP_DIR}:${INCUS_TEMP_DIR} -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false"
+
+REMOTE_LIB=$(cat <<'REMOTE_LIB_EOF'
+INTERNAL_NAME="${INTERNAL_NAME:-$PROJECT_NAME}"
+INTERNAL_ORG="${INTERNAL_ORG:-$PROJECT_ORG}"
+FAILURES=0
+fail() { echo "✗ FAILED: $*" >&2; FAILURES=$((FAILURES + 1)); }
+pass() { echo "✓ $*"; }
+check() { local d="$1"; shift; if "$@" >/dev/null 2>&1; then pass "$d"; else fail "$d"; fi; }
+check_not() { local d="$1"; shift; if "$@" >/dev/null 2>&1; then fail "$d"; else pass "$d"; fi; }
+wait_for() { local n="$1" i; shift; for i in $(seq 1 "$n"); do "$@" >/dev/null 2>&1 && return 0; sleep 1; done; return 1; }
+
+# A native service listens on the port the server saved in server.yml (a random 64xxx port; 80 is only the container default), so read it there
+CONFIG_FILE="/etc/${INTERNAL_ORG}/${INTERNAL_NAME}/server.yml"
+# server.port is read inside the server: section at ANY indentation; a dual port such as "8090,8443" yields its first number
+port() { awk '/^server:[[:space:]]*$/ {s=1; next} /^[^[:space:]#]/ {s=0} s && /^  port:/ {v=$2; gsub(/[^0-9,]/, "", v); sub(/,.*/, "", v); print v; exit}' "$CONFIG_FILE" 2>/dev/null; }
+api() { echo "http://localhost:$(port)/api/v1/server/healthz"; }
+base_url() { echo "http://localhost:$(port)"; }
+operator_token() {
+    awk '/^server:[[:space:]]*$/ {s=1; next} s && /^[^[:space:]#]/ {s=0} s && /^[[:space:]]+token:[[:space:]]*/ {sub(/^[[:space:]]+token:[[:space:]]*/, ""); gsub(/["\047]/, ""); print; exit}' \
+        "/etc/${INTERNAL_ORG}/${INTERNAL_NAME}/secrets.yml" 2>/dev/null
+}
+# The health helper asks for JSON: without an Accept header a curl client gets plain text and every jq check below would fail
+healthz() { curl -q -LSsf --max-time 10 -H 'Accept: application/json' "$(api)"; }
+healthz_up() { healthz | jq -e '.status' >/dev/null; }
+overlay() { healthz | jq -r ".features.$1.$2"; }
+
+# One set of service helpers per init system; the test steps are identical for both
+if [ "$INIT_MODE" = "systemd" ]; then
+    UNIT_FILE="/etc/systemd/system/${INTERNAL_NAME}.service"
+    svc_active()  { systemctl is-active --quiet "$INTERNAL_NAME"; }
+    svc_enabled() { systemctl is-enabled --quiet "$INTERNAL_NAME"; }
+    svc_pid()     { systemctl show -p MainPID --value "$INTERNAL_NAME"; }
+else
+    UNIT_FILE="/etc/init.d/${INTERNAL_NAME}"
+    svc_active()  { rc-service "$INTERNAL_NAME" status 2>&1 | grep started >/dev/null; }
+    svc_enabled() { rc-update show default | grep -w "$INTERNAL_NAME" >/dev/null; }
+    svc_pid()     { cat "/var/run/${INTERNAL_ORG}/${INTERNAL_NAME}/${INTERNAL_NAME}.pid"; }
+fi
+svc_stopped() { ! svc_active; }
+REMOTE_LIB_EOF
+)
+
+REMOTE_MAIN=$(cat <<'REMOTE_MAIN_EOF'
+echo "=== [$INIT_MODE] Init system identity ==="
+if [ "$INIT_MODE" = "systemd" ]; then
+    check "PID 1 is systemd" test "$(cat /proc/1/comm)" = "systemd"
+else
+    check "OpenRC is running" test -d /run/openrc
+    check "no systemd in this container" test ! -d /run/systemd/system
+fi
+
+echo "=== Version Check ==="
+${PROJECT_NAME} --version
+
+echo "=== Help Check ==="
+${PROJECT_NAME} --help
+
+echo "=== Binary Info ==="
+ls -lh /usr/local/bin/${PROJECT_NAME}
+file /usr/local/bin/${PROJECT_NAME}
+
+echo "=== [$INIT_MODE] Service install (--service --install also enables and starts) ==="
+${PROJECT_NAME} --service --install
+check "service file installed at ${UNIT_FILE}" test -f "$UNIT_FILE"
+if [ "$INIT_MODE" = "openrc" ]; then
+    check "init script starts with #!/sbin/openrc-run" sh -c "head -1 '$UNIT_FILE' | grep '^#!/sbin/openrc-run' >/dev/null"
+    check "init script is executable" test -x "$UNIT_FILE"
+    check_not "init script is not a SysV script" grep -q 'BEGIN INIT INFO' "$UNIT_FILE"
+fi
+check "service enabled at boot" svc_enabled
+check "service active after install" wait_for 30 svc_active
+check "health endpoint answers after install" wait_for 60 healthz_up
+check "service account exists" getent passwd "$INTERNAL_NAME"
+check "server runs as the service account after the privilege drop" test "$(stat -c %U /proc/$(svc_pid))" = "$INTERNAL_NAME"
+
+echo "=== [$INIT_MODE] Service restart ==="
+OLD_PID=$(svc_pid)
+${PROJECT_NAME} --service restart
+check "service active after restart" wait_for 30 svc_active
+check "health endpoint answers after restart" wait_for 60 healthz_up
+check "restart replaced the process" test "$(svc_pid)" != "$OLD_PID"
+
+echo "=== [$INIT_MODE] Service stop and start ==="
+${PROJECT_NAME} --service stop
+check "service stopped" wait_for 30 svc_stopped
+check_not "health endpoint is down while stopped" curl -q -LSsf --max-time 3 "$(api)"
+${PROJECT_NAME} --service start
+check "service active after start" wait_for 30 svc_active
+check "health endpoint answers after start" wait_for 60 healthz_up
+
+echo "=== API Endpoint Tests ==="
+# JSON response (default)
+curl -q -LSsf http://localhost:$(port)/api/v1/server/healthz || fail "/api/v1/server/healthz"
+# .txt extension (plain text)
+curl -q -LSsf http://localhost:$(port)/api/v1/server/healthz.txt || fail "/api/v1/server/healthz.txt"
+# Accept: application/json
+curl -q -LSsf -H 'Accept: application/json' http://localhost:$(port)/server/healthz || fail "Accept JSON"
+# Accept: text/plain
+curl -q -LSsf -H 'Accept: text/plain' http://localhost:$(port)/server/healthz || fail "Accept text/plain"
+if BASE_URL="$(base_url)" bash /tmp/test_content_negotiation.sh; then
+    pass "comprehensive route content-negotiation suite"
+else
+    fail "comprehensive route content-negotiation suite"
+fi
+
+echo "=== Project-Specific Endpoint Tests ==="
+if curl -q -LSsf --max-time 15 -H 'Accept: application/json' "http://localhost:$(port)/api/v1/engines" | grep '"ok"[[:space:]]*:[[:space:]]*true' >/dev/null; then
+    pass "Video engines API"
+else
+    fail "Video engines API"
+fi
+if curl -q -LSsf --max-time 15 -H 'Accept: application/json' "http://localhost:$(port)/api/v1/bangs" | grep '"ok"[[:space:]]*:[[:space:]]*true' >/dev/null; then
+    pass "Bang shortcuts API"
+else
+    fail "Bang shortcuts API"
+fi
+if curl -q -LSsf --max-time 15 -H 'Accept: text/html' -H 'User-Agent: Mozilla/5.0' "http://localhost:$(port)/" | grep -i '<html' >/dev/null; then
+    pass "Search home page"
+else
+    fail "Search home page"
+fi
+if curl -q -LSsf --max-time 15 -H 'Accept: text/html' -H 'User-Agent: Mozilla/5.0' "http://localhost:$(port)/server/preferences" | grep -i 'preferences' >/dev/null; then
+    pass "Visitor preferences page"
+else
+    fail "Visitor preferences page"
+fi
+
+echo "=== Open API Smoke Test ==="
+# No token needed for the public endpoints; MCP, metrics and token routes are checked separately (a missing token answers 401)
+if curl -q -LSsf -H 'Accept: application/json' http://localhost:$(port)/server/healthz | grep '"status"' >/dev/null; then pass "Health endpoint works"; else fail "Health endpoint"; fi
+
+echo "=== Owner and Operator Token Tests ==="
+OPERATOR_TOKEN=$(operator_token)
+if [[ "${OPERATOR_TOKEN}" =~ ^adm_[A-Za-z0-9]{32}$ ]]; then
+    pass "server.token is present in secrets.yml"
+else
+    fail "server.token is missing or malformed in secrets.yml"
+fi
+AUTH_MISSING_STATUS=$(curl -q -LSs --max-time 15 -o /dev/null -w "%{http_code}" "$(base_url)/api/v1/server/auth/check" || echo "000")
+check "auth check rejects a missing token" test "$AUTH_MISSING_STATUS" = 401
+AUTH_INVALID_STATUS=$(curl -q -LSs --max-time 15 -o /dev/null -w "%{http_code}" -H 'Authorization: Bearer invalid-token' "$(base_url)/api/v1/server/auth/check" || echo "000")
+check "auth check rejects an invalid token" test "$AUTH_INVALID_STATUS" = 401
+AUTH_OPERATOR_KIND=$(curl -q -LSsf --max-time 15 -H "Authorization: Bearer ${OPERATOR_TOKEN}" "$(base_url)/api/v1/server/auth/check" | jq -r '.data.kind // empty' 2>/dev/null || true)
+check "auth check accepts server.token" test "$AUTH_OPERATOR_KIND" = operator
+OWNER_TOKEN_RESPONSE=$(curl -q -LSs --max-time 30 -w "\n%{http_code}" -X POST "$(base_url)/api/v1/server/preferences/tokens/primary" || true)
+OWNER_TOKEN_STATUS=$(printf '%s\n' "$OWNER_TOKEN_RESPONSE" | tail -n1)
+API_TOKEN=$(printf '%s\n' "$OWNER_TOKEN_RESPONSE" | sed '$d' | jq -r '.data.owner_token // empty' 2>/dev/null || true)
+unset OWNER_TOKEN_RESPONSE
+if [ "$OWNER_TOKEN_STATUS" = 201 ] && [[ "$API_TOKEN" =~ ^own_[A-Za-z0-9]{32}$ ]]; then
+    pass "primary owner token issuance succeeds without a token"
+else
+    fail "primary owner token issuance returned an invalid response"
+fi
+AUTH_OWNER_KIND=$(curl -q -LSsf --max-time 15 -H "Authorization: Bearer ${API_TOKEN}" "$(base_url)/api/v1/server/auth/check" | jq -r '.data.kind // empty' 2>/dev/null || true)
+check "auth check accepts a primary owner token" test "$AUTH_OWNER_KIND" = owner
+OPERATOR_ROUTE="$(base_url)/api/v1/status"
+OPERATOR_NO_TOKEN_STATUS=$(curl -q -LSs --max-time 10 -o /dev/null -w "%{http_code}" "$OPERATOR_ROUTE" 2>/dev/null || echo 000)
+check "operator route rejects a missing token" test "$OPERATOR_NO_TOKEN_STATUS" = 401
+OPERATOR_WRONG_TOKEN_STATUS=$(curl -q -LSs --max-time 10 -o /dev/null -w "%{http_code}" -H 'Authorization: Bearer invalid-token' "$OPERATOR_ROUTE" 2>/dev/null || echo 000)
+check "operator route rejects a wrong token" test "$OPERATOR_WRONG_TOKEN_STATUS" = 401
+OPERATOR_OWNER_TOKEN_STATUS=$(curl -q -LSs --max-time 10 -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${API_TOKEN}" "$OPERATOR_ROUTE" 2>/dev/null || echo 000)
+check "operator route rejects an owner token" test "$OPERATOR_OWNER_TOKEN_STATUS" = 403
+OPERATOR_VALID_TOKEN_STATUS=$(curl -q -LSs --max-time 10 -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${OPERATOR_TOKEN}" "$OPERATOR_ROUTE" 2>/dev/null || echo 000)
+check "operator route accepts server.token" test "$OPERATOR_VALID_TOKEN_STATUS" = 200
+OPERATOR_QUERY_TOKEN_STATUS=$(curl -q -LSs --max-time 10 -o /dev/null -w "%{http_code}" "${OPERATOR_ROUTE}?token=${OPERATOR_TOKEN}" 2>/dev/null || echo 000)
+check "operator route rejects a query-string token" test "$OPERATOR_QUERY_TOKEN_STATUS" = 401
+if [ -f "/usr/local/bin/${PROJECT_NAME}-cli" ] && [ -n "$API_TOKEN" ]; then
+    CLI_HEALTH_OUTPUT=$("${PROJECT_NAME}-cli" --server "$(base_url)" --token "$API_TOKEN" health 2>&1 || true)
+    case "$CLI_HEALTH_OUTPUT" in *"Server is healthy"*) pass "CLI health command checks the running server" ;; *) fail "CLI health command failed" ;; esac
+    check "CLI engines read command uses an API token" "${PROJECT_NAME}-cli" --server "$(base_url)" --token "$API_TOKEN" engines
+    check "CLI favorites write command uses an API token" "${PROJECT_NAME}-cli" --server "$(base_url)" --token "$API_TOKEN" favorites add --url https://example.test/vidveil-cli-check --title VidVeil-CLI-Integration
+    CLI_FAVORITES=$("${PROJECT_NAME}-cli" --server "$(base_url)" --token "$API_TOKEN" favorites list 2>&1 || true)
+    case "$CLI_FAVORITES" in *VidVeil-CLI-Integration*) pass "CLI favorites read command returns the saved item" ;; *) fail "CLI favorites read command omitted the saved item" ;; esac
+    CLI_BAD_TOKEN_OUTPUT=$("${PROJECT_NAME}-cli" --server "$(base_url)" --token invalid-token favorites list 2>&1 || true)
+    case "$CLI_BAD_TOKEN_OUTPUT" in *401*|*UNAUTHORIZED*|*unauthorized*) pass "CLI reports a clear invalid-token error" ;; *) fail "CLI invalid-token failure omitted its authentication error" ;; esac
+else
+    fail "CLI binary or issued API token is unavailable for the authenticated CLI test"
+fi
+unset API_TOKEN OPERATOR_TOKEN OPERATOR_ROUTE OPERATOR_NO_TOKEN_STATUS OPERATOR_WRONG_TOKEN_STATUS OPERATOR_OWNER_TOKEN_STATUS OPERATOR_VALID_TOKEN_STATUS OPERATOR_QUERY_TOKEN_STATUS CLI_HEALTH_OUTPUT CLI_FAVORITES CLI_BAD_TOKEN_OUTPUT
+
+echo "=== Binary Rename Tests ==="
+# Binaries show the ACTUAL name in --help/--version (not hardcoded)
+cp /usr/local/bin/${PROJECT_NAME} /tmp/renamed-server
+chmod +x /tmp/renamed-server
+if /tmp/renamed-server --help 2>&1 | grep 'renamed-server' >/dev/null; then pass "Server binary rename works (--help shows actual name)"; else fail "Server --help does not show renamed binary name"; fi
+
+echo "=== Client Tests (if exists) ==="
+if [ -f /usr/local/bin/${PROJECT_NAME}-cli ]; then
+    ${PROJECT_NAME}-cli --version || fail "CLI --version"
+    ${PROJECT_NAME}-cli --help || fail "CLI --help"
+
+    cp /usr/local/bin/${PROJECT_NAME}-cli /tmp/renamed-cli
+    chmod +x /tmp/renamed-cli
+    if /tmp/renamed-cli --help 2>&1 | grep 'renamed-cli' >/dev/null; then pass "CLI binary rename works"; else fail "CLI --help does not show renamed binary name"; fi
+
+else
+    echo 'client not installed - skipping'
+fi
+
+echo "=== Agent Tests (if exists) ==="
+
+echo "=== [$INIT_MODE] Tor hidden service (tor is installed in this container) ==="
+DATA_ROOT="/var/lib/${INTERNAL_ORG}/${INTERNAL_NAME}"
+CONF_ROOT="/etc/${INTERNAL_ORG}/${INTERNAL_NAME}"
+check "tor binary is installed" command -v tor
+check "features.tor.enabled is true" test "$(overlay tor enabled)" = "true"
+case "$(overlay tor status)" in
+    disabled|starting|healthy|unavailable) pass "features.tor.status is one of the four contract words" ;;
+    *) fail "features.tor.status is not one of the four contract words" ;;
+esac
+# Bootstrap needs outbound network. REQUIRE_OVERLAY=1 makes a missing network a failure instead of a SKIP.
+for _ in $(seq 1 "${TOR_WAIT:-300}"); do [ "$(overlay tor status)" = "healthy" ] && break; sleep 1; done
+if [ "$(overlay tor status)" = "healthy" ]; then
+    if [[ "$(overlay tor hostname)" =~ ^[a-z2-7]{56}\.onion$ ]]; then pass "tor hostname is a v3 onion address"; else fail "tor hostname is not a v3 onion address"; fi
+    check "features.tor.running is true" test "$(overlay tor running)" = "true"
+    check "checks.tor is ok" test "$(healthz | jq -r '.checks.tor')" = "ok"
+    check "onion hostname file persisted" test -s "${DATA_ROOT}/tor/site/hostname"
+    for d in "${CONF_ROOT}/tor" "${DATA_ROOT}/tor" "${DATA_ROOT}/tor/site"; do
+        check "$d is mode 700" test "$(stat -c %a "$d")" = "700"
+    done
+elif [ "${REQUIRE_OVERLAY:-0}" = "1" ]; then
+    fail "Tor did not become healthy within ${TOR_WAIT:-300}s"
+else
+    echo "SKIP: Tor did not bootstrap within ${TOR_WAIT:-300}s (no outbound network?). The contract is still checked." >&2
+    case "$(overlay tor status)" in
+        starting) check "starting maps to checks.tor ok" test "$(healthz | jq -r '.checks.tor')" = "ok" ;;
+        unavailable) check "unavailable maps to checks.tor degraded" test "$(healthz | jq -r '.checks.tor')" = "degraded" ;;
+        *) fail "Tor is neither starting nor unavailable while not healthy" ;;
+    esac
+fi
+HEALTH_BODY=$(healthz)
+if grep -E '/(etc|var|home|config|data)/' <<< "$HEALTH_BODY" >/dev/null; then fail "health response leaks a filesystem path"; else pass "health response carries no filesystem path"; fi
+
+echo "=== [$INIT_MODE] Tor missing binary (must be disabled, never an error) ==="
+TOR_PATHS=()
+restore_tor_binaries() {
+    local path
+    for path in "${TOR_PATHS[@]}"; do
+        [ -e "${path}.vidveil-hidden" ] || continue
+        mv "${path}.vidveil-hidden" "$path"
+    done
+}
+trap restore_tor_binaries EXIT
+for TOR_BIN in "$(command -v tor)" /usr/bin/tor /usr/sbin/tor /usr/local/bin/tor; do
+    [ -e "$TOR_BIN" ] || continue
+    [ ! -e "${TOR_BIN}.vidveil-hidden" ] || continue
+    mv "$TOR_BIN" "${TOR_BIN}.vidveil-hidden"
+    TOR_PATHS+=("$TOR_BIN")
+done
+${PROJECT_NAME} --service restart
+wait_for 60 healthz_up
+check "enabled is false without the binary" test "$(overlay tor enabled)" = "false"
+check "running is false" test "$(overlay tor running)" = "false"
+check "status is disabled" test "$(overlay tor status)" = "disabled"
+check "hostname is empty" test -z "$(overlay tor hostname)"
+check "checks.tor is omitted" test "$(healthz | jq '(.checks | has("tor"))')" = "false"
+restore_tor_binaries
+trap - EXIT
+${PROJECT_NAME} --service restart
+wait_for 60 healthz_up
+
+echo "=== [$INIT_MODE] I2P (off by default in a system container, i2pd is installed) ==="
+check "i2pd binary is installed" command -v i2pd
+check "server.yml is 0600 after start" test "$(stat -c %a "${CONF_ROOT}/server.yml")" = "600"
+check "features.i2p.enabled is false by default in a system container" test "$(overlay i2p enabled)" = "false"
+check "status is disabled by default" test "$(overlay i2p status)" = "disabled"
+check "checks.i2p is omitted by default" test "$(healthz | jq '(.checks | has("i2p"))')" = "false"
+
+echo "=== [$INIT_MODE] I2P enabled by a drop-in (opt-in, i2pd is installed) ==="
+mkdir -p "${CONF_ROOT}/yaml.d"
+printf 'server:\n  i2p:\n    enabled: true\n' > "${CONF_ROOT}/yaml.d/50-i2p.yml"
+chown "${INTERNAL_NAME}:${INTERNAL_NAME}" "${CONF_ROOT}/yaml.d" "${CONF_ROOT}/yaml.d/50-i2p.yml"
+chmod 0700 "${CONF_ROOT}/yaml.d"
+chmod 0600 "${CONF_ROOT}/yaml.d/50-i2p.yml"
+${PROJECT_NAME} --service restart
+wait_for 60 healthz_up
+check "features.i2p.enabled is true after opting in" test "$(overlay i2p enabled)" = "true"
+check "features.i2p.provider is i2pd" test "$(overlay i2p provider)" = "i2pd"
+case "$(overlay i2p status)" in
+    starting|healthy|unavailable) pass "features.i2p.status is a contract word for an enabled network" ;;
+    *) fail "features.i2p.status is not valid for an enabled network" ;;
+esac
+for _ in $(seq 1 "${I2P_WAIT:-600}"); do [ "$(overlay i2p status)" = "healthy" ] && break; sleep 1; done
+if [ "$(overlay i2p status)" = "healthy" ]; then
+    if [[ "$(overlay i2p hostname)" =~ ^[a-z2-7]{52}\.b32\.i2p$ ]]; then pass "i2p hostname is a .b32.i2p address"; else fail "i2p hostname is not a .b32.i2p address"; fi
+    check "features.i2p.running is true" test "$(overlay i2p running)" = "true"
+    check "checks.i2p is ok" test "$(healthz | jq -r '.checks.i2p')" = "ok"
+    check "destination key persisted" sh -c "find '${DATA_ROOT}/i2p/site' -type f -size +0 | grep . >/dev/null"
+elif [ "${REQUIRE_OVERLAY:-0}" = "1" ]; then
+    fail "I2P did not become healthy within ${I2P_WAIT:-600}s"
+else
+    echo "SKIP: I2P did not build tunnels within ${I2P_WAIT:-600}s (no outbound network?). The contract is still checked." >&2
+fi
+if healthz | grep -Eq '/(etc|var|home|config|data)/'; then fail "health response leaks a filesystem path"; else pass "health response carries no filesystem path"; fi
+
+echo "=== [$INIT_MODE] I2P missing provider (enabled by the drop-in, no i2pd: disabled, never an error) ==="
+I2PD_BIN=$(command -v i2pd)
+mv "$I2PD_BIN" "${I2PD_BIN}.hidden"
+${PROJECT_NAME} --service restart
+wait_for 60 healthz_up
+check "enabled is false without a provider" test "$(overlay i2p enabled)" = "false"
+check "status is disabled" test "$(overlay i2p status)" = "disabled"
+check "provider is none" test "$(overlay i2p provider)" = "none"
+check "checks.i2p is omitted" test "$(healthz | jq '(.checks | has("i2p"))')" = "false"
+mv "${I2PD_BIN}.hidden" "$I2PD_BIN"
+rm -f "${CONF_ROOT}/yaml.d/50-i2p.yml"
+${PROJECT_NAME} --service restart
+wait_for 60 healthz_up
+
+[ "$FAILURES" -eq 0 ] || { echo "$FAILURES check(s) failed" >&2; exit 1; }
+echo "=== [$INIT_MODE] Main tests passed ==="
+REMOTE_MAIN_EOF
+)
+
+REMOTE_AFTER=$(cat <<'REMOTE_AFTER_EOF'
+echo "=== [$INIT_MODE] Boot persistence (container was restarted) ==="
+check "service still enabled after reboot" svc_enabled
+check "service came back after reboot" wait_for 120 svc_active
+check "health endpoint answers after reboot" wait_for 120 healthz_up
+
+echo "=== [$INIT_MODE] Service disable (keeps the service file) ==="
+${PROJECT_NAME} --service --disable
+check_not "service not enabled after --disable" svc_enabled
+check "service not active after --disable" wait_for 30 svc_stopped
+check "service file kept after --disable" test -f "$UNIT_FILE"
+
+echo "=== [$INIT_MODE] Service re-install ==="
+${PROJECT_NAME} --service --install
+check "service enabled again" svc_enabled
+check "service active again" wait_for 30 svc_active
+check "health endpoint answers again" wait_for 60 healthz_up
+
+echo "=== [$INIT_MODE] Service uninstall (confirmation prompt answered with y) ==="
+if ${PROJECT_NAME} --service --uninstall <<< 'y'; then
+    pass "uninstall command completed"
+else
+    fail "uninstall command completed"
+fi
+check_not "service file removed" test -e "$UNIT_FILE"
+check_not "service not enabled" svc_enabled
+check "service not active" wait_for 30 svc_stopped
+check_not "data directory removed" test -d "/var/lib/${INTERNAL_ORG}/${INTERNAL_NAME}"
+
+[ "$FAILURES" -eq 0 ] || { echo "$FAILURES check(s) failed" >&2; exit 1; }
+echo "=== [$INIT_MODE] All tests passed ==="
+REMOTE_AFTER_EOF
+)
+
+# Run a script inside the container with the init mode and project names
+# Every script fragment is its own argument: printf puts a newline after each one, because $(cat <<EOF) strips the trailing newline of a heredoc
+remote() {
+    local container="$1" init="$2"
+    shift 2
+    printf '%s\n' "$@" | iexec "$INCUS_RUN_TIMEOUT" "$container" env INIT_MODE="$init" PROJECT_NAME="$PROJECT_NAME" PROJECT_ORG="$PROJECT_ORG" \
+        INTERNAL_NAME="$INTERNAL_NAME" INTERNAL_ORG="$INTERNAL_ORG" REQUIRE_OVERLAY="${REQUIRE_OVERLAY:-0}" \
+        TOR_WAIT="${TOR_WAIT:-300}" I2P_WAIT="${I2P_WAIT:-600}" bash -s
 }
 
-info() {
-    echo -e "${BLUE}>${NC} $1"
+# Wait until the container accepts commands, its init system finished booting and the network is up
+wait_boot() {
+    local container="$1" init="$2" state deadline=$((SECONDS + INCUS_BOOT_WAIT)) ready=false init_ready=false
+    while (( SECONDS < deadline )); do
+        if incus_probe "$container" true 2>/dev/null; then ready=true; break; fi
+        sleep 1
+    done
+    if [ "$ready" != true ]; then
+        echo "ERROR: Incus container did not accept commands within ${INCUS_BOOT_WAIT}s: ${container}" >&2
+        return 1
+    fi
+    if [ "$init" = "systemd" ]; then
+        # "degraded" is normal in a container; only "starting" means boot is unfinished
+        while (( SECONDS < deadline )); do
+            state=$(incus_probe "$container" systemctl is-system-running 2>/dev/null || true)
+            if [ -n "$state" ] && [ "$state" != starting ]; then init_ready=true; break; fi
+            sleep 1
+        done
+    else
+        while (( SECONDS < deadline )); do
+            if incus_probe "$container" test -d /run/openrc 2>/dev/null; then init_ready=true; break; fi
+            sleep 1
+        done
+    fi
+    if [ "$init_ready" != true ]; then
+        echo "ERROR: Incus init system did not become ready within ${INCUS_BOOT_WAIT}s: ${container}" >&2
+        return 1
+    fi
+    while (( SECONDS < deadline )); do
+        if incus_probe "$container" sh -c 'ip route | grep "^default" >/dev/null' 2>/dev/null; then return 0; fi
+        sleep 1
+    done
+    echo "ERROR: Incus container init or network did not become ready within ${INCUS_BOOT_WAIT}s: ${container}" >&2
+    return 1
 }
 
-# Step 1: Build server binary
-# Per AI.md PART 26: casjaysdev/go:latest entrypoint requires a shell script for multi-word commands
-info "Building server binary with casjaysdev/go:latest..."
-cat > "${TEMP_DIR}/build.sh" << 'EOF'
-#!/bin/sh
-set -e
-cd /build
-go mod tidy
-go mod download
-go build -buildvcs=false -ldflags '-s -w' -o /output/vidveil ./src
-EOF
-chmod +x "${TEMP_DIR}/build.sh"
-
-docker run --rm --name "${INSTANCE_NAME}-server-build" \
-    -v "${PROJECT_ROOT}":/build \
-    -v "${TEMP_DIR}":/output \
-    -e CGO_ENABLED=0 \
-    -e GOFLAGS=-buildvcs=false \
-    casjaysdev/go:latest \
-    /output/build.sh 2>&1 | tail -5
-
-if [ ! -f "${TEMP_DIR}/${PROJECT_NAME}" ]; then
-    echo -e "${RED}x Build failed${NC}"
-    exit 1
-fi
-pass "Server binary built successfully"
-
-# Step 2: Build CLI binary (vidveil-cli — required per AI.md PART 8)
-info "Building CLI binary (vidveil-cli) with casjaysdev/go:latest..."
-cat > "${TEMP_DIR}/build-cli.sh" << 'EOF'
-#!/bin/sh
-set -e
-cd /build
-go build -buildvcs=false -ldflags '-s -w' -o /output/vidveil-cli ./src/client
-EOF
-chmod +x "${TEMP_DIR}/build-cli.sh"
-
-docker run --rm --name "${INSTANCE_NAME}-cli-build" \
-    -v "${PROJECT_ROOT}":/build \
-    -v "${TEMP_DIR}":/output \
-    -e CGO_ENABLED=0 \
-    -e GOFLAGS=-buildvcs=false \
-    casjaysdev/go:latest \
-    /output/build-cli.sh 2>&1 | tail -5
-
-if [ ! -f "${TEMP_DIR}/vidveil-cli" ]; then
-    echo -e "${RED}x CLI build failed${NC}"
-    exit 1
-fi
-pass "CLI binary built successfully"
-
-# Step 3: Launch Incus container (Debian trixie for full systemd support)
-# Per AI.md PART 29: Incus tests MUST use images:debian/trixie (latest stable)
-info "Launching Incus container (Debian trixie)..."
-incus launch images:debian/trixie "${INSTANCE_NAME}"
-sleep 5
-pass "Incus container launched"
-
-# Step 4: Install dependencies
-info "Installing dependencies (curl, Tor, I2P, timezone and CA data)..."
-incus exec "${INSTANCE_NAME}" -- apt-get update -qq 2>&1 | tail -1
-incus exec "${INSTANCE_NAME}" -- apt-get install -y -qq curl tor i2pd tzdata ca-certificates 2>&1 | tail -1
-pass "Dependencies installed"
-
-# Step 5: Install server binary
-info "Installing server binary..."
-incus file push "${TEMP_DIR}/${PROJECT_NAME}" "${INSTANCE_NAME}/usr/local/bin/"
-incus exec "${INSTANCE_NAME}" -- chmod +x "/usr/local/bin/${PROJECT_NAME}"
-pass "Server binary installed"
-
-# Step 6: Install CLI binary
-info "Installing CLI binary..."
-incus file push "${TEMP_DIR}/vidveil-cli" "${INSTANCE_NAME}/usr/local/bin/"
-incus exec "${INSTANCE_NAME}" -- chmod +x "/usr/local/bin/vidveil-cli"
-pass "CLI binary installed"
-
-# Step 7: Test server version
-info "Testing server binary..."
-VERSION=$(incus exec "${INSTANCE_NAME}" -- ${PROJECT_NAME} --version | head -1)
-if [ -n "$VERSION" ]; then
-    pass "Server version check: $VERSION"
-else
-    fail "Server version check failed"
-fi
-
-# Step 8: Binary rename test (per AI.md PART 7: binary renames itself gracefully)
-info "Testing binary rename behavior..."
-incus exec "${INSTANCE_NAME}" -- cp "/usr/local/bin/${PROJECT_NAME}" "/usr/local/bin/myveil"
-RENAMED_HELP=$(incus exec "${INSTANCE_NAME}" -- /usr/local/bin/myveil --help 2>&1 | head -5 || true)
-if echo "$RENAMED_HELP" | grep -qi "myveil"; then
-    pass "Binary rename: --help shows new name"
-else
-    fail "Binary rename: --help does not reflect new binary name"
-fi
-incus exec "${INSTANCE_NAME}" -- rm -f "/usr/local/bin/myveil"
-
-# Step 9: Test CLI binary
-info "Testing CLI binary..."
-CLI_VERSION=$(incus exec "${INSTANCE_NAME}" -- vidveil-cli --version | head -1)
-if [ -n "$CLI_VERSION" ]; then
-    pass "CLI version check: $CLI_VERSION"
-else
-    fail "CLI version check failed"
-fi
-
-# Step 10: Install as systemd service (PART 13 requirement for Incus tests)
-info "Configuring the test-only Tor service..."
-cat > "${TEMP_DIR}/server.yml" << 'EOF'
-server: {}
-EOF
-incus exec "${INSTANCE_NAME}" -- mkdir -p /etc/apimgr/vidveil
-incus file push "${TEMP_DIR}/server.yml" "${INSTANCE_NAME}/etc/apimgr/vidveil/server.yml"
-pass "Default I2P setting retained in Incus test configuration"
-
-info "Installing systemd service..."
-if incus exec "${INSTANCE_NAME}" -- ${PROJECT_NAME} --service --install; then
-    pass "Systemd service installed"
-else
-    fail "Systemd service installation failed"
-fi
-
-# Step 11: Start service
-info "Starting vidveil service..."
-sleep 2
-if incus exec "${INSTANCE_NAME}" -- systemctl start ${PROJECT_NAME}; then
-    pass "Service started"
-else
-    fail "Service start failed"
-fi
-
-# Step 12: Check service status
-info "Checking service status..."
-if incus exec "${INSTANCE_NAME}" -- systemctl is-active ${PROJECT_NAME} | grep -q "active"; then
-    pass "Service is active"
-else
-    fail "Service is not active"
-    incus exec "${INSTANCE_NAME}" -- systemctl --no-pager --full status ${PROJECT_NAME} || true
-    incus exec "${INSTANCE_NAME}" -- journalctl -u ${PROJECT_NAME} --no-pager -n 80 || true
-fi
-
-# Detect the public service listener (random 64xxx per AI.md PART 5).
-info "Detecting service port..."
-# Service readiness can lag behind systemd's active state. Retry until its
-# wildcard listener exists; Tor and I2P backend listeners are loopback-only.
-SERVICE_PORT=""
-for _ in $(seq 1 30); do
-    SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- sh -c "ss -H -tlnp | awk 'index(\$4, \"*:\")==1 && /vidveil/ {split(\$4, address, \":\"); print address[2]; exit}'" 2>/dev/null || true)
-    if [ -z "$SERVICE_PORT" ]; then
-        SERVICE_PORT=$(incus exec "${INSTANCE_NAME}" -- journalctl -u "${PROJECT_NAME}" --no-pager -n 50 2>/dev/null | grep -oP 'Listening on (\[::\]:|[0-9.]+:)\K[0-9]+' | tail -1 || true)
+run_mode() {
+    local init="$1" image container
+    if [ "$init" = "systemd" ]; then image="$INCUS_IMAGE_SYSTEMD"; else image="$INCUS_IMAGE_OPENRC"; fi
+    container="${CONTAINER_PREFIX}-${init}"
+    if incus_op info "$container" >/dev/null 2>&1; then
+        echo "ERROR: refusing to replace existing Incus instance ${container}" >&2
+        return 73
     fi
-    if [ -n "$SERVICE_PORT" ] && incus exec "${INSTANCE_NAME}" -- curl -q -fsS "http://localhost:${SERVICE_PORT}/server/healthz" >/dev/null 2>&1; then
-        break
+    CONTAINER_CANDIDATES+=("$container")
+
+    echo "=== [$init] Launching Incus container ($image) ==="
+    incus_op launch "$image" "$container" \
+        -c user.vidveil.test-run="$CONTAINER_PREFIX" \
+        -c limits.cpu="$INCUS_CPUS" -c limits.memory="$INCUS_MEM" -c limits.cpu.priority="$INCUS_CPU_PRIORITY"
+    wait_boot "$container" "$init"
+
+    echo "=== [$init] Installing test tools, tor and i2pd ==="
+    if [ "$init" = "systemd" ]; then
+        iexec "$INCUS_INSTALL_TIMEOUT" "$container" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl jq file tor i2pd' >/dev/null
+        # The distro tor/i2pd services are NOT what is tested: the server runs its own dedicated, isolated instances (PART 31)
+        iexec "$INCUS_OP_TIMEOUT" "$container" systemctl disable --now tor.service tor@default.service i2pd.service 2>/dev/null || true
+    else
+        iexec "$INCUS_INSTALL_TIMEOUT" "$container" sh -c 'apk add --no-cache bash curl jq file tor i2pd tzdata ca-certificates' >/dev/null
+        iexec "$INCUS_OP_TIMEOUT" "$container" sh -c 'rc-service tor stop; rc-service i2pd stop; rc-update del tor; rc-update del i2pd' 2>/dev/null || true
     fi
-    sleep 1
-done
-if [ -z "$SERVICE_PORT" ]; then
-    fail "Could not detect the server's public listener port"
-    SERVICE_PORT="64080"
-fi
-info "Service running on port: ${SERVICE_PORT}"
 
-# Incus runs a full systemd service container, which follows the bare-host
-# opt-in default. The Docker application-container test covers its enabled
-# computed default; this test enables I2P explicitly for the provider check.
-info "Checking that I2P remains opt-in in the Incus system container..."
-HEALTH_JSON=""
-for _ in $(seq 1 30); do
-    HEALTH_JSON=$(incus exec "${INSTANCE_NAME}" -- curl -q -sS -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/server/healthz" 2>/dev/null | tr -d '[:space:]' || true)
-    if printf '%s' "$HEALTH_JSON" | grep -Eo '"i2p":\{[^}]*\}' | grep -q '"enabled":false.*"status":"disabled"'; then
-        break
+    echo "=== [$init] Copying binaries to container ==="
+    incus_op file push "${BIN_DIR}/${PROJECT_NAME}" "$container/usr/local/bin/"
+    iexec "$INCUS_OP_TIMEOUT" "$container" chmod +x "/usr/local/bin/${PROJECT_NAME}"
+    if [ -f "${BIN_DIR}/${PROJECT_NAME}-cli" ]; then
+        incus_op file push "${BIN_DIR}/${PROJECT_NAME}-cli" "$container/usr/local/bin/"
+        iexec "$INCUS_OP_TIMEOUT" "$container" chmod +x "/usr/local/bin/${PROJECT_NAME}-cli"
     fi
-    sleep 1
-done
-if printf '%s' "$HEALTH_JSON" | grep -Eo '"i2p":\{[^}]*\}' | grep -q '"enabled":false.*"status":"disabled"'; then
-    pass "I2P is opt-in by default in the Incus system container"
-else
-    fail "I2P was not disabled by default (status: ${HEALTH_JSON:-unavailable})"
-fi
+    incus_op file push "${SCRIPT_DIR}/test_content_negotiation.sh" "$container/tmp/test_content_negotiation.sh"
+    iexec "$INCUS_OP_TIMEOUT" "$container" chmod 0600 /tmp/test_content_negotiation.sh
 
-info "Opting in to I2P through a configuration drop-in..."
-cat > "${TEMP_DIR}/50-i2p.yml" << 'EOF'
-server:
-  i2p:
-    enabled: true
-    bootstrap_timeout: 10m
-    inbound_length: 1
-    outbound_length: 1
-    inbound_quantity: 1
-    outbound_quantity: 1
-EOF
-incus exec "${INSTANCE_NAME}" -- mkdir -p /etc/apimgr/vidveil/yaml.d
-incus file push "${TEMP_DIR}/50-i2p.yml" "${INSTANCE_NAME}/etc/apimgr/vidveil/yaml.d/50-i2p.yml"
-incus exec "${INSTANCE_NAME}" -- systemctl restart "${PROJECT_NAME}"
+    echo "=== [$init] Running tests in Incus ==="
+    remote "$container" "$init" "$REMOTE_LIB" "$REMOTE_MAIN"
 
-# Wait for the server plus its isolated Tor and opted-in I2P providers to become healthy.
-info "Waiting for Tor and I2P health..."
-OVERLAY_HEALTHY=false
-for _ in $(seq 1 600); do
-    # Restarting can select a new random service port. Refresh it from the
-    # latest service startup log before probing the health endpoint.
-    CURRENT_PORT=$(incus exec "${INSTANCE_NAME}" -- journalctl -u "${PROJECT_NAME}" --no-pager -n 30 2>/dev/null | grep -oP 'Listening on (\[::\]:|[0-9.]+:)\K[0-9]+' | tail -1 || true)
-    if [ -n "$CURRENT_PORT" ]; then
-        SERVICE_PORT="$CURRENT_PORT"
-    fi
-    HEALTH_JSON=$(incus exec "${INSTANCE_NAME}" -- curl -q -sS -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/server/healthz" 2>/dev/null | tr -d '[:space:]' || true)
-    if echo "$HEALTH_JSON" | grep -Eo '"tor":\{[^}]*\}' | grep -q '"status":"healthy"' && \
-       echo "$HEALTH_JSON" | grep -Eo '"i2p":\{[^}]*\}' | grep -q '"status":"healthy"'; then
-        OVERLAY_HEALTHY=true
-        break
-    fi
-    sleep 1
-done
-if [ "${OVERLAY_HEALTHY}" = "true" ]; then
-    pass "Tor and I2P providers are healthy"
-else
-    fail "Tor or I2P provider did not become healthy"
-    incus exec "${INSTANCE_NAME}" -- journalctl -u ${PROJECT_NAME} --no-pager -n 80 || true
-fi
+    echo "=== [$init] Restarting the container (boot persistence) ==="
+    incus_op restart "$container"
+    wait_boot "$container" "$init"
+    remote "$container" "$init" "$REMOTE_LIB" "$REMOTE_AFTER"
+}
 
-# Step 13: Test HTTP endpoints
-# Per AI.md PART 13: /server/healthz is canonical; /healthz is opt-in via config
-info "Testing API endpoints..."
-if incus exec "${INSTANCE_NAME}" -- curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/server/healthz" | grep -q "^200$"; then
-    pass "Health endpoint responding"
-else
-    fail "Health endpoint not responding"
-fi
+# One container per init system, run one after the other (never in parallel)
+run_mode_list() {
+    local init
+    for init in $MODES; do
+        run_mode "$init"
+    done
+}
+run_mode_list
 
-# Per AI.md PART 14: API endpoints return JSON when Accept: application/json
-ENGINES_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -q -LSsf -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/api/v1/engines" 2>&1 || echo "curl failed")
-if echo "$ENGINES_OUT" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
-    pass "Engines API responding"
-else
-    fail "Engines API not responding (got: ${ENGINES_OUT:0:200})"
-fi
-
-BANGS_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -q -LSsf -H "Accept: application/json" "http://localhost:${SERVICE_PORT}/api/v1/bangs" 2>&1 || echo "curl failed")
-if echo "$BANGS_OUT" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
-    pass "Bangs API responding"
-else
-    fail "Bangs API not responding (got: ${BANGS_OUT:0:200})"
-fi
-
-# Per AI.md PART 28: Content negotiation - test ALL Accept headers
-info "Testing content negotiation..."
-
-# Test API with text/plain
-PLAIN_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -q -LSsf -H "Accept: text/plain" "http://localhost:${SERVICE_PORT}/api/v1/engines" 2>&1 || echo "curl failed")
-if echo "$PLAIN_OUT" | grep -qE "^(engines:|ok:)"; then
-    pass "API Accept: text/plain"
-else
-    fail "API Accept: text/plain (got: ${PLAIN_OUT:0:100})"
-fi
-
-# Test frontend with text/html (browser)
-# Use -L to follow redirects (homepage may redirect to /age-verify for browser UA)
-HTML_OUT=$(incus exec "${INSTANCE_NAME}" -- curl -q -LSsf -H "Accept: text/html" -H "User-Agent: Mozilla/5.0" "http://localhost:${SERVICE_PORT}/" 2>&1 || echo "curl failed")
-if echo "$HTML_OUT" | grep -qi "<!DOCTYPE html\|<html"; then
-    pass "Frontend Accept: text/html"
-else
-    fail "Frontend Accept: text/html"
-fi
-
-# Test frontend with text/plain (CLI)
-PLAIN_FRONT=$(incus exec "${INSTANCE_NAME}" -- curl -q -LSsf -H "Accept: text/plain" "http://localhost:${SERVICE_PORT}/" 2>&1 || echo "curl failed")
-if [ -n "$PLAIN_FRONT" ]; then
-    pass "Frontend Accept: text/plain"
-else
-    fail "Frontend Accept: text/plain"
-fi
-
-# Test .txt endpoints (PART 28 requirement)
-info "Testing .txt endpoints..."
-if incus exec "${INSTANCE_NAME}" -- curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/api/v1/engines.txt" | grep -q "^200$"; then
-    pass "Engines .txt extension"
-else
-    fail "Engines .txt extension"
-fi
-
-if incus exec "${INSTANCE_NAME}" -- curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/api/v1/bangs.txt" | grep -q "^200$"; then
-    pass "Bangs .txt extension"
-else
-    fail "Bangs .txt extension"
-fi
-
-if incus exec "${INSTANCE_NAME}" -- curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:${SERVICE_PORT}/robots.txt" | grep -q "^200$"; then
-    pass "robots.txt"
-else
-    fail "robots.txt"
-fi
-
-# Test SSE streaming (informational - may fail without configured engines)
-info "Testing SSE streaming..."
-SSE_OUTPUT=$(incus exec "${INSTANCE_NAME}" -- timeout 5 curl -q -LSsfN -H "Accept: text/event-stream" "http://localhost:${SERVICE_PORT}/api/v1/search?q=test" 2>/dev/null || true)
-if echo "$SSE_OUTPUT" | grep -q "data:\|event:"; then
-    pass "SSE streaming responding"
-else
-    echo "  SSE streaming not returning data (engines may not be configured)"
-fi
-
-# Step 14: Test service logs
-info "Checking service logs..."
-if incus exec "${INSTANCE_NAME}" -- journalctl -u ${PROJECT_NAME} --no-pager -n 10 | grep -q "vidveil"; then
-    pass "Service logging to journald"
-else
-    fail "No service logs found"
-fi
-
-# Step 15: Test shell completions (PART 8 - built into binary)
-info "Testing shell completions..."
-BASH_COMPL=$(incus exec "${INSTANCE_NAME}" -- ${PROJECT_NAME} --shell completions bash 2>&1 || true)
-if echo "$BASH_COMPL" | grep -q "complete\|_vidveil"; then
-    pass "Shell completions: bash"
-else
-    fail "Shell completions: bash"
-fi
-
-ZSH_COMPL=$(incus exec "${INSTANCE_NAME}" -- ${PROJECT_NAME} --shell completions zsh 2>&1 || true)
-if echo "$ZSH_COMPL" | grep -q "compdef\|_vidveil"; then
-    pass "Shell completions: zsh"
-else
-    fail "Shell completions: zsh"
-fi
-
-# Step 16: Test service stop
-if [ "${TESTS_FAILED}" -gt 0 ]; then
-    info "Service journal after failed checks..."
-    incus exec "${INSTANCE_NAME}" -- journalctl -u ${PROJECT_NAME} --no-pager -n 100 || true
-fi
-
-info "Testing service stop..."
-if incus exec "${INSTANCE_NAME}" -- systemctl stop ${PROJECT_NAME}; then
-    pass "Service stopped cleanly"
-else
-    fail "Service stop failed"
-fi
-
-# Final Summary
-echo
-echo "===================================================="
-echo -e "Tests run: ${TESTS_RUN}"
-echo -e "${GREEN}Passed: ${TESTS_PASSED}${NC}"
-if [ ${TESTS_FAILED} -gt 0 ]; then
-    echo -e "${RED}Failed: ${TESTS_FAILED}${NC}"
-    exit 1
-else
-    echo -e "${GREEN}All Incus tests passed!${NC}"
-    exit 0
-fi
+cleanup
+echo "Incus tests completed successfully ($MODES)"

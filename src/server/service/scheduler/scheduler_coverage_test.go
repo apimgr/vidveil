@@ -237,19 +237,20 @@ func TestRegisterBuiltinTasks_SSLRenewalRegistered(t *testing.T) {
 func TestRegisterBuiltinTasks_MultipleTasksRegistered(t *testing.T) {
 	s := NewScheduler()
 	if err := s.RegisterBuiltinTasks(BuiltinTaskFuncs{
-		SSLRenewal:      func(_ context.Context) error { return nil },
-		GeoIPUpdate:     func(_ context.Context) error { return nil },
-		BlocklistUpdate: func(_ context.Context) error { return nil },
-		CVEUpdate:       func(_ context.Context) error { return nil },
-		LogRotation:     func(_ context.Context) error { return nil },
-		BackupDaily:     func(_ context.Context) error { return nil },
-		HealthcheckSelf: func(_ context.Context) error { return nil },
+		SSLRenewal:           func(_ context.Context) error { return nil },
+		GeoIPUpdate:          func(_ context.Context) error { return nil },
+		BlocklistUpdate:      func(_ context.Context) error { return nil },
+		CVEUpdate:            func(_ context.Context) error { return nil },
+		LogRotation:          func(_ context.Context) error { return nil },
+		BackupDaily:          func(_ context.Context) error { return nil },
+		HealthcheckSelf:      func(_ context.Context) error { return nil },
+		DatasetHealthRefresh: func(_ context.Context) error { return nil },
 	}); err != nil {
 		t.Fatalf("RegisterBuiltinTasks: %v", err)
 	}
 	expected := []string{
 		"ssl_renewal", "geoip_update", "blocklist_update",
-		"cve_update", "log_rotation", "backup_daily", "healthcheck_self",
+		"cve_update", "log_rotation", "backup_daily", "healthcheck_self", "dataset_health_refresh",
 	}
 	for _, id := range expected {
 		if _, err := s.GetTask(id); err != nil {

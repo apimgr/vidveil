@@ -55,8 +55,8 @@ func TestOwnerTokenRevealRedirectsAndIsConsumedOnce(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/server/preferences/token/reveal?lang=es", nil)
 	response := httptest.NewRecorder()
 	s := &Server{}
-	secretToken := "tok_0123456789abcdefghijkmnpqrstuv"
-	s.redirectOwnerTokenReveal(response, request, secretToken, 0, true, "")
+	secretToken := "own_0123456789abcdefghijkmnpqrstuv"
+	s.redirectOwnerTokenReveal(response, request, secretToken, "", true, "")
 	if response.Code != http.StatusSeeOther || !strings.Contains(response.Header().Get("Location"), "/server/preferences/tokens#primary") {
 		t.Fatalf("reveal redirect = %d %q", response.Code, response.Header().Get("Location"))
 	}
@@ -206,6 +206,100 @@ func TestOwnerTokensAPIRequiresPrimaryBearerAndMasksList(t *testing.T) {
 	}
 }
 
+func TestOwnerTokensAPIIssuePrimaryAndRejectsExistingCredentials(t *testing.T) {
+	schema, err := database.NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = schema.Close() }()
+	if err := schema.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := apitoken.NewManager(schema.GetDB(), strings.Repeat("cd", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	operatorToken := "adm_" + strings.Repeat("a", 32)
+	s := &Server{appConfig: config.DefaultAppConfig(), tokenManager: manager}
+	s.appConfig.Server.Token = operatorToken
+	s.RefreshOperatorTokenHash()
+	s.tokenActionLimiter = ratelimit.NewRateLimiter(true, 10, 900)
+	defer s.tokenActionLimiter.Stop()
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/server/preferences/tokens/primary", nil)
+	response := httptest.NewRecorder()
+	s.ownerTokensAPIIssuePrimary(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("primary issue status = %d: %s", response.Code, response.Body.String())
+	}
+	var result struct {
+		Data struct {
+			OwnerToken string `json:"owner_token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(result.Data.OwnerToken, "own_") {
+		t.Fatalf("issued owner token has invalid format: %q", result.Data.OwnerToken)
+	}
+
+	for name, token := range map[string]string{"owner": result.Data.OwnerToken, "operator": operatorToken} {
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/server/preferences/tokens/primary", nil)
+		request.Header.Set("Authorization", "Bearer "+token)
+		response := httptest.NewRecorder()
+		s.ownerTokensAPIIssuePrimary(response, request)
+		if response.Code != http.StatusConflict || strings.Contains(response.Body.String(), result.Data.OwnerToken) {
+			t.Errorf("%s credential issue response = %d %q, want conflict without token disclosure", name, response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestOwnerTokenWebIssuePrimarySetsCookieAndRejectsExistingIdentity(t *testing.T) {
+	schema, err := database.NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = schema.Close() }()
+	if err := schema.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := apitoken.NewManager(schema.GetDB(), strings.Repeat("de", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{appConfig: config.DefaultAppConfig(), tokenManager: manager}
+	s.tokenActionLimiter = ratelimit.NewRateLimiter(true, 10, 900)
+	defer s.tokenActionLimiter.Stop()
+
+	request := httptest.NewRequest(http.MethodPost, "/server/preferences/token/create", nil)
+	response := httptest.NewRecorder()
+	s.ownerTokenWebIssuePrimary(response, request)
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("web primary issue status = %d: %s", response.Code, response.Body.String())
+	}
+	var ownerCookie *http.Cookie
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == ownerTokenCookieName {
+			ownerCookie = cookie
+		}
+	}
+	if ownerCookie == nil || ownerCookie.Value == "" || !ownerCookie.HttpOnly || !ownerCookie.Secure || ownerCookie.SameSite != http.SameSiteStrictMode {
+		t.Fatalf("web issue did not set the required owner cookie: %#v", ownerCookie)
+	}
+	if _, err := manager.ValidateOnly(context.Background(), ownerCookie.Value); err != nil {
+		t.Fatalf("issued web token is invalid: %v", err)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/server/preferences/token/create", nil)
+	request.AddCookie(ownerCookie)
+	response = httptest.NewRecorder()
+	s.ownerTokenWebIssuePrimary(response, request)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("web issue with existing identity status = %d, want %d", response.Code, http.StatusConflict)
+	}
+}
+
 func TestOwnerTokenRestoreSetsStrictPrimaryCookie(t *testing.T) {
 	schema, err := database.NewSchemaManager(":memory:")
 	if err != nil {
@@ -238,5 +332,36 @@ func TestOwnerTokenRestoreSetsStrictPrimaryCookie(t *testing.T) {
 	cookie := cookies[0]
 	if cookie.Name != ownerTokenCookieName || cookie.Value != issued.Token || !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/" {
 		t.Fatalf("restored cookie does not match required owner-cookie attributes: %#v", cookie)
+	}
+}
+
+func TestOperatorRouteDistinguishesValidOwnerToken(t *testing.T) {
+	schema, err := database.NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = schema.Close() }()
+	if err := schema.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := apitoken.NewManager(schema.GetDB(), strings.Repeat("12", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := manager.IssuePrimary(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{appConfig: config.DefaultAppConfig(), tokenManager: manager}
+	s.appConfig.Server.Token = "operator-test-token"
+	s.RefreshOperatorTokenHash()
+	called := false
+	route := s.requireOperatorToken(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/status", nil)
+	request.Header.Set("Authorization", "Bearer "+issued.Token)
+	response := httptest.NewRecorder()
+	route.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || response.Header().Get("WWW-Authenticate") != `Bearer error="insufficient_scope"` || called {
+		t.Fatalf("valid owner token response = %d, challenge %q, route called %t", response.Code, response.Header().Get("WWW-Authenticate"), called)
 	}
 }

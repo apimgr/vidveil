@@ -42,33 +42,31 @@ func setupTestDB(t *testing.T) *sql.DB {
 	// Schema matches security_reports DDL in
 	// src/server/service/database/migrations.go.
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS security_reports (
-		tracking_id TEXT PRIMARY KEY,
-		status TEXT NOT NULL DEFAULT 'received',
-		severity TEXT NOT NULL,
-		component TEXT NOT NULL,
-		endpoint TEXT,
-		summary TEXT NOT NULL,
-		encrypted_body BLOB NOT NULL,
-		encryption_method TEXT NOT NULL,
-		researcher_email TEXT,
-		researcher_gpg_fingerprint TEXT,
-		cve_requested INTEGER DEFAULT 0,
-		disclosure_window_days INTEGER,
-		credit_preference TEXT NOT NULL,
-		credit_name TEXT,
-		disclosed INTEGER DEFAULT 0,
-		app_version TEXT,
-		commit_hash TEXT,
-		report_token_hash TEXT,
-		report_token_last_used_date TEXT,
-		maintainer_comments TEXT,
-		expected_disclosure_date DATETIME,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		closed_at DATETIME
-	)`)
+		tracking_id VARCHAR(32) PRIMARY KEY,
+		id_window BIGINT NOT NULL,
+		severity VARCHAR(16) NOT NULL,
+		component VARCHAR(255) NOT NULL,
+		status VARCHAR(16) NOT NULL DEFAULT 'received',
+		body_enc BLOB NOT NULL,
+		body_alg VARCHAR(16) NOT NULL,
+		contact_enc BLOB,
+		credit_pref VARCHAR(8) NOT NULL DEFAULT 'no',
+		credit_name VARCHAR(100),
+		researcher_comment TEXT NOT NULL DEFAULT '',
+		disclosure_date DATE,
+		cve_requested BOOLEAN NOT NULL DEFAULT FALSE,
+		token_hash VARCHAR(64) NOT NULL,
+		token_last_used DATE,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		closed_at TIMESTAMP
+	);
+	CREATE TABLE security_thanks (tracking_id VARCHAR(32) PRIMARY KEY, credit VARCHAR(120) NOT NULL, severity VARCHAR(16) NOT NULL, disclosed_on DATE NOT NULL)`)
 	if err != nil {
 		t.Fatalf("create table: %v", err)
+	}
+	if _, err := db.Exec(`CREATE TABLE app_secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatalf("create app secrets table: %v", err)
 	}
 	return db
 }
@@ -87,12 +85,12 @@ func TestCreateReport_And_GetReportStatus(t *testing.T) {
 	ctx := context.Background()
 	configDir := t.TempDir() // no pgp keypair present -> AES-256-GCM fallback
 	keyHex := testEncryptionKeyHex(t)
+	idWindow := windowIndex(time.Now())
 
 	sub, err := CreateReport(ctx, db, configDir, keyHex, Input{
 		Severity:         "high",
+		IDWindow:         idWindow,
 		Component:        "auth",
-		Endpoint:         "/api/v1/login",
-		Summary:          "auth bypass",
 		Body:             []byte("steps to reproduce...\nimpact...\n"),
 		ResearcherEmail:  "researcher@example.com",
 		CreditPreference: "anonymous",
@@ -130,8 +128,8 @@ func TestGetReportStatus_WrongTokenRejected(t *testing.T) {
 
 	sub, err := CreateReport(ctx, db, configDir, keyHex, Input{
 		Severity:         "medium",
+		IDWindow:         windowIndex(time.Now()),
 		Component:        "billing",
-		Summary:          "off-by-one",
 		Body:             []byte("body"),
 		CreditPreference: "none",
 	})
@@ -161,8 +159,8 @@ func TestGetReportStatus_ExpiredTokenRejected(t *testing.T) {
 
 	sub, err := CreateReport(ctx, db, configDir, keyHex, Input{
 		Severity:         "low",
+		IDWindow:         windowIndex(time.Now()),
 		Component:        "docs",
-		Summary:          "typo",
 		Body:             []byte("body"),
 		CreditPreference: "none",
 	})
@@ -183,3 +181,40 @@ func TestGetReportStatus_ExpiredTokenRejected(t *testing.T) {
 		t.Fatalf("GetReportStatus: expected error for expired token")
 	}
 }
+
+func TestDisclosureCreatesPersistentThanksAndForwardOnlyLifecycle(t *testing.T) {
+	db := setupTestDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 11, 24, 3, 0, 0, 0, time.UTC)
+	sub, err := CreateReport(ctx, db, t.TempDir(), testEncryptionKeyHex(t), Input{
+		IDWindow: windowIndex(now), Severity: "high", Component: "parser",
+		Body: []byte("private vulnerability details"), CreditPreference: "anon",
+	})
+	if err != nil {
+		t.Fatalf("CreateReport: %v", err)
+	}
+	for _, status := range []string{StatusTriaged, StatusConfirmed, StatusPatching, StatusDisclosed} {
+		if _, err := UpdateReport(ctx, db, sub.TrackingID, UpdateInput{Status: &status}, now); err != nil {
+			t.Fatalf("advance report to %s: %v", status, err)
+		}
+	}
+	if _, err := UpdateReport(ctx, db, sub.TrackingID, UpdateInput{Status: ptrStatus(StatusPatching)}, now); err == nil {
+		t.Fatal("expected disclosed report to reject backward transition")
+	}
+	entries, err := ListThanks(ctx, db)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("ListThanks = %#v, %v; want one entry", entries, err)
+	}
+	if entries[0].Credit != "Anonymous Researcher #1" || entries[0].Severity != "high" || entries[0].DisclosedOn != "2026-11-24" {
+		t.Fatalf("unexpected thanks entry: %#v", entries[0])
+	}
+	if _, err := CleanupClosedReports(ctx, db, 365, now.AddDate(0, 0, 366)); err != nil {
+		t.Fatalf("CleanupClosedReports: %v", err)
+	}
+	entries, err = ListThanks(ctx, db)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("thanks entry did not survive report retention: %#v, %v", entries, err)
+	}
+}
+
+func ptrStatus(value string) *string { return &value }

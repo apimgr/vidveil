@@ -2,6 +2,7 @@
 package mcp
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,7 +19,7 @@ func TestHandlerServesStatelessOpenAPITools(t *testing.T) {
 		dispatched = r
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"ok":true}`)
-	}), nil))
+	}), nil, validTestBearer))
 
 	response := serveMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, "")
 	if response.Code != http.StatusOK {
@@ -30,21 +31,47 @@ func TestHandlerServesStatelessOpenAPITools(t *testing.T) {
 			t.Fatalf("tools/list omitted OpenAPI operation %s: %s", operation, body)
 		}
 	}
-	if strings.Contains(body, "restoreServerBackup") || strings.Contains(body, "OwnerToken") || strings.Contains(body, "LinkedToken") {
-		t.Fatalf("tools/list exposed a protected or token-management operation: %s", body)
+	for _, operation := range []string{"getOperatorStatus", "debugEngines", "debugEngine", "getPreferences", "savePreferences", "exportPreferences", "importPreferences", "listOwnerTokens", "createLinkedToken", "executeMCP", "OwnerToken", "LinkedToken"} {
+		if strings.Contains(body, operation) {
+			t.Fatalf("tools/list exposed a protected or cookie-bound preferences operation %q: %s", operation, body)
+		}
 	}
 	if response.Header().Get("Mcp-Session-Id") != "" {
 		t.Fatal("stateless MCP response minted a session id")
 	}
-	operatorHandler := OriginMiddleware(cfg, Handler(cfg, http.NotFoundHandler(), func(*http.Request) bool { return true }))
-	operatorResponse := serveMCP(t, operatorHandler, `{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}`, "")
-	if !strings.Contains(operatorResponse.Body.String(), "restoreServerBackup") || !strings.Contains(operatorResponse.Body.String(), "base64") {
-		t.Fatalf("operator tools/list omitted protected restore tool: %s", operatorResponse.Body.String())
+	operatorHandler := OriginMiddleware(cfg, Handler(cfg, http.NotFoundHandler(), func(r *http.Request) bool { return r.Header.Get("Authorization") == "Bearer operator-token" }, validTestBearer))
+	operatorRequest := httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}`))
+	setMCPHeaders(operatorRequest, `{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}`)
+	operatorRequest.Header.Set("Authorization", "Bearer operator-token")
+	operatorResponse := httptest.NewRecorder()
+	operatorHandler.ServeHTTP(operatorResponse, operatorRequest)
+	if !strings.Contains(operatorResponse.Body.String(), "getOperatorStatus") || strings.Contains(operatorResponse.Body.String(), "restoreServerBackup") {
+		t.Fatalf("operator tools/list has the wrong operator-only tools: %s", operatorResponse.Body.String())
+	}
+
+	debugCfg := config.DefaultAppConfig()
+	debugCfg.Server.Mode = "debug"
+	debugOwnerHandler := OriginMiddleware(debugCfg, Handler(debugCfg, http.NotFoundHandler(), nil, validTestBearer))
+	debugOwnerResponse := serveMCP(t, debugOwnerHandler, `{"jsonrpc":"2.0","id":4,"method":"tools/list","params":{}}`, "")
+	for _, operation := range []string{"getOperatorStatus", "debugEngines", "debugEngine"} {
+		if strings.Contains(debugOwnerResponse.Body.String(), operation) {
+			t.Fatalf("owner tools/list exposed operator-only operation %q: %s", operation, debugOwnerResponse.Body.String())
+		}
+	}
+	debugOperatorHandler := OriginMiddleware(debugCfg, Handler(debugCfg, http.NotFoundHandler(), func(r *http.Request) bool { return r.Header.Get("Authorization") == "Bearer operator-token" }, validTestBearer))
+	debugOperatorRequest := httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":5,"method":"tools/list","params":{}}`))
+	setMCPHeaders(debugOperatorRequest, `{"jsonrpc":"2.0","id":5,"method":"tools/list","params":{}}`)
+	debugOperatorRequest.Header.Set("Authorization", "Bearer operator-token")
+	debugOperatorResponse := httptest.NewRecorder()
+	debugOperatorHandler.ServeHTTP(debugOperatorResponse, debugOperatorRequest)
+	for _, operation := range []string{"getOperatorStatus", "debugEngines", "debugEngine"} {
+		if !strings.Contains(debugOperatorResponse.Body.String(), operation) {
+			t.Fatalf("operator tools/list omitted operation %q: %s", operation, debugOperatorResponse.Body.String())
+		}
 	}
 
 	request := httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"searchVideos","arguments":{"q":"needle"}}}`))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json, text/event-stream")
+	setMCPHeaders(request, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"searchVideos","arguments":{"q":"needle"}}}`)
 	request.Header.Set("Authorization", "Bearer test-token")
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -61,7 +88,7 @@ func TestHandlerServesStatelessOpenAPITools(t *testing.T) {
 
 func TestHandlerOriginValidation(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	handler := OriginMiddleware(cfg, Handler(cfg, http.NotFoundHandler(), nil))
+	handler := OriginMiddleware(cfg, Handler(cfg, http.NotFoundHandler(), nil, validTestBearer))
 	request := httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{}`))
 	request.Header.Set("Origin", "https://attacker.example")
 	response := httptest.NewRecorder()
@@ -71,8 +98,8 @@ func TestHandlerOriginValidation(t *testing.T) {
 	}
 
 	request = httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json, text/event-stream")
+	setMCPHeaders(request, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
+	request.Header.Set("Authorization", "Bearer test-token")
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
@@ -82,7 +109,7 @@ func TestHandlerOriginValidation(t *testing.T) {
 
 func TestHandlerRejectsSessionAndStreamingMethods(t *testing.T) {
 	cfg := config.DefaultAppConfig()
-	handler := OriginMiddleware(cfg, Handler(cfg, http.NotFoundHandler(), nil))
+	handler := OriginMiddleware(cfg, Handler(cfg, http.NotFoundHandler(), nil, validTestBearer))
 	for _, method := range []string{http.MethodGet, http.MethodDelete} {
 		request := httptest.NewRequest(method, "http://api.example.test/mcp", nil)
 		response := httptest.NewRecorder()
@@ -92,8 +119,8 @@ func TestHandlerRejectsSessionAndStreamingMethods(t *testing.T) {
 		}
 	}
 	request := httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json, text/event-stream")
+	setMCPHeaders(request, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
+	request.Header.Set("Authorization", "Bearer test-token")
 	request.Header.Set("Mcp-Session-Id", "legacy-session-id")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -105,15 +132,128 @@ func TestHandlerRejectsSessionAndStreamingMethods(t *testing.T) {
 	}
 }
 
+func TestHandlerMCPValidationContract(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	handler := OriginMiddleware(cfg, Handler(cfg, http.NotFoundHandler(), nil, validTestBearer))
+	legacy := httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":7,"method":"initialize"}`))
+	legacy.Header.Set("Authorization", "Bearer test-token")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, legacy)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "UnsupportedProtocolVersionError") || response.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("legacy initialize response = %d %s", response.Code, response.Body.String())
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":8,"method":"tools/list","params":{}}`))
+	setMCPHeaders(request, `{"jsonrpc":"2.0","id":8,"method":"tools/list","params":{}}`)
+	request.Header.Set("Authorization", "Bearer test-token")
+	request.Header.Del("MCP-Protocol-Version")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `-32020`) {
+		t.Fatalf("missing protocol header response = %d %s", response.Code, response.Body.String())
+	}
+	request = httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":12,"method":"tools/list","params":{}}`))
+	request.Header.Set("Authorization", "Bearer test-token")
+	request.Header.Set("Mcp-Method", "tools/list")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `-32020`) {
+		t.Fatalf("missing protocol header and body metadata response = %d %s", response.Code, response.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":9,"method":"tools/list","params":{}}`))
+	setMCPHeaders(request, `{"jsonrpc":"2.0","id":9,"method":"tools/list","params":{}}`)
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized || response.Header().Get("WWW-Authenticate") != "Bearer" || !strings.Contains(response.Body.String(), `"error"`) {
+		t.Fatalf("unauthenticated response = %d %s", response.Code, response.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":10,"method":"tools/list","params":{}}`))
+	setMCPHeaders(request, `{"jsonrpc":"2.0","id":10,"method":"tools/list","params":{}}`)
+	request.Header.Set("Authorization", "Bearer test-token")
+	request.Header.Set("Mcp-Method", "ping")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `-32020`) {
+		t.Fatalf("mismatched method header response = %d %s", response.Code, response.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":11,"method":"made/up","params":{}}`))
+	setMCPHeaders(request, `{"jsonrpc":"2.0","id":11,"method":"made/up","params":{}}`)
+	request.Header.Set("Authorization", "Bearer test-token")
+	request.Header.Set("Mcp-Method", "made/up")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `-32601`) {
+		t.Fatalf("unknown method response = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestToolAnnotationsFollowHTTPMethod(t *testing.T) {
+	get := toolAnnotations(http.MethodGet)
+	if !get.ReadOnlyHint || get.IdempotentHint || get.DestructiveHint != nil {
+		t.Errorf("GET annotations = %#v", get)
+	}
+	post := toolAnnotations(http.MethodPost)
+	if post.ReadOnlyHint || post.IdempotentHint || post.DestructiveHint != nil {
+		t.Errorf("POST annotations = %#v", post)
+	}
+	put := toolAnnotations(http.MethodPut)
+	if put.ReadOnlyHint || !put.IdempotentHint || put.DestructiveHint != nil {
+		t.Errorf("PUT annotations = %#v", put)
+	}
+	delete := toolAnnotations(http.MethodDelete)
+	if delete.ReadOnlyHint || !delete.IdempotentHint || delete.DestructiveHint == nil || !*delete.DestructiveHint {
+		t.Errorf("DELETE annotations = %#v", delete)
+	}
+}
+
 func serveMCP(t *testing.T, handler http.Handler, body, origin string) *httptest.ResponseRecorder {
 	t.Helper()
 	request := httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(body))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json, text/event-stream")
+	setMCPHeaders(request, body)
+	request.Header.Set("Authorization", "Bearer test-token")
 	if origin != "" {
 		request.Header.Set("Origin", origin)
 	}
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	return response
+}
+
+func validTestBearer(r *http.Request) bool {
+	return r.Header.Get("Authorization") == "Bearer test-token" || r.Header.Get("Authorization") == "Bearer operator-token"
+}
+
+func setMCPHeaders(request *http.Request, body string) {
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(body), &envelope); err != nil {
+		request.Body = io.NopCloser(strings.NewReader(body))
+		return
+	}
+	params, ok := envelope["params"].(map[string]any)
+	if !ok {
+		params = make(map[string]any)
+		envelope["params"] = params
+	}
+	params["_meta"] = map[string]any{
+		"io.modelcontextprotocol/clientCapabilities": map[string]any{"sampling": map[string]any{}},
+		"io.modelcontextprotocol/protocolVersion":    "2026-07-28",
+	}
+	encodedBody, err := json.Marshal(envelope)
+	if err == nil {
+		body = string(encodedBody)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json, text/event-stream")
+	request.Header.Set("MCP-Protocol-Version", "2026-07-28")
+	method, _ := envelope["method"].(string)
+	request.Header.Set("Mcp-Method", method)
+	if method == "tools/call" {
+		if name, ok := params["name"].(string); ok {
+			request.Header.Set("Mcp-Name", name)
+		}
+	}
+	request.Body = io.NopCloser(strings.NewReader(body))
 }

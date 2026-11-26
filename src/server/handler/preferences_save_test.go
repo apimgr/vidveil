@@ -107,6 +107,28 @@ func TestPreferencesPage_RendersSavedAppPreferenceCookies(t *testing.T) {
 	}
 }
 
+func TestPreferencesSaveAutomaticLanguageDeletesExplicitCookie(t *testing.T) {
+	h := newRenderTestHandler()
+	form := url.Values{"lang": {"auto"}}
+	req := httptest.NewRequest(http.MethodPost, "/server/preferences", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "lang", Value: "fr"})
+	response := httptest.NewRecorder()
+	h.PreferencesSave(response, req)
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("automatic language save status = %d, want 303", response.Code)
+	}
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == "lang" {
+			if cookie.MaxAge >= 0 {
+				t.Errorf("automatic language cookie = %#v, want deletion", cookie)
+			}
+			return
+		}
+	}
+	t.Fatal("automatic language selection did not clear lang cookie")
+}
+
 func TestPreferencesPage_NoJSRestoresSavedEngineSelection(t *testing.T) {
 	setRealTemplatesFS(t)
 	h := newRenderTestHandler()

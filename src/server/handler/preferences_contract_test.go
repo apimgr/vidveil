@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestPreferencesPageRendersInlineSyncAndNativeActions(t *testing.T) {
+func TestPreferencesPageRendersPreferencesHubAndNativeActions(t *testing.T) {
 	setRealTemplatesFS(t)
 	h := newRenderTestHandler()
 	for _, userAgent := range []string{"Mozilla/5.0", "Lynx/2.9"} {
@@ -23,17 +23,17 @@ func TestPreferencesPageRendersInlineSyncAndNativeActions(t *testing.T) {
 		if response.Code != http.StatusOK {
 			t.Fatalf("PreferencesPage(%q) status = %d", userAgent, response.Code)
 		}
-		if !strings.Contains(body, `id="sync-url"`) || !strings.Contains(body, `id="sync-code"`) || !strings.Contains(body, `name="code"`) {
-			t.Errorf("PreferencesPage(%q) omitted inline export/import controls", userAgent)
+		if strings.Contains(body, `id="sync-url"`) || strings.Contains(body, `id="sync-code"`) || strings.Contains(body, `name="code"`) {
+			t.Errorf("PreferencesPage(%q) rendered sync controls on the preferences hub", userAgent)
 		}
-		if !strings.Contains(body, `name="consent_form" value="1"`) || !strings.Contains(body, `name="consent_analytics"`) || !strings.Contains(body, `name="ccpa_opt_out"`) {
+		if !strings.Contains(body, `name="consent_form" value="1"`) || !strings.Contains(body, `name="consent_analytics"`) {
 			t.Errorf("PreferencesPage(%q) omitted consent controls", userAgent)
 		}
 		if !strings.Contains(body, `popovertarget="`) || !strings.Contains(body, `value="reset"`) || !strings.Contains(body, `href="/"`) {
 			t.Errorf("PreferencesPage(%q) omitted native reset or Cancel controls", userAgent)
 		}
-		if strings.Contains(body, `action="/server/preferences/import"`) {
-			t.Errorf("PreferencesPage(%q) rendered a separate import form", userAgent)
+		if !strings.Contains(body, `href="/server/preferences/sync"`) {
+			t.Errorf("PreferencesPage(%q) omitted the sync child page", userAgent)
 		}
 		if !strings.Contains(body, `href="/server/preferences/tokens"`) || strings.Contains(body, `action="/server/preferences/token/reveal"`) || strings.Contains(body, `action="/server/preferences/token/restore"`) {
 			t.Errorf("PreferencesPage(%q) did not keep token management on its own page", userAgent)
@@ -41,7 +41,7 @@ func TestPreferencesPageRendersInlineSyncAndNativeActions(t *testing.T) {
 	}
 }
 
-func TestPreferencesSaveCodeOverridesFormAndAppliesConsent(t *testing.T) {
+func TestPreferencesSaveIgnoresCodeAndAppliesConsent(t *testing.T) {
 	h := newRenderTestHandler()
 	code := base64.RawURLEncoding.EncodeToString([]byte("lang=fr&theme=dark"))
 	form := url.Values{
@@ -63,10 +63,10 @@ func TestPreferencesSaveCodeOverridesFormAndAppliesConsent(t *testing.T) {
 	for _, cookie := range response.Result().Cookies() {
 		cookies[cookie.Name] = cookie
 	}
-	if cookies["theme"] == nil || cookies["theme"].Value != "dark" || cookies["lang"] == nil || cookies["lang"].Value != "fr" {
-		t.Fatalf("imported code did not override form preferences: %#v", cookies)
+	if cookies["theme"] == nil || cookies["theme"].Value != "light" || cookies["lang"] != nil {
+		t.Fatalf("preferences save applied the code control field: %#v", cookies)
 	}
-	if cookies["ccpa_opt_out"] == nil || cookies["ccpa_opt_out"].Value != "true" || cookies["cookie_consent"] == nil {
+	if cookies["cookie_consent"] == nil {
 		t.Fatalf("web consent choices were not applied: %#v", cookies)
 	}
 	if !strings.Contains(cookies["cookie_consent"].Value, "%22analytics%22%3Atrue") {
@@ -94,7 +94,7 @@ func TestPreferencesSaveInvalidCodeValueKeepsSubmittedValue(t *testing.T) {
 	}
 }
 
-func TestPreferencesSaveCodeOverridesEngineSelection(t *testing.T) {
+func TestPreferencesSaveCodeDoesNotOverrideEngineSelection(t *testing.T) {
 	h := newRenderTestHandler()
 	h.engineMgr.InitializeEngines()
 	code := base64.RawURLEncoding.EncodeToString([]byte(engineSelectionValueCookieName + "=none&" + engineSelectionCookieName + "=1"))
@@ -111,15 +111,18 @@ func TestPreferencesSaveCodeOverridesEngineSelection(t *testing.T) {
 		t.Fatalf("PreferencesSave status = %d, want 303", response.Code)
 	}
 	cookies := map[string]string{}
+	imported := httptest.NewRequest(http.MethodGet, "/", nil)
 	for _, cookie := range response.Result().Cookies() {
 		cookies[cookie.Name] = cookie.Value
+		imported.AddCookie(cookie)
 	}
-	if cookies[engineSelectionValueCookieName] != "none" {
-		t.Fatalf("imported engine selection = %q, want none", cookies[engineSelectionValueCookieName])
+	selected, configured := requestEngineSelection(imported, h.engineMgr.ListEngines())
+	if !configured || len(selected) != 1 {
+		t.Fatalf("submitted engine selection = %#v, configured=%t; code must be ignored", selected, configured)
 	}
 }
 
-func TestPreferencesSaveCodeAppliesCompactEngineSelection(t *testing.T) {
+func TestPreferencesSaveCodeDoesNotOverrideCompactEngineSelection(t *testing.T) {
 	h := newRenderTestHandler()
 	h.engineMgr.InitializeEngines()
 	engines := h.engineMgr.ListEngines()
@@ -133,10 +136,13 @@ func TestPreferencesSaveCodeAppliesCompactEngineSelection(t *testing.T) {
 	if response.Code != http.StatusSeeOther {
 		t.Fatalf("PreferencesSave status = %d, want 303", response.Code)
 	}
+	imported := httptest.NewRequest(http.MethodGet, "/", nil)
 	for _, cookie := range response.Result().Cookies() {
+		imported.AddCookie(cookie)
 		if cookie.Name == engineSelectionValueCookieName {
-			if cookie.Value != packed {
-				t.Fatalf("compact imported engine selection = %q, want %q", cookie.Value, packed)
+			selected, configured := requestEngineSelection(imported, engines)
+			if !configured || len(selected) != 1 || selected["xvideos"] != true {
+				t.Fatalf("compact submitted engine selection = %#v, code should not apply", selected)
 			}
 			return
 		}

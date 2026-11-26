@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/apimgr/vidveil/src/server/service/database"
+	"github.com/google/uuid"
 )
 
 func newDataTestDB(t *testing.T) *database.SchemaManager {
@@ -55,16 +56,21 @@ func TestResolveOwnerIDByUniqueTokenPrefix(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, token := range []struct{ owner, prefix string }{{"owner-a", "tok_abc123"}, {"owner-b", "tok_def456"}} {
-		if _, err := db.Exec(`INSERT INTO api_tokens (owner_id, token_hash, token_prefix, resource_type, resource_id) VALUES (?, ?, ?, 'favorite', ?)`, token.owner, "hash-"+token.owner, token.prefix, token.owner); err != nil {
+	for _, token := range []struct{ owner, prefix string }{{"owner-a", "own_abc123"}, {"owner-b", "own_def456"}} {
+		id, err := uuid.NewV7()
+		if err != nil {
+			t.Fatal(err)
+		}
+		hashPrefix := token.owner[len(token.owner)-1:]
+		if _, err := db.Exec(`INSERT INTO api_tokens (id, owner_id, kind, token_hash, token_prefix, token_last4, token_enc) VALUES (?, ?, 'linked', ?, ?, '', '')`, id.String(), token.owner, strings.Repeat(hashPrefix, 64), token.prefix); err != nil {
 			t.Fatal(err)
 		}
 	}
-	got, err := resolveOwnerID(db, "tok_abc")
+	got, err := resolveOwnerID(db, "own_abc")
 	if err != nil || got != "owner-a" {
 		t.Fatalf("resolveOwnerID() = (%q, %v), want (owner-a, nil)", got, err)
 	}
-	if _, err := resolveOwnerID(db, "tok_"); err == nil {
+	if _, err := resolveOwnerID(db, "own_"); err == nil {
 		t.Fatal("ambiguous token prefix unexpectedly resolved")
 	}
 }
@@ -75,7 +81,11 @@ func TestOwnerTokenExportContainsNoCredentialMaterial(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO owners (id) VALUES ('owner-a')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`INSERT INTO api_tokens (owner_id, token_hash, token_prefix, token_enc, resource_type, resource_id) VALUES ('owner-a', 'secret-hash', 'tok_abc123', 'secret-token', 'favorite', '1')`); err != nil {
+	id, err := uuid.NewV7()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO api_tokens (id, owner_id, kind, token_hash, token_prefix, token_last4, token_enc) VALUES (?, 'owner-a', 'linked', ?, 'own_abc123', '1234', 'secret-token')`, id.String(), strings.Repeat("b", 64)); err != nil {
 		t.Fatal(err)
 	}
 	tokens, err := readOwnerTokens(db, "owner-a")

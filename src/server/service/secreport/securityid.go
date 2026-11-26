@@ -37,6 +37,21 @@ func ValidateSecurityID(installationSecret []byte, id string, t time.Time) bool 
 	return valid == 1
 }
 
+// SecurityIDWindow returns the validated 48-hour window index for id. Both
+// the current and immediately previous window are accepted, matching
+// ValidateSecurityID's boundary grace period.
+func SecurityIDWindow(installationSecret []byte, id string, t time.Time) (int64, bool) {
+	current := windowIndex(t)
+	for _, candidate := range []int64{current, current - 1} {
+		idHash := sha256.Sum256([]byte(id))
+		candidateHash := sha256.Sum256([]byte(computeSecurityID(installationSecret, candidate)))
+		if subtle.ConstantTimeCompare(idHash[:], candidateHash[:]) == 1 {
+			return candidate, true
+		}
+	}
+	return 0, false
+}
+
 func windowIndex(t time.Time) int64 {
 	return t.Unix() / windowSeconds
 }

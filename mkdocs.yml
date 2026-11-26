@@ -117,7 +117,7 @@ nav:
     - Authentication: api/authentication.md
   - Admin Guide:
     - Overview: admin.md
-    - Dashboard: admin-guide/dashboard.md
+    - Operator Status: admin-guide/dashboard.md
     - Server Settings: admin-guide/server.md
     - Security (Operator): admin-guide/security.md
     - Backup & Restore: admin-guide/backup.md

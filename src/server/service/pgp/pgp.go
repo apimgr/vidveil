@@ -28,7 +28,10 @@ const (
 	// PublicKeyFile is the armored public key, served at /.well-known/pgp-key.asc.
 	PublicKeyFile = "pgp.pub.asc"
 	// PrivateKeyFile is the AES-256-GCM encrypted armored private key.
-	PrivateKeyFile = "pgp.priv.asc.enc"
+	PrivateKeyFile        = "pgp.priv.asc.enc"
+	StagedPublicKeyFile   = "pgp.pub.asc.new"
+	StagedPrivateKeyFile  = "pgp.priv.asc.enc.new"
+	RetiredPrivateKeyFile = "pgp.priv.old.asc.enc"
 	// DefaultValidity is the keypair lifetime (2 years) per AI.md PART 12.
 	DefaultValidity = 2 * 365 * 24 * time.Hour
 
@@ -232,6 +235,83 @@ func DeleteKeypair(configDir string) error {
 // LoadPublicKey reads the armored public key from {config_dir}/security/.
 func LoadPublicKey(configDir string) ([]byte, error) {
 	return os.ReadFile(filepath.Join(SecurityDir(configDir), PublicKeyFile))
+}
+
+// WriteStagedKeypair writes both rotation artifacts beside the active keys.
+// They are durable before the database transaction commits its fingerprint.
+func WriteStagedKeypair(configDir string, kp *Keypair, secret []byte) error {
+	dir := SecurityDir(configDir)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return fmt.Errorf("create security dir: %w", err)
+	}
+	enc, err := EncryptPrivateKey(kp.PrivateArmored, secret)
+	if err != nil {
+		return err
+	}
+	pubPath := filepath.Join(dir, StagedPublicKeyFile)
+	privPath := filepath.Join(dir, StagedPrivateKeyFile)
+	if err := os.WriteFile(pubPath, kp.PublicArmored, 0o644); err != nil {
+		return fmt.Errorf("stage public key: %w", err)
+	}
+	if err := os.WriteFile(privPath, enc, 0o600); err != nil {
+		_ = os.Remove(pubPath)
+		return fmt.Errorf("stage private key: %w", err)
+	}
+	return nil
+}
+
+// StagedFingerprint returns the fingerprint of the staged public key.
+func StagedFingerprint(configDir string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(SecurityDir(configDir), StagedPublicKeyFile))
+	if err != nil {
+		return "", err
+	}
+	ring, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(data))
+	if err != nil || len(ring) == 0 {
+		return "", fmt.Errorf("read staged public key: invalid key")
+	}
+	return strings.ToUpper(hex.EncodeToString(ring[0].PrimaryKey.Fingerprint)), nil
+}
+
+// InstallStagedKeypair preserves the old encrypted private key for the
+// in-flight-notification grace period, then atomically replaces active keys.
+func InstallStagedKeypair(configDir string) error {
+	dir := SecurityDir(configDir)
+	activePriv := filepath.Join(dir, PrivateKeyFile)
+	oldPriv := filepath.Join(dir, RetiredPrivateKeyFile)
+	stagedPriv := filepath.Join(dir, StagedPrivateKeyFile)
+	if _, err := os.Stat(stagedPriv); err == nil {
+		if data, readErr := os.ReadFile(activePriv); readErr == nil {
+			if err := os.WriteFile(oldPriv+".tmp", data, 0o600); err != nil {
+				return fmt.Errorf("stage retired private key: %w", err)
+			}
+			if err := os.Rename(oldPriv+".tmp", oldPriv); err != nil {
+				return fmt.Errorf("install retired private key: %w", err)
+			}
+		} else if !os.IsNotExist(readErr) {
+			return readErr
+		}
+		if err := os.Rename(stagedPriv, activePriv); err != nil {
+			return fmt.Errorf("install staged private key: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(filepath.Join(dir, StagedPublicKeyFile), filepath.Join(dir, PublicKeyFile)); err != nil {
+		return fmt.Errorf("install staged public key: %w", err)
+	}
+	return nil
+}
+
+// RemoveStagedKeypair removes uncommitted rotation artifacts.
+func RemoveStagedKeypair(configDir string) error {
+	dir := SecurityDir(configDir)
+	for _, name := range []string{StagedPublicKeyFile, StagedPrivateKeyFile} {
+		if err := os.Remove(filepath.Join(dir, name)); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 // LoadPrivateKey reads and decrypts the private key from {config_dir}/security/.

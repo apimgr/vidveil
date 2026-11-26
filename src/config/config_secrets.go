@@ -23,7 +23,7 @@ func ensureGeneratedConfigSecrets(configDir string, cfg *AppConfig) error {
 	}
 	generated := make(map[string]string)
 	if cfg.Server.Token == "" {
-		token, err := newBearerToken()
+		token, err := newBearerToken("adm_")
 		if err != nil {
 			return err
 		}
@@ -69,7 +69,7 @@ func ensureGeneratedConfigSecrets(configDir string, cfg *AppConfig) error {
 		if *token.value != "" {
 			continue
 		}
-		value, err := newBearerToken()
+		value, err := newBearerToken("mtr_")
 		if err != nil {
 			return err
 		}
@@ -114,10 +114,10 @@ func ensureGeneratedConfigSecrets(configDir string, cfg *AppConfig) error {
 	}
 	return nil
 }
-func newBearerToken() (string, error) {
+func newBearerToken(prefix string) (string, error) {
 	var token strings.Builder
 	token.Grow(36)
-	token.WriteString("tok_")
+	token.WriteString(prefix)
 	limit := big.NewInt(int64(len(bearerAlphabet)))
 	for range 32 {
 		n, err := rand.Int(rand.Reader, limit)
@@ -130,7 +130,7 @@ func newBearerToken() (string, error) {
 }
 
 func defaultBearerToken() string {
-	token, err := newBearerToken()
+	token, err := newBearerToken("adm_")
 	if err != nil {
 		panic(fmt.Sprintf("config: failed to generate default operator token: %v", err))
 	}

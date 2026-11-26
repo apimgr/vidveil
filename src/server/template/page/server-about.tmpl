@@ -3,14 +3,15 @@
 {{end}}
 
 {{define "content"}}
-<div class="content">
-    <div class="prose">
-        <h1>{{ tf "about.page_title" "app_name" .AppName }}</h1>
-        {{if .AppTagline}}<p class="tagline">{{.AppTagline}}</p>{{end}}
-        {{ if .AppDescription }}<p>{{ .AppDescription }}</p>{{ else }}<p>{{ tf "about.intro" "app_name" .AppName }}</p>{{ end }}
-        {{ with .PageContent }}<section class="page-custom-content">{{ . | markdownToHTML }}</section>{{ end }}
+<div class="container container-md">
+    <header class="page-header">
+        <h1 class="page-title">{{ tf "about.page_title" "app_name" .AppName }}</h1>
+        {{if .AppTagline}}<p class="page-lead">{{.AppTagline}}</p>{{else}}{{ if .AppDescription }}<p class="page-lead">{{ .AppDescription }}</p>{{ else }}<p class="page-lead">{{ tf "about.intro" "app_name" .AppName }}</p>{{ end }}{{end}}
+    </header>
+    {{ if operatorContentConfigured "about" }}<section class="section-card" aria-labelledby="about-description-heading"><h2 id="about-description-heading">{{ t "about.what_is" }}</h2>{{ operatorHTML "about" }}</section>{{ end }}
 
-        <h2>{{ t "about.features" }}</h2>
+        <section class="section-card" aria-labelledby="about-features">
+        <h2 id="about-features">{{ t "about.features" }}</h2>
         <ul>
             <li><strong>{{ t "about.feature_privacy_label" }}</strong> — {{ t "about.feature_privacy_desc" }}</li>
             <li><strong>{{ t "about.feature_multi_engine" }}</strong> — {{ t "about.feature_multi_engine_desc" }}</li>
@@ -22,12 +23,16 @@
             <li><strong>{{ t "about.feature_geo" }}</strong> — {{ t "about.feature_geo_desc" }}</li>
             <li><strong>{{ t "about.feature_binary" }}</strong> — {{ t "about.feature_binary_desc" }}</li>
         </ul>
+        </section>
 
-        <h2>{{ t "about.version_info" }}</h2>
+        <section class="section-card" aria-labelledby="about-version">
+        <h2 id="about-version">{{ t "about.version_info" }}</h2>
         <p><strong>{{ t "about.version_label" }}:</strong> <code>{{.Version}}</code></p>
         <p><strong>{{ t "about.build_label" }}:</strong> {{.BuildDateTime}}</p>
+        </section>
 
-        <h2>{{ t "about.links" }}</h2>
+        <section class="section-card" aria-labelledby="about-links">
+        <h2 id="about-links">{{ t "about.links" }}</h2>
         <ul>
             <li><a href="https://github.com/apimgr/vidveil" target="_blank" rel="noopener">{{ t "about.link_source" }}</a> — {{ t "about.link_source_desc" }}</li>
             <li><a href="https://x.scour.li" target="_blank" rel="noopener">{{ t "about.link_official" }}</a></li>
@@ -35,10 +40,12 @@
             <li><a href="{{ path "/server/privacy" }}">{{ t "about.link_privacy" }}</a></li>
             <li><a href="{{ path "/server/dpo" }}">{{ t "about.link_dpo" }}</a></li>
         </ul>
+        </section>
 
-        <h2>{{ t "about.attribution" }}</h2>
+        <section class="section-card" aria-labelledby="about-attribution">
+        <h2 id="about-attribution">{{ t "about.attribution" }}</h2>
         <p><a href="https://db-ip.com/">{{ t "about.attribution_dbip" }}</a></p>
         <p>{{ t "about.attribution_nro" }}</p>
-    </div>
+        </section>
 </div>
 {{end}}

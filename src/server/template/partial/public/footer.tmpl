@@ -11,9 +11,9 @@
     {{ end }}
     {{ if and .I2PEnabled .I2PRunning .I2PAddress }}
     <p class="footer-i2p">
-        <a href="{{ path "/server/help" }}#i2p-access" aria-label="I2P Support">&#128279;</a>
+        <a href="{{ path "/server/help" }}#i2p-access" aria-label="{{ t "footer.i2p_support_label" }}">&#128279;</a>
         <code class="i2p-address">{{.I2PAddress}}</code>
-        <button type="button" class="copy-btn" data-copy="{{.I2PAddress}}" aria-live="polite" aria-label="Copy I2P address">&#128203;</button>
+        <button type="button" class="copy-btn" data-copy="{{.I2PAddress}}" aria-live="polite" aria-label="{{ t "footer.copy_i2p_label" }}">&#128203;</button>
     </p>
     {{ end }}
 
@@ -24,6 +24,10 @@
         <a href="{{ path "/server/privacy" }}">{{ t "nav.privacy" }}</a>
         <span>&#8226;</span>
         <a href="{{ path "/server/help" }}">{{ t "nav.help" }}</a>
+        <span>&#8226;</span>
+        <a href="{{ path "/server/preferences" }}">{{ t "prefs.title" }}</a>
+        <span>&#8226;</span>
+        <a href="{{ path "/server/preferences" }}#language">{{.LanguageName}}</a>
     </p>
 
     {{/* The operator footer replaces only the default branding block. */}}

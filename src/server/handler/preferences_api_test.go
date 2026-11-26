@@ -47,7 +47,7 @@ func TestPreferencesImportDirectValuesOverrideCodeAndSetsCookieContract(t *testi
 	h := newRenderTestHandler()
 	raw := "theme=dark&lang=fr&vidveil_pref_results_per_page=50"
 	code := base64.RawURLEncoding.EncodeToString([]byte(raw))
-	req := httptest.NewRequest(http.MethodGet, "https://example.test/server/preferences/import?code="+url.QueryEscape(code)+"&theme=light", nil)
+	req := httptest.NewRequest(http.MethodGet, "https://example.test/server/preferences/sync/import?code="+url.QueryEscape(code)+"&theme=light", nil)
 	rr := httptest.NewRecorder()
 	h.PreferencesImport(rr, req)
 	if rr.Code != http.StatusSeeOther || rr.Body.Len() != 0 || rr.Header().Get("Cache-Control") != "no-store" {
@@ -129,7 +129,7 @@ func TestPreferencesAPISetRejectsWhenNoSuppliedValueIsValid(t *testing.T) {
 }
 
 func TestSafePreferenceRedirectRejectsExternalAndMalformedTargets(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "https://example.test/server/preferences/import", nil)
+	req := httptest.NewRequest(http.MethodGet, "https://example.test/server/preferences/sync/import", nil)
 	for _, target := range []string{"//evil.example", "/\\evil.example", "https://evil.example/path", "/path\r\nLocation: https://evil.example"} {
 		if got := safeRelativePreferenceRedirect(target, req); got != "" {
 			t.Errorf("unsafe redirect %q accepted as %q", target, got)

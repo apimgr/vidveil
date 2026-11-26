@@ -3,29 +3,38 @@
 {{end}}
 
 {{define "content"}}
-<div class="content">
-    <div class="prose">
-        <h1>{{ t "privacy.title" }}</h1>
-        <p class="last-updated">{{ tf "privacy.last_updated" "date" .BuildDateTime }}</p>
-        {{ if .PageContent }}
-        {{ .PageContent | markdownToHTML }}
-        {{ else }}
+<div class="container container-md">
+    <header class="page-header">
+        <h1 class="page-title">{{ t "privacy.title" }}</h1>
+        <p class="page-lead">{{ tf "privacy.summary_body" "app_name" .AppName }}</p>
+    </header>
 
-        <h2>{{ t "privacy.summary" }}</h2>
-        <p>{{ tf "privacy.summary_body" "app_name" .AppName }}</p>
-        <ul class="privacy-key-points">
-            {{ if .Privacy.Data.StoredOnServer }}
+    {{if .GPCHonored}}
+    <section class="section-card" aria-labelledby="privacy-gpc">
+        <h2 id="privacy-gpc">{{ t "privacy.gpc_title" }}</h2>
+        <p role="status">{{ t "privacy.gpc_desc" }}</p>
+    </section>
+    {{end}}
+
+    <section class="section-card" aria-labelledby="privacy-summary">
+        <h2 id="privacy-summary">{{ t "privacy.summary" }}</h2>
+        <p>{{ tf "privacy.last_updated" "date" .BuildDateTime }}</p>
+        <ul>
+            {{if .Privacy.Data.StoredOnServer}}
             <li><strong>{{ t "privacy.summary_stored_title" }}</strong> — {{ t "privacy.summary_stored_desc" }}</li>
-            {{ end }}
-            {{ if .Privacy.Data.Sold }}
+            {{end}}
+            {{if .Privacy.Data.Sold}}
             <li><strong>{{ t "privacy.summary_sold_title" }}</strong> — {{ t "privacy.summary_sold_desc" }} <a href="#ccpa-opt-out">{{ t "privacy.summary_sold_link" }}</a></li>
-            {{ else }}
+            {{else}}
             <li><strong>{{ t "privacy.summary_not_sold_title" }}</strong> — {{ t "privacy.summary_not_sold_desc" }}</li>
-            {{ end }}
+            {{end}}
             <li><strong>{{ t "privacy.summary_control_title" }}</strong> — {{ t "privacy.summary_control_desc" }}</li>
         </ul>
+        {{ operatorHTML "privacy" }}
+    </section>
 
-        <h2>{{ t "privacy.not_collect" }}</h2>
+    <section class="section-card" aria-labelledby="privacy-collection">
+        <h2 id="privacy-collection">{{ t "privacy.not_collect" }}</h2>
         <ul>
             <li>{{ t "privacy.not_collect_accounts" }}</li>
             <li>{{ t "privacy.not_collect_track" }}</li>
@@ -33,21 +42,20 @@
             <li>{{ t "privacy.not_collect_fingerprint" }}</li>
             <li>{{ t "privacy.not_collect_profiles" }}</li>
         </ul>
-
-        <h2>{{ t "privacy.how_handled" }}</h2>
         <p>{{ tf "privacy.how_handled_body" "app_name" .AppName }}</p>
+    </section>
 
-        <h2>{{ t "privacy.browser_only" }}</h2>
+    <section class="section-card" aria-labelledby="privacy-browser-storage">
+        <h2 id="privacy-browser-storage">{{ t "privacy.browser_only" }}</h2>
         <p>{{ t "privacy.browser_only_intro" }}</p>
-        <ul>
-            <li><code>vidveil_history</code> — {{ t "privacy.storage_history" }}</li>
-        </ul>
+        <ul><li><code>vidveil_history</code> — {{ t "privacy.storage_history" }}</li></ul>
         <p>{{ t "privacy.browser_only_manage" }} <a href="{{ path "/server/preferences" }}">{{ t "privacy.preferences_link" }}</a> {{ t "privacy.browser_only_erase" }}</p>
-
-        <h2>{{ t "privacy.favorites" }}</h2>
+        <h3>{{ t "privacy.favorites" }}</h3>
         <p>{{ t "privacy.favorites_body_1" }} <a href="{{ path "/favorites" }}">{{ t "privacy.favorites_link" }}</a> {{ t "privacy.favorites_body_2" }}</p>
+    </section>
 
-        <h2>{{ t "privacy.cookies" }}</h2>
+    <section class="section-card" aria-labelledby="privacy-cookies">
+        <h2 id="privacy-cookies">{{ t "privacy.cookies" }}</h2>
         <p>{{ tf "privacy.cookies_intro" "app_name" .AppName }}</p>
         <ul>
             <li><strong>{{ t "privacy.cookie_age" }}</strong> — {{ t "privacy.cookie_age_desc" }}</li>
@@ -57,133 +65,126 @@
             <li><strong>{{ t "privacy.cookie_geo" }}</strong> (<code>forward_ip</code>) — {{ t "privacy.cookie_geo_desc" }}</li>
             <li><strong>{{ t "privacy.cookie_visitor" }}</strong> (<code>vidveil_owner_token_ab5213f6</code>) — {{ t "privacy.cookie_visitor_desc" }}</li>
         </ul>
-
         <h3>{{ t "privacy.cookie_categories" }}</h3>
         <ul>
-            {{ if .Privacy.Cookies.Essential.Enabled }}
-            <li><strong>{{ t "privacy.cookie_essential" }}</strong> — {{ .Privacy.Cookies.Essential.Description }}</li>
-            {{ end }}
-            {{ if .Privacy.Cookies.Preferences.Enabled }}
-            <li><strong>{{ t "privacy.cookie_preferences" }}</strong> — {{ .Privacy.Cookies.Preferences.Description }}</li>
-            {{ end }}
-            {{ if .Privacy.Cookies.Analytics.Enabled }}
+            {{if .Privacy.Cookies.Essential.Enabled}}<li><strong>{{ t "privacy.cookie_essential" }}</strong> — {{ .Privacy.Cookies.Essential.Description }}</li>{{end}}
+            {{if .Privacy.Cookies.Preferences.Enabled}}<li><strong>{{ t "privacy.cookie_preferences" }}</strong> — {{ .Privacy.Cookies.Preferences.Description }}</li>{{end}}
+            {{if .Privacy.Cookies.Analytics.Enabled}}
             <li><strong>{{ t "privacy.cookie_analytics" }}</strong> — {{ .Privacy.GetAnalyticsDescription }}</li>
-            {{ else }}
+            {{else}}
             <li><strong>{{ t "privacy.cookie_analytics" }}</strong> — {{ t "privacy.analytics_none" }}</li>
-            {{ end }}
+            {{end}}
         </ul>
+        <p><button type="button" class="btn btn-secondary" data-action="cookie-preferences">{{ t "privacy.manage_cookies" }}</button></p>
         <p><a href="{{ path "/server/preferences" }}#cookies">{{ t "privacy.manage_cookies" }}</a></p>
+    </section>
 
-        {{ with .Privacy.Content.DataCollection }}
-        <h2>{{ t "privacy.data_collection" }}</h2>
+    {{with .Privacy.Content.DataCollection}}
+    <section class="section-card" aria-labelledby="privacy-data-collection">
+        <h2 id="privacy-data-collection">{{ t "privacy.data_collection" }}</h2>
         {{ . | markdownToHTML }}
-        {{ end }}
-
-        {{ with .Privacy.GetDataUsageContent }}
-        <h2>{{ t "privacy.data_usage" }}</h2>
+    </section>
+    {{end}}
+    {{with .Privacy.GetDataUsageContent}}
+    <section class="section-card" aria-labelledby="privacy-data-usage">
+        <h2 id="privacy-data-usage">{{ t "privacy.data_usage" }}</h2>
         {{ . | markdownToHTML }}
-        {{ end }}
-
-        {{ with .Privacy.Content.DataSecurity }}
-        <h2>{{ t "privacy.data_security" }}</h2>
+    </section>
+    {{end}}
+    {{with .Privacy.Content.DataSecurity}}
+    <section class="section-card" aria-labelledby="privacy-data-security">
+        <h2 id="privacy-data-security">{{ t "privacy.data_security" }}</h2>
         {{ . | markdownToHTML }}
-        {{ end }}
+    </section>
+    {{end}}
 
-        {{ if .Privacy.Data.Sharing }}
-        <h2>{{ t "privacy.sharing" }}</h2>
-        <ul>
-            {{ range .Privacy.Data.Sharing }}
-            <li><strong>{{ .Condition }}:</strong> {{ .When }} — {{ .Data }}</li>
-            {{ end }}
-        </ul>
-        {{ end }}
+    <section class="section-card" aria-labelledby="privacy-sharing">
+        <h2 id="privacy-sharing">{{ t "privacy.sharing" }}</h2>
+        {{if .Privacy.Data.StoredOnServer}}<p>{{ t "privacy.summary_stored_desc" }}</p>{{end}}
+        {{if .Privacy.Data.Sharing}}
+        <ul>{{range .Privacy.Data.Sharing}}<li><strong>{{ .Condition }}:</strong> {{ .When }} — {{ .Data }}</li>{{end}}</ul>
+        {{else if .Privacy.ThirdParty.Services}}
+        <ul>{{range .Privacy.ThirdParty.Services}}<li><strong>{{ .Name }}:</strong> {{ .Purpose }} — {{ .DataSent }}</li>{{end}}</ul>
+        {{else}}
+        <p>{{ t "privacy.third_party_none" }}</p>
+        {{end}}
+    </section>
 
-        <h2>{{ t "privacy.retention" }}</h2>
+    <section class="section-card" aria-labelledby="privacy-retention">
+        <h2 id="privacy-retention">{{ t "privacy.retention" }}</h2>
         <p>{{ tf "privacy.retention_period" "period" .Privacy.Retention.Period }}</p>
-
-        <h2>{{ t "privacy.your_rights" }}</h2>
+    </section>
+    <section class="section-card" aria-labelledby="privacy-rights">
+        <h2 id="privacy-rights">{{ t "privacy.your_rights" }}</h2>
         <ul>
-            {{ if .Privacy.Retention.ExportAvailable }}
-            <li>{{ t "privacy.rights_export" }}</li>
-            {{ end }}
-            {{ if .Privacy.Retention.DeletionAvailable }}
-            <li>{{ t "privacy.rights_deletion" }}</li>
-            {{ end }}
+            {{if .Privacy.Retention.ExportAvailable}}<li>{{ t "privacy.rights_export" }}</li>{{end}}
+            {{if .Privacy.Retention.DeletionAvailable}}<li>{{ t "privacy.rights_deletion" }}</li>{{end}}
             <li><a href="{{ path "/server/preferences" }}#cookies">{{ t "privacy.manage_cookies" }}</a></li>
         </ul>
-
-        <h2>{{ t "privacy.thumbnail_proxy" }}</h2>
+    </section>
+    <section class="section-card" aria-labelledby="privacy-thumbnail-proxy">
+        <h2 id="privacy-thumbnail-proxy">{{ t "privacy.thumbnail_proxy" }}</h2>
         <p>{{ t "privacy.thumbnail_proxy_body" }}</p>
-
-        <h2>{{ t "privacy.tor_access" }}</h2>
+    </section>
+    <section class="section-card" aria-labelledby="privacy-tor-access">
+        <h2 id="privacy-tor-access">{{ t "privacy.tor_access" }}</h2>
         <p>{{if .TorOnionAddr}}{{ tf "privacy.tor_access_reachable" "onion_address" .TorOnionAddr }}{{else}}{{ tf "privacy.tor_access_auto" "app_name" .AppName }}{{end}} {{ t "privacy.tor_access_geo" }}</p>
-
-        <h2>{{ t "privacy.geo_restriction" }}</h2>
+    </section>
+    <section class="section-card" aria-labelledby="privacy-geo-restriction">
+        <h2 id="privacy-geo-restriction">{{ t "privacy.geo_restriction" }}</h2>
         <p>{{ t "privacy.geo_restriction_body" }}</p>
-
-        <h2>{{ t "privacy.server_logs" }}</h2>
+    </section>
+    <section class="section-card" aria-labelledby="privacy-server-logs">
+        <h2 id="privacy-server-logs">{{ t "privacy.server_logs" }}</h2>
         <p>{{ tf "privacy.server_logs_body" "app_name" .AppName }}</p>
+    </section>
 
-        <h2>{{ t "privacy.third_parties" }}</h2>
+    <section class="section-card" aria-labelledby="privacy-third-parties">
+        <h2 id="privacy-third-parties">{{ t "privacy.third_parties" }}</h2>
         <p>{{ tf "privacy.third_parties_body" "app_name" .AppName }}</p>
-        {{ if .Privacy.ThirdParty.Services }}
-        <table class="privacy-third-parties">
-            <thead>
-                <tr>
-                    <th>{{ t "privacy.tp_name" }}</th>
-                    <th>{{ t "privacy.tp_purpose" }}</th>
-                    <th>{{ t "privacy.tp_data" }}</th>
-                    <th>{{ t "privacy.tp_policy" }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{ range .Privacy.ThirdParty.Services }}
-                <tr>
-                    <td>{{ .Name }}</td>
-                    <td>{{ .Purpose }}</td>
-                    <td>{{ .DataSent }}</td>
-                    <td>{{ if .PolicyURL }}<a href="{{ .PolicyURL }}" rel="noopener noreferrer">{{ t "privacy.tp_policy" }}</a>{{ else }}—{{ end }}</td>
-                </tr>
-                {{ end }}
-            </tbody>
-        </table>
-        {{ else }}
+        {{if .Privacy.ThirdParty.Services}}
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead><tr><th scope="col">{{ t "privacy.tp_name" }}</th><th scope="col">{{ t "privacy.tp_purpose" }}</th><th scope="col">{{ t "privacy.tp_data" }}</th><th scope="col">{{ t "privacy.tp_policy" }}</th></tr></thead>
+                <tbody>{{range .Privacy.ThirdParty.Services}}<tr><td>{{ .Name }}</td><td>{{ .Purpose }}</td><td>{{ .DataSent }}</td><td>{{if .PolicyURL}}<a href="{{ .PolicyURL }}" rel="noopener noreferrer">{{ t "privacy.tp_policy" }}</a>{{else}}—{{end}}</td></tr>{{end}}</tbody>
+            </table>
+        </div>
+        {{else}}
         <p>{{ t "privacy.third_party_none" }}</p>
-        {{ end }}
+        {{end}}
+    </section>
 
-        {{ if .Privacy.Data.Sold }}
-        <section id="ccpa-opt-out" class="ccpa-section">
-            <h2>{{ t "privacy.ccpa_title" }}</h2>
-            <p>{{ t "privacy.ccpa_body" }}</p>
-            {{ if .CCPAOptedOut }}
-            <p role="status">{{ t "privacy.ccpa_status_opted_out" }}</p>
-            <form method="post" action="{{ path "/server/ccpa" }}">
-                {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
-                <input type="hidden" name="choice" value="opt-in">
-                <button type="submit" class="btn-secondary">{{ t "privacy.ccpa_opt_in" }}</button>
-            </form>
-            {{ else }}
-            <form method="post" action="{{ path "/server/ccpa" }}">
-                {{ if .CSRFToken }}<input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">{{ end }}
-                <input type="hidden" name="choice" value="opt-out">
-                <button type="submit" class="btn-primary">{{ t "privacy.ccpa_opt_out" }}</button>
-            </form>
-            {{ end }}
-        </section>
-        {{ end }}
+    {{if .Privacy.Data.Sold}}
+    <section class="section-card" id="ccpa-opt-out" aria-labelledby="privacy-ccpa">
+        <h2 id="privacy-ccpa">{{ t "privacy.ccpa_title" }}</h2>
+        <p>{{ t "privacy.ccpa_body" }}</p>
+        {{if .CCPAOptedOut}}
+        <p role="status">{{ t "privacy.ccpa_status_opted_out" }}</p>
+        <form method="post" action="{{ path "/server/ccpa" }}">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <input type="hidden" name="choice" value="opt-in">
+            <button type="submit" class="btn btn-secondary">{{ t "privacy.ccpa_opt_in" }}</button>
+        </form>
+        {{else}}
+        <form method="post" action="{{ path "/server/ccpa" }}">
+            <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+            <input type="hidden" name="choice" value="opt-out">
+            <button type="submit" class="btn btn-primary">{{ t "privacy.ccpa_opt_out" }}</button>
+        </form>
+        {{end}}
+    </section>
+    {{end}}
 
-        {{ operatorHTML "privacy" }}
-        <h2>{{ t "privacy.dpo" }}</h2>
-        {{ if .DPOEmail }}
-        <p>{{ if .DPOName }}{{ .DPOName }} — {{ end }}<a href="mailto:{{ .DPOEmail }}">{{ .DPOEmail }}</a></p>
-        {{ else }}
+    <section class="section-card" aria-labelledby="privacy-contact">
+        <h2 id="privacy-contact">{{ t "privacy.dpo" }}</h2>
+        {{if .DPOEmail}}
+        <p>{{if .DPOName}}{{ .DPOName }} — {{end}}<a href="mailto:{{ .DPOEmail }}">{{ .DPOEmail }}</a></p>
+        {{else}}
         <p>{{ t "dpo.no_email" }} <a href="{{ path "/server/security" }}">{{ t "security.title" }}</a>.</p>
-        {{ end }}
+        {{end}}
         <p><a href="{{ path "/server/dpo" }}">{{ t "dpo.title" }}</a></p>
-
-        <h2>{{ t "privacy.questions" }}</h2>
+        <h3>{{ t "privacy.questions" }}</h3>
         <p>{{ t "privacy.questions_prefix" }} <a href="{{ path "/server/security" }}">{{ t "security.title" }}</a>.</p>
-        {{ end }}
-    </div>
+    </section>
 </div>
 {{end}}

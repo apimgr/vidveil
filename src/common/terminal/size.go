@@ -53,6 +53,12 @@ func GetTerminalSize() TerminalSize {
 	}
 }
 
+// GetSizeMode returns the configured breakpoint for a terminal's dimensions.
+// TUI window resize events use this rather than querying stdout again.
+func GetSizeMode(cols, rows int) SizeMode {
+	return calculateMode(cols, rows)
+}
+
 // calculateMode determines the size mode based on dimensions
 func calculateMode(cols, rows int) SizeMode {
 	switch {

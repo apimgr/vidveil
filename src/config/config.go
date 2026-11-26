@@ -238,6 +238,8 @@ type ServerConfig struct {
 
 	// Backup (PART 21) - Backup & Restore settings
 	Backup BackupConfig `yaml:"backup"`
+	// Maintenance controls read-only recovery and disk-pressure cleanup per PART 13.
+	Maintenance MaintenanceConfig `yaml:"maintenance"`
 	// Restore archive resource limits per AI.md PART 21.
 	Restore RestoreConfig `yaml:"restore"`
 
@@ -339,7 +341,7 @@ type PrivacyConfig struct {
 	Retention  PrivacyRetentionConfig `yaml:"retention"`
 	Cookies    CookieCategoriesConfig `yaml:"cookies"`
 	ThirdParty ThirdPartyConfig       `yaml:"third_party"`
-	Content    PrivacyContentConfig   `yaml:"content"`
+	Content    PrivacyContentConfig   `yaml:"-"`
 }
 
 // PrivacyDataConfig holds data-handling disclosures per AI.md PART 12/16.
@@ -406,13 +408,12 @@ type ThirdPartyService struct {
 	PolicyURL string `yaml:"policy_url"`
 }
 
-// PrivacyContentConfig holds the Markdown bodies rendered into the privacy
-// page sections, with sold/not-sold variants for data usage (AI.md PART 12)
+// PrivacyContentConfig holds built-in project text for the privacy page.
 type PrivacyContentConfig struct {
-	DataCollection  string `yaml:"data_collection"`
-	DataUsage       string `yaml:"data_usage"`
-	DataUsageIfSold string `yaml:"data_usage_if_sold"`
-	DataSecurity    string `yaml:"data_security"`
+	DataCollection  string `yaml:"-"`
+	DataUsage       string `yaml:"-"`
+	DataUsageIfSold string `yaml:"-"`
+	DataSecurity    string `yaml:"-"`
 }
 
 // ConsentConfig holds the cookie-consent banner text per AI.md PART 12
@@ -1112,10 +1113,11 @@ type AllowlistEntry struct {
 
 // SecurityConfig holds security-related settings per PART 11
 type SecurityConfig struct {
-	Dir        string           `yaml:"dir"`
-	Allowlist  []AllowlistEntry `yaml:"allowlist"`
-	Blocklists BlocklistsConfig `yaml:"blocklists"`
-	CVE        CVEConfig        `yaml:"cve"`
+	Dir        string                `yaml:"dir"`
+	Allowlist  []AllowlistEntry      `yaml:"allowlist"`
+	Blocklists BlocklistsConfig      `yaml:"blocklists"`
+	CVE        CVEConfig             `yaml:"cve"`
+	Reports    SecurityReportsConfig `yaml:"reports"`
 	// EncryptionKey is the canonical 32-byte AES-256-GCM at-rest key (hex-encoded).
 	// Per AI.md PART 11 "Cryptographic Keys": auto-generated on first run and
 	// persisted in secrets.yml; used for ALL at-rest encryption of sensitive
@@ -1123,6 +1125,12 @@ type SecurityConfig struct {
 	// fallback when no PGP keypair exists, and any future at-rest data).
 	EncryptionKey        string `yaml:"encryption_key"`
 	EncryptionKeyVersion int    `yaml:"encryption_key_version"`
+}
+
+// SecurityReportsConfig controls retention for closed coordinated-disclosure
+// reports. The hall-of-fame rows are retained independently.
+type SecurityReportsConfig struct {
+	RetentionDays int `yaml:"retention_days"`
 }
 
 // BlocklistsConfig holds IP/domain blocklist settings per PART 11
@@ -1151,6 +1159,28 @@ type CVEConfig struct {
 type BackupConfig struct {
 	Retention  BackupRetentionConfig  `yaml:"retention"`
 	Encryption BackupEncryptionConfig `yaml:"encryption"`
+}
+
+// MaintenanceConfig controls automatic recovery and disk-pressure cleanup.
+type MaintenanceConfig struct {
+	SelfHealing MaintenanceSelfHealingConfig `yaml:"self_healing"`
+	Cleanup     MaintenanceCleanupConfig     `yaml:"cleanup"`
+	Notify      MaintenanceNotifyConfig      `yaml:"notify"`
+}
+
+type MaintenanceSelfHealingConfig struct {
+	RetryInterval string `yaml:"retry_interval"`
+	MaxAttempts   uint64 `yaml:"max_attempts"`
+}
+
+type MaintenanceCleanupConfig struct {
+	DiskThreshold    int `yaml:"disk_threshold"`
+	LogRetentionDays int `yaml:"log_retention_days"`
+}
+
+type MaintenanceNotifyConfig struct {
+	OnEnter bool `yaml:"on_enter"`
+	OnExit  bool `yaml:"on_exit"`
 }
 
 // RestoreConfig bounds compressed and expanded backup archive processing per AI.md PART 21.
@@ -1758,14 +1788,6 @@ type AgeVerificationConfig struct {
 // AppPaths is now defined in paths package
 type AppPaths = paths.AppPaths
 
-// envDefault returns the value of env var key when set and non-empty, else def
-func envDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
-
 // ValidateTracking validates an optional analytics provider configuration.
 func ValidateTracking(cfg *TrackingConfig) error {
 	if cfg == nil || cfg.Type == "" || cfg.Type == "none" {
@@ -1885,13 +1907,11 @@ func DefaultAppConfig() *AppConfig {
 			Token:  defaultBearerToken(),
 			Security: SecurityConfig{
 				EncryptionKey: generateToken(32),
+				Reports:       SecurityReportsConfig{RetentionDays: 365},
 			},
 			Branding: ServerBrandingConfig{
-				// Per AI.md PART 5 Init-Only Variables: APPLICATION_NAME /
-				// APPLICATION_TAGLINE seed branding on first run; the written
-				// config file wins on subsequent loads (env then ignored)
-				Title:           envDefault("APPLICATION_NAME", "Vidveil"),
-				Tagline:         envDefault("APPLICATION_TAGLINE", "Privacy-first video search"),
+				Title:           "Vidveil",
+				Tagline:         "Privacy-first video search",
 				Description:     "Privacy-respecting adult video search",
 				RefreshInterval: "24h",
 			},
@@ -2165,6 +2185,11 @@ func DefaultAppConfig() *AppConfig {
 					Enabled: false,
 				},
 			},
+			Maintenance: MaintenanceConfig{
+				SelfHealing: MaintenanceSelfHealingConfig{RetryInterval: "30s", MaxAttempts: 0},
+				Cleanup:     MaintenanceCleanupConfig{DiskThreshold: 90, LogRetentionDays: 7},
+				Notify:      MaintenanceNotifyConfig{OnEnter: true, OnExit: true},
+			},
 			Restore: DefaultRestoreConfig(),
 			// Tor settings per AI.md PART 31
 			// Hidden service auto-enabled if tor binary found
@@ -2389,6 +2414,7 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 		// Set paths in config
 		cfg.Server.SSL.CertPath = filepath.Join(paths.Config, "ssl", "certs")
 		cfg.Server.Database.SQLite.Dir = dbDir
+		seedFirstRunEnvironment(cfg)
 
 		if err := saveInitialServerConfig(cfg, configPath); err != nil {
 			return nil, "", fmt.Errorf("failed to save default config: %w", err)
@@ -2459,17 +2485,7 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 		cfg.Server.Database.SQLite.Dir = dbDir
 	}
 
-	// Per AI.md PART 5 Runtime Variables (Always Checked): bare DATABASE_DRIVER
-	// and DATABASE_URL override the config file's database driver/connection URL
-	if driver := os.Getenv("DATABASE_DRIVER"); driver != "" {
-		cfg.Server.Database.Driver = driver
-	}
-	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
-		cfg.Server.Database.URL = dbURL
-	}
-
-	// Apply VIDVEIL_* env var overrides per AI.md (env overrides config file)
-	applyEnvOverrides(cfg)
+	applyRuntimeEnvironmentOverrides(cfg)
 	validateUpdateChannel(&cfg.Server.Update, DefaultAppConfig().Server.Update)
 	validateRestoreConfig(&cfg.Server.Restore, DefaultRestoreConfig())
 
@@ -2948,7 +2964,28 @@ func validateConfig(cfg *AppConfig) {
 
 	// Validate backup retention settings (warn, don't error - server must start) per AI.md PART 21
 	validateBackupRetention(cfg)
+	if cfg.Server.Security.Reports.RetentionDays < 1 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid server.security.reports.retention_days %d, using default %d\n", cfg.Server.Security.Reports.RetentionDays, defaults.Server.Security.Reports.RetentionDays)
+		cfg.Server.Security.Reports.RetentionDays = defaults.Server.Security.Reports.RetentionDays
+	}
+	validateMaintenanceConfig(&cfg.Server.Maintenance, defaults.Server.Maintenance)
 	validateRestoreConfig(&cfg.Server.Restore, defaults.Server.Restore)
+}
+
+func validateMaintenanceConfig(cfg *MaintenanceConfig, defaults MaintenanceConfig) {
+	interval, err := time.ParseDuration(cfg.SelfHealing.RetryInterval)
+	if err != nil || interval < time.Second {
+		fmt.Fprintf(os.Stderr, "Warning: invalid maintenance.self_healing.retry_interval %q, using default %s\n", cfg.SelfHealing.RetryInterval, defaults.SelfHealing.RetryInterval)
+		cfg.SelfHealing.RetryInterval = defaults.SelfHealing.RetryInterval
+	}
+	if cfg.Cleanup.DiskThreshold < 1 || cfg.Cleanup.DiskThreshold > 99 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid maintenance.cleanup.disk_threshold %d, using default %d\n", cfg.Cleanup.DiskThreshold, defaults.Cleanup.DiskThreshold)
+		cfg.Cleanup.DiskThreshold = defaults.Cleanup.DiskThreshold
+	}
+	if cfg.Cleanup.LogRetentionDays < 1 {
+		fmt.Fprintf(os.Stderr, "Warning: invalid maintenance.cleanup.log_retention_days %d, using default %d\n", cfg.Cleanup.LogRetentionDays, defaults.Cleanup.LogRetentionDays)
+		cfg.Cleanup.LogRetentionDays = defaults.Cleanup.LogRetentionDays
+	}
 }
 
 func validateTorConfig(cfg *TorConfig, defaults TorConfig) {
@@ -3426,24 +3463,7 @@ func SaveAppConfig(cfg *AppConfig, path string) (saveErr error) {
 }
 
 func saveInitialServerConfig(cfg *AppConfig, path string) error {
-	data, err := marshalYAML(cfg)
-	if err != nil {
-		return fmt.Errorf("marshal initial config: %w", err)
-	}
-	root, err := decodeConfigMap(data)
-	if err != nil {
-		return fmt.Errorf("decode initial config: %w", err)
-	}
-	extractSecretSettings(root)
-	parts, _ := partitionConfig(root, "server.yml")
-	serverData, err := marshalYAML(parts["server.yml"])
-	if err != nil {
-		return fmt.Errorf("encode initial server config: %w", err)
-	}
-	if err := atomicConfigWrite(path, append([]byte(serverConfigHeader+"\n"), serverData...)); err != nil {
-		return fmt.Errorf("write initial server config: %w", err)
-	}
-	return nil
+	return SaveAppConfig(cfg, path)
 }
 
 func saveConfigLayout(cfg *AppConfig, path string) error {
@@ -3845,13 +3865,7 @@ func (w *ConfigWatcher) reload() {
 
 	// Invalid values are warned about and replaced with defaults, same as startup
 	validateConfig(newCfg)
-	if driver := os.Getenv("DATABASE_DRIVER"); driver != "" {
-		newCfg.Server.Database.Driver = driver
-	}
-	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
-		newCfg.Server.Database.URL = dbURL
-	}
-	applyEnvOverrides(newCfg)
+	applyRuntimeEnvironmentOverrides(newCfg)
 	logConfigSources(dropins, overrides, newCfg.Server.Mode == "debug")
 
 	// Update the shared config — all settings that can live-reload without restart.
@@ -3884,7 +3898,7 @@ func (w *ConfigWatcher) reload() {
 
 func configFilesFingerprint(configPath string) [32]byte {
 	var content bytes.Buffer
-	paths := []string{configPath}
+	paths := []string{configPath, filepath.Join(filepath.Dir(configPath), "secrets.yml")}
 	dropDir := filepath.Join(filepath.Dir(configPath), "yaml.d")
 	if info, statErr := os.Lstat(dropDir); statErr == nil {
 		fmt.Fprintf(&content, "dir:%s:%o:%d\x00", dropDir, info.Mode(), info.ModTime().UnixNano())

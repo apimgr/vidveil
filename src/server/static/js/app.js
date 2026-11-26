@@ -101,6 +101,81 @@ function setupThemeMediaListener() {
 // Initialize theme listener on load
 setupThemeMediaListener();
 
+// Enhance the CSS-only navigation with overflow detection and keyboard focus
+// handling. The checkbox, scrim, close label, and mobile breakpoint work
+// without this script (AI.md PART 16).
+function initNavigationMenu() {
+    var checkbox = document.getElementById('nav-toggle');
+    var panel = document.getElementById('nav-panel');
+    var nav = document.querySelector('.site-header .nav-links');
+    if (!checkbox || !panel || !nav) return;
+
+    function panelFocusTargets() {
+        return Array.prototype.slice.call(panel.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+    }
+
+    function updateOverflow() {
+        var focusInPanel = panel.contains(document.activeElement);
+        var collapsed = window.innerWidth >= 768 && nav.scrollWidth > nav.clientWidth;
+        document.documentElement.classList.toggle('nav-collapsed', collapsed);
+
+        if (checkbox.checked && !collapsed) {
+            checkbox.checked = false;
+            checkbox.dispatchEvent(new Event('change'));
+            if (focusInPanel) {
+                var firstNavLink = nav.querySelector('a[href]');
+                if (firstNavLink) firstNavLink.focus();
+            }
+        }
+    }
+
+    updateOverflow();
+    window.addEventListener('resize', updateOverflow);
+
+    checkbox.addEventListener('change', function() {
+        if (checkbox.checked) {
+            var targets = panelFocusTargets();
+            if (targets.length) targets[0].focus();
+        } else if (window.getComputedStyle(checkbox).display !== 'none') {
+            checkbox.focus();
+        }
+    });
+
+    document.addEventListener('keydown', function(event) {
+        if (!checkbox.checked) return;
+
+        if (event.key === 'Escape' || event.key === 'Esc' || event.key === 'ESC') {
+            event.preventDefault();
+            checkbox.checked = false;
+            checkbox.dispatchEvent(new Event('change'));
+            return;
+        }
+
+        if (event.key !== 'Tab') return;
+        var targets = panelFocusTargets();
+        if (!targets.length) {
+            event.preventDefault();
+            return;
+        }
+
+        var first = targets[0];
+        var last = targets[targets.length - 1];
+        if (event.shiftKey && (document.activeElement === first || !panel.contains(document.activeElement))) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !panel.contains(document.activeElement))) {
+            event.preventDefault();
+            first.focus();
+        }
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initNavigationMenu);
+} else {
+    initNavigationMenu();
+}
+
 // Re-apply theme when page is restored from bfcache (browser back/forward).
 // Without this, history.back() restores the old DOM class from the cached snapshot.
 window.addEventListener('pageshow', function(event) {
@@ -632,45 +707,11 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Animation styles are now in common.css per AI.md PART 16
 
-    // Initialize autocomplete for nav search (present on all pages except home)
-    setupAutocomplete('nav-search-input', 'autocomplete-dropdown-nav');
-
     // Initialize home page features
     initHomePage();
 
     // Initialize search page features
     initSearchPage();
-});
-
-// ============================================================================
-// Mobile Navigation - AI.md PART 13
-// Slides in from RIGHT edge
-// ============================================================================
-function toggleNav() {
-    const panel = document.getElementById('nav-panel');
-    const overlay = document.getElementById('nav-overlay');
-    if (panel && overlay) {
-        panel.classList.toggle('open');
-        overlay.classList.toggle('open');
-        document.body.style.overflow = panel.classList.contains('open') ? 'hidden' : '';
-    }
-}
-
-function closeNav() {
-    const panel = document.getElementById('nav-panel');
-    const overlay = document.getElementById('nav-overlay');
-    if (panel && overlay) {
-        panel.classList.remove('open');
-        overlay.classList.remove('open');
-        document.body.style.overflow = '';
-    }
-}
-
-// Close nav on escape key
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        closeNav();
-    }
 });
 
 // ============================================================================
@@ -2970,8 +3011,6 @@ Object.assign(window.Vidveil, {
     filterByDuration: filterByDuration,
     showNotification: showNotification,
     fetchAPI: fetchAPI,
-    toggleNav: toggleNav,
-    closeNav: closeNav,
     announce: announce
 });
 
@@ -3207,12 +3246,6 @@ function dispatchClickAction(el, e) {
             if (dlg) dlg.close();
             return true;
         }
-        case 'toggle-nav':
-            toggleNav();
-            return true;
-        case 'close-nav':
-            closeNav();
-            return true;
         case 'close-toast': {
             var toast = el.closest('.toast');
             if (toast) dismissToast(toast);
@@ -4068,3 +4101,19 @@ document.addEventListener('error', function(e) {
         if (el.checkValidity()) clearError(el);
     }, true);
 })();
+
+// The native theme form is complete without JS; this keeps its optional
+// instant preview in sync with the server-computed next theme.
+onReady(function() {
+    var themeCycle = ['dark', 'light', 'auto'];
+    document.querySelectorAll('.theme-toggle-form').forEach(function(form) {
+        form.addEventListener('submit', function() {
+            var html = document.documentElement;
+            var current = html.classList.contains('theme-dark') ? 'dark' :
+                (html.classList.contains('theme-light') ? 'light' : 'auto');
+            var next = themeCycle[(themeCycle.indexOf(current) + 1) % themeCycle.length];
+            html.className = 'theme-' + next;
+        });
+    });
+
+});

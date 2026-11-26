@@ -2,104 +2,91 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
-// VIDVEIL_SERVER_PORT must override server.port (full path form).
-func TestApplyEnvOverridesFullPath(t *testing.T) {
-	t.Setenv("VIDVEIL_SERVER_PORT", "8080")
-	cfg := DefaultAppConfig()
-	applyEnvOverrides(cfg)
-	if cfg.Server.Port != "8080" {
-		t.Errorf("VIDVEIL_SERVER_PORT: got %q, want %q", cfg.Server.Port, "8080")
+func TestFirstRunEnvironmentIsSeededAndThenIgnored(t *testing.T) {
+	configDir := t.TempDir()
+	dataDir := t.TempDir()
+	t.Setenv("APPLICATION_NAME", "First Run Name")
+	t.Setenv("APPLICATION_TAGLINE", "First Run Tagline")
+	t.Setenv("DATABASE_URL", "libsql://db.invalid?authToken=database-credential")
+	t.Setenv("DATABASE_DRIVER", "libsql")
+	t.Setenv("CACHE_URL", "valkey://cache-user:cache-credential@cache.invalid:6379/0")
+	t.Setenv("VIDVEIL_SERVER_PORT", "64999")
+
+	first, _, err := LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		t.Fatalf("load first-run config: %v", err)
+	}
+	if first.Server.Branding.Title != "First Run Name" || first.Server.Branding.Tagline != "First Run Tagline" {
+		t.Fatal("first-run branding values were not loaded")
+	}
+	if first.Server.Database.Driver != "libsql" || first.Server.Database.URL != "libsql://db.invalid?authToken=database-credential" {
+		t.Fatal("first-run database connection was not loaded")
+	}
+	if first.Server.Cache.Type != "valkey" || first.Server.Cache.URL != "valkey://cache-user:cache-credential@cache.invalid:6379/0" {
+		t.Fatal("first-run cache connection was not loaded")
+	}
+	if first.Server.Port == "64999" {
+		t.Fatal("unlisted VIDVEIL_SERVER_PORT override changed server.port")
+	}
+
+	serverData, err := os.ReadFile(filepath.Join(configDir, "server.yml"))
+	if err != nil {
+		t.Fatalf("read server config: %v", err)
+	}
+	secretsData, err := os.ReadFile(filepath.Join(configDir, "secrets.yml"))
+	if err != nil {
+		t.Fatalf("read secrets config: %v", err)
+	}
+	brandingData, err := os.ReadFile(filepath.Join(configDir, "yaml.d", "branding.yml"))
+	if err != nil {
+		t.Fatalf("read branding drop-in: %v", err)
+	}
+	if strings.Contains(string(serverData), "database-credential") || strings.Contains(string(serverData), "cache-credential") {
+		t.Fatal("connection credentials were written to server.yml")
+	}
+	if !strings.Contains(string(secretsData), "database-credential") || !strings.Contains(string(secretsData), "cache-credential") {
+		t.Fatal("connection credentials were not persisted to secrets.yml")
+	}
+	if !strings.Contains(string(brandingData), "First Run Name") || !strings.Contains(string(brandingData), "First Run Tagline") {
+		t.Fatal("first-run branding values were not persisted")
+	}
+
+	t.Setenv("APPLICATION_NAME", "Changed Environment Name")
+	t.Setenv("APPLICATION_TAGLINE", "Changed Environment Tagline")
+	t.Setenv("DATABASE_URL", "libsql://other.invalid?authToken=changed")
+	t.Setenv("DATABASE_DRIVER", "sqlite")
+	t.Setenv("CACHE_URL", "redis://other.invalid:6379/1")
+	second, _, err := LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		t.Fatalf("reload persisted config: %v", err)
+	}
+	if second.Server.Branding.Title != "First Run Name" || second.Server.Branding.Tagline != "First Run Tagline" {
+		t.Fatal("init-only branding environment variables replaced persisted values")
+	}
+	if second.Server.Database.Driver != "libsql" || second.Server.Database.URL != first.Server.Database.URL {
+		t.Fatal("init-only database environment variables replaced persisted values")
+	}
+	if second.Server.Cache.Type != "valkey" || second.Server.Cache.URL != first.Server.Cache.URL {
+		t.Fatal("init-only cache environment variables replaced persisted values")
 	}
 }
 
-// VIDVEIL_DATABASE_DRIVER must reach server.database.driver via the SERVER_-less alias.
-func TestApplyEnvOverridesServerAlias(t *testing.T) {
-	t.Setenv("VIDVEIL_DATABASE_DRIVER", "sqlite")
+func TestRuntimeEnvironmentOverridesOnlyI2PSetting(t *testing.T) {
+	t.Setenv("I2P_ENABLED", "yes")
+	t.Setenv("VIDVEIL_SERVER_PORT", "64999")
 	cfg := DefaultAppConfig()
-	cfg.Server.Database.Driver = "other"
-	applyEnvOverrides(cfg)
-	if cfg.Server.Database.Driver != "sqlite" {
-		t.Errorf("VIDVEIL_DATABASE_DRIVER alias: got %q, want %q", cfg.Server.Database.Driver, "sqlite")
+	cfg.Server.Port = "64998"
+	applyRuntimeEnvironmentOverrides(cfg)
+	if !cfg.Server.I2P.Enabled {
+		t.Fatal("I2P_ENABLED did not enable I2P")
 	}
-}
-
-// The full-path name must win over the SERVER_-less alias when both are set.
-func TestApplyEnvOverridesFullPathWinsOverAlias(t *testing.T) {
-	t.Setenv("VIDVEIL_SERVER_PORT", "9001")
-	t.Setenv("VIDVEIL_PORT", "9002")
-	cfg := DefaultAppConfig()
-	applyEnvOverrides(cfg)
-	if cfg.Server.Port != "9001" {
-		t.Errorf("full path must win: got %q, want %q", cfg.Server.Port, "9001")
-	}
-}
-
-// Boolean fields must accept true/false, yes/no, 1/0, on/off per AI.md.
-func TestApplyEnvOverridesBool(t *testing.T) {
-	cases := map[string]bool{"true": true, "yes": true, "1": true, "on": true, "false": false, "no": false, "0": false, "off": false}
-	for val, want := range cases {
-		t.Setenv("VIDVEIL_SERVER_PIDFILE", val)
-		cfg := DefaultAppConfig()
-		cfg.Server.PIDFile = !want
-		applyEnvOverrides(cfg)
-		if cfg.Server.PIDFile != want {
-			t.Errorf("VIDVEIL_SERVER_PIDFILE=%q: got %v, want %v", val, cfg.Server.PIDFile, want)
-		}
-	}
-}
-
-// An invalid boolean value must warn and leave the config value unchanged.
-func TestApplyEnvOverridesInvalidBoolIgnored(t *testing.T) {
-	t.Setenv("VIDVEIL_SERVER_PIDFILE", "banana")
-	cfg := DefaultAppConfig()
-	cfg.Server.PIDFile = true
-	applyEnvOverrides(cfg)
-	if cfg.Server.PIDFile != true {
-		t.Error("invalid boolean must be ignored, config value changed")
-	}
-}
-
-// An invalid integer value must warn and leave the config value unchanged.
-func TestApplyEnvOverridesInvalidIntIgnored(t *testing.T) {
-	t.Setenv("VIDVEIL_SERVER_RATE_LIMIT_REQUESTS", "notanumber")
-	cfg := DefaultAppConfig()
-	want := cfg.Server.RateLimit.Requests
-	applyEnvOverrides(cfg)
-	if cfg.Server.RateLimit.Requests != want {
-		t.Errorf("invalid integer must be ignored: got %d, want %d", cfg.Server.RateLimit.Requests, want)
-	}
-}
-
-// Integer fields must be parsed from env strings.
-func TestApplyEnvOverridesInt(t *testing.T) {
-	t.Setenv("VIDVEIL_SERVER_RATE_LIMIT_REQUESTS", "250")
-	cfg := DefaultAppConfig()
-	applyEnvOverrides(cfg)
-	if cfg.Server.RateLimit.Requests != 250 {
-		t.Errorf("VIDVEIL_SERVER_RATE_LIMIT_REQUESTS: got %d, want 250", cfg.Server.RateLimit.Requests)
-	}
-}
-
-// Nested non-server sections use the full path only (no alias).
-func TestApplyEnvOverridesNonServerSection(t *testing.T) {
-	t.Setenv("VIDVEIL_SEARCH_FILTER_PREMIUM", "false")
-	cfg := DefaultAppConfig()
-	cfg.Search.FilterPremium = true
-	applyEnvOverrides(cfg)
-	if cfg.Search.FilterPremium != false {
-		t.Error("VIDVEIL_SEARCH_FILTER_PREMIUM=false must set search.filter_premium to false")
-	}
-}
-
-// String list fields must split on commas.
-func TestApplyEnvOverridesStringSlice(t *testing.T) {
-	t.Setenv("VIDVEIL_SEARCH_DEFAULT_ENGINES", "xvideos, xnxx")
-	cfg := DefaultAppConfig()
-	applyEnvOverrides(cfg)
-	if len(cfg.Search.DefaultEngines) != 2 || cfg.Search.DefaultEngines[0] != "xvideos" || cfg.Search.DefaultEngines[1] != "xnxx" {
-		t.Errorf("VIDVEIL_SEARCH_DEFAULT_ENGINES: got %v, want [xvideos xnxx]", cfg.Search.DefaultEngines)
+	if cfg.Server.Port != "64998" {
+		t.Fatal("unlisted environment variable changed server.port")
 	}
 }

@@ -34,13 +34,19 @@ func TestReapStaleI2PDStopsMatchingProcess(t *testing.T) {
 	if err := command.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer stdin.Close()
+	defer func() { _ = stdin.Close() }()
+	actualBinary, err := os.Readlink(filepath.Join("/proc", strconv.Itoa(command.Process.Pid), "exe"))
+	if err != nil {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+		t.Fatalf("read helper process executable: %v", err)
+	}
 	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(command.Process.Pid)), 0600); err != nil {
 		_ = command.Process.Kill()
 		_ = command.Wait()
 		t.Fatal(err)
 	}
-	if err := reapStaleI2PD("/bin/sh", confPath, pidPath); err != nil {
+	if err := reapStaleI2PD(actualBinary, confPath, pidPath); err != nil {
 		_ = command.Process.Kill()
 		_ = command.Wait()
 		t.Fatalf("reapStaleI2PD: %v", err)
@@ -62,7 +68,7 @@ func TestParentDeathSignalTerminatesChild(t *testing.T) {
 		if err != nil {
 			os.Exit(2)
 		}
-		defer stdin.Close()
+		defer func() { _ = stdin.Close() }()
 		configureI2PDCommand(child)
 		if err := child.Start(); err != nil {
 			os.Exit(3)

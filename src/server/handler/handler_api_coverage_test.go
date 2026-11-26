@@ -590,7 +590,7 @@ func TestRenderErrorPage_EmptyFS_FallsBackToPlainText(t *testing.T) {
 		t.Errorf("RenderErrorPage: status = %d, want 404", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "Not Found") {
+	if !strings.Contains(body, "NOT FOUND") {
 		t.Errorf("RenderErrorPage: body missing 'Not Found': %s", body)
 	}
 }

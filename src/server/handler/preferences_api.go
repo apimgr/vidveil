@@ -47,11 +47,6 @@ func (h *SearchHandler) effectivePreferences(r *http.Request) preferenceResult {
 	if detected, ok := canonicalPreferenceLang(resolveLocale(r)); ok {
 		lang = detected
 	}
-	if c, err := r.Cookie("lang"); err == nil {
-		if valid, ok := canonicalPreferenceLang(c.Value); ok {
-			lang = valid
-		}
-	}
 	return preferenceResult{Theme: h.getRequestTheme(r), Lang: lang, Prefs: prefs, Applied: []string{}, Ignored: []string{}}
 }
 
@@ -202,6 +197,9 @@ func (h *SearchHandler) applyWebConsent(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	http.SetCookie(w, preferenceConsentCookie(r))
+	if h.appConfig == nil || !h.appConfig.Server.Privacy.Data.Sold {
+		return
+	}
 	if r.PostForm.Get("ccpa_opt_out") == "1" || r.PostForm.Get("ccpa_opt_out") == "on" {
 		http.SetCookie(w, &http.Cookie{Name: "ccpa_opt_out", Value: "true", Path: "/", MaxAge: 31536000, Secure: strings.HasPrefix(urlSchemeForRequest(r), "https"), SameSite: http.SameSiteLaxMode})
 	} else {
@@ -223,33 +221,6 @@ func resetPreferenceCookies(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Clear-Site-Data", `"storage"`)
-}
-
-func preferencesWithCode(form url.Values) url.Values {
-	values := make(url.Values, len(form))
-	for key, items := range form {
-		values[key] = append([]string(nil), items...)
-	}
-	if code, ok := decodePreferenceCode(form.Get("code")); ok {
-		if imported, err := url.ParseQuery(code); err == nil {
-			for key, items := range imported {
-				valid := make([]string, 0, len(items))
-				for _, item := range items {
-					if _, ok := validatePreference(key, item); ok {
-						valid = append(valid, item)
-					}
-				}
-				if len(valid) > 0 {
-					values[key] = []string{valid[len(valid)-1]}
-				} else if _, exists := values[key]; !exists {
-					// Keep invalid imports visible to applyPreferences so they are reported as ignored.
-					values[key] = items
-				}
-			}
-		}
-	}
-	delete(values, "code")
-	return values
 }
 
 func urlSchemeForRequest(r *http.Request) string {

@@ -1,0 +1,164 @@
+"""Read-only root operations for VidVeil APIs."""
+type Query {
+  """Reads the corresponding VidVeil service data."""
+  search(query: String!, page: Int, engines: String): SearchResult!
+  """Reads the corresponding VidVeil service data."""
+  searchBatch(queries: [BatchQueryInput!]!): JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  bangs: [Bang!]!
+  """Reads the corresponding VidVeil service data."""
+  autocomplete(prefix: String!): [Bang!]!
+  """Reads the corresponding VidVeil service data."""
+  engines: [Engine!]!
+  """Reads the corresponding VidVeil service data."""
+  health: Health!
+  """Reads the corresponding VidVeil service data."""
+  engineHealth: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  engineDetails(name: String!): JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  stats: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  version: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  healthz: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  serverAbout: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  serverPrivacy: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  serverDpo: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  serverContact: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  serverHelp: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  serverHelpMcp: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  serverTerms: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  serverSecurity: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  serverSecurityPolicy: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  serverSecurityThanks: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  operatorStatus: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  preferences: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  preferenceSync: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  preferenceTokens: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  favorites: JSONResult!
+  """Reads the corresponding VidVeil service data."""
+  openAPI: JSONResult!
+}
+
+"""Structured data returned by a VidVeil API operation."""
+type SearchResult {
+  """A value returned in the API result."""
+  query: String!
+  """A value returned in the API result."""
+  results: [VideoResult!]!
+  """A value returned in the API result."""
+  enginesUsed: [String!]!
+  """A value returned in the API result."""
+  enginesFailed: [String!]!
+  """A value returned in the API result."""
+  searchTimeMs: Int!
+  """A value returned in the API result."""
+  pagination: Pagination!
+}
+
+"""Structured data returned by a VidVeil API operation."""
+type VideoResult {
+  """A value returned in the API result."""
+  id: String!
+  """A value returned in the API result."""
+  title: String!
+  """A value returned in the API result."""
+  url: String!
+  """A value returned in the API result."""
+  thumbnail: String!
+  """A value returned in the API result."""
+  duration: Int!
+  """A value returned in the API result."""
+  durationStr: String!
+  """A value returned in the API result."""
+  views: Int!
+  """A value returned in the API result."""
+  viewsStr: String!
+  """A value returned in the API result."""
+  source: String!
+  """A value returned in the API result."""
+  sourceDisplay: String!
+  """A value returned in the API result."""
+  description: String!
+}
+
+"""Structured data returned by a VidVeil API operation."""
+type Bang {
+  """A value returned in the API result."""
+  bang: String!
+  """A value returned in the API result."""
+  engineName: String!
+  """A value returned in the API result."""
+  displayName: String!
+  """A value returned in the API result."""
+  shortCode: String!
+}
+
+"""Structured data returned by a VidVeil API operation."""
+type Engine {
+  """A value returned in the API result."""
+  name: String!
+  """A value returned in the API result."""
+  displayName: String!
+  """A value returned in the API result."""
+  enabled: Boolean!
+  """A value returned in the API result."""
+  available: Boolean!
+  """A value returned in the API result."""
+  tier: Int!
+  """A value returned in the API result."""
+  features: [String!]!
+}
+
+"""Structured data returned by a VidVeil API operation."""
+type Pagination {
+  """A value returned in the API result."""
+  page: Int!
+  """A value returned in the API result."""
+  limit: Int!
+  """A value returned in the API result."""
+  total: Int!
+  """A value returned in the API result."""
+  pages: Int!
+}
+
+"""Structured data returned by a VidVeil API operation."""
+type Health {
+  """A value returned in the API result."""
+  status: String!
+  """A value returned in the API result."""
+  enginesEnabled: Int!
+}
+
+"""Structured data returned by a VidVeil API operation."""
+type JSONResult {
+  """The JSON response from the corresponding REST read operation."""
+  json: String!
+}
+
+"""Structured data returned by a VidVeil API operation."""
+input BatchQueryInput {
+  """A value returned in the API result."""
+  q: String!
+  """A value returned in the API result."""
+  page: Int
+  """A value returned in the API result."""
+  engines: String
+}
+

@@ -34,7 +34,7 @@ func EncryptHash(encryptionKey, hash string) (string, error) {
 // EncryptToken protects a raw owner token for the explicit reveal action.
 // Callers must never include the returned ciphertext in ordinary token views.
 func EncryptToken(encryptionKey, token string) (string, error) {
-	if !strings.HasPrefix(token, "tok_") || len(token) < 5 {
+	if !isOwnerToken(token) {
 		return "", fmt.Errorf("invalid API token")
 	}
 	ciphertext, err := secreport.EncryptAESGCM(encryptionKey, []byte(token))
@@ -59,10 +59,27 @@ func DecryptToken(encryptionKey, stored string) (string, error) {
 		return "", fmt.Errorf("decrypt API token: %w", err)
 	}
 	token := string(plaintext)
-	if !strings.HasPrefix(token, "tok_") || len(token) < 5 {
+	if !isOwnerToken(token) {
 		return "", fmt.Errorf("invalid decrypted API token")
 	}
 	return token, nil
+}
+
+// DecryptTokenWithPrevious tries the current key first and uses the previous
+// key only for ciphertext left by an interrupted rotation.
+func DecryptTokenWithPrevious(currentKey, previousKey, stored string) (string, bool, error) {
+	token, err := DecryptToken(currentKey, stored)
+	if err == nil {
+		return token, false, nil
+	}
+	if previousKey == "" {
+		return "", false, err
+	}
+	token, previousErr := DecryptToken(previousKey, stored)
+	if previousErr != nil {
+		return "", false, fmt.Errorf("current-key decryption failed: %v; previous-key decryption failed: %w", err, previousErr)
+	}
+	return token, true, nil
 }
 
 // DecryptHash accepts legacy plaintext digests so existing databases can be
@@ -87,6 +104,23 @@ func DecryptHash(encryptionKey, stored string) (string, error) {
 		return "", fmt.Errorf("invalid decrypted API-token SHA-256 digest")
 	}
 	return hash, nil
+}
+
+// DecryptHashWithPrevious follows the same current-first recovery rule for
+// encrypted owner-token digests.
+func DecryptHashWithPrevious(currentKey, previousKey, stored string) (string, bool, error) {
+	hash, err := DecryptHash(currentKey, stored)
+	if err == nil {
+		return hash, false, nil
+	}
+	if previousKey == "" {
+		return "", false, err
+	}
+	hash, previousErr := DecryptHash(previousKey, stored)
+	if previousErr != nil {
+		return "", false, fmt.Errorf("current-key decryption failed: %v; previous-key decryption failed: %w", err, previousErr)
+	}
+	return hash, true, nil
 }
 
 // NormalizeLegacyHashes converts encrypted legacy digests to the SHA-256

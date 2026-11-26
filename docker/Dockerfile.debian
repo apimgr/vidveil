@@ -15,6 +15,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+RUN go generate ./src/swagger
 RUN if [ -f site.txt ]; then OFFICIAL_SITE_VALUE="$(cat site.txt)"; else OFFICIAL_SITE_VALUE="${OFFICIAL_SITE:-}"; fi; \
     CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -trimpath -buildvcs=false \

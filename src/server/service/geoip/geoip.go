@@ -19,6 +19,7 @@ import (
 	"github.com/oschwald/maxminddb-golang"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/health"
 )
 
 // Database URLs per AI.md PART 19.
@@ -62,7 +63,8 @@ type GeoIPService struct {
 	cityDB   *maxminddb.Reader
 	cityDBv6 *maxminddb.Reader
 
-	lastUpdate time.Time
+	lastUpdate   time.Time
+	updateFailed bool
 }
 
 // asnRecord for ASN database queries
@@ -334,7 +336,6 @@ func (s *GeoIPService) openDatabases() error {
 	defer s.mu.Unlock()
 
 	dbs := s.appConfig.Server.GeoIP.Databases
-
 	if dbs.ASN {
 		asnPath := filepath.Join(s.dataDir, "iptoasn-asn.mmdb")
 		if _, err := os.Stat(asnPath); err == nil {
@@ -645,7 +646,12 @@ func (s *GeoIPService) GetRestrictionConfig() config.ContentRestrictionConfig {
 }
 
 // Update downloads fresh databases
-func (s *GeoIPService) Update() error {
+func (s *GeoIPService) Update() (retErr error) {
+	defer func() {
+		s.mu.Lock()
+		s.updateFailed = retErr != nil
+		s.mu.Unlock()
+	}()
 	if !s.appConfig.Server.GeoIP.Enabled {
 		return nil
 	}
@@ -705,6 +711,61 @@ func (s *GeoIPService) LastUpdate() time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.lastUpdate
+}
+
+// RegisterHealthChecks registers each configured GeoIP database as an
+// optional, public-safe cached health check per AI.md PART 13.
+func (s *GeoIPService) RegisterHealthChecks(registry *health.Registry) {
+	if registry == nil || s.appConfig == nil || !s.appConfig.Server.GeoIP.Enabled {
+		return
+	}
+	databases := s.appConfig.Server.GeoIP.Databases
+	for _, database := range []struct {
+		key     string
+		name    string
+		path    string
+		enabled bool
+	}{
+		{key: "geoip_asn", name: "asn", path: "iptoasn-asn.mmdb", enabled: databases.ASN},
+		{key: "geoip_country", name: "country", path: "iptoasn-country.mmdb", enabled: databases.Country},
+		{key: "geoip_city_ipv4", name: "city_ipv4", path: "dbip-city-ipv4.mmdb", enabled: databases.City},
+		{key: "geoip_city_ipv6", name: "city_ipv6", path: "dbip-city-ipv6.mmdb", enabled: databases.City},
+	} {
+		if !database.enabled {
+			continue
+		}
+		name := database.name
+		path := filepath.Join(s.dataDir, database.path)
+		_ = registry.Register(database.key, false, func() string {
+			s.mu.RLock()
+			loaded := false
+			switch name {
+			case "asn":
+				loaded = s.asnDB != nil
+			case "country":
+				loaded = s.countryDB != nil
+			case "city":
+				loaded = s.cityDB != nil && s.cityDBv6 != nil
+			case "city_ipv4":
+				loaded = s.cityDB != nil
+			case "city_ipv6":
+				loaded = s.cityDBv6 != nil
+			}
+			updateFailed := s.updateFailed
+			s.mu.RUnlock()
+			if !loaded {
+				return health.StatusError
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				return health.StatusError
+			}
+			if updateFailed || time.Since(info.ModTime()) > 7*24*time.Hour {
+				return health.StatusDegraded
+			}
+			return health.StatusOK
+		})
+	}
 }
 
 // IsEnabled returns whether GeoIP is enabled

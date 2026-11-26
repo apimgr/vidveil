@@ -154,26 +154,38 @@ func (sm *ServiceManager) installUserLaunchAgent() error {
 
 // Uninstall removes the service
 func (sm *ServiceManager) Uninstall() error {
+	return sm.uninstall(false)
+}
+
+// UninstallConfirmed completes an uninstall after the caller has obtained
+// explicit confirmation from the operator.
+func (sm *ServiceManager) UninstallConfirmed() error {
+	return sm.uninstall(true)
+}
+
+func (sm *ServiceManager) uninstall(confirmed bool) error {
 	if !IsRunningAsRoot() {
-		return sm.uninstallUserService()
+		return sm.uninstallUserService(confirmed)
 	}
 	switch runtime.GOOS {
 	case "linux":
-		return sm.uninstallLinux()
+		return sm.uninstallLinux(confirmed)
 	case "darwin":
-		return sm.uninstallDarwin()
+		return sm.uninstallDarwin(confirmed)
 	case "freebsd", "openbsd", "netbsd":
-		return sm.uninstallBSD()
+		return sm.uninstallBSD(confirmed)
 	case "windows":
-		return sm.uninstallWindows()
+		return sm.uninstallWindows(confirmed)
 	default:
 		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
 }
 
-func (sm *ServiceManager) uninstallUserService() error {
-	if err := confirmUninstall(); err != nil {
-		return err
+func (sm *ServiceManager) uninstallUserService(confirmed bool) error {
+	if !confirmed {
+		if err := confirmUninstall(); err != nil {
+			return err
+		}
 	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -239,13 +251,9 @@ func (sm *ServiceManager) removeProjectDataAndAccount(removeAccount bool) error 
 		}
 		seen[absolute] = struct{}{}
 	}
-	for dir := range seen {
-		if err := removeIfExists(dir); err != nil {
-			return err
-		}
-	}
+	var pidPath string
 	if paths.PIDFile != "" {
-		pidPath, err := filepath.Abs(filepath.Clean(paths.PIDFile))
+		pidPath, err = filepath.Abs(filepath.Clean(paths.PIDFile))
 		if err != nil {
 			return fmt.Errorf("resolve PID-file cleanup path: %w", err)
 		}
@@ -257,6 +265,13 @@ func (sm *ServiceManager) removeProjectDataAndAccount(removeAccount bool) error 
 		} else if err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("inspect PID file %q: %w", pidPath, err)
 		}
+	}
+	for dir := range seen {
+		if err := removeIfExists(dir); err != nil {
+			return err
+		}
+	}
+	if pidPath != "" {
 		if err := removeIfExists(pidPath); err != nil {
 			return err
 		}
@@ -272,11 +287,20 @@ func (sm *ServiceManager) removeProjectDataAndAccount(removeAccount bool) error 
 	}
 	switch runtime.GOOS {
 	case "linux":
-		if err := exec.Command("userdel", sm.user).Run(); err != nil {
-			return fmt.Errorf("remove service user %q: %w", sm.user, err)
-		}
-		if err := exec.Command("groupdel", sm.group).Run(); err != nil {
-			return fmt.Errorf("remove service group %q: %w", sm.group, err)
+		if _, err := exec.LookPath("userdel"); err == nil {
+			if err := exec.Command("userdel", sm.user).Run(); err != nil {
+				return fmt.Errorf("remove service user %q: %w", sm.user, err)
+			}
+			if err := exec.Command("groupdel", sm.group).Run(); err != nil {
+				return fmt.Errorf("remove service group %q: %w", sm.group, err)
+			}
+		} else {
+			if err := exec.Command("deluser", sm.user).Run(); err != nil {
+				return fmt.Errorf("remove service user %q: %w", sm.user, err)
+			}
+			if err := exec.Command("delgroup", sm.group).Run(); err != nil {
+				return fmt.Errorf("remove service group %q: %w", sm.group, err)
+			}
 		}
 	case "darwin":
 		if err := exec.Command("dscl", ".", "-delete", "/Users/"+sm.user).Run(); err != nil {
@@ -341,7 +365,8 @@ func validateProjectRemovalPath(target, homeDir string) error {
 			if err != nil {
 				return fmt.Errorf("resolve cleanup path %q: %w", probe, err)
 			}
-			if filepath.Clean(resolved) != filepath.Clean(probe) {
+			isRuntimeDirectoryAlias := probe == "/var/run" && filepath.Clean(resolved) == "/run"
+			if filepath.Clean(resolved) != filepath.Clean(probe) && !isRuntimeDirectoryAlias {
 				return fmt.Errorf("refusing cleanup through symlinked path %q", probe)
 			}
 			break
@@ -402,14 +427,21 @@ func (sm *ServiceManager) Disable() error {
 	switch runtime.GOOS {
 	case "linux":
 		if sm.hasSystemd() {
-			return exec.Command("systemctl", systemdCommandArgs(!IsRunningAsRoot(), "disable", sm.internalName)...).Run()
+			args := systemdCommandArgs(!IsRunningAsRoot(), "disable", "--now", sm.internalName)
+			return exec.Command("systemctl", args...).Run()
 		}
 		// OpenRC: remove the service from the default runlevel
 		if sm.hasOpenRC() {
+			if err := exec.Command("rc-service", sm.internalName, "stop").Run(); err != nil {
+				return fmt.Errorf("stop OpenRC service: %w", err)
+			}
 			return exec.Command("rc-update", "del", sm.internalName, "default").Run()
 		}
 		// SysVinit: turn off the runlevel links via the host's runlevel manager
 		if sm.hasSysVInit() {
+			if err := exec.Command(fmt.Sprintf("/etc/init.d/%s", sm.internalName), "stop").Run(); err != nil {
+				return fmt.Errorf("stop SysVinit service: %w", err)
+			}
 			if _, err := exec.LookPath("update-rc.d"); err == nil {
 				return exec.Command("update-rc.d", sm.internalName, "disable").Run()
 			}
@@ -419,6 +451,9 @@ func (sm *ServiceManager) Disable() error {
 		}
 		if sm.hasRunit() {
 			// Runit: remove symlink from /var/service
+			if err := exec.Command("sv", "down", sm.internalName).Run(); err != nil {
+				return fmt.Errorf("stop runit service: %w", err)
+			}
 			return os.Remove(fmt.Sprintf("/var/service/%s", sm.internalName))
 		}
 		return fmt.Errorf("no supported init system found")
@@ -432,9 +467,15 @@ func (sm *ServiceManager) Disable() error {
 		return exec.Command("launchctl", "unload", "-w", plistPath).Run()
 	case "freebsd", "openbsd", "netbsd":
 		// BSD: set enable=NO in rc.conf
+		if err := sm.Stop(); err != nil {
+			return fmt.Errorf("stop BSD service: %w", err)
+		}
 		return exec.Command("sysrc", fmt.Sprintf("%s_enable=NO", sm.internalName)).Run()
 	case "windows":
 		// Windows: set service start type to disabled
+		if err := sm.Stop(); err != nil {
+			return fmt.Errorf("stop Windows service: %w", err)
+		}
 		return exec.Command("sc", "config", sm.internalName, "start=", "disabled").Run()
 	default:
 		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
@@ -649,30 +690,32 @@ func (sm *ServiceManager) createLinuxUser() error {
 		return nil
 	}
 
-	// Find available UID in 200-899 range per AI.md PART 23
 	uid, err := findAvailableSystemID()
 	if err != nil {
 		return err
 	}
-
-	// groupadd --system --gid {id} {name} per AI.md PART 23
-	if err := exec.Command("groupadd", "--system", "--gid", strconv.Itoa(uid), sm.group).Run(); err != nil {
-		return fmt.Errorf("failed to create group: %w", err)
-	}
-
-	// useradd: --system, numeric --gid, --uid, --home-dir, --shell, --comment
-	// per AI.md PART 23 (--gid must be numeric, not a group name)
-	cmd := exec.Command("useradd",
-		"--system",
-		"--uid", strconv.Itoa(uid),
-		"--gid", strconv.Itoa(uid),
-		"--home-dir", sm.dataDir,
-		"--shell", "/sbin/nologin",
-		"--comment", sm.description,
-		sm.user,
-	)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
+	if _, err := exec.LookPath("groupadd"); err == nil {
+		if err := exec.Command("groupadd", "--system", "--gid", strconv.Itoa(uid), sm.group).Run(); err != nil {
+			return fmt.Errorf("failed to create group: %w", err)
+		}
+		cmd := exec.Command("useradd", "--system", "--uid", strconv.Itoa(uid), "--gid", strconv.Itoa(uid), "--home-dir", sm.dataDir, "--shell", "/sbin/nologin", "--comment", sm.description, sm.user)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to create user: %w", err)
+		}
+	} else {
+		if _, err := exec.LookPath("addgroup"); err != nil {
+			return fmt.Errorf("no supported Linux group creation command found: %w", err)
+		}
+		if _, err := exec.LookPath("adduser"); err != nil {
+			return fmt.Errorf("no supported Linux user creation command found: %w", err)
+		}
+		if err := exec.Command("addgroup", "-g", strconv.Itoa(uid), "-S", sm.group).Run(); err != nil {
+			return fmt.Errorf("failed to create group: %w", err)
+		}
+		cmd := exec.Command("adduser", "-D", "-S", "-H", "-u", strconv.Itoa(uid), "-G", sm.group, "-h", sm.dataDir, "-s", "/sbin/nologin", "-g", sm.description, sm.user)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to create user: %w", err)
+		}
 	}
 
 	// Set directory ownership per PART 23 after creating the service account.
@@ -1270,9 +1313,11 @@ func confirmUninstall() error {
 }
 
 // uninstallLinux removes Linux service
-func (sm *ServiceManager) uninstallLinux() error {
-	if err := confirmUninstall(); err != nil {
-		return err
+func (sm *ServiceManager) uninstallLinux(confirmed bool) error {
+	if !confirmed {
+		if err := confirmUninstall(); err != nil {
+			return err
+		}
 	}
 	if err := sm.Stop(); err != nil {
 		return fmt.Errorf("stop service before uninstall: %w", err)
@@ -1326,9 +1371,11 @@ func (sm *ServiceManager) uninstallLinux() error {
 }
 
 // uninstallDarwin removes macOS service
-func (sm *ServiceManager) uninstallDarwin() error {
-	if err := confirmUninstall(); err != nil {
-		return err
+func (sm *ServiceManager) uninstallDarwin(confirmed bool) error {
+	if !confirmed {
+		if err := confirmUninstall(); err != nil {
+			return err
+		}
 	}
 	// Per PART 24: Path is /Library/LaunchDaemons/{plist_name}.plist
 	plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.plistName)
@@ -1342,9 +1389,11 @@ func (sm *ServiceManager) uninstallDarwin() error {
 }
 
 // uninstallBSD removes BSD service
-func (sm *ServiceManager) uninstallBSD() error {
-	if err := confirmUninstall(); err != nil {
-		return err
+func (sm *ServiceManager) uninstallBSD(confirmed bool) error {
+	if !confirmed {
+		if err := confirmUninstall(); err != nil {
+			return err
+		}
 	}
 	if err := sm.Stop(); err != nil {
 		return fmt.Errorf("stop service before uninstall: %w", err)
@@ -1357,9 +1406,11 @@ func (sm *ServiceManager) uninstallBSD() error {
 }
 
 // uninstallWindows removes Windows service
-func (sm *ServiceManager) uninstallWindows() error {
-	if err := confirmUninstall(); err != nil {
-		return err
+func (sm *ServiceManager) uninstallWindows(confirmed bool) error {
+	if !confirmed {
+		if err := confirmUninstall(); err != nil {
+			return err
+		}
 	}
 	if err := sm.Stop(); err != nil {
 		return fmt.Errorf("stop service before uninstall: %w", err)

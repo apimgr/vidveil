@@ -172,7 +172,7 @@ func TestUpdate_Enabled_DBsPresent_OpenFails(t *testing.T) {
 
 func TestClose_AllNilDBs_NoPanic(t *testing.T) {
 	s, _ := newGeoIPForTest(t)
-	s.Close()
+	_ = s.Close()
 }
 
 // ── IsBlocked — enabled with allow/deny lists ─────────────────────────────────

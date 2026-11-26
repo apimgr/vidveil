@@ -3,11 +3,15 @@
 {{end}}
 
 {{define "content"}}
-<div class="content">
-    <div class="prose">
-        <h1>{{ t "security.thanks_title" }}</h1>
-        <p>{{ t "security.thanks_intro" }}</p>
+<div class="container container-md">
+        <header class="page-header">
+            <nav class="breadcrumb" aria-label="{{ t "a11y.breadcrumb" }}"><a href="{{ path "/server/security" }}">{{ t "security.title" }}</a></nav>
+            <h1 class="page-title">{{ t "security.thanks_title" }}</h1>
+            <p class="page-lead">{{ t "security.thanks_intro" }}</p>
+        </header>
 
+        <section class="section-card" aria-labelledby="security-thanks-heading">
+        <h2 id="security-thanks-heading">{{ t "security.more_info_title" }}</h2>
         {{if .Credits}}
         <ul>
             {{range .Credits}}
@@ -17,8 +21,8 @@
         {{else}}
         <p>{{ t "security.thanks_empty" }}</p>
         {{end}}
+        </section>
 
         <p><a href="{{ path "/server/security" }}">{{ t "security.back_to_security" }}</a></p>
-    </div>
 </div>
 {{end}}

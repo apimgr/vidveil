@@ -30,11 +30,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/apimgr/vidveil/src/common/apiroute"
 	humanformat "github.com/apimgr/vidveil/src/common/format"
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/sanitize"
@@ -46,12 +48,12 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/cache"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
+	"github.com/apimgr/vidveil/src/server/service/health"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 	"github.com/apimgr/vidveil/src/server/service/secreport"
 	"github.com/apimgr/vidveil/src/server/service/secret"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 	signalstate "github.com/apimgr/vidveil/src/server/signal"
-	"github.com/apimgr/vidveil/src/swagger"
 )
 
 // templatesFS holds the embedded templates filesystem
@@ -299,22 +301,99 @@ func getClientIP(r *http.Request) string {
 
 // SearchHandler holds dependencies for HTTP handlers
 type SearchHandler struct {
-	appConfig      *config.AppConfig
-	dataDir        string
-	configDir      string
-	engineMgr      *engine.EngineManager
-	searchCache    cache.SearchResultCache
-	metrics        *ServerMetrics
-	torSvc         TorStatusChecker
-	i2pSvc         I2PStatusChecker
-	geoipSvc       GeoIPChecker
-	secretsMgr     *secret.Manager
-	healthDB       *sql.DB
-	tokenManager   *apitoken.Manager
-	ownerAudit     OwnerTokenAuditLogger
-	sched          SchedulerHealth
-	recentSearchMu sync.Mutex
-	recentSearches []recentSearch
+	appConfig         *config.AppConfig
+	dataDir           string
+	configDir         string
+	engineMgr         *engine.EngineManager
+	searchCache       cache.SearchResultCache
+	metrics           *ServerMetrics
+	torSvc            TorStatusChecker
+	i2pSvc            I2PStatusChecker
+	geoipSvc          GeoIPChecker
+	secretsMgr        *secret.Manager
+	healthDB          *sql.DB
+	healthRegistry    *health.Registry
+	maintenanceStatus atomic.Pointer[maintenance.MaintenanceStatus]
+	tokenManager      *apitoken.Manager
+	ownerAudit        OwnerTokenAuditLogger
+	sched             SchedulerHealth
+	recentSearchMu    sync.Mutex
+	recentSearches    []recentSearch
+}
+
+func (h *SearchHandler) SetMaintenanceStatus(status *maintenance.MaintenanceStatus) {
+	if status == nil {
+		h.maintenanceStatus.Store(nil)
+		return
+	}
+	statusCopy := *status
+	h.maintenanceStatus.Store(&statusCopy)
+}
+
+func (h *SearchHandler) currentMaintenanceStatus() (*maintenance.MaintenanceStatus, bool) {
+	status, active := h.currentOperatorMaintenanceStatus()
+	if status != nil {
+		status.Diagnostic = ""
+	}
+	return status, active
+}
+
+func (h *SearchHandler) currentOperatorMaintenanceStatus() (*maintenance.MaintenanceStatus, bool) {
+	if status := h.maintenanceStatus.Load(); status != nil {
+		statusCopy := *status
+		return &statusCopy, true
+	}
+	dataDir := h.dataDir
+	if dataDir == "" {
+		dataDir = config.GetAppPaths("", "").Data
+	}
+	return maintenance.ReadMaintenanceStatus(dataDir)
+}
+
+// OperatorStatus returns maintenance diagnostics only after the router's
+// server-token middleware has authenticated the request.
+func (h *SearchHandler) OperatorStatus(w http.ResponseWriter, r *http.Request) {
+	status, active := h.currentOperatorMaintenanceStatus()
+	fixInstructions := []string{
+		"Check the server logs for the database and data-directory probe errors.",
+		"Restore database connectivity and ensure the configured data directory is writable with available disk space.",
+	}
+	if status != nil && status.SelfHealing.Exhausted {
+		fixInstructions = append(fixInstructions, "Correct the cause and restart the service to resume recovery attempts.")
+	} else {
+		fixInstructions = append(fixInstructions, "The server exits maintenance mode automatically after its recovery checks pass.")
+	}
+	data := map[string]interface{}{
+		"maintenance":      active,
+		"status":           status,
+		"fix_instructions": fixInstructions,
+	}
+	if getAPIResponseFormat(r) == "text" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = fmt.Fprintf(w, "maintenance: %t\n", active)
+		if status != nil {
+			_, _ = fmt.Fprintf(w, "reason: %s\ndiagnostic: %s\nsince: %s\nself_healing.enabled: %t\nself_healing.exhausted: %t\nself_healing.attempts: %d\n",
+				status.Reason, status.Diagnostic, status.Since.UTC().Format(time.RFC3339), status.SelfHealing.Enabled, status.SelfHealing.Exhausted, status.SelfHealing.Attempts)
+		}
+		for index, instruction := range fixInstructions {
+			_, _ = fmt.Fprintf(w, "fix.%d: %s\n", index+1, instruction)
+		}
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "data": data})
+}
+
+func (h *SearchHandler) maintenanceRetryAfterSeconds() int {
+	if h.appConfig != nil {
+		if interval, err := time.ParseDuration(h.appConfig.Server.Maintenance.SelfHealing.RetryInterval); err == nil && interval >= time.Second {
+			seconds := int(interval / time.Second)
+			if interval%time.Second != 0 {
+				seconds++
+			}
+			return seconds
+		}
+	}
+	return int(maintenance.MaintenanceRetryInterval / time.Second)
 }
 
 // SchedulerHealth is the minimal scheduler interface the /server/healthz check
@@ -474,6 +553,11 @@ func (h *SearchHandler) SetHealthDB(db *sql.DB) {
 	h.healthDB = db
 }
 
+// SetHealthRegistry wires cached dataset and dependency health checks.
+func (h *SearchHandler) SetHealthRegistry(registry *health.Registry) {
+	h.healthRegistry = registry
+}
+
 // SetOwnerTokenManager wires anonymous resource ownership to API tokens.
 func (h *SearchHandler) SetOwnerTokenManager(manager *apitoken.Manager) {
 	h.tokenManager = manager
@@ -573,6 +657,9 @@ func (h *SearchHandler) getTorStatus() string {
 	if status, ok := info["status"].(string); ok {
 		switch status {
 		case "disabled", "no_tor_binary":
+			if h.torSvc.IsEnabled() {
+				break
+			}
 			return "disabled"
 		case "starting":
 			return "starting"
@@ -588,6 +675,40 @@ func (h *SearchHandler) getTorStatus() string {
 	if h.torSvc.IsStarting() {
 		return "starting"
 	}
+	if h.torSvc.IsEnabled() {
+		return "unavailable"
+	}
+	return "disabled"
+}
+
+func (h *SearchHandler) getTorState() string {
+	if h.torSvc == nil {
+		return "disabled"
+	}
+	info := h.torSvc.GetInfo()
+	if state, ok := info["status"].(string); ok {
+		switch state {
+		case "disabled", "no_tor_binary", "no_provider":
+			if !h.torSvc.IsEnabled() {
+				return "disabled"
+			}
+		case "starting", "building":
+			return state
+		case "connected", "healthy", "running":
+			return "running"
+		case "disconnected", "error", "unavailable":
+			return "error"
+		}
+	}
+	if h.torSvc.IsRunning() {
+		return "running"
+	}
+	if h.torSvc.IsStarting() {
+		return "starting"
+	}
+	if h.torSvc.IsEnabled() {
+		return "error"
+	}
 	return "disabled"
 }
 
@@ -599,6 +720,9 @@ func (h *SearchHandler) getTorHostname() string {
 	info := h.torSvc.GetInfo()
 	if hostname, ok := info["hostname"].(string); ok {
 		return hostname
+	}
+	if address, ok := info["onion_address"].(string); ok {
+		return address
 	}
 	return ""
 }
@@ -646,6 +770,21 @@ func WriteJSON(w http.ResponseWriter, statusCode int, data interface{}) {
 	_, _ = w.Write([]byte("\n"))
 }
 
+// writeHealthJSON preserves the canonical health field order. HealthResponse
+// contains only public-safe fields and its dataset keys are validated by the
+// health registry before they are serialized.
+func writeHealthJSON(w http.ResponseWriter, statusCode int, response HealthResponse) {
+	data, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		WriteJSON(w, http.StatusInternalServerError, APIResponse{OK: false, Error: CodeServerError, Message: "Failed to encode response"})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_, _ = w.Write(data)
+	_, _ = w.Write([]byte("\n"))
+}
+
 // MaintenanceModeMiddleware checks if maintenance mode is enabled
 func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -666,18 +805,15 @@ func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handle
 			return
 		}
 
-		// Check if maintenance mode is active
-		paths := config.GetAppPaths("", "")
-		modeFile := filepath.Join(paths.Data, "maintenance.flag")
-		if _, err := os.Stat(modeFile); err == nil {
+		// Maintenance mode is read-only: safe retrieval methods continue to
+		// serve public data, while any request that can change server state is
+		// rejected until the recovery monitor clears the critical failure.
+		if status, active := h.currentMaintenanceStatus(); active && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
 			// Maintenance mode is active. Per AI.md PART 5/6 "API Responses in
 			// Maintenance Mode": API/JSON/text clients get the canonical
 			// {"ok":false,"error":"MAINTENANCE",...} envelope with
-			// Retry-After/X-Maintenance-* headers; browsers get the HTML page.
-			// This project has no self-healing/reason tracking (maintenance is
-			// only ever toggled manually via the CLI), so those fields reflect
-			// that reality rather than fabricating unimplemented state.
-			const maintenanceReason = "manual"
+			// Retry-After/X-Maintenance-* headers; browsers get guidance.
+			maintenanceReason := status.Reason
 			wantsHTML := true
 			if strings.HasPrefix(path, "/api/") {
 				wantsHTML = false
@@ -686,7 +822,7 @@ func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handle
 			}
 
 			headers := w.Header()
-			headers.Set("Retry-After", "3600")
+			headers.Set("Retry-After", strconv.Itoa(h.maintenanceRetryAfterSeconds()))
 			headers.Set("X-Maintenance-Mode", "true")
 			headers.Set("X-Maintenance-Reason", maintenanceReason)
 
@@ -697,7 +833,8 @@ func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handle
 					"message": MsgMaintenance,
 					"details": map[string]interface{}{
 						"reason":       maintenanceReason,
-						"self_healing": false,
+						"self_healing": status.SelfHealing.Enabled,
+						"exhausted":    status.SelfHealing.Exhausted,
 					},
 				})
 				return
@@ -707,23 +844,32 @@ func (h *SearchHandler) MaintenanceModeMiddleware(next http.Handler) http.Handle
 			w.WriteHeader(http.StatusServiceUnavailable)
 			lang := resolveLocale(r)
 			dir := i18n.Direction(lang)
+			label := func(key string) string { return template.HTMLEscapeString(i18n.Translate(lang, key)) }
+			var attemptMessage string
+			if status.SelfHealing.Exhausted {
+				attemptMessage = template.HTMLEscapeString(i18n.TranslateFormat(lang, "healthz.maintenance_attempts_exhausted", "attempts", status.SelfHealing.Attempts))
+			} else {
+				attemptMessage = fmt.Sprintf("%s: %d. %s %d%s.", label("healthz.maintenance_attempts"), status.SelfHealing.Attempts, label("healthz.maintenance_retry_after"), h.maintenanceRetryAfterSeconds(), label("healthz.seconds_suffix"))
+			}
 			_, _ = fmt.Fprintf(w, `<!DOCTYPE html>
 <html lang="%s" dir="%s">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex,nofollow">
-    <title>Maintenance - %s</title>
+    <title>%s - %s</title>
     <link rel="stylesheet" href="/static/css/common.css">
 </head>
 <body class="maintenance-page">
     <div class="maintenance">
-        <h1>Under Maintenance</h1>
-        <p>We're performing scheduled maintenance.</p>
-        <p>Please check back shortly.</p>
+			<h1>%s</h1>
+	    <p>%s</p>
+	            <p>%s</p>
+        <p>%s</p>
     </div>
 </body>
-</html>`, lang, dir, template.HTMLEscapeString(h.appConfig.Server.Branding.Title))
+
+</html>`, template.HTMLEscapeString(lang), template.HTMLEscapeString(dir), label("healthz.status_maintenance"), template.HTMLEscapeString(h.appConfig.Server.Branding.Title), label("healthz.status_maintenance"), template.HTMLEscapeString(localizedMaintenanceMessage(lang, status)), template.HTMLEscapeString(attemptMessage), label("healthz.maintenance_operator_help"))
 			return
 		}
 
@@ -1301,11 +1447,17 @@ func (h *SearchHandler) PreferencesPage(w http.ResponseWriter, r *http.Request) 
 
 	default:
 		data := h.preferencePageData(w, r)
-		query := h.exportablePreferenceQuery(r)
-		data["PreferenceExportURL"] = urlvar.BuildURL(r, "/server/preferences/import") + "?" + query
-		data["PreferenceExportCode"] = base64.RawURLEncoding.EncodeToString([]byte(query))
 		h.renderResponse(w, r, "preferences", data)
 	}
+}
+
+func (h *SearchHandler) renderPreferenceSyncPage(w http.ResponseWriter, r *http.Request) {
+	query := h.exportablePreferenceQuery(r)
+	importURL := urlvar.BuildURL(r, "/server/preferences/sync/import") + "?" + query
+	data := h.preferencePageData(w, r)
+	data["PreferenceExportURL"] = importURL
+	data["PreferenceExportCode"] = base64.RawURLEncoding.EncodeToString([]byte(query))
+	h.renderResponse(w, r, "preferences-sync", data)
 }
 
 func (h *SearchHandler) preferencePageData(w http.ResponseWriter, r *http.Request) map[string]interface{} {
@@ -1336,6 +1488,9 @@ func (h *SearchHandler) preferencePageData(w http.ResponseWriter, r *http.Reques
 		"Title":              "Preferences - " + h.appConfig.Server.Branding.Title,
 		"Theme":              h.getRequestTheme(r),
 		"Lang":               h.effectivePreferences(r).Lang,
+		"PreferenceLang":     explicitPreferenceLanguage(r),
+		"DetectedLocaleName": preferenceLocaleName(h.effectivePreferences(r).Lang),
+		"Languages":          i18n.SupportedLanguageRegistry,
 		"Prefs":              h.effectivePreferences(r).Prefs,
 		"CCPAOptedOut":       hasCCPAOptOut(r),
 		"ConsentGiven":       hasConsentCookie(r),
@@ -1347,6 +1502,7 @@ func (h *SearchHandler) preferencePageData(w http.ResponseWriter, r *http.Reques
 		"OpenNewTab":         h.getRequestOpenNewTab(r),
 		"FavoritesCount":     favCount,
 		"CSRFToken":          cSRFTokenFromRequest(r),
+		"PreferencePages":    pagesForHub("preferences", h.appConfig),
 		"BuildDateTime":      BuildDateTime(),
 		// ReturnTo is the page the user arrived from (Referer), threaded
 		// through the form (hidden field for no-JS, data attribute for
@@ -1355,6 +1511,26 @@ func (h *SearchHandler) preferencePageData(w http.ResponseWriter, r *http.Reques
 		"ReturnTo":  safeReturnPath(r.Referer(), r),
 		"CancelURL": preferenceRedirect(r),
 	}
+}
+
+func explicitPreferenceLanguage(r *http.Request) string {
+	if value := strings.TrimSpace(r.URL.Query().Get("lang")); value != "" {
+		if locale, ok := canonicalPreferenceLang(value); ok {
+			return locale
+		}
+		return "auto"
+	}
+	if locale, ok := canonicalPreferenceLang(preferenceCookieValue(r, "lang", "")); ok {
+		return locale
+	}
+	return "auto"
+}
+
+func preferenceLocaleName(code string) string {
+	if locale, ok := i18n.LocaleInfoFor(code); ok {
+		return locale.NativeName
+	}
+	return "English"
 }
 
 func requestEngineSelection(r *http.Request, engines []model.EngineInfo) (map[string]bool, bool) {
@@ -1622,7 +1798,7 @@ func safeReturnPath(target string, r *http.Request) string {
 		return ""
 	}
 	switch path {
-	case "/server/preferences", "/server/preferences/export", "/server/preferences/import":
+	case "/server/preferences", "/server/preferences/sync", "/server/preferences/sync/import":
 		return ""
 	}
 	if u.RawQuery != "" {
@@ -1647,10 +1823,15 @@ func (h *SearchHandler) PreferencesSave(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	values := url.Values{}
-	for name, v := range preferencesWithCode(r.PostForm) {
+	for name, v := range r.PostForm {
 		if name == "theme" || name == "lang" || strings.HasPrefix(name, "vidveil_pref_") {
 			values[name] = v
 		}
+	}
+	if r.PostForm.Get("lang") == "auto" {
+		secure := strings.HasPrefix(urlSchemeForRequest(r), "https")
+		http.SetCookie(w, &http.Cookie{Name: "lang", Value: "", Path: "/", MaxAge: -1, Secure: secure, SameSite: http.SameSiteLaxMode})
+		delete(values, "lang")
 	}
 	result := h.applyPreferences(w, r, values)
 	h.applyWebConsent(w, r)
@@ -1724,7 +1905,7 @@ func (h *SearchHandler) exportablePreferenceQuery(r *http.Request) string {
 func (h *SearchHandler) PreferencesExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	query := h.exportablePreferenceQuery(r)
-	importURL := urlvar.BuildURL(r, "/server/preferences/import") + "?" + query
+	importURL := urlvar.BuildURL(r, "/server/preferences/sync/import") + "?" + query
 	code := base64.RawURLEncoding.EncodeToString([]byte(query))
 
 	format := detectResponseFormat(r)
@@ -1739,11 +1920,40 @@ func (h *SearchHandler) PreferencesExport(w http.ResponseWriter, r *http.Request
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("URL: " + importURL + "\nCode: " + code + "\n"))
 	default:
-		data := h.preferencePageData(w, r)
-		data["PreferenceExportURL"] = importURL
-		data["PreferenceExportCode"] = code
-		h.renderResponse(w, r, "preferences", data)
+		h.renderPreferenceSyncPage(w, r)
 	}
+}
+
+// PreferencesSyncSave applies an imported preference code from the sync form.
+func (h *SearchHandler) PreferencesSyncSave(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.NotFoundHandler(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		r.PostForm = url.Values{}
+	}
+	values := importPreferenceValues(r.PostForm.Get("code"), r.URL.Query(), nil)
+	h.applyPreferences(w, r, values)
+	writePreferenceRedirect(w, r)
+}
+
+func importPreferenceValues(code string, query url.Values, form url.Values) url.Values {
+	values := make(url.Values)
+	if decoded, ok := decodePreferenceCode(code); ok {
+		if parsed, err := url.ParseQuery(decoded); err == nil {
+			values = parsed
+		}
+	}
+	for _, direct := range []url.Values{form, query} {
+		for key, items := range direct {
+			if key == "code" || key == "redirect" || key == "csrf_token" || key == "action" {
+				continue
+			}
+			values[key] = items
+		}
+	}
+	return values
 }
 
 // decodePreferenceCode decodes a short sync code back into a preference query
@@ -1789,21 +1999,7 @@ func decodePreferenceCode(code string) (string, bool) {
 // is written or looked up server-side.
 func (h *SearchHandler) PreferencesImport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	q := make(url.Values)
-	if raw, ok := decodePreferenceCode(r.URL.Query().Get("code")); ok {
-		if decoded, err := url.ParseQuery(raw); err == nil {
-			q = decoded
-		}
-	}
-	for key, vals := range r.URL.Query() {
-		if key == "code" {
-			continue
-		}
-		q[key] = vals
-	}
-	if code := r.URL.Query().Get("code"); len(code) > 2048 {
-		q.Add("code", code)
-	}
+	q := importPreferenceValues(r.URL.Query().Get("code"), r.URL.Query(), nil)
 	result := h.applyPreferences(w, r, q)
 	if strings.HasPrefix(r.URL.Path, "/api/") {
 		SendOK(w, result)
@@ -1818,6 +2014,9 @@ func preferenceRedirect(r *http.Request) string {
 	}
 	if referer := safeRefererPreferenceRedirect(r.Referer(), r); referer != "" {
 		return referer
+	}
+	if r.URL.Path == "/server/preferences/sync" {
+		return "/server/preferences/sync"
 	}
 	return "/"
 }
@@ -2161,9 +2360,10 @@ type HealthResponse struct {
 	GoVersion string    `json:"go_version"`
 	Build     BuildInfo `json:"build"`
 
-	Uptime    string `json:"uptime"`
-	Mode      string `json:"mode"`
-	Timestamp string `json:"timestamp"`
+	Uptime      string                         `json:"uptime"`
+	Mode        string                         `json:"mode"`
+	Timestamp   string                         `json:"timestamp"`
+	Maintenance *maintenance.MaintenanceStatus `json:"maintenance,omitempty"`
 
 	Features FeaturesInfo `json:"features"`
 	Checks   ChecksInfo   `json:"checks"`
@@ -2196,6 +2396,7 @@ type FeaturesInfo struct {
 type TorInfo struct {
 	Enabled  bool   `json:"enabled"`
 	Running  bool   `json:"running"`
+	State    string `json:"state"`
 	Status   string `json:"status"`
 	Hostname string `json:"hostname"`
 }
@@ -2215,12 +2416,44 @@ type I2PInfo struct {
 // ChecksInfo holds component health checks — "ok"/"error" only, no details,
 // per AI.md PART 13's public-safe-only requirement.
 type ChecksInfo struct {
-	Database  string `json:"database"`
-	Cache     string `json:"cache"`
-	Disk      string `json:"disk"`
-	Scheduler string `json:"scheduler"`
-	Tor       string `json:"tor,omitempty"`
-	I2P       string `json:"i2p,omitempty"`
+	Database  string               `json:"database"`
+	Cache     string               `json:"cache"`
+	Disk      string               `json:"disk"`
+	Scheduler string               `json:"scheduler"`
+	Tor       string               `json:"tor,omitempty"`
+	I2P       string               `json:"i2p,omitempty"`
+	Datasets  []health.CheckResult `json:"-"`
+}
+
+func (c ChecksInfo) MarshalJSON() ([]byte, error) {
+	core := struct {
+		Database  string `json:"database"`
+		Cache     string `json:"cache"`
+		Disk      string `json:"disk"`
+		Scheduler string `json:"scheduler"`
+		Tor       string `json:"tor,omitempty"`
+		I2P       string `json:"i2p,omitempty"`
+	}{c.Database, c.Cache, c.Disk, c.Scheduler, c.Tor, c.I2P}
+	encoded, err := json.Marshal(core)
+	if err != nil || len(c.Datasets) == 0 {
+		return encoded, err
+	}
+	encoded = encoded[:len(encoded)-1]
+	for _, item := range c.Datasets {
+		key, err := json.Marshal(item.Key)
+		if err != nil {
+			return nil, err
+		}
+		value, err := json.Marshal(item.Status)
+		if err != nil {
+			return nil, err
+		}
+		encoded = append(encoded, ',')
+		encoded = append(encoded, key...)
+		encoded = append(encoded, ':')
+		encoded = append(encoded, value...)
+	}
+	return append(encoded, '}'), nil
 }
 
 // StatsInfo holds public-safe aggregate statistics per AI.md PART 13.
@@ -2297,10 +2530,195 @@ func (h *SearchHandler) checkI2P(ctx context.Context) string {
 	if h.i2pSvc == nil || !h.i2pSvc.Enabled() {
 		return ""
 	}
-	if h.i2pSvc.CheckHealth(ctx) != nil {
-		return "error"
+	switch h.i2pState() {
+	case "starting", "building":
+		return "ok"
+	case "error":
+		return "degraded"
+	case "running":
+		if h.i2pSvc.CheckHealth(ctx) != nil {
+			return "degraded"
+		}
+		return "ok"
+	default:
+		if h.i2pSvc.CheckHealth(ctx) != nil {
+			return "degraded"
+		}
+		return "ok"
 	}
-	return "ok"
+}
+
+func (h *SearchHandler) checkTor() string {
+	if h.torSvc == nil || !h.torSvc.IsEnabled() {
+		return ""
+	}
+	if h.torSvc.IsRunning() {
+		return "ok"
+	}
+	if h.torSvc.IsStarting() {
+		return "ok"
+	}
+	return "degraded"
+}
+
+func healthStatusFromChecksWithDatasets(checks map[string]string, datasets, critical map[string]bool) (string, int) {
+	status := "healthy"
+	for key, check := range checks {
+		if check == "degraded" {
+			status = "degraded"
+		} else if check != "ok" {
+			if datasets[key] && !critical[key] {
+				status = "degraded"
+				continue
+			}
+			return "unhealthy", http.StatusServiceUnavailable
+		}
+	}
+	return status, http.StatusOK
+}
+
+func (h *SearchHandler) cachedDatasetChecks() ([]health.CheckResult, map[string]bool, map[string]bool) {
+	datasets := make([]health.CheckResult, 0)
+	keys := make(map[string]bool)
+	critical := make(map[string]bool)
+	if h.healthRegistry == nil {
+		return datasets, keys, critical
+	}
+	for _, item := range h.healthRegistry.Snapshot() {
+		datasets = append(datasets, item)
+		keys[item.Key] = true
+		critical[item.Key] = item.Critical
+	}
+	return datasets, keys, critical
+}
+
+func frontendHealthTimestamp(value string) string {
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return value
+	}
+	return parsed.UTC().Format("January 02, 2006 at 15:04:05 MST")
+}
+
+func frontendHealthCheckStatus(status, locale string) string {
+	switch status {
+	case "ok":
+		return i18n.Translate(locale, "healthz.check_ok")
+	case "degraded":
+		return i18n.Translate(locale, "healthz.status_degraded")
+	default:
+		return i18n.Translate(locale, "healthz.check_error")
+	}
+}
+
+func localizedMaintenanceMessage(locale string, status *maintenance.MaintenanceStatus) string {
+	if status == nil {
+		return ""
+	}
+	if status.SelfHealing.Exhausted {
+		return i18n.Translate(locale, "healthz.maintenance_exhausted")
+	}
+	key := "healthz.maintenance_manual"
+	switch status.Reason {
+	case "database_connection":
+		key = "healthz.maintenance_database"
+	case "file_write":
+		key = "healthz.maintenance_file_write"
+	}
+	return i18n.Translate(locale, key)
+}
+
+func (h *SearchHandler) writeFrontendHealthText(w http.ResponseWriter, httpStatus int, locale, projectName, tagline, status string, checks map[string]string, maintenanceInfo *maintenance.MaintenanceStatus, pendingRestart bool, restartReasons []string) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(httpStatus)
+	label := func(key string) string { return i18n.Translate(locale, key) }
+	_, _ = fmt.Fprintf(w, "%s - %s\n\n", projectName, tagline)
+	statusLabel := status
+	switch status {
+	case "healthy":
+		statusLabel = label("healthz.status_healthy")
+	case "degraded":
+		statusLabel = label("healthz.status_degraded")
+	case "unhealthy":
+		statusLabel = label("healthz.status_unhealthy")
+	case "maintenance":
+		statusLabel = label("healthz.status_maintenance")
+	}
+	_, _ = fmt.Fprintf(w, "%-10s %s\n", label("healthz.status_header")+":", statusLabel)
+	if pendingRestart {
+		_, _ = fmt.Fprintf(w, "%-10s %s\n", label("healthz.restart_label")+":", label("healthz.restart_required"))
+		for _, reason := range restartReasons {
+			_, _ = fmt.Fprintf(w, "%-10s %s\n", "Reason:", reason)
+		}
+	}
+	_, _ = fmt.Fprintf(w, "%-10s %s\n", label("healthz.version_label")+":", version.GetVersion())
+	_, _ = fmt.Fprintf(w, "%-10s %s\n", label("healthz.build_label")+":", version.CommitID+" ("+frontendHealthTimestamp(version.BuildTime)+")")
+	_, _ = fmt.Fprintf(w, "%-10s %s\n", label("healthz.go_version_label")+":", runtime.Version())
+	_, _ = fmt.Fprintf(w, "%-10s %s\n", label("healthz.uptime_label")+":", humanformat.Duration(time.Since(serverStartTime), locale))
+	mode := "production"
+	if h.appConfig != nil {
+		mode = config.NormalizeMode(h.appConfig.Server.Mode)
+	}
+	_, _ = fmt.Fprintf(w, "%-10s %s\n", label("healthz.mode_label")+":", mode)
+	if maintenanceInfo != nil {
+		_, _ = fmt.Fprintf(w, "%-10s %s\n", label("healthz.maintenance_reason")+":", maintenanceInfo.Reason)
+		_, _ = fmt.Fprintf(w, "%-10s %s\n", label("healthz.maintenance_recovery")+":", localizedMaintenanceMessage(locale, maintenanceInfo))
+		if maintenanceInfo.SelfHealing.Enabled {
+			nextAttempt := ""
+			if maintenanceInfo.SelfHealing.NextAttempt != nil {
+				nextAttempt = frontendHealthTimestamp(maintenanceInfo.SelfHealing.NextAttempt.Format(time.RFC3339))
+			}
+			_, _ = fmt.Fprintf(w, "%-10s %d (next %s)\n", label("healthz.maintenance_attempts")+":", maintenanceInfo.SelfHealing.Attempts, nextAttempt)
+		} else if maintenanceInfo.SelfHealing.Exhausted {
+			_, _ = fmt.Fprintf(w, "%s\n", i18n.TranslateFormat(locale, "healthz.maintenance_attempts_exhausted", "attempts", maintenanceInfo.SelfHealing.Attempts))
+		}
+	}
+	_, _ = fmt.Fprintf(w, "%-10s %s\n", label("healthz.last_checked"), frontendHealthTimestamp(time.Now().UTC().Format(time.RFC3339)))
+
+	_, _ = fmt.Fprintf(w, "\n%s\n", label("healthz.features_title"))
+	torStatus := h.getTorStatus()
+	torLine := "  " + strings.TrimSuffix(label("healthz.tor_label"), ":") + ": " + torStatus
+	if torStatus == "healthy" && h.getTorHostname() != "" {
+		torLine += " - " + h.getTorHostname()
+	}
+	_, _ = fmt.Fprintln(w, torLine)
+	i2pStatus := h.i2pHealthStatus(checks["i2p"])
+	i2pLine := "  " + strings.TrimSuffix(label("healthz.i2p_label"), ":") + ": " + i2pStatus
+	if i2pStatus == "healthy" && h.i2pAddress() != "" {
+		i2pLine += " - " + h.i2pAddress()
+	}
+	_, _ = fmt.Fprintln(w, i2pLine)
+	geoIP := h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled
+	geoIPStatus := label("healthz.disabled")
+	if geoIP {
+		geoIPStatus = label("healthz.enabled")
+	}
+	_, _ = fmt.Fprintf(w, "  %s: %s\n", strings.TrimSuffix(label("healthz.geoip_label"), ":"), geoIPStatus)
+
+	_, _ = fmt.Fprintf(w, "\n%s\n", label("healthz.component_status_title"))
+	coreLabels := []struct{ key, label string }{
+		{"database", "healthz.database_label"},
+		{"cache", "healthz.cache_label"},
+		{"disk", "healthz.disk_label"},
+		{"scheduler", "healthz.scheduler_label"},
+	}
+	for _, item := range coreLabels {
+		_, _ = fmt.Fprintf(w, "  %-20s %s\n", label(item.label)+":", frontendHealthCheckStatus(checks[item.key], locale))
+	}
+	for _, key := range []string{"tor", "i2p"} {
+		if value, exists := checks[key]; exists {
+			_, _ = fmt.Fprintf(w, "  %-20s %s\n", strings.ToUpper(key[:1])+key[1:]+":", frontendHealthCheckStatus(value, locale))
+		}
+	}
+	if h.healthRegistry != nil {
+		for _, item := range h.healthRegistry.Snapshot() {
+			_, _ = fmt.Fprintf(w, "  %-20s %s\n", healthCheckLabel(locale, item.Key)+":", frontendHealthCheckStatus(item.Status, locale))
+		}
+	}
+	_, _ = fmt.Fprintf(w, "\n%s\n", label("healthz.statistics_title"))
+	_, _ = fmt.Fprintf(w, "  %-24s %s\n", label("healthz.requests_total_label")+":", humanformat.Count(int64(h.getRequestsTotal()), locale))
+	_, _ = fmt.Fprintf(w, "  %-24s %s\n", label("healthz.requests_24h_label")+":", humanformat.Count(int64(h.getRequests24h()), locale))
+	_, _ = fmt.Fprintf(w, "  %-24s %s\n", label("healthz.active_connections_label")+":", humanformat.Count(h.getActiveConnections(), locale))
 }
 
 // HealthCheck handles /healthz endpoint with content negotiation
@@ -2329,27 +2747,24 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		"scheduler": h.checkScheduler(),
 	}
 
-	// Add Tor check if enabled per PART 31
-	if h.torSvc != nil && h.torSvc.IsEnabled() {
-		if h.torSvc.IsRunning() {
-			checks["tor"] = "ok"
-		} else {
-			checks["tor"] = "error"
-		}
+	// Overlay checks follow PART 13: bootstrapping is ok and unavailable is degraded.
+	if torCheck := h.checkTor(); torCheck != "" {
+		checks["tor"] = torCheck
 	}
 	if i2pCheck := h.checkI2P(r.Context()); i2pCheck != "" {
 		checks["i2p"] = i2pCheck
 	}
+	datasetChecks, datasetKeys, criticalDatasets := h.cachedDatasetChecks()
+	for _, item := range datasetChecks {
+		checks[item.Key] = item.Status
+	}
 
 	// Overall status - per AI.md PART 13: derive from checks
-	status := "healthy"
-	httpStatus := http.StatusOK
-	for _, v := range checks {
-		if v != "ok" {
-			status = "unhealthy"
-			httpStatus = http.StatusServiceUnavailable
-			break
-		}
+	status, httpStatus := healthStatusFromChecksWithDatasets(checks, datasetKeys, criticalDatasets)
+	maintenanceInfo, inMaintenance := h.currentMaintenanceStatus()
+	if inMaintenance {
+		status = "maintenance"
+		httpStatus = http.StatusServiceUnavailable
 	}
 
 	// restart_required per AI.md PART 13 status->HTTP table: HTTP 200,
@@ -2397,13 +2812,15 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				Commit: version.CommitID,
 				Date:   version.BuildTime,
 			},
-			Uptime:    uptime,
-			Mode:      appMode,
-			Timestamp: timestamp,
+			Uptime:      uptime,
+			Mode:        appMode,
+			Timestamp:   timestamp,
+			Maintenance: maintenanceInfo,
 			Features: FeaturesInfo{
 				Tor: TorInfo{
 					Enabled:  h.torSvc != nil && h.torSvc.IsEnabled(),
 					Running:  h.torSvc != nil && h.torSvc.IsRunning(),
+					State:    h.getTorState(),
 					Status:   h.getTorStatus(),
 					Hostname: h.getTorHostname(),
 				},
@@ -2424,6 +2841,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				Scheduler: checks["scheduler"],
 				Tor:       checks["tor"],
 				I2P:       checks["i2p"],
+				Datasets:  datasetChecks,
 			},
 			Stats: StatsInfo{
 				RequestsTotal:     h.getRequestsTotal(),
@@ -2439,67 +2857,15 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 			response.RestartReason = h.appConfig.RestartReasons
 		}
 
-		WriteJSON(w, httpStatus, response)
+		writeHealthJSON(w, httpStatus, response)
 
 	case "text/plain":
-		// Plain text format per AI.md PART 13 — canonical field order
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(httpStatus)
-		// 1. Project
-		_, _ = fmt.Fprintf(w, "project.name: %s\n", projectName)
-		_, _ = fmt.Fprintf(w, "project.tagline: %s\n", projectTagline)
-		_, _ = fmt.Fprintf(w, "project.description: %s\n", projectDescription)
-		// 2. Status
-		_, _ = fmt.Fprintf(w, "status: %s\n", status)
-		if h.appConfig != nil && h.appConfig.PendingRestart {
-			_, _ = fmt.Fprintf(w, "pending_restart: true\n")
-			for _, r := range h.appConfig.RestartReasons {
-				_, _ = fmt.Fprintf(w, "restart_reason: %s\n", r)
+		h.writeFrontendHealthText(w, httpStatus, resolveLocale(r), projectName, projectTagline, status, checks, maintenanceInfo, h.appConfig != nil && h.appConfig.PendingRestart, func() []string {
+			if h.appConfig == nil {
+				return nil
 			}
-		}
-		// 3. Version & build
-		_, _ = fmt.Fprintf(w, "version: %s\n", version.GetVersion())
-		_, _ = fmt.Fprintf(w, "go_version: %s\n", runtime.Version())
-		_, _ = fmt.Fprintf(w, "build.commit: %s\n", version.CommitID)
-		_, _ = fmt.Fprintf(w, "build.date: %s\n", version.BuildTime)
-		// 4. Runtime
-		_, _ = fmt.Fprintf(w, "uptime: %s\n", uptime)
-		_, _ = fmt.Fprintf(w, "mode: %s\n", appMode)
-		_, _ = fmt.Fprintf(w, "timestamp: %s\n", timestamp)
-		// 5. Features
-		torEnabled := h.torSvc != nil && h.torSvc.IsEnabled()
-		torRunning := h.torSvc != nil && h.torSvc.IsRunning()
-		i2pEnabled := h.i2pSvc != nil && h.i2pSvc.Enabled()
-		i2pRunning := h.i2pSvc != nil && h.i2pSvc.IsRunning()
-		_, _ = fmt.Fprintf(w, "features.tor.enabled: %v\n", torEnabled)
-		_, _ = fmt.Fprintf(w, "features.tor.running: %v\n", torRunning)
-		_, _ = fmt.Fprintf(w, "features.tor.status: %s\n", h.getTorStatus())
-		if torRunning {
-			_, _ = fmt.Fprintf(w, "features.tor.hostname: %s\n", h.getTorHostname())
-		}
-		_, _ = fmt.Fprintf(w, "features.i2p.enabled: %v\n", i2pEnabled)
-		_, _ = fmt.Fprintf(w, "features.i2p.running: %v\n", i2pRunning)
-		_, _ = fmt.Fprintf(w, "features.i2p.status: %s\n", h.i2pHealthStatus(checks["i2p"]))
-		if i2pRunning {
-			_, _ = fmt.Fprintf(w, "features.i2p.hostname: %s\n", h.i2pAddress())
-		}
-		_, _ = fmt.Fprintf(w, "features.i2p.provider: %s\n", h.i2pProvider())
-		_, _ = fmt.Fprintf(w, "features.geoip: %v\n", h.appConfig != nil && h.appConfig.Server.GeoIP.Enabled)
-		// 7. Checks
-		_, _ = fmt.Fprintf(w, "checks.database: %s\n", checks["database"])
-		_, _ = fmt.Fprintf(w, "checks.cache: %s\n", checks["cache"])
-		_, _ = fmt.Fprintf(w, "checks.disk: %s\n", checks["disk"])
-		_, _ = fmt.Fprintf(w, "checks.scheduler: %s\n", checks["scheduler"])
-		if _, ok := checks["tor"]; ok {
-			_, _ = fmt.Fprintf(w, "checks.tor: %s\n", checks["tor"])
-		}
-		if _, ok := checks["i2p"]; ok {
-			_, _ = fmt.Fprintf(w, "checks.i2p: %s\n", checks["i2p"])
-		}
-		// 8. Stats
-		_, _ = fmt.Fprintf(w, "stats.requests_total: %d\n", h.getRequestsTotal())
-		_, _ = fmt.Fprintf(w, "stats.requests_24h: %d\n", h.getRequests24h())
-		_, _ = fmt.Fprintf(w, "stats.active_connections: %d\n", h.getActiveConnections())
+			return h.appConfig.RestartReasons
+		}())
 
 	default:
 		// HTML format (default) per AI.md PART 13 with full template
@@ -2515,8 +2881,9 @@ type HealthzHTMLData struct {
 	BuildDateTime string
 
 	// AI.md PART 30: locale + direction for <html lang dir>
-	Lang string
-	Dir  string
+	Lang         string
+	Dir          string
+	LanguageName string
 
 	// Nav template compatibility
 	ActiveNav string
@@ -2591,12 +2958,14 @@ type HealthzHTMLData struct {
 	StatusText  string
 
 	// Version info
-	GoVersion   string
-	BuildCommit string
-	BuildDate   string
-	Uptime      string
-	Mode        string
-	ModeDisplay string
+	GoVersion          string
+	BuildCommit        string
+	BuildDate          string
+	Uptime             string
+	Mode               string
+	ModeDisplay        string
+	Maintenance        *maintenance.MaintenanceStatus
+	MaintenanceMessage string
 
 	// Features
 	Features FeaturesData
@@ -2617,7 +2986,7 @@ type HealthzHTMLData struct {
 type FeaturesData struct {
 	TorEnabled  bool
 	TorStarting bool
-	// TorStatus is "healthy", "unhealthy", "starting", or empty
+	// TorStatus follows the normalized overlay state contract.
 	TorStatus    string
 	TorOnionAddr string
 	I2PEnabled   bool
@@ -2629,11 +2998,50 @@ type FeaturesData struct {
 }
 
 type ChecksData struct {
-	Database  string
-	Cache     string
-	Disk      string
-	Scheduler string
-	I2P       string
+	Database      string
+	DatabaseText  string
+	Cache         string
+	CacheText     string
+	Disk          string
+	DiskText      string
+	Scheduler     string
+	SchedulerText string
+	Tor           string
+	TorText       string
+	I2P           string
+	I2PText       string
+	Datasets      []HealthCheckDisplay
+}
+
+type HealthCheckDisplay struct {
+	Label      string
+	Status     string
+	StatusText string
+}
+
+func healthCheckLabel(locale, key string) string {
+	translationKey := "health.check." + key
+	if translated := i18n.Translate(locale, translationKey); translated != translationKey {
+		return translated
+	}
+	parts := strings.SplitN(key, "_", 2)
+	if len(parts) == 1 {
+		return strings.ToUpper(parts[0][:1]) + parts[0][1:]
+	}
+	kind := strings.ToUpper(parts[0][:1]) + parts[0][1:]
+	return kind + ": " + strings.ReplaceAll(parts[1], "_", " ")
+}
+
+func datasetHealthDisplay(registry *health.Registry, locale string) []HealthCheckDisplay {
+	if registry == nil {
+		return nil
+	}
+	results := registry.Snapshot()
+	display := make([]HealthCheckDisplay, 0, len(results))
+	for _, item := range results {
+		display = append(display, HealthCheckDisplay{Label: healthCheckLabel(locale, item.Key), Status: item.Status, StatusText: frontendHealthCheckStatus(item.Status, locale)})
+	}
+	return display
 }
 
 // StatsData holds statistics for healthz display per AI.md PART 13
@@ -2659,6 +3067,12 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		// AI.md PART 30: lang/dir for <html>
 		Lang: lang,
 		Dir:  i18n.Direction(lang),
+		LanguageName: func() string {
+			if locale, ok := i18n.LocaleInfoFor(lang); ok {
+				return locale.NativeName
+			}
+			return "English"
+		}(),
 
 		// Nav template compatibility
 		ActiveNav: "healthz",
@@ -2690,14 +3104,23 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		BuildDate:   version.BuildTime,
 		Uptime:      uptime,
 		Mode:        appMode,
+		Maintenance: func() *maintenance.MaintenanceStatus { status, _ := h.currentMaintenanceStatus(); return status }(),
 
 		// Checks
 		Checks: ChecksData{
-			Database:  checks["database"],
-			Cache:     checks["cache"],
-			Disk:      checks["disk"],
-			Scheduler: checks["scheduler"],
-			I2P:       checks["i2p"],
+			Database:      checks["database"],
+			DatabaseText:  frontendHealthCheckStatus(checks["database"], lang),
+			Cache:         checks["cache"],
+			CacheText:     frontendHealthCheckStatus(checks["cache"], lang),
+			Disk:          checks["disk"],
+			DiskText:      frontendHealthCheckStatus(checks["disk"], lang),
+			Scheduler:     checks["scheduler"],
+			SchedulerText: frontendHealthCheckStatus(checks["scheduler"], lang),
+			Tor:           checks["tor"],
+			TorText:       frontendHealthCheckStatus(checks["tor"], lang),
+			I2P:           checks["i2p"],
+			I2PText:       frontendHealthCheckStatus(checks["i2p"], lang),
+			Datasets:      datasetHealthDisplay(h.healthRegistry, lang),
 		},
 
 		// Stats per AI.md PART 13
@@ -2726,21 +3149,26 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		Timestamp:        timestamp,
 		TimestampDisplay: ts.Format("Jan 02, 2006 3:04 PM"),
 	}
+	data.MaintenanceMessage = localizedMaintenanceMessage(lang, data.Maintenance)
 
 	// Status display
 	switch status {
 	case "healthy":
 		data.StatusClass = "healthy"
 		data.StatusIcon = "OK"
-		data.StatusText = "All Systems Operational"
+		data.StatusText = i18n.Translate(lang, "healthz.status_healthy")
 	case "unhealthy":
 		data.StatusClass = "unhealthy"
 		data.StatusIcon = "DOWN"
-		data.StatusText = "System Unhealthy"
+		data.StatusText = i18n.Translate(lang, "healthz.status_unhealthy")
+	case "maintenance":
+		data.StatusClass = "unhealthy"
+		data.StatusIcon = "WARN"
+		data.StatusText = i18n.Translate(lang, "healthz.status_maintenance")
 	default:
 		data.StatusClass = "degraded"
 		data.StatusIcon = "WARN"
-		data.StatusText = "System Degraded"
+		data.StatusText = i18n.Translate(lang, "healthz.status_degraded")
 	}
 
 	// Mode display
@@ -2827,19 +3255,13 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	if h.appConfig != nil {
 		// Tor status per AI.md PART 13
 		if h.torSvc != nil {
+			data.Features.TorEnabled = h.torSvc.IsEnabled()
+			data.Features.TorStarting = h.getTorStatus() == "starting"
+			data.Features.TorStatus = h.getTorStatus()
 			if h.torSvc.IsRunning() {
-				data.Features.TorEnabled = true
-				data.Features.TorStatus = "healthy"
-				info := h.torSvc.GetInfo()
-				if addr, ok := info["onion_address"].(string); ok {
+				if addr, ok := h.torSvc.GetInfo()["onion_address"].(string); ok {
 					data.Features.TorOnionAddr = addr
 				}
-			} else if h.torSvc.IsStarting() {
-				// Tor is still bootstrapping — show as "starting" not "disabled"
-				data.Features.TorStarting = true
-				data.Features.TorStatus = "starting"
-			} else {
-				data.Features.TorStatus = "unhealthy"
 			}
 		}
 		data.Features.GeoIP = h.appConfig.Server.GeoIP.Enabled
@@ -2885,6 +3307,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 		"path": func(value string) string {
 			return templatePath(r, value)
 		},
+		"docsStylesheets":           func() []string { return serverDocsStylesheets(r) },
 		"operatorHTML":              func(name string) template.HTML { return operatorHTML(r, name) },
 		"operatorContentConfigured": func(name string) bool { return operatorContentConfigured(r, name) },
 		"safeHTML": func(s string) template.HTML {
@@ -2974,6 +3397,9 @@ func robotsDirective(r *http.Request) string {
 		return "noindex,nofollow"
 	}
 	path := strings.TrimSuffix(r.URL.Path, "/")
+	if isRegisteredHubPage(path, nil) {
+		return "noindex,nofollow"
+	}
 	if path == "" {
 		path = "/"
 	}
@@ -3197,46 +3623,27 @@ func (h *SearchHandler) LlmsTxt(w http.ResponseWriter, r *http.Request) {
 
 	if h.appConfig.Web.LLMS.IncludeEndpoints {
 		fmt.Fprintln(&b, "## Endpoints")
-		var spec map[string]any
-		if err := json.Unmarshal([]byte(swagger.GenerateSpec(h.appConfig, r)), &spec); err == nil {
-			if paths, ok := spec["paths"].(map[string]any); ok {
-				pathNames := make([]string, 0, len(paths))
-				for path := range paths {
-					pathNames = append(pathNames, path)
+		for _, definition := range apiroute.Definitions() {
+			if !definition.Listed || !llmsRouteEnabled(definition.Condition, h.appConfig) {
+				continue
+			}
+			path := strings.ReplaceAll(definition.Path, "/api/{api_version}", apiPath)
+			label := "public"
+			if definition.Auth != "none" {
+				label = "Bearer token required"
+			}
+			fmt.Fprintf(&b, "- %s %s - %s (%s)\n", definition.Method, path, definition.Summary, label)
+			if h.appConfig.Web.LLMS.IncludeSchemas {
+				metadata := map[string]any{
+					"operationId": definition.OperationID,
+					"request":     definition.Request,
+					"response":    definition.Response,
+					"primary":     definition.Primary,
+					"message":     definition.Message,
+					"binary":      definition.Binary,
 				}
-				sort.Strings(pathNames)
-				for _, path := range pathNames {
-					if !strings.HasPrefix(path, apiPath+"/") || strings.Contains(path, "/metrics") {
-						continue
-					}
-					operations, ok := paths[path].(map[string]any)
-					if !ok {
-						continue
-					}
-					methods := make([]string, 0, len(operations))
-					for method := range operations {
-						if method == "get" || method == "post" || method == "put" || method == "patch" || method == "delete" {
-							methods = append(methods, method)
-						}
-					}
-					sort.Strings(methods)
-					for _, method := range methods {
-						operation, ok := operations[method].(map[string]any)
-						if !ok || operation["x-admin-only"] == true {
-							continue
-						}
-						label := "public"
-						if operation["security"] != nil {
-							label = "Bearer token required"
-						}
-						description, _ := operation["summary"].(string)
-						fmt.Fprintf(&b, "- %s %s - %s (%s)\n", strings.ToUpper(method), path, description, label)
-						if h.appConfig.Web.LLMS.IncludeSchemas {
-							if encoded, err := json.Marshal(operation); err == nil {
-								fmt.Fprintf(&b, "  Schema: `%s`\n", encoded)
-							}
-						}
-					}
+				if encoded, err := json.Marshal(metadata); err == nil {
+					fmt.Fprintf(&b, "  Schema: `%s`\n", encoded)
 				}
 			}
 		}
@@ -3265,6 +3672,21 @@ func (h *SearchHandler) LlmsTxt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, _ = w.Write([]byte(b.String()))
+}
+
+func llmsRouteEnabled(condition string, appConfig *config.AppConfig) bool {
+	switch condition {
+	case "":
+		return true
+	case "debug":
+		return false
+	case "server.metrics.enabled":
+		return appConfig != nil && appConfig.Server.Metrics.Enabled
+	case "server.metrics.root.enabled":
+		return appConfig != nil && appConfig.Server.Metrics.Enabled && appConfig.Server.Metrics.Root.Enabled
+	default:
+		return false
+	}
 }
 
 // SitemapXML returns sitemap.xml per AI.md PART 16
@@ -3298,7 +3720,7 @@ func (h *SearchHandler) SitemapXML(w http.ResponseWriter, r *http.Request) {
 	}
 	allowedPages := pages[:0]
 	for _, page := range pages {
-		if robotsAllowsPath(page.path, appConfig.Web.Robots) {
+		if !isRegisteredHubPage(page.path, appConfig) && robotsAllowsPath(page.path, appConfig.Web.Robots) {
 			allowedPages = append(allowedPages, page)
 		}
 	}
@@ -4132,45 +4554,29 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		"disk":     h.checkDisk(),
 	}
 
-	// Overall status - per AI.md PART 13: derive from checks
-	status := "healthy"
-	httpStatus := http.StatusOK
-	for _, v := range checks {
-		if v != "ok" {
-			status = "unhealthy"
-			httpStatus = http.StatusServiceUnavailable
-			break
-		}
-	}
-
 	// Detect response format per AI.md PART 14
 	format := getAPIResponseFormat(r)
 
 	// Add scheduler check - per AI.md PART 13: real probe, must match HealthCheck
 	checks["scheduler"] = h.checkScheduler()
-	if checks["scheduler"] != "ok" {
-		status = "unhealthy"
-		httpStatus = http.StatusServiceUnavailable
-	}
-
-	// Tor status for features and checks
+	// Tor and I2P checks are optional and degraded overlays keep the server ready.
 	torEnabled := h.torSvc != nil && h.torSvc.IsEnabled()
 	torRunning := h.torSvc != nil && h.torSvc.IsRunning()
-	if torEnabled {
-		if torRunning {
-			checks["tor"] = "ok"
-		} else {
-			checks["tor"] = "error"
-			status = "unhealthy"
-			httpStatus = http.StatusServiceUnavailable
-		}
+	if torCheck := h.checkTor(); torCheck != "" {
+		checks["tor"] = torCheck
 	}
 	if i2pCheck := h.checkI2P(r.Context()); i2pCheck != "" {
 		checks["i2p"] = i2pCheck
-		if i2pCheck != "ok" {
-			status = "unhealthy"
-			httpStatus = http.StatusServiceUnavailable
-		}
+	}
+	datasetChecks, datasetKeys, criticalDatasets := h.cachedDatasetChecks()
+	for _, item := range datasetChecks {
+		checks[item.Key] = item.Status
+	}
+	status, httpStatus := healthStatusFromChecksWithDatasets(checks, datasetKeys, criticalDatasets)
+	maintenanceInfo, inMaintenance := h.currentMaintenanceStatus()
+	if inMaintenance {
+		status = "maintenance"
+		httpStatus = http.StatusServiceUnavailable
 	}
 
 	// restart_required per AI.md PART 13 status->HTTP table: HTTP 200,
@@ -4225,6 +4631,16 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, "uptime: %s\n", uptime)
 		_, _ = fmt.Fprintf(w, "mode: %s\n", appMode)
 		_, _ = fmt.Fprintf(w, "timestamp: %s\n", timestamp)
+		if maintenanceInfo != nil {
+			_, _ = fmt.Fprintf(w, "maintenance.reason: %s\n", maintenanceInfo.Reason)
+			_, _ = fmt.Fprintf(w, "maintenance.message: %s\n", maintenanceInfo.Message)
+			_, _ = fmt.Fprintf(w, "maintenance.since: %s\n", maintenanceInfo.Since.Format(time.RFC3339))
+			_, _ = fmt.Fprintf(w, "maintenance.self_healing.enabled: %t\n", maintenanceInfo.SelfHealing.Enabled)
+			_, _ = fmt.Fprintf(w, "maintenance.self_healing.attempts: %d\n", maintenanceInfo.SelfHealing.Attempts)
+			if maintenanceInfo.SelfHealing.NextAttempt != nil {
+				_, _ = fmt.Fprintf(w, "maintenance.self_healing.next_attempt: %s\n", maintenanceInfo.SelfHealing.NextAttempt.Format(time.RFC3339))
+			}
+		}
 		// 5. Features
 		_, _ = fmt.Fprintf(w, "features.tor.enabled: %v\n", torEnabled)
 		_, _ = fmt.Fprintf(w, "features.tor.running: %v\n", torRunning)
@@ -4252,6 +4668,9 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		if _, ok := checks["i2p"]; ok {
 			_, _ = fmt.Fprintf(w, "checks.i2p: %s\n", checks["i2p"])
 		}
+		for _, item := range datasetChecks {
+			_, _ = fmt.Fprintf(w, "checks.%s: %s\n", item.Key, item.Status)
+		}
 		// 8. Stats
 		_, _ = fmt.Fprintf(w, "stats.requests_total: %d\n", h.getRequestsTotal())
 		_, _ = fmt.Fprintf(w, "stats.requests_24h: %d\n", h.getRequests24h())
@@ -4276,13 +4695,15 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 			Commit: version.CommitID,
 			Date:   version.BuildTime,
 		},
-		Uptime:    uptime,
-		Mode:      appMode,
-		Timestamp: timestamp,
+		Uptime:      uptime,
+		Mode:        appMode,
+		Timestamp:   timestamp,
+		Maintenance: maintenanceInfo,
 		Features: FeaturesInfo{
 			Tor: TorInfo{
 				Enabled:  torEnabled,
 				Running:  torRunning,
+				State:    h.getTorState(),
 				Status:   h.getTorStatus(),
 				Hostname: h.getTorHostname(),
 			},
@@ -4303,6 +4724,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 			Scheduler: checks["scheduler"],
 			Tor:       checks["tor"],
 			I2P:       checks["i2p"],
+			Datasets:  datasetChecks,
 		},
 		Stats: StatsInfo{
 			RequestsTotal:     h.getRequestsTotal(),
@@ -4318,7 +4740,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		response.RestartReason = h.appConfig.RestartReasons
 	}
 
-	WriteJSON(w, httpStatus, response)
+	writeHealthJSON(w, httpStatus, response)
 }
 
 // serverStartTime is set when the server starts
@@ -4433,64 +4855,18 @@ func (h *SearchHandler) writeSearchOverloadJSON(w http.ResponseWriter) {
 
 // RenderErrorPage renders a custom error page per AI.md PART 30
 func (h *SearchHandler) RenderErrorPage(w http.ResponseWriter, r *http.Request, code int, title, message string) {
+	siteTitle := "VidVeil"
+	if h.appConfig != nil && h.appConfig.Server.Branding.Title != "" {
+		siteTitle = h.appConfig.Server.Branding.Title
+	}
 	data := map[string]interface{}{
 		"Code":      code,
 		"Title":     title,
 		"Message":   message,
-		"SiteTitle": h.appConfig.Server.Branding.Title,
+		"SiteTitle": siteTitle,
 		"Theme":     h.getRequestTheme(r),
 	}
-	// AI.md PART 30: lang/dir for <html>
-	injectLocaleData(r, data)
-
-	if templatesFS == nil {
-		writeGuaranteedErrorPage(w, r, code, title, message)
-		return
-	}
-
-	// Resolve the request locale so the error page can translate via {{ t "key" }}
-	locale := i18n.DefaultLocale
-	if l, ok := data["Lang"].(string); ok && l != "" {
-		locale = l
-	}
-
-	tmpl, err := template.New("error.tmpl").Funcs(template.FuncMap{
-		"t": func(key string) string {
-			return i18n.Translate(locale, key)
-		},
-		"tf": func(key string, args ...interface{}) string {
-			return i18n.TranslateFormat(locale, key, args...)
-		},
-		"path": func(value string) string {
-			return templatePath(r, value)
-		},
-		// asset appends the version-busting stamp per AI.md PART 9
-		"asset": func(path string) string {
-			return templatePath(r, path) + "?v=" + version.AssetStamp()
-		},
-	}).ParseFS(templatesFS, "template/page/error.tmpl")
-	if err != nil {
-		// Fallback per AI.md PART 16 "Error Pages" — the error-page
-		// template itself failed to parse, so fall back to the minimal
-		// hardcoded, content-negotiated response instead of plain text.
-		writeGuaranteedErrorPage(w, r, code, title, message)
-		return
-	}
-
-	// Buffer template output to prevent proxy truncation issues
-	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, "error", data); err != nil {
-		// Fallback per AI.md PART 16 "Error Pages" — same guaranteed-
-		// response rule applies when execution (not just parsing) fails.
-		writeGuaranteedErrorPage(w, r, code, title, message)
-		return
-	}
-
-	// Set headers and write buffered response
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
-	w.WriteHeader(code)
-	_, _ = w.Write(buf.Bytes())
+	h.renderResponseStatus(w, r, "error", data, code)
 }
 
 // NotFoundHandler handles 404 errors per AI.md PART 30
@@ -4534,12 +4910,18 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 	case "home":
 		templateFile = "template/page/index.tmpl"
 		templateName = "home"
+	case "error":
+		templateFile = "template/page/error.tmpl"
+		templateName = "error"
 	case "search":
 		templateFile = "template/page/search.tmpl"
 		templateName = "search"
 	case "preferences":
 		templateFile = "template/page/preferences.tmpl"
 		templateName = "preferences"
+	case "preferences-sync":
+		templateFile = "template/page/preferences-sync.tmpl"
+		templateName = "preferences-sync"
 	case "owner-tokens":
 		templateFile = "template/page/owner-tokens.tmpl"
 		templateName = "owner-tokens"
@@ -4571,6 +4953,9 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 	case "nojs/preferences":
 		templateFile = "template/nojs/preferences.tmpl"
 		templateName = "nojs/preferences"
+	case "nojs/preferences-sync":
+		templateFile = "template/nojs/preferences-sync.tmpl"
+		templateName = "nojs/preferences-sync"
 	case "nojs/owner-tokens":
 		templateFile = "template/nojs/owner-tokens.tmpl"
 		templateName = "nojs/owner-tokens"
@@ -4583,6 +4968,18 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 	case "nojs/privacy":
 		templateFile = "template/nojs/privacy.tmpl"
 		templateName = "nojs/privacy"
+	case "nojs/favorites":
+		templateFile = "template/nojs/favorites.tmpl"
+		templateName = "nojs/favorites"
+	case "nojs/content-restricted":
+		templateFile = "template/nojs/content-restricted.tmpl"
+		templateName = "nojs/content-restricted"
+	case "nojs/content-blocked":
+		templateFile = "template/nojs/content-blocked.tmpl"
+		templateName = "nojs/content-blocked"
+	case "nojs/error":
+		templateFile = "template/nojs/error.tmpl"
+		templateName = "nojs/error"
 	default:
 		writeGuaranteedErrorPage(w, r, http.StatusInternalServerError)
 		return
@@ -4601,6 +4998,9 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 	}
 	if data["BuildDateTime"] == nil {
 		data["BuildDateTime"] = BuildDateTime()
+	}
+	if data["APIBase"] == nil {
+		data["APIBase"] = h.appConfig.APIBasePath()
 	}
 
 	// Footer onion-address row per AI.md PART 16 — dropped entirely unless
@@ -4717,6 +5117,7 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 		"path": func(value string) string {
 			return templatePath(r, value)
 		},
+		"docsStylesheets":           func() []string { return serverDocsStylesheets(r) },
 		"operatorHTML":              func(name string) template.HTML { return operatorHTML(r, name) },
 		"operatorContentConfigured": func(name string) bool { return operatorContentConfigured(r, name) },
 		// safeHTML sanitizes s through the strict PART 16 allowlist

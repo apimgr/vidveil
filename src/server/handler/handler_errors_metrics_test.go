@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 )
@@ -491,7 +493,7 @@ func TestServerMetrics_IncrementSearches_NilCounter_NoPanic(t *testing.T) {
 
 // ── MaintenanceModeMiddleware — active maintenance mode ───────────────────────
 
-func TestMaintenanceModeMiddleware_MaintenanceFlagExists_Returns503(t *testing.T) {
+func TestMaintenanceModeMiddleware_MaintenanceFlagRejectsWrites(t *testing.T) {
 	isolateMaintenanceDataDir(t)
 	h := newRenderTestHandler()
 
@@ -511,11 +513,37 @@ func TestMaintenanceModeMiddleware_MaintenanceFlagExists_Returns503(t *testing.T
 	}))
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
+	req := httptest.NewRequest(http.MethodPost, "/search", nil)
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Errorf("MaintenanceModeMiddleware(active): status = %d, want 503", rr.Code)
+	}
+}
+
+func TestMaintenanceModeMiddleware_AllowsReadOnlyRequests(t *testing.T) {
+	isolateMaintenanceDataDir(t)
+	h := newRenderTestHandler()
+	paths := config.GetAppPaths("", "")
+	if err := os.MkdirAll(paths.Data, 0755); err != nil {
+		t.Skipf("cannot create data dir %s: %v", paths.Data, err)
+	}
+	flagFile := filepath.Join(paths.Data, "maintenance.flag")
+	if err := os.WriteFile(flagFile, []byte(time.Now().UTC().Format(time.RFC3339)), 0600); err != nil {
+		t.Skipf("cannot create maintenance flag: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Remove(flagFile); err != nil && !os.IsNotExist(err) {
+			t.Errorf("remove maintenance flag: %v", err)
+		}
+	})
+	middleware := h.MaintenanceModeMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodOptions} {
+		recorder := httptest.NewRecorder()
+		middleware.ServeHTTP(recorder, httptest.NewRequest(method, "/api/v1/search?q=test", nil))
+		if recorder.Code != http.StatusOK {
+			t.Errorf("%s read request status = %d, want 200", method, recorder.Code)
+		}
 	}
 }
 
@@ -569,7 +597,7 @@ func TestMaintenanceModeMiddleware_APIPath_ReturnsJSONEnvelope(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=test", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/search", nil)
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusServiceUnavailable {
@@ -620,7 +648,7 @@ func TestMaintenanceModeMiddleware_BrowserPath_ReturnsHTML(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
+	req := httptest.NewRequest(http.MethodPost, "/search", nil)
 	req.Header.Set("Accept", "text/html")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/128.0")
 	handler.ServeHTTP(rr, req)
@@ -632,7 +660,7 @@ func TestMaintenanceModeMiddleware_BrowserPath_ReturnsHTML(t *testing.T) {
 	if !strings.Contains(ct, "text/html") {
 		t.Errorf("MaintenanceModeMiddleware(/search, browser): Content-Type = %q, want text/html", ct)
 	}
-	if !strings.Contains(rr.Body.String(), "Under Maintenance") {
+	if !strings.Contains(rr.Body.String(), i18n.Translate("en", "healthz.status_maintenance")) {
 		t.Error("MaintenanceModeMiddleware(/search, browser): body missing HTML maintenance page")
 	}
 }

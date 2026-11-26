@@ -15,22 +15,23 @@ import (
 )
 
 type ownerTokenPageItem struct {
-	ID        int64
-	Name      string
-	Suffix    string
-	Created   string
-	LastUsed  string
-	Expires   string
-	Status    string
-	Revealed  string
-	RevealURL string
-	RotateURL string
-	UpdateURL string
-	RevokeURL string
+	ID          string
+	Name        string
+	TokenPrefix string
+	Suffix      string
+	Created     string
+	LastUsed    string
+	Expires     string
+	Status      string
+	Revealed    string
+	RevealURL   string
+	RotateURL   string
+	UpdateURL   string
+	RevokeURL   string
 }
 
 type OwnerTokenReveal struct {
-	ID      int64
+	ID      string
 	Primary bool
 	Token   string
 }
@@ -62,7 +63,7 @@ func (h *SearchHandler) OwnerTokensPage(w http.ResponseWriter, r *http.Request) 
 	data := map[string]interface{}{
 		"Title":         "Owner tokens - " + h.appConfig.Server.Branding.Title,
 		"ActiveNav":     "preferences",
-		"NoJSTemplate":  "owner-tokens",
+		"NoJSTemplate":  "nojs/owner-tokens",
 		"TokensEnabled": false,
 		"PrimaryToken":  ownerTokenPageItem{},
 		"LinkedTokens":  []ownerTokenPageItem{},
@@ -93,9 +94,10 @@ func (h *SearchHandler) OwnerTokensPage(w http.ResponseWriter, r *http.Request) 
 				}
 				data["TokensEnabled"] = true
 				data["PrimaryToken"] = ownerTokenPageItem{
-					Suffix:   primary.Suffix,
-					Created:  time.Unix(primary.CreatedAt, 0).UTC().Format(time.RFC3339),
-					LastUsed: formatOwnerTokenTime(primary.LastUsed),
+					TokenPrefix: maskedOwnerTokenPrefix(primary.Prefix),
+					Suffix:      primary.Suffix,
+					Created:     time.Unix(primary.CreatedAt, 0).UTC().Format(time.RFC3339),
+					LastUsed:    formatOwnerTokenTime(primary.LastUsed),
 				}
 				if reveal.Primary {
 					item := data["PrimaryToken"].(ownerTokenPageItem)
@@ -115,13 +117,13 @@ func (h *SearchHandler) OwnerTokensPage(w http.ResponseWriter, r *http.Request) 
 						}
 					}
 					item := ownerTokenPageItem{
-						ID: token.ID, Name: token.Name, Suffix: token.Suffix,
+						ID: token.ID, Name: token.Name, TokenPrefix: maskedOwnerTokenPrefix(token.Prefix), Suffix: token.Suffix,
 						Created:  time.Unix(token.CreatedAt, 0).UTC().Format(time.RFC3339),
 						LastUsed: formatOwnerTokenTime(token.LastUsed), Expires: expires, Status: status,
-						RevealURL: fmt.Sprintf("%s/server/preferences/tokens/%d/reveal", ownerTokenPathPrefix(r), token.ID),
-						RotateURL: fmt.Sprintf("%s/server/preferences/tokens/%d/rotate", ownerTokenPathPrefix(r), token.ID),
-						UpdateURL: fmt.Sprintf("%s/server/preferences/tokens/%d/update", ownerTokenPathPrefix(r), token.ID),
-						RevokeURL: fmt.Sprintf("%s/server/preferences/tokens/%d/revoke", ownerTokenPathPrefix(r), token.ID),
+						RevealURL: fmt.Sprintf("%s/server/preferences/tokens/%s/reveal", ownerTokenPathPrefix(r), token.ID),
+						RotateURL: fmt.Sprintf("%s/server/preferences/tokens/%s/rotate", ownerTokenPathPrefix(r), token.ID),
+						UpdateURL: fmt.Sprintf("%s/server/preferences/tokens/%s/update", ownerTokenPathPrefix(r), token.ID),
+						RevokeURL: fmt.Sprintf("%s/server/preferences/tokens/%s/revoke", ownerTokenPathPrefix(r), token.ID),
 					}
 					if !reveal.Primary && reveal.ID == token.ID {
 						item.Revealed = reveal.Token
@@ -133,6 +135,13 @@ func (h *SearchHandler) OwnerTokensPage(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	h.renderResponse(w, r, "owner-tokens", data)
+}
+
+func maskedOwnerTokenPrefix(prefix string) string {
+	if strings.HasPrefix(prefix, "tok_") {
+		return "tok_"
+	}
+	return "own_"
 }
 
 func formatOwnerTokenTime(value sql.NullInt64) string {

@@ -170,6 +170,10 @@ func (st *suite) start() error {
   port: %d
   address: "0.0.0.0"
   mode: development
+  search:
+    # Keep upstream engines disabled so searches stay hermetic and offline.
+    default_engines:
+      - __offline_e2e__
   scheduler:
     enabled: false
   i2p:

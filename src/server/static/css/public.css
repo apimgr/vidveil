@@ -1,54 +1,5 @@
 /* Public Layout Styles - VidVeil per AI.md PART 16 */
 
-/* Header */
-.site-header {
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-  padding: 1rem;
-}
-
-.header-content {
-  max-width: var(--content-width);
-  margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.header-brand {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.header-nav {
-  display: none;
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: var(--bg-secondary);
-  flex-direction: column;
-  padding: 1rem;
-  border-bottom: 1px solid var(--border);
-  gap: 1.5rem;
-}
-
-.header-nav.active {
-  display: flex;
-}
-
-.header-nav a {
-  color: var(--text-primary);
-  text-decoration: none;
-  transition: color 0.2s;
-}
-
-.header-nav a:hover {
-  color: var(--accent);
-}
-
 /* Main content area */
 .content {
   max-width: var(--content-width);
@@ -111,6 +62,167 @@
 @media (min-width: 720px) {
   .results-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Shared header and CSS-only navigation per AI.md PART 16. */
+.site-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+}
+
+.nav-checkbox {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.nav-links {
+  display: none;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.nav-link {
+  padding: 0.5rem 0.75rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.nav-link:hover,
+.nav-link.active {
+  color: var(--text-primary);
+}
+
+.nav-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+}
+
+.nav-checkbox:focus-visible + .site-header .nav-toggle {
+  box-shadow: var(--focus-ring);
+}
+
+.header-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: var(--text-primary);
+}
+
+.nav-panel {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: var(--z-drawer);
+  display: flex;
+  flex-direction: column;
+  width: min(280px, 85vw);
+  height: 100dvh;
+  overflow-y: auto;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--bg-secondary);
+  box-shadow: 0 0 1.25rem var(--shadow);
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform 0.3s ease, visibility 0s linear 0.3s;
+}
+
+[dir="rtl"] .nav-panel {
+  transform: translateX(-100%);
+}
+
+.nav-checkbox:checked ~ .nav-panel {
+  transform: none;
+  visibility: visible;
+  transition: transform 0.3s ease;
+}
+
+.nav-panel-close {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 44px;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.nav-panel-link {
+  display: block;
+  min-height: 44px;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.nav-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+.nav-checkbox:checked ~ .nav-overlay {
+  display: block;
+}
+
+body:has(.nav-checkbox:checked) {
+  overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  .nav-checkbox {
+    display: none;
+  }
+
+  .nav-toggle,
+  .nav-panel,
+  .nav-overlay {
+    display: none;
+  }
+
+  .nav-links {
+    display: flex;
+  }
+
+  .nav-collapsed .nav-checkbox {
+    display: block;
+  }
+
+  .nav-collapsed .nav-toggle {
+    display: flex;
+  }
+
+  .nav-collapsed .nav-links {
+    display: none;
+  }
+
+  .nav-collapsed .nav-panel {
+    display: flex;
+  }
+
+  .nav-collapsed .nav-checkbox:checked ~ .nav-overlay {
+    display: block;
   }
 }
 
@@ -228,38 +340,6 @@
 
 .prose a {
   color: var(--accent);
-}
-
-/* Mobile base: nav toggle visible, header-nav collapsed */
-.nav-toggle {
-  display: block;
-  background: none;
-  border: none;
-  color: var(--text-primary);
-  font-size: 1.5rem;
-  cursor: pointer;
-  min-width: 44px;
-  min-height: 44px;
-}
-
-/* Desktop: hide toggle, show nav inline as flex row */
-@media (min-width: 720px) {
-  .nav-toggle {
-    display: none;
-  }
-
-  .header-nav {
-    display: flex;
-    position: static;
-    flex-direction: row;
-    background: transparent;
-    padding: 0;
-    border: none;
-  }
-
-  .header-nav.active {
-    display: flex;
-  }
 }
 
 /* Favorite button on video cards */

@@ -5,12 +5,19 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"reflect"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/apiroute"
 	commonhttputil "github.com/apimgr/vidveil/src/common/httputil"
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/outsan"
@@ -45,33 +52,20 @@ func injectLocaleData(r *http.Request, data map[string]interface{}) {
 	if _, ok := data["Dir"]; !ok {
 		data["Dir"] = i18n.Direction(data["Lang"].(string))
 	}
+	if _, ok := data["LanguageName"]; !ok {
+		name := "English"
+		if locale, exists := i18n.LocaleInfoFor(data["Lang"].(string)); exists {
+			name = locale.NativeName
+		}
+		data["LanguageName"] = name
+	}
 }
 
 // resolveLocale returns the locale for a request. Prefers the value set by
 // i18n.LanguageMiddleware in the request context (primary path); falls back to
 // direct header/cookie/query inspection when the middleware is not in the chain.
 func resolveLocale(r *http.Request) string {
-	if loc := i18n.LocaleFromContext(r.Context()); loc != i18n.DefaultLocale {
-		return loc
-	}
-	if v := strings.TrimSpace(r.URL.Query().Get("lang")); v != "" {
-		return strings.ToLower(v)
-	}
-	if c, err := r.Cookie("lang"); err == nil && c.Value != "" {
-		return strings.ToLower(c.Value)
-	}
-	if al := r.Header.Get("Accept-Language"); al != "" {
-		// Accept-Language: en-US,en;q=0.9 → "en-us"
-		first := al
-		if idx := strings.IndexAny(first, ",;"); idx > 0 {
-			first = first[:idx]
-		}
-		first = strings.TrimSpace(first)
-		if first != "" {
-			return strings.ToLower(first)
-		}
-	}
-	return i18n.DefaultLocale
+	return i18n.GlobalTranslator().GetLocale(r)
 }
 
 // newSecureCookie creates a cookie with proper security flags per AI.md PART 11
@@ -124,6 +118,296 @@ type APIResponse struct {
 	Error   string `json:"error,omitempty"`
 	Message string `json:"message,omitempty"`
 	Details any    `json:"details,omitempty"`
+}
+
+// RouteResponseMiddleware serializes negotiated API text from the registered
+// route's response model and primary/message metadata.
+func RouteResponseMiddleware(route apiroute.Route, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if route.Binary != "" {
+			if originalPath(r) != "" && strings.HasSuffix(originalPath(r), ".txt") {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = io.WriteString(w, "ERROR: NOT_FOUND: Binary routes do not have a text representation\n")
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+		if route.OperationID == "getServerHealth" && getAPIResponseFormat(r) == "text" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if route.SkipText || strings.Contains(r.Header.Get("Accept"), "text/event-stream") || getAPIResponseFormat(r) != "text" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		request := r.Clone(context.WithValue(r.Context(), OriginalPathKey, r.URL.Path))
+		request.Header = r.Header.Clone()
+		request.Header.Set("Accept", "application/json")
+		captured := httptest.NewRecorder()
+		next.ServeHTTP(captured, request)
+		for name, values := range captured.Header() {
+			if strings.EqualFold(name, "Content-Type") || strings.EqualFold(name, "Content-Length") {
+				continue
+			}
+			for _, value := range values {
+				w.Header().Add(name, value)
+			}
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		status := captured.Code
+		if status == 0 {
+			status = http.StatusOK
+		}
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, routeTextBody(route, captured.Body.Bytes(), status))
+	})
+}
+
+func originalPath(r *http.Request) string {
+	if path, ok := r.Context().Value(OriginalPathKey).(string); ok {
+		return path
+	}
+	return r.URL.Path
+}
+
+func routeTextBody(route apiroute.Route, body []byte, status int) string {
+	if len(body) == 0 && status < http.StatusBadRequest {
+		message := route.Message
+		if message == "" {
+			message = operationMessage(route.Method)
+		}
+		return fmt.Sprintf("OK: %s\n", message)
+	}
+	var value any
+	if err := json.Unmarshal(body, &value); err != nil {
+		return strings.TrimRight(string(body), "\r\n") + "\n"
+	}
+	root, _ := value.(map[string]any)
+	if route.OperationID == "getServerHealth" {
+		data := value
+		if root != nil {
+			if wrapped, found := root["data"]; found {
+				data = wrapped
+			}
+		}
+		return flattenTypedText(data, "", nil, responseDataModel(route.Response))
+	}
+	if status >= http.StatusBadRequest {
+		code, _ := root["error"].(string)
+		message, _ := root["message"].(string)
+		if code == "" {
+			code = "SERVER_ERROR"
+		}
+		if message == "" {
+			message = http.StatusText(status)
+		}
+		return fmt.Sprintf("ERROR: %s: %s\n", code, message)
+	}
+	data, hasData := root["data"]
+	if !hasData {
+		data = value
+	}
+	message, _ := root["message"].(string)
+	if message == "" {
+		message = route.Message
+	}
+	if message == "" {
+		message = operationMessage(route.Method)
+	}
+	if route.Primary != "" {
+		if object, ok := data.(map[string]any); ok {
+			if primary, found := object[route.Primary]; found {
+				return bareText(primary)
+			}
+		}
+	}
+	switch collection := data.(type) {
+	case []any:
+		if len(collection) == 0 {
+			return fmt.Sprintf("OK: %s\n", message)
+		}
+		if _, objects := collection[0].(map[string]any); !objects {
+			var b strings.Builder
+			fmt.Fprintf(&b, "OK: %d items found\n", len(collection))
+			for _, item := range collection {
+				b.WriteString(bareText(item))
+			}
+			return b.String()
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "OK: %d items found\n", len(collection))
+		for index, item := range collection {
+			if index > 0 {
+				b.WriteByte('\n')
+			}
+			b.WriteString(flattenTypedText(item, "", nil, responseDataElementModel(route.Response)))
+		}
+		return b.String()
+	case map[string]any:
+		if len(collection) == 0 {
+			return fmt.Sprintf("OK: %s\n", message)
+		}
+		return fmt.Sprintf("OK: %s\n", message) + flattenTypedText(collection, "", nil, responseDataModel(route.Response))
+	default:
+		if data == nil || data == "" {
+			return fmt.Sprintf("OK: %s\n", message)
+		}
+		return fmt.Sprintf("OK: %s\ndata: %v\n", message, data)
+	}
+}
+
+func operationMessage(method string) string {
+	switch strings.ToUpper(method) {
+	case http.MethodGet, http.MethodHead:
+		return "Retrieved successfully"
+	case http.MethodPost:
+		return "Created successfully"
+	case http.MethodPut, http.MethodPatch:
+		return "Updated successfully"
+	case http.MethodDelete:
+		return "Deleted successfully"
+	default:
+		return "OK"
+	}
+}
+
+func bareText(value any) string {
+	if value == nil {
+		return "\n"
+	}
+	return fmt.Sprint(value) + "\n"
+}
+
+func flattenTypedText(value any, prefix string, preferred []string, model reflect.Type) string {
+	var b strings.Builder
+	write := func(key string, item any) {
+		itemModel := modelFieldType(model, strings.TrimPrefix(key, prefix+"."))
+		if nested, ok := item.(map[string]any); ok {
+			b.WriteString(flattenTypedText(nested, key, nil, itemModel))
+			return
+		}
+		if list, ok := item.([]any); ok {
+			parts := make([]string, 0, len(list))
+			for _, part := range list {
+				parts = append(parts, fmt.Sprint(part))
+			}
+			fmt.Fprintf(&b, "%s: %s\n", key, strings.Join(parts, ", "))
+			return
+		}
+		fmt.Fprintf(&b, "%s: %v\n", key, item)
+	}
+	switch object := value.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(object))
+		seen := make(map[string]bool, len(object))
+		if len(preferred) == 0 {
+			preferred = modelFieldNames(model)
+		}
+		for _, key := range preferred {
+			if _, ok := object[key]; ok {
+				keys = append(keys, key)
+				seen[key] = true
+			}
+		}
+		remaining := make([]string, 0, len(object)-len(keys))
+		for key := range object {
+			if !seen[key] {
+				remaining = append(remaining, key)
+			}
+		}
+		sort.Strings(remaining)
+		keys = append(keys, remaining...)
+		for _, key := range keys {
+			name := key
+			if prefix != "" {
+				name = prefix + "." + key
+			}
+			write(name, object[key])
+		}
+	case []any:
+		for _, item := range object {
+			write(prefix, item)
+		}
+	default:
+		if prefix != "" {
+			write(prefix, object)
+		}
+	}
+	return b.String()
+}
+
+func responseDataModel(response any) reflect.Type {
+	typeOf := reflect.TypeOf(response)
+	for typeOf != nil && typeOf.Kind() == reflect.Pointer {
+		typeOf = typeOf.Elem()
+	}
+	if typeOf == nil || typeOf.Kind() != reflect.Struct {
+		return nil
+	}
+	for index := 0; index < typeOf.NumField(); index++ {
+		if strings.EqualFold(typeOf.Field(index).Name, "Data") {
+			return typeOf.Field(index).Type
+		}
+	}
+	return typeOf
+}
+
+func responseDataElementModel(response any) reflect.Type {
+	typeOf := responseDataModel(response)
+	for typeOf != nil && (typeOf.Kind() == reflect.Pointer || typeOf.Kind() == reflect.Slice || typeOf.Kind() == reflect.Array) {
+		if typeOf.Kind() == reflect.Pointer {
+			typeOf = typeOf.Elem()
+		} else {
+			typeOf = typeOf.Elem()
+		}
+	}
+	return typeOf
+}
+
+func modelFieldNames(model reflect.Type) []string {
+	model = dereferenceType(model)
+	if model == nil || model.Kind() != reflect.Struct {
+		return nil
+	}
+	names := make([]string, 0, model.NumField())
+	for index := 0; index < model.NumField(); index++ {
+		name := strings.Split(model.Field(index).Tag.Get("json"), ",")[0]
+		if name == "" {
+			name = model.Field(index).Name
+		}
+		if name != "-" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func modelFieldType(model reflect.Type, fieldName string) reflect.Type {
+	model = dereferenceType(model)
+	if model == nil || model.Kind() != reflect.Struct {
+		return nil
+	}
+	for index := 0; index < model.NumField(); index++ {
+		field := model.Field(index)
+		name := strings.Split(field.Tag.Get("json"), ",")[0]
+		if name == "" {
+			name = field.Name
+		}
+		if name == fieldName {
+			return field.Type
+		}
+	}
+	return nil
+}
+
+func dereferenceType(model reflect.Type) reflect.Type {
+	for model != nil && model.Kind() == reflect.Pointer {
+		model = model.Elem()
+	}
+	return model
 }
 
 type deferredStatusResponseWriter struct {
@@ -605,6 +889,8 @@ func (h *SearchHandler) renderSimpleHTML(name string, data map[string]interface{
 	html := "<html><body>"
 
 	switch name {
+	case "error":
+		html += fmt.Sprintf("<h1>%s</h1><p>%s</p><a href=\"/\">Home</a>", htmlEscape(fmt.Sprint(data["Title"])), htmlEscape(fmt.Sprint(data["Message"])))
 	case "home":
 		html += "<h1>VidVeil - Privacy-Respecting Video Search</h1>"
 		html += "<p>Search across 27 registered adult video engines by default. Search history stays in your browser, not as per-visitor history on the server.</p>"

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -651,5 +652,37 @@ func extractSecretSettings(root map[string]interface{}) map[string]interface{} {
 			deletePathValue(root, path...)
 		}
 	}
+	for _, path := range [][]string{{"server", "database", "url"}, {"server", "cache", "url"}} {
+		value, ok := pathValue(root, path...)
+		connectionURL, isString := value.(string)
+		if !ok || !isString || !connectionURLHasCredential(connectionURL) {
+			continue
+		}
+		setPathValue(secrets, connectionURL, path...)
+		deletePathValue(root, path...)
+	}
 	return secrets
+}
+
+func connectionURLHasCredential(raw string) bool {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	if parsed.User != nil {
+		if password, ok := parsed.User.Password(); ok && password != "" {
+			return true
+		}
+	}
+	for key, values := range parsed.Query() {
+		switch strings.ToLower(key) {
+		case "password", "pwd", "token", "authtoken":
+			for _, value := range values {
+				if value != "" {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

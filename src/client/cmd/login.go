@@ -47,14 +47,31 @@ func RunLoginCommand(args []string) error {
 		return NewExitError(ExitUsage, fmt.Errorf("token is required"))
 	}
 
-	// Save token to token file
-	tokenFileLocation := paths.TokenFile()
-	if err := writeCLIDefaultTokenFile(apiTokenInput); err != nil {
-		return err
-	}
-
 	if err := validateCLIServerURL(serverURL); err != nil {
 		return fmt.Errorf("invalid server URL: %w", err)
+	}
+	if err := saveCLILogin(serverURL, apiTokenInput); err != nil {
+		return err
+	}
+	tokenFileLocation := paths.TokenFile()
+	configFileLocation := getCLIConfigFilePath()
+
+	fmt.Printf("\nLogged in successfully!\n")
+	fmt.Printf("  Server: %s\n", serverURL)
+	fmt.Printf("  Token saved to: %s\n", tokenFileLocation)
+	fmt.Printf("  Config saved to: %s\n", configFileLocation)
+	return nil
+}
+
+func saveCLILogin(serverURL, apiTokenInput string) error {
+	if err := validateCLIServerURL(serverURL); err != nil {
+		return fmt.Errorf("invalid server URL: %w", err)
+	}
+	if strings.TrimSpace(apiTokenInput) == "" {
+		return fmt.Errorf("token is required")
+	}
+	if err := writeCLIDefaultTokenFile(apiTokenInput); err != nil {
+		return err
 	}
 
 	// Also update config with server address
@@ -83,12 +100,29 @@ func RunLoginCommand(args []string) error {
 		return err
 	}
 
-	fmt.Printf("\nLogged in successfully!\n")
-	fmt.Printf("  Server: %s\n", serverURL)
-	fmt.Printf("  Token saved to: %s\n", tokenFileLocation)
-	fmt.Printf("  Config saved to: %s\n", configFileLocation)
-
 	return nil
+}
+
+// saveCLIServerConfiguration persists the optional-token first-run GUI setup.
+func saveCLIServerConfiguration(serverURL, apiTokenInput string) error {
+	if err := validateCLIServerURL(serverURL); err != nil {
+		return fmt.Errorf("invalid server URL: %w", err)
+	}
+	if strings.TrimSpace(apiTokenInput) != "" {
+		return saveCLILogin(serverURL, apiTokenInput)
+	}
+	configFileLocation := getCLIConfigFilePath()
+	var fileCLIConfig CLIConfig
+	if data, err := os.ReadFile(configFileLocation); err == nil {
+		_ = yaml.Unmarshal(data, &fileCLIConfig)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("reading CLI config: %w", err)
+	}
+	fileCLIConfig.Server.Address = serverURL
+	if fileCLIConfig.Server.APIVersion == "" {
+		fileCLIConfig.Server.APIVersion = "v1"
+	}
+	return writeCLIConfigFile(fileCLIConfig, configFileLocation)
 }
 
 // printLoginCommandHelp prints help for the login command

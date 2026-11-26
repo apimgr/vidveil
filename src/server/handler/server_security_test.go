@@ -55,6 +55,13 @@ func (s *recordingSecurityReportEmailSender) SendRaw(to, subject, body string) e
 	return nil
 }
 
+func (s *recordingSecurityReportEmailSender) SendRawAttachment(to, subject, body, filename, contentType string, payload []byte) error {
+	s.calls = append(s.calls, securityReportEmailCall{template: "attachment:" + subject, to: to, vars: map[string]string{
+		"body": body, "filename": filename, "content_type": contentType, "payload": string(payload),
+	}})
+	return nil
+}
+
 func (s *recordingSecurityReportEmailSender) SendContact(to, replyTo, subject, body string) error {
 	s.calls = append(s.calls, securityReportEmailCall{template: "contact", to: to, vars: map[string]string{"reply_to": replyTo, "subject": subject, "body": body}})
 	return s.contactErr
@@ -167,6 +174,105 @@ func newSecurityTestHandler(t *testing.T) (*ServerHandler, string) {
 	}
 	securityID := secreport.GenerateSecurityID(secret, time.Now())
 	return h, securityID
+}
+
+func TestAPISecurityReturnsPublicOverviewContract(t *testing.T) {
+	t.Setenv("DOMAIN", "example.test")
+	h, _ := newSecurityTestHandler(t)
+	h.appConfig.Web.Security.ReportURL = "https://github.com/apimgr/vidveil/security/advisories/new"
+	h.appConfig.Web.Security.Contact = "mailto:security@example.test"
+	h.appConfig.Server.Pages.Contact.Enabled = true
+	h.appConfig.Web.Security.Expires = "2030-01-01T00:00:00Z"
+	request := httptest.NewRequest(http.MethodGet, "https://example.test/api/v1/server/security", nil)
+	request.Host = "example.test"
+	response := httptest.NewRecorder()
+	h.APISecurity(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("APISecurity status = %d, want 200: %s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Contacts []struct {
+				Type  string `json:"type"`
+				Value string `json:"value"`
+			} `json:"contacts"`
+			Expires string `json:"expires"`
+			PGP     struct {
+				Available   bool    `json:"available"`
+				URL         *string `json:"url"`
+				Fingerprint *string `json:"fingerprint"`
+			} `json:"pgp"`
+			PolicyURL string `json:"policy_url"`
+			ThanksURL string `json:"thanks_url"`
+			ReportURL string `json:"report_url"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode API security response: %v", err)
+	}
+	if !payload.OK || len(payload.Data.Contacts) != 3 || payload.Data.Contacts[0].Type != "github" || payload.Data.Contacts[1].Type != "contact_form" || payload.Data.Contacts[2].Type != "email" {
+		t.Fatalf("security response contacts = %#v", payload.Data.Contacts)
+	}
+	if payload.Data.Expires != "2030-01-01T00:00:00Z" || payload.Data.PGP.Available || payload.Data.PGP.URL != nil || payload.Data.PGP.Fingerprint != nil {
+		t.Fatalf("security response optional metadata = %#v", payload.Data)
+	}
+	if payload.Data.PolicyURL != "https://example.test/server/security/policy" || payload.Data.ThanksURL != "https://example.test/server/security/thanks" || payload.Data.ReportURL != "https://example.test/server/contact" {
+		t.Fatalf("security response links = %#v", payload.Data)
+	}
+}
+
+func TestAPISecurityPolicyReturnsMarkdownSource(t *testing.T) {
+	h, _ := newSecurityTestHandler(t)
+	h.appConfig.Web.Security.PolicyText = "# Operator policy\n\nReport privately."
+	response := httptest.NewRecorder()
+	h.APISecurityPolicy(response, httptest.NewRequest(http.MethodGet, "/api/v1/server/security/policy", nil))
+	var payload struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Policy string `json:"policy"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode API security policy: %v", err)
+	}
+	if response.Code != http.StatusOK || !payload.OK || payload.Data.Policy != h.appConfig.Web.Security.PolicyText {
+		t.Fatalf("policy response = %d %#v", response.Code, payload)
+	}
+}
+
+func TestAPISecurityThanksReturnsEmptyAndOrderedRows(t *testing.T) {
+	h, _ := newSecurityTestHandler(t)
+	response := httptest.NewRecorder()
+	h.APISecurityThanks(response, httptest.NewRequest(http.MethodGet, "/api/v1/server/security/thanks", nil))
+	var empty struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Entries []map[string]string `json:"entries"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &empty); err != nil {
+		t.Fatalf("decode empty thanks response: %v", err)
+	}
+	if response.Code != http.StatusOK || !empty.OK || empty.Data.Entries == nil || len(empty.Data.Entries) != 0 {
+		t.Fatalf("empty thanks response = %d %#v", response.Code, empty)
+	}
+	if _, err := h.db.Exec(`INSERT INTO security_thanks (tracking_id, credit, severity, disclosed_on) VALUES (?, ?, ?, ?)`, "sec_0123456789abcdef", "Researcher", "high", "2026-10-15"); err != nil {
+		t.Fatalf("insert thanks fixture: %v", err)
+	}
+	response = httptest.NewRecorder()
+	h.APISecurityThanks(response, httptest.NewRequest(http.MethodGet, "/api/v1/server/security/thanks", nil))
+	var populated struct {
+		Data struct {
+			Entries []map[string]string `json:"entries"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &populated); err != nil {
+		t.Fatalf("decode populated thanks response: %v", err)
+	}
+	if response.Code != http.StatusOK || len(populated.Data.Entries) != 1 || populated.Data.Entries[0]["credit"] != "Researcher" || populated.Data.Entries[0]["date"] != "2026-10-15" || populated.Data.Entries[0]["severity"] != "high" {
+		t.Fatalf("populated thanks response = %d %#v", response.Code, populated)
+	}
 }
 
 func TestValidSecurityIDAcceptsPreviousInstallationSecretDuringGrace(t *testing.T) {
@@ -294,8 +400,11 @@ func TestSecurityReportSendsSingleMaintainerNoticeAndOptionalAcknowledgment(t *t
 			if len(sender.calls) != 2 {
 				t.Fatalf("email attempts = %d, want one maintainer notice and one acknowledgment", len(sender.calls))
 			}
-			if sender.calls[0].template != "security_report_maintainer" || sender.calls[0].to != "security@example.com" {
+			if !strings.HasPrefix(sender.calls[0].template, "attachment:") || sender.calls[0].to != "security@example.com" {
 				t.Errorf("maintainer email = %+v", sender.calls[0])
+			}
+			if !strings.Contains(sender.calls[0].vars["body"], "AES-256-GCM ciphertext") || strings.Contains(sender.calls[0].vars["body"], "Steps to reproduce") || sender.calls[0].vars["payload"] == "" {
+				t.Errorf("maintainer notice must carry only the warning and encrypted attachment: %+v", sender.calls[0])
 			}
 			ack := sender.calls[1]
 			if ack.template != "security_report_researcher_ack" || ack.to != "researcher@example.com" {
@@ -413,7 +522,7 @@ func TestSecurityPages_Render200(t *testing.T) {
 // SecurityReportStatusPage returns 404 without a valid tracking id/token, and
 // 200 with a real one created via the store.
 func TestSecurityReportStatusPage(t *testing.T) {
-	h, _ := newSecurityTestHandler(t)
+	h, securityID := newSecurityTestHandler(t)
 
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("tracking_id", "sec_doesnotexist")
@@ -429,10 +538,14 @@ func TestSecurityReportStatusPage(t *testing.T) {
 		t.Errorf("unknown tracking id: status=%d want 404", rr.Code)
 	}
 
+	idWindow, validSecurityID := h.securityIDWindow(httptest.NewRequest(http.MethodPost, "/server/contact", nil), securityID)
+	if !validSecurityID {
+		t.Fatal("test security ID failed validation")
+	}
 	sub, err := secreport.CreateReport(context.Background(), h.db, h.configDir, h.appConfig.Server.Security.EncryptionKey, secreport.Input{
+		IDWindow:         idWindow,
 		Severity:         "low",
 		Component:        "API",
-		Summary:          "test",
 		Body:             []byte("body"),
 		CreditPreference: "none",
 	})

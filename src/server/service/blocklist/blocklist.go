@@ -5,6 +5,7 @@ package blocklist
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"net"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/health"
 )
 
 // BlocklistService manages IP and domain blocklists per PART 11
@@ -28,7 +30,9 @@ type BlocklistService struct {
 	// subnets contains CIDR blocks to check
 	subnets []*net.IPNet
 	// domains contains domains to block
-	domains map[string]bool
+	domains      map[string]bool
+	loadedAt     map[string]time.Time
+	updateFailed bool
 }
 
 // NewBlocklistService creates a new blocklist service
@@ -43,6 +47,7 @@ func NewBlocklistService(appConfig *config.AppConfig) *BlocklistService {
 		ipBlocks:  make(map[string]bool),
 		subnets:   make([]*net.IPNet, 0),
 		domains:   make(map[string]bool),
+		loadedAt:  make(map[string]time.Time),
 	}
 }
 
@@ -51,11 +56,112 @@ func (s *BlocklistService) Initialize() error {
 	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create blocklist directory: %w", err)
 	}
+	if s.appConfig == nil || !s.appConfig.Server.Security.Blocklists.Enabled {
+		return nil
+	}
+	for _, source := range s.appConfig.Server.Security.Blocklists.Sources {
+		if !source.Enabled {
+			continue
+		}
+		filename := filepath.Join(s.dataDir, source.Name+".txt")
+		if _, err := os.Stat(filename); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			return fmt.Errorf("inspect blocklist source %q: %w", source.Name, err)
+		}
+		if err := s.loadBlocklist(filename, source.Type); err != nil {
+			return fmt.Errorf("load blocklist source %q: %w", source.Name, err)
+		}
+	}
 	return nil
 }
 
+// RegisterHealthChecks registers one cached check for every enabled source.
+func (s *BlocklistService) RegisterHealthChecks(registry *health.Registry) {
+	if registry == nil || s.appConfig == nil || !s.appConfig.Server.Security.Blocklists.Enabled {
+		return
+	}
+	sources := s.appConfig.Server.Security.Blocklists.Sources
+	keys := blocklistHealthKeys(sources)
+	for index, source := range sources {
+		if !source.Enabled {
+			continue
+		}
+		key := keys[index]
+		if key == "" {
+			continue
+		}
+		name := source.Name
+		_ = registry.Register(key, false, func() string {
+			s.mu.RLock()
+			lastUpdate := s.loadedAt[name]
+			updateFailed := s.updateFailed
+			s.mu.RUnlock()
+			if lastUpdate.IsZero() {
+				return health.StatusError
+			}
+			if updateFailed || time.Since(lastUpdate) > 72*time.Hour {
+				return health.StatusDegraded
+			}
+			return health.StatusOK
+		})
+	}
+}
+
+func blocklistHealthKeys(sources []config.BlocklistSource) []string {
+	keys := make([]string, len(sources))
+	baseCounts := make(map[string]int)
+	for _, source := range sources {
+		if source.Enabled {
+			if id := healthCheckID(source.Name); id != "" {
+				baseCounts[id]++
+			}
+		}
+	}
+	used := make(map[string]int)
+	for index, source := range sources {
+		if !source.Enabled {
+			continue
+		}
+		id := healthCheckID(source.Name)
+		if id == "" {
+			continue
+		}
+		if baseCounts[id] > 1 {
+			digest := sha256.Sum256([]byte(source.Name))
+			id = fmt.Sprintf("%s_%x", id, digest[:4])
+		}
+		used[id]++
+		if used[id] > 1 {
+			id = fmt.Sprintf("%s_%d", id, used[id])
+		}
+		keys[index] = "blocklist_" + id
+	}
+	return keys
+}
+
+func healthCheckID(value string) string {
+	var b strings.Builder
+	lastUnderscore := false
+	for _, r := range strings.ToLower(value) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			lastUnderscore = false
+		} else if !lastUnderscore && b.Len() > 0 {
+			b.WriteByte('_')
+			lastUnderscore = true
+		}
+	}
+	return strings.Trim(b.String(), "_")
+}
+
 // Update downloads and updates all enabled blocklists per PART 11
-func (s *BlocklistService) Update(ctx context.Context) error {
+func (s *BlocklistService) Update(ctx context.Context) (retErr error) {
+	defer func() {
+		s.mu.Lock()
+		s.updateFailed = retErr != nil
+		s.mu.Unlock()
+	}()
 	// Check if blocklists are enabled in config
 	if !s.appConfig.Server.Security.Blocklists.Enabled || len(s.appConfig.Server.Security.Blocklists.Sources) == 0 {
 		return nil
@@ -136,6 +242,9 @@ func (s *BlocklistService) loadBlocklist(filename, blockType string) error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.loadedAt == nil {
+		s.loadedAt = make(map[string]time.Time)
+	}
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -154,7 +263,15 @@ func (s *BlocklistService) loadBlocklist(filename, blockType string) error {
 		}
 	}
 
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	info, err := os.Stat(filename)
+	if err != nil {
+		return err
+	}
+	s.loadedAt[strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))] = info.ModTime()
+	return nil
 }
 
 // parseIPLine parses an IP address or CIDR block

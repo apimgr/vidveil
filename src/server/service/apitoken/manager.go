@@ -12,7 +12,12 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/apimgr/vidveil/src/server/service/secreport"
+	"github.com/apimgr/vidveil/src/server/service/secret"
+	"github.com/google/uuid"
 )
 
 const tokenAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -47,14 +52,45 @@ func CookieMaxAge(value string) int {
 
 // Manager owns API-token persistence and validation.
 type Manager struct {
-	db            *sql.DB
-	encryptionKey string
+	db                      *sql.DB
+	encryptionKey           string
+	encryptionKeyMu         sync.RWMutex
+	decryptionFailureLogger func(table, rowID string)
+}
+
+func (m *Manager) currentEncryptionKey() string {
+	m.encryptionKeyMu.RLock()
+	defer m.encryptionKeyMu.RUnlock()
+	return m.encryptionKey
+}
+
+// SetEncryptionKey applies a live config reload after the DB key marker commits.
+func (m *Manager) SetEncryptionKey(key string) {
+	if m == nil {
+		return
+	}
+	m.encryptionKeyMu.Lock()
+	m.encryptionKey = key
+	m.encryptionKeyMu.Unlock()
+}
+
+// SetDecryptionFailureLogger installs a sanitized security-event callback.
+func (m *Manager) SetDecryptionFailureLogger(logger func(table, rowID string)) {
+	if m != nil {
+		m.decryptionFailureLogger = logger
+	}
+}
+
+func (m *Manager) logDecryptionFailure(table, rowID string) {
+	if m != nil && m.decryptionFailureLogger != nil {
+		m.decryptionFailureLogger(table, rowID)
+	}
 }
 
 // Principal is the owner resolved from a valid token.
 type Principal struct {
 	OwnerID string
-	TokenID int64
+	TokenID string
 	Kind    string
 	Prefix  string
 }
@@ -62,14 +98,14 @@ type Principal struct {
 // IssuedToken contains a raw token only at the issuance boundary.
 type IssuedToken struct {
 	OwnerID string
-	TokenID int64
+	TokenID string
 	Token   string
 	Prefix  string
 }
 
 // LinkedToken contains safe metadata; raw token values are never included.
 type LinkedToken struct {
-	ID        int64
+	ID        string
 	Name      string
 	Prefix    string
 	Suffix    string
@@ -81,7 +117,7 @@ type LinkedToken struct {
 
 // PrimaryTokenMetadata contains masked primary-token details for preferences views.
 type PrimaryTokenMetadata struct {
-	ID        int64
+	ID        string
 	Prefix    string
 	Suffix    string
 	CreatedAt int64
@@ -105,37 +141,44 @@ func (m *Manager) IssuePrimary(ctx context.Context) (IssuedToken, error) {
 	if err != nil {
 		return IssuedToken{}, err
 	}
-	token, err := generateToken()
+	token, err := generateOwnerToken()
 	if err != nil {
 		return IssuedToken{}, err
 	}
 	prefix := token[:12]
-	storedHash, storedToken, err := m.encrypt(token)
-	if err != nil {
-		return IssuedToken{}, err
-	}
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
 		return IssuedToken{}, fmt.Errorf("begin owner token issuance: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_prefix = token_prefix WHERE id = ''`); err != nil {
+		return IssuedToken{}, err
+	}
+	key := m.currentEncryptionKey()
+	if err := secreport.ValidateCurrentEncryptionKey(ctx, tx, key); err != nil {
+		return IssuedToken{}, err
+	}
+	storedHash, storedToken, err := m.encryptWithKey(token, key)
+	if err != nil {
+		return IssuedToken{}, err
+	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO owners(id) VALUES (?)`, ownerID); err != nil {
 		return IssuedToken{}, fmt.Errorf("create token owner: %w", err)
 	}
-	result, err := tx.ExecContext(ctx, `INSERT INTO api_tokens
-		(owner_id, kind, name, token_hash, token_prefix, token_suffix, token_enc, resource_type, resource_id)
-		VALUES (?, 'primary', NULL, ?, ?, ?, ?, '', '')`, ownerID, storedHash, prefix, token[len(token)-4:], storedToken)
+	tokenID, err := uuid.NewV7()
+	if err != nil {
+		return IssuedToken{}, fmt.Errorf("generate primary token id: %w", err)
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO api_tokens
+		(id, owner_id, kind, name, token_hash, token_prefix, token_last4, token_enc)
+		VALUES (?, ?, 'primary', NULL, ?, ?, ?, ?)`, tokenID.String(), ownerID, storedHash, prefix, token[len(token)-4:], storedToken)
 	if err != nil {
 		return IssuedToken{}, fmt.Errorf("store primary token: %w", err)
-	}
-	id, err := result.LastInsertId()
-	if err != nil {
-		return IssuedToken{}, fmt.Errorf("read primary token id: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return IssuedToken{}, fmt.Errorf("commit owner token issuance: %w", err)
 	}
-	return IssuedToken{OwnerID: ownerID, TokenID: id, Token: token, Prefix: prefix}, nil
+	return IssuedToken{OwnerID: ownerID, TokenID: tokenID.String(), Token: token, Prefix: prefix}, nil
 }
 
 // Authenticate resolves an active owner token and updates bounded last-use data.
@@ -149,7 +192,7 @@ func (m *Manager) ValidateOnly(ctx context.Context, raw string) (Principal, erro
 }
 
 func (m *Manager) authenticate(ctx context.Context, raw string, updateLastUsed bool) (Principal, error) {
-	if !strings.HasPrefix(raw, "tok_") {
+	if !isOwnerToken(raw) {
 		return Principal{}, ErrInvalidToken
 	}
 	want := HashToken(raw)
@@ -159,21 +202,38 @@ func (m *Manager) authenticate(ctx context.Context, raw string, updateLastUsed b
 		return Principal{}, fmt.Errorf("read owner tokens: %w", err)
 	}
 	type tokenRow struct {
-		id                        int64
+		id                        string
 		owner, kind, hash, prefix string
 		revoked, expires, used    sql.NullInt64
 	}
 	var found *tokenRow
+	type hashRewrite struct{ id, value string }
+	var rewrites []hashRewrite
+	currentKey := m.currentEncryptionKey()
 	for rows.Next() {
 		var item tokenRow
 		if err := rows.Scan(&item.id, &item.owner, &item.kind, &item.hash, &item.prefix, &item.revoked, &item.expires, &item.used); err != nil {
 			_ = rows.Close()
 			return Principal{}, fmt.Errorf("scan owner token: %w", err)
 		}
-		storedHash, err := DecryptHash(m.encryptionKey, item.hash)
+		storedHash, usedPrevious, err := DecryptHashWithPrevious(currentKey, "", item.hash)
+		if err != nil {
+			previous, valid, previousErr := secret.LoadPreviousEncryptionKey(ctx, m.db, currentKey, time.Now().UTC())
+			if previousErr != nil {
+				_ = rows.Close()
+				return Principal{}, previousErr
+			}
+			if valid {
+				storedHash, usedPrevious, err = DecryptHashWithPrevious(currentKey, previous, item.hash)
+			}
+		}
 		if err != nil {
 			_ = rows.Close()
-			return Principal{}, fmt.Errorf("validate stored owner token %d: %w", item.id, err)
+			m.logDecryptionFailure("api_tokens", item.id)
+			return Principal{}, fmt.Errorf("validate stored owner token %s: %w", item.id, err)
+		}
+		if usedPrevious {
+			rewrites = append(rewrites, hashRewrite{id: item.id, value: storedHash})
 		}
 		if subtle.ConstantTimeCompare([]byte(storedHash), []byte(want)) == 1 {
 			copy := item
@@ -186,6 +246,11 @@ func (m *Manager) authenticate(ctx context.Context, raw string, updateLastUsed b
 	}
 	if err := rows.Close(); err != nil {
 		return Principal{}, fmt.Errorf("close owner tokens: %w", err)
+	}
+	for _, rewrite := range rewrites {
+		if _, err := m.db.ExecContext(ctx, `UPDATE api_tokens SET token_hash = ? WHERE id = ?`, rewrite.value, rewrite.id); err != nil {
+			return Principal{}, fmt.Errorf("rewrite owner-token digest %s with current key: %w", rewrite.id, err)
+		}
 	}
 	now := time.Now().Unix()
 	if found == nil || found.revoked.Valid || (found.expires.Valid && found.expires.Int64 <= now) {
@@ -219,6 +284,13 @@ func (m *Manager) CreateLinked(ctx context.Context, primary Principal, name stri
 		return IssuedToken{}, fmt.Errorf("begin linked-token creation: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_prefix = token_prefix WHERE id = ''`); err != nil {
+		return IssuedToken{}, err
+	}
+	key := m.currentEncryptionKey()
+	if err := secreport.ValidateCurrentEncryptionKey(ctx, tx, key); err != nil {
+		return IssuedToken{}, err
+	}
 	if err := verifyPrimary(ctx, tx, primary); err != nil {
 		return IssuedToken{}, err
 	}
@@ -236,32 +308,32 @@ func (m *Manager) CreateLinked(ctx context.Context, primary Principal, name stri
 	if duplicate > 0 {
 		return IssuedToken{}, ErrDuplicateTokenName
 	}
-	token, err := generateToken()
+	token, err := generateOwnerToken()
 	if err != nil {
 		return IssuedToken{}, err
 	}
-	hash, copy, err := m.encrypt(token)
+	hash, copy, err := m.encryptWithKey(token, key)
 	if err != nil {
 		return IssuedToken{}, err
 	}
-	result, err := tx.ExecContext(ctx, `INSERT INTO api_tokens
-		(owner_id, kind, name, token_hash, token_prefix, token_suffix, token_enc, resource_type, resource_id, expires_at)
-		VALUES (?, 'linked', ?, ?, ?, ?, ?, '', '', ?)`, primary.OwnerID, name, hash, token[:12], token[len(token)-4:], copy, expiresAt)
+	tokenID, err := uuid.NewV7()
+	if err != nil {
+		return IssuedToken{}, fmt.Errorf("generate linked token id: %w", err)
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO api_tokens
+		(id, owner_id, kind, name, token_hash, token_prefix, token_last4, token_enc, expires_at)
+		VALUES (?, ?, 'linked', ?, ?, ?, ?, ?, ?)`, tokenID.String(), primary.OwnerID, name, hash, token[:12], token[len(token)-4:], copy, expiresAt)
 	if err != nil {
 		return IssuedToken{}, fmt.Errorf("store linked token: %w", err)
-	}
-	id, err := result.LastInsertId()
-	if err != nil {
-		return IssuedToken{}, fmt.Errorf("read linked token id: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return IssuedToken{}, fmt.Errorf("commit linked-token creation: %w", err)
 	}
-	return IssuedToken{OwnerID: primary.OwnerID, TokenID: id, Token: token, Prefix: token[:12]}, nil
+	return IssuedToken{OwnerID: primary.OwnerID, TokenID: tokenID.String(), Token: token, Prefix: token[:12]}, nil
 }
 
 // Reveal returns a token only after primary-owner authorization.
-func (m *Manager) Reveal(ctx context.Context, primary Principal, id int64) (string, error) {
+func (m *Manager) Reveal(ctx context.Context, primary Principal, id string) (string, error) {
 	if primary.Kind != "primary" || primary.OwnerID == "" {
 		return "", ErrManagementForbidden
 	}
@@ -275,30 +347,79 @@ func (m *Manager) Reveal(ctx context.Context, primary Principal, id int64) (stri
 		}
 		return "", fmt.Errorf("read token for reveal: %w", err)
 	}
-	token, err := DecryptToken(m.encryptionKey, encrypted)
+	currentKey := m.currentEncryptionKey()
+	token, err := DecryptToken(currentKey, encrypted)
 	if err != nil {
+		previous, valid, previousErr := secret.LoadPreviousEncryptionKey(ctx, m.db, currentKey, time.Now().UTC())
+		if previousErr != nil {
+			return "", previousErr
+		}
+		if valid {
+			token, usedPrevious, fallbackErr := DecryptTokenWithPrevious(currentKey, previous, encrypted)
+			if fallbackErr == nil && usedPrevious {
+				tx, txErr := m.db.BeginTx(ctx, nil)
+				if txErr != nil {
+					return "", txErr
+				}
+				defer func() { _ = tx.Rollback() }()
+				if _, txErr = tx.ExecContext(ctx, `UPDATE api_tokens SET token_prefix = token_prefix WHERE id = ''`); txErr != nil {
+					return "", txErr
+				}
+				if txErr = secreport.ValidateCurrentEncryptionKey(ctx, tx, currentKey); txErr != nil {
+					return "", txErr
+				}
+				rewritten, encErr := EncryptToken(currentKey, token)
+				if encErr != nil {
+					return "", encErr
+				}
+				if _, encErr = tx.ExecContext(ctx, `UPDATE api_tokens SET token_enc = ? WHERE id = ?`, rewritten, id); encErr != nil {
+					return "", encErr
+				}
+				if encErr = tx.Commit(); encErr != nil {
+					return "", encErr
+				}
+				err = nil
+			} else {
+				err = fallbackErr
+			}
+		}
+	}
+	if err != nil {
+		m.logDecryptionFailure("api_tokens", id)
 		return "", fmt.Errorf("decrypt token for reveal: %w", err)
 	}
 	return token, nil
 }
 
 // Rotate replaces a token in place while preserving owner, name, expiry and resource ownership.
-func (m *Manager) Rotate(ctx context.Context, primary Principal, id int64) (IssuedToken, error) {
+func (m *Manager) Rotate(ctx context.Context, primary Principal, id string) (IssuedToken, error) {
 	if primary.Kind != "primary" || primary.OwnerID == "" {
 		return IssuedToken{}, ErrManagementForbidden
 	}
-	if err := verifyPrimary(ctx, m.db, primary); err != nil {
-		return IssuedToken{}, err
-	}
-	token, err := generateToken()
+	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
 		return IssuedToken{}, err
 	}
-	hash, copy, err := m.encrypt(token)
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_prefix = token_prefix WHERE id = ''`); err != nil {
+		return IssuedToken{}, err
+	}
+	key := m.currentEncryptionKey()
+	if err := secreport.ValidateCurrentEncryptionKey(ctx, tx, key); err != nil {
+		return IssuedToken{}, err
+	}
+	if err := verifyPrimary(ctx, tx, primary); err != nil {
+		return IssuedToken{}, err
+	}
+	token, err := generateOwnerToken()
 	if err != nil {
 		return IssuedToken{}, err
 	}
-	result, err := m.db.ExecContext(ctx, `UPDATE api_tokens SET token_hash = ?, token_prefix = ?, token_suffix = ?, token_enc = ?, rotated_at = ?
+	hash, copy, err := m.encryptWithKey(token, key)
+	if err != nil {
+		return IssuedToken{}, err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_hash = ?, token_prefix = ?, token_last4 = ?, token_enc = ?, rotated_at = ?
 		WHERE id = ? AND owner_id = ? AND revoked_at IS NULL AND (kind = 'linked' OR (kind = 'primary' AND id = ?))`,
 		hash, token[:12], token[len(token)-4:], copy, time.Now().Unix(), id, primary.OwnerID, primary.TokenID)
 	if err != nil {
@@ -311,6 +432,9 @@ func (m *Manager) Rotate(ctx context.Context, primary Principal, id int64) (Issu
 	if changed != 1 {
 		return IssuedToken{}, ErrInvalidToken
 	}
+	if err := tx.Commit(); err != nil {
+		return IssuedToken{}, err
+	}
 	return IssuedToken{OwnerID: primary.OwnerID, TokenID: id, Token: token, Prefix: token[:12]}, nil
 }
 
@@ -319,7 +443,7 @@ func (m *Manager) ListLinked(ctx context.Context, primary Principal) ([]LinkedTo
 	if primary.Kind != "primary" || primary.OwnerID == "" {
 		return nil, ErrManagementForbidden
 	}
-	rows, err := m.db.QueryContext(ctx, `SELECT id, COALESCE(name, ''), token_prefix, token_suffix, created_at, last_used_at, expires_at, revoked_at
+	rows, err := m.db.QueryContext(ctx, `SELECT id, COALESCE(name, ''), token_prefix, token_last4, created_at, last_used_at, expires_at, revoked_at
 		FROM api_tokens WHERE owner_id = ? AND kind = 'linked' ORDER BY created_at DESC, id DESC`, primary.OwnerID)
 	if err != nil {
 		return nil, fmt.Errorf("list linked tokens: %w", err)
@@ -348,7 +472,7 @@ func (m *Manager) PrimaryMetadata(ctx context.Context, primary Principal) (Prima
 		return PrimaryTokenMetadata{}, err
 	}
 	var item PrimaryTokenMetadata
-	err := m.db.QueryRowContext(ctx, `SELECT id, token_prefix, token_suffix, created_at, last_used_at
+	err := m.db.QueryRowContext(ctx, `SELECT id, token_prefix, token_last4, created_at, last_used_at
 		FROM api_tokens WHERE owner_id = ? AND kind = 'primary' AND revoked_at IS NULL`, primary.OwnerID).
 		Scan(&item.ID, &item.Prefix, &item.Suffix, &item.CreatedAt, &item.LastUsed)
 	if err == sql.ErrNoRows {
@@ -397,7 +521,7 @@ func (m *Manager) PurgeIdleOwners(ctx context.Context, idleDays int) (int64, err
 }
 
 // RevokeLinked permanently revokes one linked token belonging to the owner.
-func (m *Manager) RevokeLinked(ctx context.Context, primary Principal, id int64) error {
+func (m *Manager) RevokeLinked(ctx context.Context, primary Principal, id string) error {
 	if primary.Kind != "primary" || primary.OwnerID == "" {
 		return ErrManagementForbidden
 	}
@@ -420,7 +544,7 @@ func (m *Manager) RevokeLinked(ctx context.Context, primary Principal, id int64)
 }
 
 // UpdateLinked changes a linked token's name and expiry without changing its credential.
-func (m *Manager) UpdateLinked(ctx context.Context, primary Principal, id int64, name string, expiresAt *int64) error {
+func (m *Manager) UpdateLinked(ctx context.Context, primary Principal, id, name string, expiresAt *int64) error {
 	if primary.Kind != "primary" || primary.OwnerID == "" {
 		return ErrManagementForbidden
 	}
@@ -482,18 +606,22 @@ var ErrDuplicateTokenName = fmt.Errorf("linked-token name already exists")
 var ErrInvalidToken = fmt.Errorf("invalid token")
 
 func (m *Manager) encrypt(token string) (string, string, error) {
+	return m.encryptWithKey(token, m.currentEncryptionKey())
+}
+
+func (m *Manager) encryptWithKey(token, key string) (string, string, error) {
 	hash := HashToken(token)
-	copy, err := EncryptToken(m.encryptionKey, token)
+	copy, err := EncryptToken(key, token)
 	if err != nil {
 		return "", "", err
 	}
 	return hash, copy, nil
 }
 
-func generateToken() (string, error) {
+func generateOwnerToken() (string, error) {
 	var token strings.Builder
 	token.Grow(36)
-	token.WriteString("tok_")
+	token.WriteString("own_")
 	max := big.NewInt(int64(len(tokenAlphabet)))
 	for range 32 {
 		index, err := rand.Int(rand.Reader, max)
@@ -503,6 +631,18 @@ func generateToken() (string, error) {
 		token.WriteByte(tokenAlphabet[index.Int64()])
 	}
 	return token.String(), nil
+}
+
+func isOwnerToken(token string) bool {
+	if len(token) != 36 || (!strings.HasPrefix(token, "own_") && !strings.HasPrefix(token, "tok_")) {
+		return false
+	}
+	for _, char := range token[4:] {
+		if !strings.ContainsRune(tokenAlphabet, char) {
+			return false
+		}
+	}
+	return true
 }
 
 func randomID() (string, error) {

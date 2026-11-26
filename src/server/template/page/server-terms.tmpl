@@ -3,23 +3,26 @@
 {{end}}
 
 {{define "content"}}
-<div class="content">
-    <div class="prose">
-        <h1>{{ t "terms.title" }}</h1>
+<div class="container container-md">
+    <header class="page-header">
+        <h1 class="page-title">{{ t "terms.title" }}</h1>
+        <p class="page-lead">{{ tf "terms.acceptance_body" "app_name" .AppName }}</p>
         <p class="last-updated">{{ tf "terms.last_updated" "date" .BuildDateTime }}</p>
+    </header>
         {{ if operatorContentConfigured "terms" }}
+        <section class="section-card" aria-labelledby="terms-content-heading">
+        <h2 id="terms-content-heading">{{ t "terms.acceptance" }}</h2>
         {{ operatorHTML "terms" }}
-        {{ else if .PageContent }}
-        {{ .PageContent | markdownToHTML }}
+        </section>
         {{ else }}
 
-        <h2>{{ t "terms.acceptance" }}</h2>
-        <p>{{ tf "terms.acceptance_body" "app_name" .AppName }}</p>
-
-        <h2>{{ t "terms.eligibility" }}</h2>
+        <section class="section-card" aria-labelledby="terms-eligibility-heading">
+        <h2 id="terms-eligibility-heading">{{ t "terms.eligibility" }}</h2>
         <p>{{ tf "terms.eligibility_body" "app_name" .AppName }}</p>
+        </section>
 
-        <h2>{{ t "terms.acceptable_use" }}</h2>
+        <section class="section-card" aria-labelledby="terms-acceptable-use-heading">
+        <h2 id="terms-acceptable-use-heading">{{ t "terms.acceptable_use" }}</h2>
         <p>{{ tf "terms.acceptable_use_intro" "app_name" .AppName }}</p>
         <ul>
             <li>{{ t "terms.rule_illegal_content" }}</li>
@@ -28,25 +31,37 @@
             <li>{{ t "terms.rule_probe" }}</li>
             <li>{{ t "terms.rule_automation" }}</li>
         </ul>
+        </section>
 
-        <h2>{{ t "terms.third_party" }}</h2>
+        <section class="section-card" aria-labelledby="terms-third-party-heading">
+        <h2 id="terms-third-party-heading">{{ t "terms.third_party" }}</h2>
         <p>{{ tf "terms.third_party_body" "app_name" .AppName }}</p>
+        </section>
 
-        <h2>{{ t "terms.no_warranty" }}</h2>
+        <section class="section-card" aria-labelledby="terms-no-warranty-heading">
+        <h2 id="terms-no-warranty-heading">{{ t "terms.no_warranty" }}</h2>
         <p>{{ t "terms.no_warranty_body" }}</p>
+        </section>
 
-        <h2>{{ t "terms.liability" }}</h2>
+        <section class="section-card" aria-labelledby="terms-liability-heading">
+        <h2 id="terms-liability-heading">{{ t "terms.liability" }}</h2>
         <p>{{ tf "terms.liability_body" "app_name" .AppName }}</p>
+        </section>
 
-        <h2>{{ t "terms.changes" }}</h2>
+        <section class="section-card" aria-labelledby="terms-changes-heading">
+        <h2 id="terms-changes-heading">{{ t "terms.changes" }}</h2>
         <p>{{ t "terms.changes_body" }}</p>
+        </section>
 
-        <h2>{{ t "terms.governing_law" }}</h2>
+        <section class="section-card" aria-labelledby="terms-governing-law-heading">
+        <h2 id="terms-governing-law-heading">{{ t "terms.governing_law" }}</h2>
         <p>{{ t "terms.governing_law_body" }}</p>
+        </section>
 
-        <h2>{{ t "terms.questions" }}</h2>
+        <section class="section-card" aria-labelledby="terms-questions-heading">
+        <h2 id="terms-questions-heading">{{ t "terms.questions" }}</h2>
         <p>{{ t "terms.questions_prefix" }} <a href="{{ path "/server/security" }}">{{ t "security.title" }}</a>.</p>
+        </section>
         {{ end }}
-    </div>
 </div>
 {{end}}

@@ -21,6 +21,7 @@ RUN go mod download
 # Copy source and build per AI.md PART 7
 # BuildDate is NOT embedded - it is derived from BuildEpoch at process start
 COPY . .
+RUN go generate ./src/swagger
 RUN if [ -f site.txt ]; then OFFICIAL_SITE_VALUE="$(cat site.txt)"; else OFFICIAL_SITE_VALUE="${OFFICIAL_SITE:-}"; fi; \
     CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -trimpath -buildvcs=false \

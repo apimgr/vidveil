@@ -8,11 +8,15 @@
     <meta name="robots" content="noindex,nofollow">
     <title>{{.Title}}</title>
     <link rel="stylesheet" href="{{ asset "/static/css/common.css" }}">
+    <link rel="stylesheet" href="{{ asset "/static/css/public.css" }}">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128269;</text></svg>">
 </head>
 <body>
     {{ trackingNoScript }}
     <a href="#main-content" class="skip-link">{{ t "a11y.skip_to_main" }}</a>
+    <a href="#navigation" class="skip-link">{{ t "a11y.skip_to_nav" }}</a>
+    {{template "public/site-banner" .}}
+    {{template "public/header" .}}
     <main class="age-gate" id="main-content" role="main">
         <div class="age-gate-box">
             <div class="warning-icon">&#9888;&#65039;</div>
@@ -32,6 +36,7 @@
             </p>
         </div>
     </main>
+    {{template "public/footer" .}}
 </body>
 </html>
 {{end}}

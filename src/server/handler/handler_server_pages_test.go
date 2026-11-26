@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/notify"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
@@ -153,6 +154,58 @@ func TestServerHandler_AboutPage_TextBrowserUsesNoJSTemplate(t *testing.T) {
 	}
 }
 
+func TestServerHandler_ContactPage_LocalizesTextBrowserContent(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := newServerHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/server/contact?lang=fr", nil)
+	req.Header.Set("User-Agent", "Lynx/2.9.0")
+	response := httptest.NewRecorder()
+	h.ContactPage(response, req)
+	if response.Code != http.StatusOK {
+		t.Fatalf("ContactPage text browser: status=%d body=%s", response.Code, response.Body.String())
+	}
+	want := i18n.Translate("fr", "contact.report_disclaimer")
+	if !strings.Contains(response.Body.String(), want) || strings.Contains(response.Body.String(), "Use this form only") {
+		t.Errorf("contact page text-browser content was not localized: %s", response.Body.String())
+	}
+}
+
+func TestServerHandler_ServerPagesRenderWithoutJavaScript(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := newServerHandler(t)
+	pages := []struct {
+		name string
+		path string
+		h    func(http.ResponseWriter, *http.Request)
+	}{
+		{name: "about", path: "/server/about", h: h.AboutPage},
+		{name: "privacy", path: "/server/privacy", h: h.PrivacyPage},
+		{name: "dpo", path: "/server/dpo", h: h.DPOPage},
+		{name: "contact", path: "/server/contact", h: h.ContactPage},
+		{name: "help", path: "/server/help", h: h.HelpPage},
+		{name: "mcp help", path: "/server/help/mcp", h: h.HelpMCPPage},
+		{name: "terms", path: "/server/terms", h: h.TermsPage},
+		{name: "security", path: "/server/security", h: h.SecurityPage},
+		{name: "security policy", path: "/server/security/policy", h: h.SecurityPolicyPage},
+		{name: "security thanks", path: "/server/security/thanks", h: h.SecurityThanksPage},
+	}
+	for _, page := range pages {
+		t.Run(page.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, page.path, nil)
+			req.Header.Set("User-Agent", "Lynx/2.9.0")
+			response := httptest.NewRecorder()
+			page.h(response, req)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+			}
+			body := response.Body.String()
+			if !strings.Contains(body, `href="#main-content"`) || !strings.Contains(body, `href="#navigation"`) || strings.Contains(body, "/static/js/app.js") {
+				t.Errorf("text-browser page is missing skip links or loaded JavaScript: %s", body)
+			}
+		})
+	}
+}
+
 func TestServerHandler_AboutPage_HTTPToolGetsFormattedText(t *testing.T) {
 	setRealTemplatesFS(t)
 	h := newServerHandler(t)
@@ -177,8 +230,78 @@ func TestHealthz_TextBrowserGetsNoJSTemplate(t *testing.T) {
 	h.renderHealthzHTML(response, req, "healthy", http.StatusOK, "development", "1h", "localhost", time.Now().Format(time.RFC3339), map[string]string{
 		"database": "ok", "cache": "ok", "disk": "ok", "scheduler": "ok",
 	})
-	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "<script") || !strings.Contains(response.Body.String(), "System Health") {
-		t.Fatalf("healthz text-browser response: status=%d body=%s", response.Code, response.Body.String())
+	body := response.Body.String()
+	for _, match := range regexp.MustCompile(`<script\b([^>]*)>`).FindAllStringSubmatch(body, -1) {
+		attrs := strings.ToLower(match[1])
+		if !strings.Contains(attrs, `type="application/ld+json"`) && !strings.Contains(attrs, `type="application/json"`) {
+			t.Errorf("healthz text-browser response contains executable script tag %q", match[0])
+		}
+	}
+	if response.Code != http.StatusOK || !strings.Contains(body, "System Health") || !strings.Contains(body, `href="#main-content"`) || !strings.Contains(body, `href="#navigation"`) {
+		t.Fatalf("healthz text-browser response: status=%d body=%s", response.Code, body)
+	}
+}
+
+func TestRenderResponse_TextBrowserPagesUseStandaloneNoJSTemplates(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := &SearchHandler{appConfig: config.DefaultAppConfig()}
+	pages := []string{
+		"home",
+		"search",
+		"preferences",
+		"preferences-sync",
+		"owner-tokens",
+		"favorites",
+		"about",
+		"age-verify",
+		"content-restricted",
+		"content-blocked",
+		"privacy",
+		"error",
+	}
+	for _, page := range pages {
+		t.Run(page, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/", nil)
+			request.Header.Set("User-Agent", "Lynx/2.8.9rel.1 libwww-FM/2.14 SSL-MM")
+			response := httptest.NewRecorder()
+			h.renderResponse(response, request, page, map[string]interface{}{
+				"Title":           "Test page",
+				"Theme":           "auto",
+				"Lang":            "en",
+				"Dir":             "ltr",
+				"Favorites":       []Favorite{},
+				"Results":         []interface{}{},
+				"Page":            1,
+				"TotalPages":      1,
+				"Prefs":           map[string]string{},
+				"Languages":       []interface{}{},
+				"PreferencePages": []interface{}{},
+			})
+			if response.Code != http.StatusOK {
+				t.Fatalf("text-browser %s status = %d, want %d; body = %s", page, response.Code, http.StatusOK, response.Body.String())
+			}
+			for _, match := range regexp.MustCompile(`(?is)<script\b([^>]*)>`).FindAllStringSubmatch(response.Body.String(), -1) {
+				attributes := strings.ToLower(match[1])
+				if !strings.Contains(attributes, `type="application/json"`) && !strings.Contains(attributes, `type="application/ld+json"`) {
+					t.Errorf("text-browser %s rendered an executable script element: %s", page, match[0])
+				}
+			}
+		})
+	}
+}
+
+func TestOwnerTokensPage_TextBrowserUsesStandaloneNoJSTemplate(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := &SearchHandler{appConfig: config.DefaultAppConfig()}
+	request := httptest.NewRequest(http.MethodGet, "/server/preferences/tokens", nil)
+	request.Header.Set("User-Agent", "Lynx/2.8.9rel.1")
+	response := httptest.NewRecorder()
+	h.OwnerTokensPage(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("owner token text-browser status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "<form") {
+		t.Errorf("owner token text-browser page did not render its script-free no-JS content: %s", response.Body.String())
 	}
 }
 
@@ -384,12 +507,12 @@ func TestServerHandler_ContactPage_RendersTypeSpecificForms(t *testing.T) {
 }
 
 func contactProse(body string) string {
-	start := strings.Index(body, `<div class="prose">`)
+	start := strings.Index(body, `<section class="section-card" aria-labelledby="contact-card-title">`)
 	if start < 0 {
 		return body
 	}
 	body = body[start:]
-	if end := strings.Index(body, "</div>\n</div>"); end >= 0 {
+	if end := strings.Index(body, "</section>"); end >= 0 {
 		return body[:end]
 	}
 	return body
@@ -806,6 +929,7 @@ func TestRenderErrorPage_RealFS_Returns404WithHTML(t *testing.T) {
 	h := &SearchHandler{appConfig: cfg}
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/missing", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 
 	h.RenderErrorPage(rr, req, http.StatusNotFound, "Not Found", "Resource not found")
 

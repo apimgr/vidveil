@@ -130,7 +130,7 @@ func revokeAPIToken(db *sql.DB, prefix string) error {
 		return fmt.Errorf("lookup token: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	var id int64
+	var id string
 	var ownerID, kind string
 	if rows.Next() {
 		if err := rows.Scan(&id, &ownerID, &kind); err != nil {

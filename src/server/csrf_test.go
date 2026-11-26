@@ -38,7 +38,7 @@ func TestCsrfBypassMCPAliases(t *testing.T) {
 	for _, path := range []string{"/mcp", "/api/mcp", "/api/v2/server/mcp"} {
 		req := httptest.NewRequest("POST", path, nil)
 		if !csrfBypass(config.CSRFConfig{}, req) {
-			t.Errorf("CSRF should be bypassed for anonymous MCP POST %s", path)
+			t.Errorf("CSRF should be bypassed for Bearer-authenticated MCP POST %s", path)
 		}
 	}
 	for _, path := range []string{"/not-api/server/mcp", "/custom/server/mcp"} {
@@ -50,13 +50,13 @@ func TestCsrfBypassMCPAliases(t *testing.T) {
 }
 
 func TestCsrfBypassBackendAPI(t *testing.T) {
-	for _, path := range []string{"/api/v1/server/preferences", "/api/v2/server/preferences", "/api/v1/server/preferences/import", "/api/custom/server/preferences", "/api/v1/anything"} {
+	for _, path := range []string{"/api/v1/server/preferences", "/api/v2/server/preferences", "/api/v1/server/preferences/sync/import", "/api/custom/server/preferences", "/api/v1/anything"} {
 		req := httptest.NewRequest("POST", path, nil)
 		if !csrfBypass(config.CSRFConfig{}, req) {
 			t.Errorf("CSRF should be bypassed for API route %s", path)
 		}
 	}
-	for _, path := range []string{"/server/preferences", "/server/preferences/import"} {
+	for _, path := range []string{"/server/preferences", "/server/preferences/sync/import"} {
 		req := httptest.NewRequest("POST", path, nil)
 		if csrfBypass(config.CSRFConfig{}, req) {
 			t.Errorf("CSRF unexpectedly bypassed for %s", path)

@@ -8,12 +8,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +20,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/secret"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 const ownerTokenRevealCookie = "vidveil_token_reveal_once"
@@ -107,7 +106,7 @@ func (s *Server) setOwnerTokenCookie(w http.ResponseWriter, raw string) {
 	http.SetCookie(w, &http.Cookie{Name: apitoken.OwnerCookieName, Value: raw, Path: "/", MaxAge: maxAge, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
 }
 
-func (s *Server) redirectOwnerTokenReveal(w http.ResponseWriter, r *http.Request, token string, id int64, primary bool, notice string) {
+func (s *Server) redirectOwnerTokenReveal(w http.ResponseWriter, r *http.Request, token, id string, primary bool, notice string) {
 	var nonce [24]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		http.Error(w, "Could not prepare token reveal", http.StatusInternalServerError)
@@ -142,7 +141,7 @@ func (s *Server) redirectOwnerTokenReveal(w http.ResponseWriter, r *http.Request
 	http.SetCookie(w, &http.Cookie{Name: ownerTokenRevealCookie, Value: key, Path: "/", MaxAge: 60, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
 	fragment := "#primary"
 	if !primary {
-		fragment = fmt.Sprintf("#token-%d", id)
+		fragment = "#token-" + id
 	}
 	target := urlvar.BuildURL(r, "/server/preferences/tokens")
 	if notice != "" {
@@ -187,7 +186,7 @@ func (s *Server) ownerTokenWebRevealPrimary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s.auditOwnerToken("token.revealed", principal.OwnerID, principal.Prefix, r)
-	s.redirectOwnerTokenReveal(w, r, token, 0, true, "")
+	s.redirectOwnerTokenReveal(w, r, token, "", true, "")
 }
 
 func (s *Server) ownerTokenWebRotatePrimary(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +206,7 @@ func (s *Server) ownerTokenWebRotatePrimary(w http.ResponseWriter, r *http.Reque
 	s.rotateCSRFSecretAfterAPITokenRegeneration(r)
 	s.setOwnerTokenCookie(w, issued.Token)
 	s.auditOwnerToken("token.rotated", principal.OwnerID, issued.Prefix, r)
-	s.redirectOwnerTokenReveal(w, r, issued.Token, 0, true, "token-rotated")
+	s.redirectOwnerTokenReveal(w, r, issued.Token, "", true, "token-rotated")
 }
 
 func (s *Server) ownerTokenWebCreateLinked(w http.ResponseWriter, r *http.Request) {
@@ -233,17 +232,18 @@ func (s *Server) ownerTokenWebCreateLinked(w http.ResponseWriter, r *http.Reques
 	s.redirectOwnerTokenReveal(w, r, issued.Token, issued.TokenID, false, "token-created")
 }
 
-func (s *Server) ownerTokenWebLinkedID(w http.ResponseWriter, r *http.Request, sensitive bool) (apitoken.Principal, int64, bool) {
+func (s *Server) ownerTokenWebLinkedID(w http.ResponseWriter, r *http.Request, sensitive bool) (apitoken.Principal, string, bool) {
 	principal, ok := s.ownerTokenWebPrincipal(w, r, sensitive)
 	if !ok {
-		return apitoken.Principal{}, 0, false
+		return apitoken.Principal{}, "", false
 	}
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || id < 1 {
+	id := chi.URLParam(r, "id")
+	parsed, err := uuid.Parse(id)
+	if err != nil || parsed.Version() != 7 {
 		http.NotFound(w, r)
-		return apitoken.Principal{}, 0, false
+		return apitoken.Principal{}, "", false
 	}
-	return principal, id, true
+	return principal, parsed.String(), true
 }
 
 func (s *Server) ownerTokenWebRevealLinked(w http.ResponseWriter, r *http.Request) {
@@ -293,7 +293,7 @@ func (s *Server) ownerTokenWebUpdateLinked(w http.ResponseWriter, r *http.Reques
 		s.ownerTokenOperationError(w, err)
 		return
 	}
-	http.Redirect(w, r, urlvar.BuildURL(r, "/server/preferences/tokens")+"?notice=token-renamed#token-"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+	http.Redirect(w, r, urlvar.BuildURL(r, "/server/preferences/tokens")+"?notice=token-renamed#token-"+id, http.StatusSeeOther)
 }
 
 func (s *Server) ownerTokenWebRevokeLinked(w http.ResponseWriter, r *http.Request) {
@@ -315,7 +315,7 @@ func (s *Server) ownerTokenWebRevokeLinked(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	s.auditOwnerToken("token.revoked", principal.OwnerID, prefix, r)
-	http.Redirect(w, r, urlvar.BuildURL(r, "/server/preferences/tokens")+"?notice=token-revoked#token-"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+	http.Redirect(w, r, urlvar.BuildURL(r, "/server/preferences/tokens")+"?notice=token-revoked#token-"+id, http.StatusSeeOther)
 }
 
 func (s *Server) ownerTokenRestore(w http.ResponseWriter, r *http.Request) {
@@ -341,6 +341,39 @@ func (s *Server) ownerTokenRestore(w http.ResponseWriter, r *http.Request) {
 	s.setOwnerTokenCookie(w, strings.TrimSpace(r.FormValue("token")))
 	s.auditOwnerToken("token.restored", principal.OwnerID, principal.Prefix, r)
 	http.Redirect(w, r, urlvar.BuildURL(r, "/server/preferences/tokens")+"#primary", http.StatusSeeOther)
+}
+
+// ownerTokenWebIssuePrimary creates the visitor's first anonymous identity.
+func (s *Server) ownerTokenWebIssuePrimary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if s.tokenActionLimiter != nil && !s.tokenActionLimiter.Allow(urlvar.ResolveClientIP(r)) {
+		w.Header().Set("Retry-After", "900")
+		handler.SendError(w, "RATE_LIMITED", "Too many token actions")
+		return
+	}
+	if s.tokenManager == nil {
+		handler.SendError(w, "SERVER_ERROR", "Token management is unavailable")
+		return
+	}
+	if cookie, err := r.Cookie(ownerTokenCookieName); err == nil {
+		_, ownerErr := s.tokenManager.ValidateOnly(r.Context(), cookie.Value)
+		if s.matchesOperatorToken(cookie.Value) || ownerErr == nil {
+			handler.SendError(w, "CONFLICT", "A valid token is already present")
+			return
+		}
+	}
+	issued, err := s.tokenManager.IssuePrimary(r.Context())
+	if err != nil {
+		handler.SendError(w, "SERVER_ERROR", "Could not issue a primary token")
+		return
+	}
+	s.setOwnerTokenCookie(w, issued.Token)
+	if s.logger != nil {
+		s.logger.Audit("token.created", issued.OwnerID, "owner", urlvar.ResolveClientIP(r), "success", map[string]interface{}{
+			"owner_id": issued.OwnerID, "token_prefix": issued.Prefix, "source": "issue",
+		})
+	}
+	s.redirectOwnerTokenReveal(w, r, issued.Token, "", true, "token-created")
 }
 
 func (s *Server) ownerTokensAPIList(w http.ResponseWriter, r *http.Request) {
@@ -377,6 +410,46 @@ func (s *Server) ownerTokensAPIList(w http.ResponseWriter, r *http.Request) {
 		"primary": map[string]any{"id": primary.ID, "prefix": primary.Prefix, "suffix": primary.Suffix, "created_at": primary.CreatedAt, "last_used_at": nullInt(primary.LastUsed)},
 		"linked":  items,
 	})
+}
+
+// ownerTokensAPIIssuePrimary issues a new anonymous primary token when the
+// caller does not already hold a valid operator or owner credential.
+func (s *Server) ownerTokensAPIIssuePrimary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if s.tokenActionLimiter != nil && !s.tokenActionLimiter.Allow(urlvar.ResolveClientIP(r)) {
+		w.Header().Set("Retry-After", "900")
+		handler.SendError(w, "RATE_LIMITED", "Too many token actions")
+		return
+	}
+
+	if raw, ok := bearerToken(strings.TrimSpace(r.Header.Get("Authorization"))); ok {
+		if s.matchesOperatorToken(raw) {
+			handler.SendError(w, "CONFLICT", "A valid token is already present")
+			return
+		}
+		if s.tokenManager != nil {
+			if _, err := s.tokenManager.ValidateOnly(r.Context(), raw); err == nil {
+				handler.SendError(w, "CONFLICT", "A valid token is already present")
+				return
+			}
+		}
+	}
+	if s.tokenManager == nil {
+		handler.SendError(w, "SERVER_ERROR", "Token management is unavailable")
+		return
+	}
+	issued, err := s.tokenManager.IssuePrimary(r.Context())
+	if err != nil {
+		handler.SendError(w, "SERVER_ERROR", "Could not issue a primary token")
+		return
+	}
+	if s.logger != nil {
+		s.logger.Audit("token.created", issued.OwnerID, "owner", urlvar.ResolveClientIP(r), "success", map[string]interface{}{
+			"owner_id": issued.OwnerID, "token_prefix": issued.Prefix, "source": "issue",
+		})
+	}
+	w.WriteHeader(http.StatusCreated)
+	handler.SendOK(w, map[string]string{"owner_token": issued.Token})
 }
 
 func (s *Server) ownerTokensAPICreate(w http.ResponseWriter, r *http.Request) {
@@ -511,17 +584,18 @@ func (s *Server) ownerTokensAPIRevokeLinked(w http.ResponseWriter, r *http.Reque
 	handler.SendOK(w, map[string]bool{"revoked": true})
 }
 
-func (s *Server) ownerTokenRequestID(w http.ResponseWriter, r *http.Request) (apitoken.Principal, int64, bool) {
+func (s *Server) ownerTokenRequestID(w http.ResponseWriter, r *http.Request) (apitoken.Principal, string, bool) {
 	principal, ok := s.ownerTokenPrincipal(w, r)
 	if !ok {
-		return apitoken.Principal{}, 0, false
+		return apitoken.Principal{}, "", false
 	}
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || id < 1 {
+	id := chi.URLParam(r, "id")
+	parsed, err := uuid.Parse(id)
+	if err != nil || parsed.Version() != 7 {
 		handler.SendError(w, "NOT_FOUND", "Token not found")
-		return apitoken.Principal{}, 0, false
+		return apitoken.Principal{}, "", false
 	}
-	return principal, id, true
+	return principal, parsed.String(), true
 }
 
 func (s *Server) ownerTokenOperationError(w http.ResponseWriter, err error) {

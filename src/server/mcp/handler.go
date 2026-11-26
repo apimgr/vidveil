@@ -28,6 +28,7 @@ import (
 // called in-process so the API handlers retain their normal validation and
 // authorization behavior.
 type OperatorAuthorizer func(*http.Request) bool
+type BearerAuthorizer func(*http.Request) bool
 
 type internalDispatchKey struct{}
 
@@ -47,7 +48,7 @@ func IsInternalDispatch(ctx context.Context) bool {
 	return value
 }
 
-func Handler(cfg *config.AppConfig, api http.Handler, isOperator OperatorAuthorizer) http.Handler {
+func Handler(cfg *config.AppConfig, api http.Handler, isOperator OperatorAuthorizer, isAuthenticated BearerAuthorizer) http.Handler {
 	streamable := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
 		server := sdk.NewServer(&sdk.Implementation{Name: "vidveil", Version: version.GetVersion()}, &sdk.ServerOptions{})
 		if cfg == nil || api == nil {
@@ -60,13 +61,117 @@ func Handler(cfg *config.AppConfig, api http.Handler, isOperator OperatorAuthori
 				Name:        operation.name,
 				Description: operation.description,
 				InputSchema: operation.schema,
+				Annotations: toolAnnotations(operation.method),
 			}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
 				return callAPI(ctx, api, r, operation, req.Params.Arguments)
 			})
 		}
 		return server
 	}, &sdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true, DisableLocalhostProtection: true})
-	return streamable
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			writeRPCError(w, http.StatusMethodNotAllowed, nil, -32600, "Method not allowed")
+			return
+		}
+		if isAuthenticated == nil || !isAuthenticated(r) {
+			w.Header().Set("WWW-Authenticate", `Bearer`)
+			writeRPCError(w, http.StatusUnauthorized, nil, -32000, "Unauthorized")
+			return
+		}
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 10<<20))
+		if err != nil {
+			writeRPCError(w, http.StatusBadRequest, nil, -32600, "Invalid request")
+			return
+		}
+		var envelope struct {
+			ID     any            `json:"id"`
+			Method string         `json:"method"`
+			Meta   map[string]any `json:"_meta"`
+			Params struct {
+				Name            string         `json:"name"`
+				URI             string         `json:"uri"`
+				ProtocolVersion string         `json:"protocolVersion"`
+				Meta            map[string]any `json:"_meta"`
+			} `json:"params"`
+		}
+		if json.Unmarshal(body, &envelope) != nil || envelope.Method == "" {
+			writeRPCError(w, http.StatusBadRequest, envelope.ID, -32600, "Invalid request")
+			return
+		}
+		protocol := strings.TrimSpace(r.Header.Get("MCP-Protocol-Version"))
+		bodyMeta := envelope.Meta
+		if bodyMeta == nil {
+			bodyMeta = envelope.Params.Meta
+		}
+		bodyProtocol, _ := bodyMeta["io.modelcontextprotocol/protocolVersion"].(string)
+		initializeVersion := envelope.Params.ProtocolVersion
+		if (envelope.Method == "initialize" && protocol == "" && bodyProtocol == "" && r.Header.Get("Mcp-Method") == "" && r.Header.Get("Mcp-Name") == "") || (protocol != "" && protocol != "2026-07-28") || (envelope.Method == "initialize" && initializeVersion != "" && initializeVersion != "2026-07-28") {
+			writeRPCError(w, http.StatusBadRequest, envelope.ID, -32000, "UnsupportedProtocolVersionError: supported version is 2026-07-28")
+			return
+		}
+		if protocol == "" || bodyProtocol == "" || protocol != bodyProtocol || r.Header.Get("Mcp-Method") != envelope.Method {
+			writeRPCError(w, http.StatusBadRequest, envelope.ID, -32020, "HeaderMismatch")
+			return
+		}
+		if envelope.Method == "tools/call" || envelope.Method == "resources/read" || envelope.Method == "prompts/get" {
+			name := envelope.Params.Name
+			if name == "" {
+				name = envelope.Params.URI
+			}
+			headerName, ok := decodeMCPName(r.Header.Get("Mcp-Name"))
+			if !ok || name == "" || headerName != name {
+				writeRPCError(w, http.StatusBadRequest, envelope.ID, -32020, "HeaderMismatch")
+				return
+			}
+		}
+		if !supportedMethod(envelope.Method) {
+			writeRPCError(w, http.StatusNotFound, envelope.ID, -32601, "Method not found")
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		streamable.ServeHTTP(w, r)
+	})
+}
+
+func supportedMethod(method string) bool {
+	switch method {
+	case "initialize", "notifications/initialized", "ping", "tools/list", "tools/call":
+		return true
+	default:
+		return false
+	}
+}
+
+func decodeMCPName(value string) (string, bool) {
+	if value == "" {
+		return "", false
+	}
+	if strings.HasPrefix(value, "=?") {
+		if !strings.HasSuffix(value, "?=") {
+			return "", false
+		}
+		parts := strings.Split(value[2:len(value)-2], "?")
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "base64") {
+			return "", false
+		}
+		decoded, err := base64.StdEncoding.DecodeString(parts[1])
+		return string(decoded), err == nil && len(decoded) > 0
+	}
+	for _, r := range value {
+		if r > 127 {
+			return "", false
+		}
+	}
+	return value, true
+}
+
+func writeRPCError(w http.ResponseWriter, status int, id any, code int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": id, "error": map[string]any{"code": code, "message": message}})
 }
 
 // OriginMiddleware rejects foreign browser origins while allowing the request's
@@ -75,7 +180,7 @@ func OriginMiddleware(cfg *config.AppConfig, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 		if origin != "" && !allowedOrigin(cfg, r, origin) {
-			http.Error(w, "forbidden origin", http.StatusForbidden)
+			writeRPCError(w, http.StatusForbidden, nil, -32000, "Forbidden origin")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -114,9 +219,28 @@ type operation struct {
 	formEncoded bool
 }
 
+func toolAnnotations(method string) *sdk.ToolAnnotations {
+	annotations := &sdk.ToolAnnotations{}
+	switch strings.ToUpper(method) {
+	case http.MethodGet:
+		annotations.ReadOnlyHint = true
+	case http.MethodDelete:
+		annotations.ReadOnlyHint = false
+		annotations.IdempotentHint = true
+		destructive := true
+		annotations.DestructiveHint = &destructive
+	case http.MethodPut:
+		annotations.ReadOnlyHint = false
+		annotations.IdempotentHint = true
+	case http.MethodPost, http.MethodPatch:
+		annotations.ReadOnlyHint = false
+	}
+	return annotations
+}
+
 func operations(cfg *config.AppConfig, r *http.Request, operatorAuthorized bool) []operation {
 	var document map[string]any
-	if err := json.Unmarshal([]byte(swagger.GenerateSpec(cfg, r)), &document); err != nil {
+	if err := json.Unmarshal([]byte(swagger.GenerateMCPToolSpec(cfg, r)), &document); err != nil {
 		return nil
 	}
 	paths, ok := document["paths"].(map[string]any)
@@ -130,7 +254,7 @@ func operations(cfg *config.AppConfig, r *http.Request, operatorAuthorized bool)
 	sort.Strings(pathNames)
 	var result []operation
 	for _, path := range pathNames {
-		if !strings.HasPrefix(path, cfg.APIBasePath()+"/") || strings.Contains(path, "/metrics") || strings.Contains(path, "/server/preferences/tokens") {
+		if !strings.HasPrefix(path, cfg.APIBasePath()+"/") || strings.Contains(path, "/metrics") || strings.Contains(path, "/server/preferences") || strings.Contains(path, "/server/mcp") {
 			continue
 		}
 		methods, ok := paths[path].(map[string]any)

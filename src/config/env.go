@@ -1,41 +1,90 @@
 // SPDX-License-Identifier: MIT
-// Environment variable overrides per AI.md: all settings can be overridden via
-// {PROJECT_NAME}_{SECTION}_{KEY} env vars, e.g. VIDVEIL_SERVER_PORT, VIDVEIL_DATABASE_TYPE.
 package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
-	"reflect"
-	"strconv"
 	"strings"
-
-	paths "github.com/apimgr/vidveil/src/paths"
 )
 
-// envPrefix is the project env var prefix derived from the project name
-var envPrefix = strings.ToUpper(paths.ProjectName) + "_"
-
-// applyEnvOverrides walks the config struct and applies {PREFIX}_{PATH} env overrides.
-// Two names are checked per field: the full yaml path (VIDVEIL_SERVER_DATABASE_TYPE) and,
-// for fields under the server section, an alias without SERVER_ (VIDVEIL_DATABASE_TYPE).
-// The full name wins when both are set. Invalid values warn and are ignored per AI.md PART 12.
-func applyEnvOverrides(cfg *AppConfig) {
-	applyEnvToStruct(reflect.ValueOf(cfg).Elem(), nil)
-	applyBareCacheURL(cfg)
-	applyI2PEnabled(cfg)
-}
-
-// applyI2PEnabled supports the documented unprefixed operator override while
-// preserving the standard project-prefixed overrides as higher priority.
-func applyI2PEnabled(cfg *AppConfig) {
+func seedFirstRunEnvironment(cfg *AppConfig) {
 	if cfg == nil {
 		return
 	}
-	if _, ok := os.LookupEnv(envPrefix + "SERVER_I2P_ENABLED"); ok {
-		return
+	if value := os.Getenv("APPLICATION_NAME"); value != "" {
+		cfg.Server.Branding.Title = value
 	}
-	if _, ok := os.LookupEnv(envPrefix + "I2P_ENABLED"); ok {
+	if value := os.Getenv("APPLICATION_TAGLINE"); value != "" {
+		cfg.Server.Branding.Tagline = value
+	}
+
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		if driver := os.Getenv("DATABASE_DRIVER"); driver != "" {
+			cfg.Server.Database.Driver = driver
+		}
+	} else {
+		cfg.Server.Database.URL = databaseURL
+		if driver := databaseDriverForURL(databaseURL); driver != "" {
+			if requested := os.Getenv("DATABASE_DRIVER"); requested != "" && normalizeDatabaseDriver(requested) != driver {
+				fmt.Fprintln(os.Stderr, "Warning: DATABASE_URL scheme selects the database driver; DATABASE_DRIVER is ignored")
+			}
+			cfg.Server.Database.Driver = driver
+		}
+	}
+
+	if cacheURL := os.Getenv("CACHE_URL"); cacheURL != "" {
+		cfg.Server.Cache.URL = cacheURL
+		if cacheType := cacheTypeForURL(cacheURL); cacheType != "" {
+			cfg.Server.Cache.Type = cacheType
+		}
+	}
+}
+
+func databaseDriverForURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "libsql", "libsqls", "turso":
+		return "libsql"
+	case "sqlite", "sqlite2", "sqlite3", "file":
+		return "sqlite"
+	default:
+		return ""
+	}
+}
+
+func normalizeDatabaseDriver(driver string) string {
+	switch strings.ToLower(strings.TrimSpace(driver)) {
+	case "libsql", "turso":
+		return "libsql"
+	case "sqlite", "sqlite2", "sqlite3", "file", "":
+		return "sqlite"
+	default:
+		return strings.ToLower(strings.TrimSpace(driver))
+	}
+}
+
+func cacheTypeForURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "valkey", "valkeys":
+		return "valkey"
+	case "redis", "rediss":
+		return "redis"
+	default:
+		return ""
+	}
+}
+
+func applyRuntimeEnvironmentOverrides(cfg *AppConfig) {
+	if cfg == nil {
 		return
 	}
 	value, ok := os.LookupEnv("I2P_ENABLED")
@@ -48,113 +97,4 @@ func applyI2PEnabled(cfg *AppConfig) {
 		return
 	}
 	cfg.Server.I2P.Enabled = enabled
-}
-
-// applyBareCacheURL honors the bare CACHE_URL env var used by the shipped
-// docker-compose (AI.md PART 26 compose template) and mirrors the bare
-// MODE/PORT handling in main.go. A CACHE_URL by itself opts into the external
-// cache: it sets server.cache.url and, when the type is still the default
-// memory, promotes the type to valkey so the connection string is actually
-// used. The VIDVEIL_-prefixed overrides always win when both are present.
-func applyBareCacheURL(cfg *AppConfig) {
-	url, ok := os.LookupEnv("CACHE_URL")
-	if !ok || url == "" {
-		return
-	}
-	if _, prefixed := os.LookupEnv(envPrefix + "CACHE_URL"); prefixed {
-		return
-	}
-	if _, prefixed := os.LookupEnv(envPrefix + "SERVER_CACHE_URL"); prefixed {
-		return
-	}
-	cfg.Server.Cache.URL = url
-	if cfg.Server.Cache.Type == "" || cfg.Server.Cache.Type == "memory" {
-		cfg.Server.Cache.Type = "valkey"
-	}
-}
-
-// applyEnvToStruct recurses through struct fields following yaml tags
-func applyEnvToStruct(v reflect.Value, path []string) {
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tag := field.Tag.Get("yaml")
-		// Skip runtime-only fields and untagged fields
-		if tag == "" || tag == "-" {
-			continue
-		}
-		// Strip yaml tag options like ",omitempty"
-		name := strings.Split(tag, ",")[0]
-		if name == "" || name == "-" {
-			continue
-		}
-		fv := v.Field(i)
-		fieldPath := append(append([]string{}, path...), name)
-		if fv.Kind() == reflect.Struct {
-			applyEnvToStruct(fv, fieldPath)
-			continue
-		}
-		if val, ok := lookupEnvForPath(fieldPath); ok {
-			setFieldFromEnv(fv, val, fieldPath)
-		}
-	}
-}
-
-// lookupEnvForPath checks the full-path env name, then the SERVER_-less alias
-func lookupEnvForPath(path []string) (string, bool) {
-	full := envPrefix + strings.ToUpper(strings.Join(path, "_"))
-	if val, ok := os.LookupEnv(full); ok {
-		return val, true
-	}
-	if len(path) > 1 && path[0] == "server" {
-		alias := envPrefix + strings.ToUpper(strings.Join(path[1:], "_"))
-		if val, ok := os.LookupEnv(alias); ok {
-			return val, true
-		}
-	}
-	return "", false
-}
-
-// setFieldFromEnv converts and assigns an env string to a config field
-func setFieldFromEnv(fv reflect.Value, val string, path []string) {
-	if !fv.CanSet() {
-		return
-	}
-	name := envPrefix + strings.ToUpper(strings.Join(path, "_"))
-	switch fv.Kind() {
-	case reflect.String:
-		fv.SetString(val)
-	case reflect.Bool:
-		b, err := ParseBool(val, false)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: invalid boolean for %s: %q (ignored)\n", name, val)
-			return
-		}
-		fv.SetBool(b)
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		n, err := strconv.ParseInt(strings.TrimSpace(val), 10, 64)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: invalid integer for %s: %q (ignored)\n", name, val)
-			return
-		}
-		fv.SetInt(n)
-	case reflect.Float32, reflect.Float64:
-		f, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: invalid number for %s: %q (ignored)\n", name, val)
-			return
-		}
-		fv.SetFloat(f)
-	case reflect.Slice:
-		if fv.Type().Elem().Kind() == reflect.String {
-			// Comma-separated list; empty value clears the slice
-			var items []string
-			for _, item := range strings.Split(val, ",") {
-				if trimmed := strings.TrimSpace(item); trimmed != "" {
-					items = append(items, trimmed)
-				}
-			}
-			fv.Set(reflect.ValueOf(items))
-		}
-	}
 }

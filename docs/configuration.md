@@ -85,6 +85,19 @@ retained. The default value `0` disables purging.
 `server.pages.help.mcp` is VidVeil-specific Markdown appended to the base guide
 at `/server/help/mcp`; it defaults to the project guidance above and can be
 edited in `yaml.d/pages.yml`.
+`server.pages.help.content` supplies the Markdown shown at `/server/help` and
+returned by `GET /api/{api_version}/server/help`. Set one scalar for shared
+content, or a language map; the server selects the exact request language,
+then `default`, then the first configured language in YAML order.
+
+```yaml
+server:
+  pages:
+    help:
+      content:
+        default: "Search VidVeil with a phrase or a bang such as `!ph`."
+        fr: "Recherchez dans VidVeil avec une phrase ou un raccourci comme `!ph`."
+```
 
 ## Minimal Example
 

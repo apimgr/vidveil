@@ -15,6 +15,11 @@ with `web.llms` settings. See the [REST API guide](../api/rest.md) for routes
 and the [configuration guide](../configuration.md) for YAML options.
 The MCP connection guide is at `/server/help/mcp`; its VidVeil-specific
 instructions come from `server.pages.help.mcp`.
+The `/server/help` guide content is configured with `server.pages.help.content`
+as shared Markdown or a language map. Locale selection uses the exact request
+language, then `default`, then the first language entry in YAML order. The same
+localized Markdown source is returned by `GET /api/{api_version}/server/help`;
+see the [configuration guide](../configuration.md) for an example.
 
 The standard server pages are server-rendered at `/server/about`,
 `/server/privacy`, `/server/dpo`, `/server/help`, `/server/help/mcp`,

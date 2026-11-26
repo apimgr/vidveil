@@ -28,7 +28,6 @@ import (
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 
-	"github.com/apimgr/vidveil/src/common/banner"
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/common/version"
@@ -36,6 +35,7 @@ import (
 	"github.com/apimgr/vidveil/src/mode"
 	pathpkg "github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server"
+	serverbanner "github.com/apimgr/vidveil/src/server/banner"
 	daemonpkg "github.com/apimgr/vidveil/src/server/daemon"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/blocklist"
@@ -154,12 +154,6 @@ func applySchedulerConfig(sched *scheduler.Scheduler, appConfig *config.AppConfi
 	}
 	for id, taskConfig := range appConfig.Server.Schedule.Tasks {
 		schedule := taskConfig.Schedule
-		if id == "database_check" && schedule == "@every 1m" && appConfig.Server.Notifications.DatabaseError.CheckInterval != "" {
-			schedule = "@every " + appConfig.Server.Notifications.DatabaseError.CheckInterval
-		}
-		if id == "disk_check" && schedule == "@every 5m" && appConfig.Server.Notifications.DiskLow.CheckInterval != "" {
-			schedule = "@every " + appConfig.Server.Notifications.DiskLow.CheckInterval
-		}
 		if schedule == "" {
 			continue
 		}
@@ -205,6 +199,95 @@ func formatServerStartupTime(started time.Time) string {
 		location = time.Local
 	}
 	return started.In(location).Format("January 02, 2006 at 15:04:05 MST")
+}
+
+func openAuditMirrorDatabase(appConfig *config.AppConfig, configDir, dataDir string) (*database.SchemaManager, error) {
+	appPaths := config.GetAppPaths(configDir, dataDir)
+	sqliteDir := appConfig.Server.Database.SQLite.Dir
+	if sqliteDir == "" {
+		sqliteDir = config.GetDatabaseDir(appPaths.Data)
+	}
+	serverDB := appConfig.Server.Database.SQLite.ServerDB
+	if serverDB == "" {
+		serverDB = "server.db"
+	}
+	return database.NewSchemaManagerWithConfig(database.DatabaseConfig{
+		Driver:      database.Driver(appConfig.Server.Database.Driver),
+		URL:         appConfig.Server.Database.URL,
+		Token:       appConfig.Server.Database.Token,
+		Path:        filepath.Join(sqliteDir, serverDB),
+		JournalMode: appConfig.Server.Database.SQLite.JournalMode,
+		BusyTimeout: appConfig.Server.Database.SQLite.BusyTimeout,
+	})
+}
+
+func attachAuditMirror(logger *logging.AppLogger, manager *database.SchemaManager) {
+	logger.SetAuditMirror(func(entry logging.AuditEntry) error {
+		return manager.InsertAuditMirror(context.Background(), entry)
+	})
+	logger.ReportAuditChainIssue()
+}
+
+func newCLIAuditLogger(appConfig *config.AppConfig, configDir, dataDir string) (*logging.AppLogger, func(), error) {
+	logger, err := logging.NewAppLogger(appConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	manager, err := openAuditMirrorDatabase(appConfig, configDir, dataDir)
+	if err != nil {
+		logger.Close()
+		return nil, nil, err
+	}
+	if err := manager.EnsureSchema(); err != nil {
+		_ = manager.Close()
+		logger.Close()
+		return nil, nil, err
+	}
+	attachAuditMirror(logger, manager)
+	return logger, func() {
+		logger.Close()
+		_ = manager.Close()
+	}, nil
+}
+
+func waitForOverlayAddresses(torService *tor.TorService, i2pService *i2p.Service, torDone, i2pDone <-chan struct{}) (string, string) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	torFinished := func() bool {
+		select {
+		case <-torDone:
+			return true
+		default:
+			return false
+		}
+	}
+	i2pFinished := func() bool {
+		select {
+		case <-i2pDone:
+			return true
+		default:
+			return false
+		}
+	}
+	for {
+		onionAddress, i2pAddress := torService.GetOnionAddress(), i2pService.Address()
+		if torFinished() && !torService.IsEnabled() {
+			onionAddress = ""
+		}
+		if i2pFinished() && !i2pService.Enabled() {
+			i2pAddress = ""
+		}
+		if (onionAddress != "" || torFinished()) && (i2pAddress != "" || i2pFinished()) {
+			return onionAddress, i2pAddress
+		}
+		select {
+		case <-ticker.C:
+		case <-timer.C:
+			return torService.GetOnionAddress(), i2pService.Address()
+		}
+	}
 }
 
 func init() {
@@ -639,7 +722,7 @@ func run(ctx context.Context) error {
 	if pidFile == "" {
 		pidFile = paths.PIDFile
 	}
-	if (pidFileExplicit || appConfig.Server.PIDFile) && pidFile != "" && !system.IsRunningInContainer() {
+	if (pidFileExplicit || appConfig.Server.PIDFile) && pidFile != "" && runtime.GOOS != "windows" && !system.IsRunningInContainer() {
 		if err := signalpkg.WritePIDFile(pidFile, appName); err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 			os.Exit(1)
@@ -802,14 +885,14 @@ func run(ctx context.Context) error {
 		// Create a basic logger that doesn't write to files
 		logger = &logging.AppLogger{}
 	}
+	logger.SetAuditMirror(func(entry logging.AuditEntry) error {
+		return migrationMgr.InsertAuditMirror(context.Background(), entry)
+	})
+	logger.ReportAuditChainIssue()
 	defer logger.Close()
 	for _, key := range appConfig.GeneratedSecretKeys {
 		logger.Audit("config.secret_generated", "system", "system", "", "success", map[string]interface{}{"key_name": key})
 	}
-	if appConfig.GeneratedServerToken && os.Getenv("VIDVEIL_SERVER_TOKEN") == "" && os.Getenv("VIDVEIL_TOKEN") == "" {
-		fmt.Printf("Generated server token (shown once): %s\n", appConfig.Server.Token)
-	}
-
 	// Route engine debug logging through the governed AppLogger/debug.log
 	// pipeline (AI.md PART 11) instead of the package's stdlib log.Printf
 	// fallback.
@@ -1175,7 +1258,6 @@ func run(ctx context.Context) error {
 		primaryIsHTTPS = false
 	}
 	listenAddr := net.JoinHostPort(strings.Trim(appConfig.Server.Address, "[]"), primaryPort)
-
 	// Re-apply ownership immediately before dropping privileges per AI.md PART 23
 	// step 8c — catches files created since the initial EnsureSystemUser call
 	// above (step 15's database file, downloaded GeoIP databases), which the
@@ -1197,8 +1279,10 @@ func run(ctx context.Context) error {
 		fmt.Printf(terminal.UserIcon()+" Dropped privileges to %s\n", appName)
 	}
 
+	i2pStartupComplete := make(chan struct{})
 	if appConfig.Server.I2P.Enabled {
 		go func() {
+			defer close(i2pStartupComplete)
 			if err := i2pSvc.Start(i2pCtx); err != nil {
 				if i2pCtx.Err() == nil {
 					logger.Warn("I2P eepsite unavailable", map[string]interface{}{"error": err.Error()})
@@ -1213,6 +1297,8 @@ func run(ctx context.Context) error {
 				}
 			}
 		}()
+	} else {
+		close(i2pStartupComplete)
 	}
 
 	// Start Tor hidden service per PART 31 (in background to not block HTTP server).
@@ -1329,14 +1415,28 @@ func run(ctx context.Context) error {
 		}
 
 		// Print responsive startup banner per AI.md PART 7
-		banner.PrintStartupBanner(banner.BannerConfig{
-			AppName:   "VidVeil",
-			Version:   version.GetVersion(),
-			AppMode:   appConfig.Server.Mode,
-			Debug:     mode.IsDebugEnabled(),
-			URLs:      []string{displayURL},
-			StartedAt: formatServerStartupTime(time.Now()),
-			ShowSetup: isFirstRun,
+		var forceColor *bool
+		if colorFlag == "yes" || colorFlag == "no" {
+			value := colorFlag == "yes"
+			forceColor = &value
+		}
+		onionAddress, i2pAddress := waitForOverlayAddresses(torSvc, i2pSvc, torStartupComplete, i2pStartupComplete)
+		setupToken := ""
+		if appConfig.GeneratedServerToken && os.Getenv("VIDVEIL_SERVER_TOKEN") == "" && os.Getenv("VIDVEIL_TOKEN") == "" {
+			setupToken = appConfig.Server.Token
+		}
+		serverbanner.PrintServerStartupBanner(serverbanner.ServerBannerInfo{
+			AppName:         "VidVeil",
+			Version:         version.GetVersion(),
+			AppMode:         appConfig.Server.Mode,
+			StartupDatetime: formatServerStartupTime(time.Now()),
+			URLs:            []string{displayURL},
+			OnionAddress:    onionAddress,
+			I2PAddress:      i2pAddress,
+			SMTPAddress:     smtpInfo,
+			SetupToken:      setupToken,
+			ForceColor:      forceColor,
+			Lang:            langFlag,
 		})
 
 		if isFirstRun {
@@ -1883,8 +1983,7 @@ func handleServiceCommand(cmd, configDir, dataDir, language string) {
 	case "--install":
 		// Per AI.md PART 23: Check escalation before service install
 		if err := system.HandleEscalation(serviceText(locale, "cli.service.installing"), locale); err != nil {
-			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.operation_error", "{error}", err.Error()))
-			os.Exit(1)
+			fmt.Fprintf(os.Stderr, "Using the current user's service scope: %v\n", err)
 		}
 		fmt.Println(serviceText(locale, "cli.service.installing"))
 		if err := svc.Install(); err != nil {
@@ -1915,8 +2014,7 @@ func handleServiceCommand(cmd, configDir, dataDir, language string) {
 
 		// Per AI.md PART 23: Check escalation before service uninstall
 		if err := system.HandleEscalation(serviceText(locale, "cli.service.uninstalling"), locale); err != nil {
-			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+serviceText(locale, "cli.service.operation_error", "{error}", err.Error()))
-			os.Exit(1)
+			fmt.Fprintf(os.Stderr, "Using the current user's service scope: %v\n", err)
 		}
 
 		fmt.Println(serviceText(locale, "cli.service.uninstalling"))
@@ -2204,8 +2302,11 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 
 		// Attach the audit logger so backup.created/verification_failed/etc. per
 		// AI.md PART 21 "Audit Events" are recorded for CLI-triggered backups too.
-		if cliLogger, err := logging.NewAppLogger(appConfig); err == nil {
+		if cliLogger, closeLogger, err := newCLIAuditLogger(appConfig, configDir, dataDir); err == nil {
 			maint.SetLogger(cliLogger)
+			defer closeLogger()
+		} else {
+			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Backup audit mirror unavailable: %v\n", err)
 		}
 
 		password := appConfig.Server.Backup.EncryptionPassword
@@ -3079,11 +3180,12 @@ func emitPrivateExportAudit(configDir, dataDir, operator, operatorIP, reason, ou
 		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" private key exported but audit log unavailable: %v\n", err)
 		return
 	}
-	logger, err := logging.NewAppLogger(appConfig)
+	logger, closeLogger, err := newCLIAuditLogger(appConfig, configDir, dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" private key exported but audit log unavailable: %v\n", err)
 		return
 	}
+	defer closeLogger()
 	logger.Audit("security.private_key_exported", operator, "operator", operatorIP, "success",
 		map[string]interface{}{"reason": reason, "path": outPath})
 }
@@ -3217,11 +3319,12 @@ func emitPrivateImportAudit(configDir, dataDir, operator, operatorIP, inPath, fi
 		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" private key imported but audit log unavailable: %v\n", err)
 		return
 	}
-	logger, err := logging.NewAppLogger(appConfig)
+	logger, closeLogger, err := newCLIAuditLogger(appConfig, configDir, dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" private key imported but audit log unavailable: %v\n", err)
 		return
 	}
+	defer closeLogger()
 	logger.Audit("security.private_key_imported", operator, "operator", operatorIP, "success",
 		map[string]interface{}{"source": inPath, "fingerprint": fingerprint})
 }
@@ -3319,11 +3422,12 @@ func emitPrivateDeleteAudit(configDir, dataDir, operator, operatorIP, fingerprin
 		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" keypair deleted but audit log unavailable: %v\n", err)
 		return
 	}
-	logger, err := logging.NewAppLogger(appConfig)
+	logger, closeLogger, err := newCLIAuditLogger(appConfig, configDir, dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" keypair deleted but audit log unavailable: %v\n", err)
 		return
 	}
+	defer closeLogger()
 	logger.Audit("security.private_key_deleted", operator, "operator", operatorIP, "success",
 		map[string]interface{}{"fingerprint": fingerprint})
 }
@@ -3397,27 +3501,52 @@ func printComplianceReport(appConfig *config.AppConfig, dataDirs ...string) {
 
 func printComplianceDataSummary(dataDir string, appConfig *config.AppConfig) {
 	paths := config.GetAppPaths("", dataDir)
-	dbPath := filepath.Join(config.GetDatabaseDir(paths.Data), "server.db")
 	counts := map[string]string{"owners": "unavailable", "resources": "unavailable", "active tokens": "unavailable", "open security reports": "unavailable", "compliance events (30 days)": "unavailable"}
-	if _, err := os.Stat(dbPath); err == nil {
-		if db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro"); err == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			queries := map[string]string{
-				"owners":                      "SELECT COUNT(*) FROM owners",
-				"resources":                   "SELECT COUNT(*) FROM favorites",
-				"active tokens":               "SELECT COUNT(*) FROM api_tokens WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > CAST(strftime('%s','now') AS INTEGER))",
-				"open security reports":       "SELECT COUNT(*) FROM security_reports WHERE status NOT IN ('closed','resolved','disclosed')",
-				"compliance events (30 days)": "SELECT COUNT(*) FROM audit_log WHERE action LIKE 'compliance.%' AND timestamp >= datetime('now','-30 days')",
-			}
-			for label, query := range queries {
-				var count int64
-				if err := db.QueryRowContext(ctx, query).Scan(&count); err == nil {
-					counts[label] = strconv.FormatInt(count, 10)
-				}
-			}
-			cancel()
-			_ = db.Close()
+	driver := strings.ToLower(strings.TrimSpace(appConfig.Server.Database.Driver))
+	remote := driver == "libsql" || driver == "turso"
+	dbDir := appConfig.Server.Database.SQLite.Dir
+	if dbDir == "" {
+		dbDir = config.GetDatabaseDir(paths.Data)
+	}
+	dbName := appConfig.Server.Database.SQLite.ServerDB
+	if dbName == "" {
+		dbName = "server.db"
+	}
+	dbPath := filepath.Join(dbDir, dbName)
+	var db *sql.DB
+	var closeDB func()
+	if remote {
+		if manager, err := openAuditMirrorDatabase(appConfig, "", dataDir); err == nil {
+			db = manager.GetDB()
+			closeDB = func() { _ = manager.Close() }
 		}
+	} else if _, err := os.Stat(dbPath); err == nil {
+		if opened, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro"); err == nil {
+			db = opened
+			closeDB = func() { _ = opened.Close() }
+		}
+	}
+	if db != nil {
+		tablePrefix := ""
+		if remote {
+			tablePrefix = "srv_"
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		queries := map[string]string{
+			"owners":                      "SELECT COUNT(*) FROM " + tablePrefix + "owners",
+			"resources":                   "SELECT COUNT(*) FROM " + tablePrefix + "favorites",
+			"active tokens":               "SELECT COUNT(*) FROM " + tablePrefix + "api_tokens WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > CAST(strftime('%s','now') AS INTEGER))",
+			"open security reports":       "SELECT COUNT(*) FROM " + tablePrefix + "security_reports WHERE status NOT IN ('closed','resolved','disclosed')",
+			"compliance events (30 days)": "SELECT COUNT(*) FROM " + tablePrefix + "audit_log WHERE action LIKE 'compliance.%' AND timestamp >= CAST(strftime('%s','now','-30 days') AS INTEGER)",
+		}
+		for label, query := range queries {
+			var count int64
+			if err := db.QueryRowContext(ctx, query).Scan(&count); err == nil {
+				counts[label] = strconv.FormatInt(count, 10)
+			}
+		}
+		cancel()
+		closeDB()
 	}
 	fmt.Println("\nData summary:")
 	for _, label := range []string{"owners", "resources", "active tokens", "open security reports", "compliance events (30 days)"} {
@@ -3450,6 +3579,14 @@ func printComplianceDataSummary(dataDir string, appConfig *config.AppConfig) {
 		}
 	}
 	fmt.Printf("Last backup: %s\n", lastBackup)
+	auditPath := appConfig.Server.Logs.Audit.Filename
+	if auditPath == "" {
+		auditPath = "audit.log"
+	}
+	if !filepath.IsAbs(auditPath) {
+		auditPath = filepath.Join(paths.Log, auditPath)
+	}
+	fmt.Printf("Audit log integrity: %s\n", logging.AuditLogIntegrity(auditPath, filepath.Join(filepath.Dir(auditPath), "audit.anchor")))
 }
 
 // isDBFirstRun returns true if the settings table has no rows, indicating first run.

@@ -18,6 +18,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/sanitize"
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 type operatorConfigContextKey struct{}
@@ -25,6 +26,8 @@ type operatorVariablesContextKey struct{}
 
 var operatorWarnings sync.Map
 var contactHrefPattern = regexp.MustCompile(`(?i)href="/server/contact(?:[?#][^"]*)?"`)
+var externalAnchorPattern = regexp.MustCompile(`(?is)<a\b[^>]*href=["']https?://[^"']*["'][^>]*>(.*?)</a>`)
+var protocolRelativeAnchorPattern = regexp.MustCompile(`(?is)<a\b[^>]*href=["']//[^"']*["'][^>]*>(.*?)</a>`)
 
 func withOperatorConfig(r *http.Request, cfg *config.AppConfig) *http.Request {
 	if r == nil {
@@ -105,7 +108,15 @@ func operatorHTML(r *http.Request, name string) template.HTML {
 		rendered = sanitize.Document(strings.Join(paragraphs, ""))
 	}
 	clean := contactHrefPattern.ReplaceAllString(string(rendered), "")
+	if urlvar.IsTorRequest(r) {
+		clean = stripExternalAnchorLinks(clean)
+	}
 	return sanitize.Document(clean)
+}
+
+func stripExternalAnchorLinks(markup string) string {
+	markup = externalAnchorPattern.ReplaceAllString(markup, "$1")
+	return protocolRelativeAnchorPattern.ReplaceAllString(markup, "$1")
 }
 
 func operatorContentConfigured(r *http.Request, name string) bool {

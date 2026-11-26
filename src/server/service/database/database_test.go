@@ -5,10 +5,13 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/apimgr/vidveil/src/server/service/logging"
 )
 
 // newSQLiteDB opens an in-memory SQLite AppDatabase for testing.
@@ -23,6 +26,58 @@ func newSQLiteDB(t *testing.T) *AppDatabase {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return db
+}
+
+func TestInsertAuditMirrorStoresAuditIDAndQueryableFields(t *testing.T) {
+	sm, err := NewSchemaManagerWithConfig(DatabaseConfig{Driver: DriverSQLite, Path: filepath.Join(t.TempDir(), "server.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sm.Close() }()
+	if err := sm.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	entry := logging.AuditEntry{
+		ID: "01KB0S9QYJAHQ6JJ1ZZ7N4JX4R", Time: "2026-11-26T22:00:00.000Z",
+		Event: "config.updated", Category: "config", Severity: "info",
+		Actor:  logging.AuditActor{Type: "operator", ID: "operator-1", IP: "192.0.2.1"},
+		Result: "success", Details: map[string]interface{}{"changed_keys": []string{"server.port"}},
+	}
+	if err := sm.InsertAuditMirror(context.Background(), entry); err != nil {
+		t.Fatal(err)
+	}
+	var action, category, actorIP, details string
+	var success int
+	if err := sm.GetDB().QueryRow(`SELECT action, category, actor_ip, details, success FROM audit_log ORDER BY id DESC LIMIT 1`).Scan(&action, &category, &actorIP, &details, &success); err != nil {
+		t.Fatal(err)
+	}
+	var detailFields map[string]interface{}
+	if err := json.Unmarshal([]byte(details), &detailFields); err != nil {
+		t.Fatal(err)
+	}
+	if action != entry.Event || category != entry.Category || actorIP != entry.Actor.IP || success != 1 || detailFields["audit_id"] != entry.ID {
+		t.Fatalf("audit mirror row = (%q, %q, %q, %d, %#v)", action, category, actorIP, success, detailFields)
+	}
+}
+
+func TestEnsureSchemaCreatesAuditQueryIndexes(t *testing.T) {
+	sm, err := NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sm.Close() }()
+	if err := sm.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"idx_audit_timestamp", "idx_audit_category", "idx_audit_actor_ip", "idx_audit_target"} {
+		var count int
+		if err := sm.GetDB().QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?`, name).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != 1 {
+			t.Errorf("audit index %q count = %d, want 1", name, count)
+		}
+	}
 }
 
 // --- NewAppDatabase ---

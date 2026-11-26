@@ -21,7 +21,7 @@ https://x.scour.li
 
 | Feature | Description |
 |---------|-------------|
-| **Privacy First** | Search history stays in the visitor's browser; the server has no per-visitor history, though filtered queries may appear in public feeds; configured logs may include request metadata and custom formats can include query strings; optional analytics require operator configuration and visitor consent |
+| **Privacy First** | Search history stays in the visitor's browser; the server has no per-visitor history, though filtered queries may appear in public feeds; configured logs may include request metadata and custom formats can include query strings; optional analytics require operator configuration and visitor consent; the privacy page lists applicable export, correction, and deletion rights, and Tor renders external policy links as plain text |
 | **27 Engines** | Aggregates results from 27 registered adult video sites by default |
 | **Bang Search** | Use `!ph`, `!xh`, `!rt` to search specific sites |
 | **Fast APIs** | Direct JSON API integration with PornHub, RedTube, Eporner |
@@ -135,7 +135,7 @@ Configuration file location (created on first run):
 | Linux (root) | `/etc/apimgr/vidveil/server.yml` |
 | Linux (user) | `~/.config/apimgr/vidveil/server.yml` |
 | macOS | `~/Library/Application Support/apimgr/vidveil/server.yml` |
-| Windows | `%AppData%\apimgr\vidveil\server.yml` |
+| Windows (system / user) | `%ProgramData%\apimgr\vidveil\server.yml` / `%AppData%\apimgr\vidveil\server.yml` |
 | Docker | `/config/vidveil/server.yml` |
 
 `server.yml` contains node-specific settings. Other settings live in area files

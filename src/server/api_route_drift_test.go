@@ -172,6 +172,9 @@ func parseAIMethodRoutes(document string) map[string]struct{} {
 	if strings.Contains(document, "`/api/{api_version}/status`") && strings.Contains(document, "read-only through the server status API") {
 		routes["get /api/{api_version}/status"] = struct{}{}
 	}
+	if strings.Contains(document, "text via the `.txt` suffix (`/api/{api_version}/server/healthz.txt`)") {
+		routes["get /api/{api_version}/server/healthz.txt"] = struct{}{}
+	}
 	return routes
 }
 

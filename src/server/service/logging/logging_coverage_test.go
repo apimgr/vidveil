@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -23,8 +24,8 @@ func TestGenerateAuditID(t *testing.T) {
 	if id == "" {
 		t.Fatal("generateAuditID() returned empty string")
 	}
-	if !strings.HasPrefix(id, "audit_") {
-		t.Errorf("generateAuditID() = %q, want prefix %q", id, "audit_")
+	if matched, _ := regexp.MatchString(`^[0-7][0-9A-HJKMNP-TV-Z]{25}$`, id); !matched {
+		t.Errorf("generateAuditID() = %q, want ULID format", id)
 	}
 }
 
@@ -247,8 +248,8 @@ func TestAppLoggerAuditWithOutput(t *testing.T) {
 	if err := json.Unmarshal(raw, &entry); err != nil {
 		t.Fatalf("Audit() output is not valid JSON: %v — got: %s", err, raw)
 	}
-	if !strings.HasPrefix(entry.ID, "audit_") {
-		t.Errorf("AuditEntry.ID = %q, want prefix %q", entry.ID, "audit_")
+	if matched, _ := regexp.MatchString(`^[0-7][0-9A-HJKMNP-TV-Z]{25}$`, entry.ID); !matched {
+		t.Errorf("AuditEntry.ID = %q, want ULID format", entry.ID)
 	}
 	if entry.Time == "" {
 		t.Error("AuditEntry.Time is empty")

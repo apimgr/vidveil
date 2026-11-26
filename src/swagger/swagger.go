@@ -569,18 +569,22 @@ func synchronizeRouteDefinitions(paths map[string]interface{}, apiBase string) {
 	type operationKey struct{ path, method string }
 	wanted := make(map[operationKey]map[string]interface{})
 	for _, definition := range apiroute.Definitions() {
+		if definition.Internal {
+			continue
+		}
 		path := strings.ReplaceAll(definition.Path, "/api/{api_version}", apiBase)
 		method := strings.ToLower(definition.Method)
 		operation := routeOperation(paths, path, method, definition)
 		wanted[operationKey{path, method}] = operation
 		for _, alias := range definition.Aliases {
+			aliasPath := strings.ReplaceAll(alias.Path, "/api/{api_version}", apiBase)
 			aliasMethod := strings.ToLower(alias.Method)
 			aliasOperation := cloneOperation(operation)
-			aliasOperation["operationId"] = aliasOperationID(definition.OperationID, alias.Path)
+			aliasOperation["operationId"] = aliasOperationID(definition.OperationID, aliasPath)
 			if alias.Condition != "" {
 				aliasOperation["x-mounted-when"] = alias.Condition
 			}
-			wanted[operationKey{alias.Path, aliasMethod}] = aliasOperation
+			wanted[operationKey{aliasPath, aliasMethod}] = aliasOperation
 		}
 	}
 

@@ -195,12 +195,20 @@ func TestServer_HealthzRoot_Returns200_WhenEnabled(t *testing.T) {
 	s := newTestServerWithCfg(t, func(cfg *config.AppConfig) {
 		cfg.Server.Healthz.Root.Enabled = true
 	})
-	for _, path := range []string{"/healthz", "/healthz.json", "/healthz.txt"} {
+	for _, path := range []string{"/healthz"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rr := httptest.NewRecorder()
 		s.router.ServeHTTP(rr, req)
 		if rr.Code != http.StatusOK {
 			t.Errorf("%s with Healthz.Root.Enabled=true: status=%d want 200", path, rr.Code)
+		}
+	}
+	for _, path := range []string{"/healthz.json", "/healthz.txt"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rr := httptest.NewRecorder()
+		s.router.ServeHTTP(rr, req)
+		if rr.Code == http.StatusOK {
+			t.Errorf("%s suffix alias returned 200, root alias has no suffix form", path)
 		}
 	}
 }

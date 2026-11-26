@@ -229,11 +229,11 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 		}
 	}()
 	if sched != nil {
-		databaseInterval := parseDuration(appConfig.Server.Notifications.DatabaseError.CheckInterval, time.Minute)
-		if databaseInterval <= 0 {
-			databaseInterval = time.Minute
+		databaseSchedule := appConfig.Server.Schedule.Tasks["database_check"].Schedule
+		if databaseSchedule == "" {
+			databaseSchedule = "@every 1m"
 		}
-		if err := sched.RegisterTask("database_check", "Database Connection Check", "Probe the database and notify after consecutive failures", "@every "+databaseInterval.String(), func(ctx context.Context) error {
+		if err := sched.RegisterTask("database_check", "Database Connection Check", "Probe the database and notify after consecutive failures", databaseSchedule, func(ctx context.Context) error {
 			return s.runDatabaseCheck(ctx)
 		}); err != nil {
 			if s.logger != nil {
@@ -246,11 +246,11 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 				}
 			}
 		}
-		diskInterval := parseDuration(appConfig.Server.Notifications.DiskLow.CheckInterval, 5*time.Minute)
-		if diskInterval <= 0 {
-			diskInterval = 5 * time.Minute
+		diskSchedule := appConfig.Server.Schedule.Tasks["disk_check"].Schedule
+		if diskSchedule == "" {
+			diskSchedule = "@every 5m"
 		}
-		if err := sched.RegisterTask("disk_check", "Disk Space Check", "Check data, log, and backup filesystem usage", "@every "+diskInterval.String(), func(ctx context.Context) error {
+		if err := sched.RegisterTask("disk_check", "Disk Space Check", "Check data, log, and backup filesystem usage", diskSchedule, func(ctx context.Context) error {
 			return s.runDiskCheck(ctx)
 		}); err != nil {
 			if s.logger != nil {
@@ -1004,7 +1004,7 @@ func (s *Server) buildCSPHeader(r *http.Request) string {
 		directive("script-src", scriptDefaults, cfg.ScriptSrcExtra, cfg.ScriptSrcOverride) +
 		directive("style-src", "'self' 'unsafe-inline'", cfg.StyleSrcExtra, cfg.StyleSrcOverride) +
 		directive("img-src", "'self' data: blob: https:", cfg.ImgSrcExtra, "") +
-		directive("font-src", "'self' https:", cfg.FontSrcExtra, "") +
+		directive("font-src", "'self' data: https:", cfg.FontSrcExtra, "") +
 		"connect-src " + connectSrc + "; " +
 		directive("media-src", "'self' blob:", "", "") +
 		directive("worker-src", "'self' blob:", "", "") +
@@ -1286,8 +1286,6 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/server/healthz.txt", h.HealthCheck)
 	if s.appConfig.Server.Healthz.Root.Enabled {
 		s.router.Get("/healthz", h.HealthCheck)
-		s.router.Get("/healthz.json", h.HealthCheck)
-		s.router.Get("/healthz.txt", h.HealthCheck)
 	}
 	s.router.Get("/robots.txt", h.RobotsTxt)
 	s.router.Get("/sitemap.xml", h.SitemapXML)

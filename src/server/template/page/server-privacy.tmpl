@@ -118,7 +118,7 @@
         <h2 id="privacy-rights">{{ t "privacy.your_rights" }}</h2>
         <ul>
             {{if .Privacy.Retention.ExportAvailable}}<li>{{ t "privacy.rights_export" }}</li>{{end}}
-            {{if .Privacy.Retention.DeletionAvailable}}<li>{{ t "privacy.rights_deletion" }}</li>{{end}}
+            {{if .Privacy.Retention.DeletionAvailable}}<li>{{ t "privacy.rights_deletion" }}</li><li>{{ t "privacy.rights_correction" }}</li>{{end}}
             <li><a href="{{ path "/server/preferences" }}#cookies">{{ t "privacy.manage_cookies" }}</a></li>
         </ul>
     </section>
@@ -146,7 +146,7 @@
         <div class="table-wrapper">
             <table class="data-table">
                 <thead><tr><th scope="col">{{ t "privacy.tp_name" }}</th><th scope="col">{{ t "privacy.tp_purpose" }}</th><th scope="col">{{ t "privacy.tp_data" }}</th><th scope="col">{{ t "privacy.tp_policy" }}</th></tr></thead>
-                <tbody>{{range .Privacy.ThirdParty.Services}}<tr><td>{{ .Name }}</td><td>{{ .Purpose }}</td><td>{{ .DataSent }}</td><td>{{if .PolicyURL}}<a href="{{ .PolicyURL }}" rel="noopener noreferrer">{{ t "privacy.tp_policy" }}</a>{{else}}—{{end}}</td></tr>{{end}}</tbody>
+                <tbody>{{range .Privacy.ThirdParty.Services}}<tr><td>{{ .Name }}</td><td>{{ .Purpose }}</td><td>{{ .DataSent }}</td><td>{{if .PolicyURL}}{{if $.TorRequest}}{{.PolicyURL}}{{else}}<a href="{{ .PolicyURL }}" rel="noopener noreferrer">{{ t "privacy.tp_policy" }}</a>{{end}}{{else}}—{{end}}</td></tr>{{end}}</tbody>
             </table>
         </div>
         {{else}}

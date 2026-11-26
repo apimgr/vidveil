@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/apimgr/vidveil/src/config"
 )
@@ -416,6 +417,15 @@ func TestParseRotationString(t *testing.T) {
 	})
 }
 
+func TestRotationHasMaxSize(t *testing.T) {
+	if rotationHasMaxSize("daily") {
+		t.Fatal("daily rotation unexpectedly has a size limit")
+	}
+	if !rotationHasMaxSize("daily,50MB") || !rotationHasMaxSize("100KB") {
+		t.Fatal("explicit rotation size was not detected")
+	}
+}
+
 // --- parseKeepString ---
 
 func TestParseKeepString(t *testing.T) {
@@ -435,6 +445,28 @@ func TestParseKeepString(t *testing.T) {
 		got := parseKeepString(tt.input)
 		if got != tt.expected {
 			t.Errorf("parseKeepString(%q) = %d, want %d", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestParseKeepRetention(t *testing.T) {
+	tests := []struct {
+		value       string
+		count       int
+		retention   time.Duration
+		keepForever bool
+	}{
+		{value: "none"},
+		{value: "7", count: 7},
+		{value: "30d", retention: 30 * 24 * time.Hour},
+		{value: "90d", retention: 90 * 24 * time.Hour},
+		{value: "12m", retention: 365 * 24 * time.Hour},
+		{value: "forever", keepForever: true},
+	}
+	for _, test := range tests {
+		count, retention, keepForever := parseKeepRetention(test.value)
+		if count != test.count || retention != test.retention || keepForever != test.keepForever {
+			t.Errorf("parseKeepRetention(%q) = (%d, %s, %t), want (%d, %s, %t)", test.value, count, retention, keepForever, test.count, test.retention, test.keepForever)
 		}
 	}
 }

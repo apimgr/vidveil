@@ -232,7 +232,13 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		},
 		// markdownToHTML converts supported project and operator Markdown to
 		// sanitized HTML before it reaches a rendered page.
-		"markdownToHTML": markdown.ToHTML,
+		"markdownToHTML": func(source string) template.HTML {
+			rendered := markdown.ToHTML(source)
+			if urlvar.IsTorRequest(r) {
+				return template.HTML(stripExternalAnchorLinks(string(rendered)))
+			}
+			return rendered
+		},
 	})
 
 	// Load layout and partials first
@@ -340,7 +346,8 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 		"CurrentPath": r.URL.RequestURI(),
 		// Whole privacy config for the config-driven /server/privacy page
 		// (AI.md PART 12 / PART 16 "/server/privacy")
-		"Privacy": h.privacyConfigForDisplay(),
+		"Privacy":    h.privacyConfigForDisplay(),
+		"TorRequest": urlvar.IsTorRequest(r),
 		// CCPA opt-out state backing the "Do Not Sell" toggle; only ever
 		// rendered when server.privacy.data.sold is true.
 		"CCPAOptedOut": hasCCPAOptOut(r),

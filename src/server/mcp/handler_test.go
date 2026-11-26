@@ -45,7 +45,7 @@ func TestHandlerServesStatelessOpenAPITools(t *testing.T) {
 	operatorRequest.Header.Set("Authorization", "Bearer operator-token")
 	operatorResponse := httptest.NewRecorder()
 	operatorHandler.ServeHTTP(operatorResponse, operatorRequest)
-	if !strings.Contains(operatorResponse.Body.String(), "getOperatorStatus") || strings.Contains(operatorResponse.Body.String(), "restoreServerBackup") {
+	if !strings.Contains(operatorResponse.Body.String(), "getOperatorStatus") || strings.Contains(operatorResponse.Body.String(), "restoreServerBackup") || strings.Contains(operatorResponse.Body.String(), "debugEngines") || strings.Contains(operatorResponse.Body.String(), "debugEngine") {
 		t.Fatalf("operator tools/list has the wrong operator-only tools: %s", operatorResponse.Body.String())
 	}
 
@@ -64,10 +64,8 @@ func TestHandlerServesStatelessOpenAPITools(t *testing.T) {
 	debugOperatorRequest.Header.Set("Authorization", "Bearer operator-token")
 	debugOperatorResponse := httptest.NewRecorder()
 	debugOperatorHandler.ServeHTTP(debugOperatorResponse, debugOperatorRequest)
-	for _, operation := range []string{"getOperatorStatus", "debugEngines", "debugEngine"} {
-		if !strings.Contains(debugOperatorResponse.Body.String(), operation) {
-			t.Fatalf("operator tools/list omitted operation %q: %s", operation, debugOperatorResponse.Body.String())
-		}
+	if !strings.Contains(debugOperatorResponse.Body.String(), "getOperatorStatus") || strings.Contains(debugOperatorResponse.Body.String(), "debugEngines") || strings.Contains(debugOperatorResponse.Body.String(), "debugEngine") {
+		t.Fatalf("debug routes were exposed in MCP or operator status was missing: %s", debugOperatorResponse.Body.String())
 	}
 
 	request := httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"searchVideos","arguments":{"q":"needle"}}}`))

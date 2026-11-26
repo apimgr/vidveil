@@ -2941,6 +2941,7 @@ type HealthzHTMLData struct {
 	// Consent banner gating (AI.md PART 12) — footer.tmpl renders the banner
 	// only when no valid cookie_consent cookie exists
 	HasConsentCookie bool
+	TorRequest       bool
 	// CSRF token for the consent banner forms in footer.tmpl (AI.md PART 16)
 	CSRFToken string
 	// CurrentPath backs the return_to hidden field on the zero-JS
@@ -3092,6 +3093,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 
 		// Consent banner gating per AI.md PART 12
 		HasConsentCookie: hasConsentCookie(r),
+		TorRequest:       urlvar.IsTorRequest(r),
 		CSRFToken:        cSRFTokenFromRequest(r),
 		CurrentPath:      r.URL.RequestURI(),
 		Announcements:    activeAnnouncements(h.appConfig, r),

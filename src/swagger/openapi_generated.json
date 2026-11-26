@@ -106,99 +106,6 @@
         "x-listed": true
       }
     },
-    "/api/debug/engines": {
-      "get": {
-        "description": "Operator-only engine diagnostics.",
-        "operationId": "debugEnginesAliasApiDebugEngines",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "data": {
-                      "type": "object"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "ok": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "ok"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful response"
-          }
-        },
-        "security": [
-          {
-            "OperatorTokenAuth": []
-          }
-        ],
-        "summary": "Get debug engine diagnostics",
-        "x-admin-only": true,
-        "x-listed": false,
-        "x-mounted-when": "debug"
-      }
-    },
-    "/api/debug/engines/{name}": {
-      "get": {
-        "description": "Operator-only engine diagnostics.",
-        "operationId": "debugEngineAliasApiDebugEnginesName",
-        "parameters": [
-          {
-            "description": "Engine identifier",
-            "in": "path",
-            "name": "name",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "data": {
-                      "type": "object"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "ok": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "ok"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful response"
-          }
-        },
-        "security": [
-          {
-            "OperatorTokenAuth": []
-          }
-        ],
-        "summary": "Get debug engine details",
-        "x-admin-only": true,
-        "x-listed": false,
-        "x-mounted-when": "debug"
-      }
-    },
     "/api/graphql": {
       "post": {
         "description": "Execute a GraphQL query against the service schema.",
@@ -427,69 +334,6 @@
         "x-listed": true
       }
     },
-    "/api/metrics": {
-      "get": {
-        "description": "Prometheus metrics endpoint.",
-        "operationId": "getMetricsAliasApiMetrics",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful response"
-          }
-        },
-        "security": [
-          {
-            "ServiceTokenAuth": []
-          }
-        ],
-        "summary": "Get internal server metrics",
-        "x-listed": false,
-        "x-mounted-when": "server.metrics.enabled"
-      }
-    },
-    "/api/metrics/{service}": {
-      "get": {
-        "description": "Prometheus metrics endpoint.",
-        "operationId": "getServiceMetricsAliasApiMetricsService",
-        "parameters": [
-          {
-            "description": "Metrics service",
-            "in": "path",
-            "name": "service",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful response"
-          }
-        },
-        "security": [
-          {
-            "ServiceTokenAuth": []
-          }
-        ],
-        "summary": "Get internal service metrics",
-        "x-listed": false,
-        "x-mounted-when": "server.metrics.enabled"
-      }
-    },
     "/api/swagger": {
       "get": {
         "description": "Return the generated OpenAPI JSON document.",
@@ -620,99 +464,6 @@
         },
         "summary": "Autocomplete search bangs",
         "x-listed": true
-      }
-    },
-    "/api/v1/debug/engines": {
-      "get": {
-        "description": "Operator-only engine diagnostics.",
-        "operationId": "debugEngines",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "data": {
-                      "type": "object"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "ok": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "ok"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful response"
-          }
-        },
-        "security": [
-          {
-            "OperatorTokenAuth": []
-          }
-        ],
-        "summary": "Get debug engine diagnostics",
-        "x-admin-only": true,
-        "x-listed": false,
-        "x-mounted-when": "debug"
-      }
-    },
-    "/api/v1/debug/engines/{name}": {
-      "get": {
-        "description": "Operator-only engine diagnostics.",
-        "operationId": "debugEngine",
-        "parameters": [
-          {
-            "description": "Engine identifier",
-            "in": "path",
-            "name": "name",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "data": {
-                      "type": "object"
-                    },
-                    "message": {
-                      "type": "string"
-                    },
-                    "ok": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "ok"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful response"
-          }
-        },
-        "security": [
-          {
-            "OperatorTokenAuth": []
-          }
-        ],
-        "summary": "Get debug engine details",
-        "x-admin-only": true,
-        "x-listed": false,
-        "x-mounted-when": "debug"
       }
     },
     "/api/v1/engines": {
@@ -2273,6 +2024,101 @@
         "x-listed": true
       }
     },
+    "/api/v1/server/healthz.txt": {
+      "get": {
+        "description": "Get API health status (per AI.md PART 13)",
+        "operationId": "getServerHealthAliasApiV1ServerHealthzTxt",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "build": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "checks": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "features": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "go_version": {
+                      "type": "string"
+                    },
+                    "maintenance": {
+                      "type": "object"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "pending_restart": {
+                      "type": "boolean"
+                    },
+                    "project": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "restart_reason": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "stats": {
+                      "additionalProperties": {
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    },
+                    "uptime": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "status",
+                    "version",
+                    "go_version",
+                    "build",
+                    "uptime",
+                    "mode",
+                    "timestamp",
+                    "features",
+                    "checks",
+                    "stats"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Healthy"
+          }
+        },
+        "summary": "Health check",
+        "x-listed": true
+      }
+    },
     "/api/v1/server/help": {
       "get": {
         "description": "Return usage and help information for this server.",
@@ -2447,69 +2293,6 @@
         ],
         "summary": "Use the Model Context Protocol endpoint",
         "x-listed": true
-      }
-    },
-    "/api/v1/server/metrics": {
-      "get": {
-        "description": "Prometheus metrics endpoint.",
-        "operationId": "getMetrics",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful response"
-          }
-        },
-        "security": [
-          {
-            "ServiceTokenAuth": []
-          }
-        ],
-        "summary": "Get internal server metrics",
-        "x-listed": false,
-        "x-mounted-when": "server.metrics.enabled"
-      }
-    },
-    "/api/v1/server/metrics/{service}": {
-      "get": {
-        "description": "Prometheus metrics endpoint.",
-        "operationId": "getServiceMetrics",
-        "parameters": [
-          {
-            "description": "Metrics service",
-            "in": "path",
-            "name": "service",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful response"
-          }
-        },
-        "security": [
-          {
-            "ServiceTokenAuth": []
-          }
-        ],
-        "summary": "Get internal service metrics",
-        "x-listed": false,
-        "x-mounted-when": "server.metrics.enabled"
       }
     },
     "/api/v1/server/preferences": {
@@ -4220,69 +4003,6 @@
         "x-listed": true
       }
     },
-    "/metrics": {
-      "get": {
-        "description": "Prometheus metrics endpoint.",
-        "operationId": "getMetricsAliasMetrics",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful response"
-          }
-        },
-        "security": [
-          {
-            "ServiceTokenAuth": []
-          }
-        ],
-        "summary": "Get internal server metrics",
-        "x-listed": false,
-        "x-mounted-when": "server.metrics.root.enabled"
-      }
-    },
-    "/metrics/{service}": {
-      "get": {
-        "description": "Prometheus metrics endpoint.",
-        "operationId": "getServiceMetricsAliasMetricsService",
-        "parameters": [
-          {
-            "description": "Metrics service",
-            "in": "path",
-            "name": "service",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful response"
-          }
-        },
-        "security": [
-          {
-            "ServiceTokenAuth": []
-          }
-        ],
-        "summary": "Get internal service metrics",
-        "x-listed": false,
-        "x-mounted-when": "server.metrics.root.enabled"
-      }
-    },
     "/search.atom": {
       "get": {
         "description": "Search results as Atom 1.0 feed",
@@ -4350,69 +4070,6 @@
           }
         },
         "summary": "Health check (frontend)"
-      }
-    },
-    "/server/metrics": {
-      "get": {
-        "description": "Prometheus metrics endpoint.",
-        "operationId": "getMetricsAliasServerMetrics",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful response"
-          }
-        },
-        "security": [
-          {
-            "ServiceTokenAuth": []
-          }
-        ],
-        "summary": "Get internal server metrics",
-        "x-listed": false,
-        "x-mounted-when": "server.metrics.enabled"
-      }
-    },
-    "/server/metrics/{service}": {
-      "get": {
-        "description": "Prometheus metrics endpoint.",
-        "operationId": "getServiceMetricsAliasServerMetricsService",
-        "parameters": [
-          {
-            "description": "Metrics service",
-            "in": "path",
-            "name": "service",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful response"
-          }
-        },
-        "security": [
-          {
-            "ServiceTokenAuth": []
-          }
-        ],
-        "summary": "Get internal service metrics",
-        "x-listed": false,
-        "x-mounted-when": "server.metrics.enabled"
       }
     }
   },

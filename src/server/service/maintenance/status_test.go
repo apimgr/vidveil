@@ -2,8 +2,10 @@
 package maintenance
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -68,6 +70,18 @@ func TestSelfHealingAttemptStatusHonorsLimit(t *testing.T) {
 				t.Errorf("attempt metadata = %#v", got)
 			}
 		})
+	}
+}
+
+func TestSelfHealingTimestampsRemainPresentWhenNull(t *testing.T) {
+	data, err := json.Marshal(SelfHealingStatus{Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"last_attempt":null`, `"next_attempt":null`} {
+		if !strings.Contains(string(data), field) {
+			t.Errorf("serialized self-healing status %s omits %s", data, field)
+		}
 	}
 }
 

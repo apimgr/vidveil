@@ -26,6 +26,9 @@ func TestBuildCSPHeaderUpgradesInsecureRequestsOnlyForHTTPS(t *testing.T) {
 				SSL: config.SSLConfig{Enabled: tt.ssl},
 			}}}
 			policy := s.buildCSPHeader(httptest.NewRequest("GET", tt.request, nil))
+			if !strings.Contains(policy, "font-src 'self' data: https:") {
+				t.Errorf("CSP font source policy is missing data: fonts: %q", policy)
+			}
 			got := strings.Contains(policy, "upgrade-insecure-requests;")
 			if got != tt.want {
 				t.Errorf("upgrade-insecure-requests present = %t, want %t; policy=%q", got, tt.want, policy)

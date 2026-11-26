@@ -52,21 +52,27 @@ type RotatingFile struct {
 	// Last rotation time
 	lastRotation time.Time
 	// Number of rotated files to keep (0 = delete immediately)
-	keepCount int
+	keepCount    int
+	keepDuration time.Duration
+	keepForever  bool
 	// Mode used when creating/reopening the file (0 defaults to 0644)
-	fileMode os.FileMode
+	fileMode     os.FileMode
+	beforeRotate func() error
 }
 
 // RotationConfig holds rotation settings per PART 11
 type RotationConfig struct {
 	// e.g., "50MB", "100KB"
-	MaxSize string
+	MaxSize     string
+	DisableSize bool
 	// e.g., "daily", "weekly", "hourly"
 	Interval string
 	// Whether to gzip rotated files
 	Compress bool
 	// Number of rotated files to keep (0 = delete immediately)
-	Keep int
+	Keep        int
+	KeepFor     time.Duration
+	KeepForever bool
 	// File mode for the log file (0 defaults to 0644). PART 11 requires
 	// audit.log at 0640; other logs default to 0644.
 	FileMode os.FileMode
@@ -78,7 +84,9 @@ func NewRotatingFile(path string, cfg RotationConfig) (*RotatingFile, error) {
 		path:         path,
 		compress:     cfg.Compress,
 		keepCount:    cfg.Keep,
-		lastRotation: time.Now(),
+		keepDuration: cfg.KeepFor,
+		keepForever:  cfg.KeepForever,
+		lastRotation: time.Now().UTC(),
 		fileMode:     cfg.FileMode,
 	}
 
@@ -90,7 +98,7 @@ func NewRotatingFile(path string, cfg RotationConfig) (*RotatingFile, error) {
 	// Parse max size (e.g., "50MB", "100KB")
 	rf.maxSize = parseSize(cfg.MaxSize)
 	// Default 50MB
-	if rf.maxSize == 0 {
+	if rf.maxSize == 0 && !cfg.DisableSize {
 		rf.maxSize = 50 * 1024 * 1024
 	}
 
@@ -113,6 +121,9 @@ func NewRotatingFile(path string, cfg RotationConfig) (*RotatingFile, error) {
 	// Get current file size
 	if info, err := f.Stat(); err == nil {
 		rf.currentSize = info.Size()
+	}
+	if rf.keepCount > 0 || rf.keepDuration > 0 || rf.keepForever {
+		go rf.cleanupOldFiles()
 	}
 
 	return rf, nil
@@ -180,6 +191,15 @@ func (rf *RotatingFile) Write(p []byte) (n int, err error) {
 	return n, err
 }
 
+func (rf *RotatingFile) Sync() error {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	if rf.file == nil {
+		return os.ErrClosed
+	}
+	return rf.file.Sync()
+}
+
 // needsRotation checks if rotation is needed based on size or time
 func (rf *RotatingFile) needsRotation() bool {
 	// Size-based check
@@ -188,18 +208,19 @@ func (rf *RotatingFile) needsRotation() bool {
 	}
 
 	// Time-based check
-	now := time.Now()
+	now := time.Now().UTC()
+	lastRotation := rf.lastRotation.UTC()
 	switch rf.interval {
 	case RotationHourly:
-		return now.Hour() != rf.lastRotation.Hour() || now.Day() != rf.lastRotation.Day()
+		return now.Hour() != lastRotation.Hour() || now.Day() != lastRotation.Day()
 	case RotationDaily:
-		return now.Day() != rf.lastRotation.Day() || now.Month() != rf.lastRotation.Month()
+		return now.YearDay() != lastRotation.YearDay() || now.Year() != lastRotation.Year()
 	case RotationWeekly:
-		_, lastWeek := rf.lastRotation.ISOWeek()
+		_, lastWeek := lastRotation.ISOWeek()
 		_, thisWeek := now.ISOWeek()
-		return thisWeek != lastWeek || now.Year() != rf.lastRotation.Year()
+		return thisWeek != lastWeek || now.Year() != lastRotation.Year()
 	case RotationMonthly:
-		return now.Month() != rf.lastRotation.Month() || now.Year() != rf.lastRotation.Year()
+		return now.Month() != lastRotation.Month() || now.Year() != lastRotation.Year()
 	}
 
 	return false
@@ -207,6 +228,11 @@ func (rf *RotatingFile) needsRotation() bool {
 
 // rotate performs log rotation
 func (rf *RotatingFile) rotate() error {
+	if rf.beforeRotate != nil {
+		if err := rf.beforeRotate(); err != nil {
+			return fmt.Errorf("prepare audit log rotation: %w", err)
+		}
+	}
 	// Close current file
 	if rf.file != nil {
 		if err := rf.file.Close(); err != nil {
@@ -215,8 +241,14 @@ func (rf *RotatingFile) rotate() error {
 	}
 
 	// Generate rotated filename with timestamp
-	timestamp := time.Now().Format("20060102-150405")
+	timestamp := time.Now().UTC().Format("20060102-150405")
+	if filepath.Base(rf.path) == "audit.log" {
+		timestamp = time.Now().UTC().Format("2006-01-02")
+	}
 	rotatedPath := rf.path + "." + timestamp
+	if _, err := os.Stat(rotatedPath); err == nil {
+		rotatedPath += "-" + time.Now().UTC().Format("150405")
+	}
 
 	// Rename current log to rotated name
 	if err := os.Rename(rf.path, rotatedPath); err != nil {
@@ -230,14 +262,16 @@ func (rf *RotatingFile) rotate() error {
 
 	// Compress if enabled
 	if rf.compress {
-		go rf.compressFile(rotatedPath)
-	} else if rf.keepCount == 0 {
+		go func() {
+			rf.compressFile(rotatedPath)
+			if rf.keepCount > 0 || rf.keepDuration > 0 || rf.keepForever {
+				rf.cleanupOldFiles()
+			}
+		}()
+	} else if rf.keepCount == 0 && rf.keepDuration == 0 && !rf.keepForever {
 		// Delete immediately if not keeping rotated files (PART 11 default)
 		go func() { _ = os.Remove(rotatedPath) }()
-	}
-
-	// Clean up old rotated files if keepCount > 0
-	if rf.keepCount > 0 {
+	} else if rf.keepCount > 0 || rf.keepDuration > 0 {
 		go rf.cleanupOldFiles()
 	}
 
@@ -249,7 +283,7 @@ func (rf *RotatingFile) rotate() error {
 
 	rf.file = f
 	rf.currentSize = 0
-	rf.lastRotation = time.Now()
+	rf.lastRotation = time.Now().UTC()
 	return nil
 }
 
@@ -291,13 +325,16 @@ func (rf *RotatingFile) compressFile(path string) {
 	}
 
 	// If not keeping files, remove compressed too (PART 11 default)
-	if rf.keepCount == 0 {
+	if rf.keepCount == 0 && rf.keepDuration == 0 && !rf.keepForever {
 		_ = os.Remove(path + ".gz")
 	}
 }
 
 // cleanupOldFiles removes rotated files beyond keepCount
 func (rf *RotatingFile) cleanupOldFiles() {
+	if rf.keepForever {
+		return
+	}
 	dir := filepath.Dir(rf.path)
 	base := filepath.Base(rf.path)
 	pattern := base + ".*"
@@ -328,6 +365,15 @@ func (rf *RotatingFile) cleanupOldFiles() {
 		}
 	}
 
+	if rf.keepDuration > 0 {
+		cutoff := time.Now().Add(-rf.keepDuration)
+		for _, file := range files {
+			if file.modTime.Before(cutoff) {
+				_ = os.Remove(file.path)
+			}
+		}
+		return
+	}
 	// Remove files beyond keepCount
 	if len(files) > rf.keepCount {
 		for i := 0; i < len(files)-rf.keepCount; i++ {
@@ -654,7 +700,7 @@ type LogEntry struct {
 // AuditActor represents who performed an action per AI.md PART 11 audit format
 type AuditActor struct {
 	Type      string `json:"type"`
-	ID        string `json:"id"`
+	ID        string `json:"id,omitempty"`
 	IP        string `json:"ip,omitempty"`
 	UserAgent string `json:"user_agent,omitempty"`
 }
@@ -677,6 +723,8 @@ type AuditEntry struct {
 	Details  map[string]interface{} `json:"details,omitempty"`
 	Result   string                 `json:"result"`
 	Reason   string                 `json:"reason,omitempty"`
+	Prev     string                 `json:"prev"`
+	Source   string                 `json:"source,omitempty"`
 }
 
 // generateAuditID generates a unique audit entry ID using timestamp + random hex
@@ -685,10 +733,30 @@ func generateAuditID() string {
 	b := make([]byte, 10)
 	// On the rare chance the CSPRNG read fails, fall back to a time-only ID
 	// rather than emitting a predictable all-zero random suffix.
-	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("audit_%d", time.Now().UnixNano())
+	_, _ = rand.Read(b)
+	var value [16]byte
+	millis := uint64(time.Now().UnixMilli())
+	value[0] = byte(millis >> 40)
+	value[1] = byte(millis >> 32)
+	value[2] = byte(millis >> 24)
+	value[3] = byte(millis >> 16)
+	value[4] = byte(millis >> 8)
+	value[5] = byte(millis)
+	copy(value[6:], b)
+	const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+	var id [26]byte
+	for index := range id {
+		var digit byte
+		for bit := 0; bit < 5; bit++ {
+			position := index*5 + bit - 2
+			digit <<= 1
+			if position >= 0 && position < 128 {
+				digit |= (value[position/8] >> (7 - uint(position%8))) & 1
+			}
+		}
+		id[index] = alphabet[digit]
 	}
-	return fmt.Sprintf("audit_%d%x", time.Now().UnixMilli(), b)
+	return string(id[:])
 }
 
 // auditCategory maps event prefixes to category names per PART 11
@@ -718,6 +786,9 @@ func auditCategory(event string) string {
 
 // auditSeverity maps events to severity levels per PART 11
 func auditSeverity(event, result string) string {
+	if strings.Contains(event, "audit_chain_broken") {
+		return "critical"
+	}
 	if result == "failure" {
 		switch {
 		case strings.Contains(event, "brute_force") || strings.Contains(event, "suspicious"):
@@ -746,8 +817,15 @@ type AppLogger struct {
 	level   Level
 	outputs map[string]io.Writer
 	// output name → format ("text", "logfmt", "json")
-	outputFormats map[string]string
-	appConfig     *config.AppConfig
+	outputFormats       map[string]string
+	appConfig           *config.AppConfig
+	auditPrevious       string
+	auditPath           string
+	auditAnchor         string
+	auditIssue          *auditChainIssue
+	auditReportedBroken bool
+	auditGenesis        bool
+	auditMirror         func(AuditEntry) error
 	// recent holds a bounded in-memory ring of structured log entries,
 	// consumed by the Loki metrics service per AI.md PART 20
 	recent []RecentLogEntry
@@ -817,7 +895,7 @@ func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
 
 	// Setup debug log — text format per PART 11
 	if appConfig.Server.Logs.Debug.Enabled && appConfig.Server.Logs.Debug.Filename != "" {
-		keep := parseKeepString(appConfig.Server.Logs.Debug.Keep)
+		keep := appConfig.Server.Logs.Debug.Keep
 		if err := l.addFileOutput("debug", appConfig.Server.Logs.Debug.Filename, appConfig.Server.Logs.Debug.Rotate, "text", keep); err != nil {
 			return nil, fmt.Errorf("failed to open debug log: %w", err)
 		}
@@ -825,7 +903,7 @@ func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
 
 	// Setup access log — apache combined format per PART 11
 	if appConfig.Server.Logs.Access.Enabled && appConfig.Server.Logs.Access.Filename != "" {
-		keep := parseKeepString(appConfig.Server.Logs.Access.Keep)
+		keep := appConfig.Server.Logs.Access.Keep
 		accessFmt := appConfig.Server.Logs.Access.Format
 		if accessFmt == "" {
 			accessFmt = "apache_combined"
@@ -837,7 +915,7 @@ func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
 
 	// Setup server log — text format per PART 11
 	if appConfig.Server.Logs.Server.Enabled && appConfig.Server.Logs.Server.Filename != "" {
-		keep := parseKeepString(appConfig.Server.Logs.Server.Keep)
+		keep := appConfig.Server.Logs.Server.Keep
 		if err := l.addFileOutput("server", appConfig.Server.Logs.Server.Filename, appConfig.Server.Logs.Server.Rotate, "text", keep); err != nil {
 			return nil, fmt.Errorf("failed to open server log: %w", err)
 		}
@@ -845,7 +923,7 @@ func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
 
 	// Setup error log — text format per PART 11
 	if appConfig.Server.Logs.Error.Enabled && appConfig.Server.Logs.Error.Filename != "" {
-		keep := parseKeepString(appConfig.Server.Logs.Error.Keep)
+		keep := appConfig.Server.Logs.Error.Keep
 		if err := l.addFileOutput("error", appConfig.Server.Logs.Error.Filename, appConfig.Server.Logs.Error.Rotate, "text", keep); err != nil {
 			return nil, fmt.Errorf("failed to open error log: %w", err)
 		}
@@ -853,15 +931,19 @@ func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
 
 	// Setup audit log — JSON Lines format per PART 11
 	if appConfig.Server.Logs.Audit.Enabled && appConfig.Server.Logs.Audit.Filename != "" {
-		keep := parseKeepString(appConfig.Server.Logs.Audit.Keep)
+		keep := appConfig.Server.Logs.Audit.Keep
 		if err := l.addFileOutput("audit", appConfig.Server.Logs.Audit.Filename, appConfig.Server.Logs.Audit.Rotate, "json", keep); err != nil {
 			return nil, fmt.Errorf("failed to open audit log: %w", err)
+		}
+		l.initializeAuditChain()
+		if l.auditGenesis {
+			l.Info("audit.log chain initialized at genesis", nil)
 		}
 	}
 
 	// Setup security log — fail2ban format by default per PART 11 (Security() writes directly)
 	if appConfig.Server.Logs.Security.Enabled && appConfig.Server.Logs.Security.Filename != "" {
-		keep := parseKeepString(appConfig.Server.Logs.Security.Keep)
+		keep := appConfig.Server.Logs.Security.Keep
 		secFmt := appConfig.Server.Logs.Security.Format
 		if secFmt == "" {
 			secFmt = "fail2ban"
@@ -873,7 +955,7 @@ func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
 
 	// Setup auth log — syslog RFC 3164 format per PART 11
 	if appConfig.Server.Logs.Auth.Enabled && appConfig.Server.Logs.Auth.Filename != "" {
-		keep := parseKeepString(appConfig.Server.Logs.Auth.Keep)
+		keep := appConfig.Server.Logs.Auth.Keep
 		if err := l.addFileOutput("auth", appConfig.Server.Logs.Auth.Filename, appConfig.Server.Logs.Auth.Rotate, "syslog", keep); err != nil {
 			return nil, fmt.Errorf("failed to open auth log: %w", err)
 		}
@@ -881,7 +963,7 @@ func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
 
 	// Setup app/project log — logfmt format per PART 11
 	if appConfig.Server.Logs.App.Enabled && appConfig.Server.Logs.App.Filename != "" {
-		keep := parseKeepString(appConfig.Server.Logs.App.Keep)
+		keep := appConfig.Server.Logs.App.Keep
 		if err := l.addFileOutput("app", appConfig.Server.Logs.App.Filename, appConfig.Server.Logs.App.Rotate, "logfmt", keep); err != nil {
 			return nil, fmt.Errorf("failed to open app log: %w", err)
 		}
@@ -892,15 +974,19 @@ func NewAppLogger(appConfig *config.AppConfig) (*AppLogger, error) {
 
 // addFileOutput adds a rotating file output per PART 11.
 // format controls how log() writes to this output ("text", "logfmt", "json").
-func (l *AppLogger) addFileOutput(name, path, rotate, format string, keep int) error {
+func (l *AppLogger) addFileOutput(name, path, rotate, format, keep string) error {
 	// Parse rotation config from string like "weekly,50MB" or "daily" or "100MB"
 	rotCfg := parseRotationString(rotate)
-	rotCfg.Keep = keep
+	rotCfg.Keep, rotCfg.KeepFor, rotCfg.KeepForever = parseKeepRetention(keep)
 
 	// PART 11 "Audit Log Integrity": audit.log MUST be 0640 (rw-r-----), not
 	// world-readable. All other logs keep the 0644 default.
 	if name == "audit" {
 		rotCfg.FileMode = 0640
+		rotCfg.DisableSize = !rotationHasMaxSize(rotate)
+		if rotCfg.DisableSize {
+			rotCfg.MaxSize = ""
+		}
 	}
 
 	if !filepath.IsAbs(path) {
@@ -918,6 +1004,9 @@ func (l *AppLogger) addFileOutput(name, path, rotate, format string, keep int) e
 	// already-existing audit.log that a prior run may have left at 0644.
 	if name == "audit" {
 		_ = os.Chmod(path, 0640)
+		l.auditPath = path
+		l.auditAnchor = filepath.Join(filepath.Dir(path), "audit.anchor")
+		rf.beforeRotate = l.prepareAuditRotation
 	}
 
 	l.outputs[name] = rf
@@ -925,6 +1014,16 @@ func (l *AppLogger) addFileOutput(name, path, rotate, format string, keep int) e
 		l.outputFormats[name] = format
 	}
 	return nil
+}
+
+func rotationHasMaxSize(rotation string) bool {
+	for _, part := range strings.Split(rotation, ",") {
+		part = strings.ToUpper(strings.TrimSpace(part))
+		if strings.HasSuffix(part, "MB") || strings.HasSuffix(part, "KB") || strings.HasSuffix(part, "GB") || strings.HasSuffix(part, "B") {
+			return true
+		}
+	}
+	return false
 }
 
 // parseRotationString parses rotation string like "weekly,50MB" per PART 11
@@ -974,6 +1073,38 @@ func parseKeepString(s string) int {
 		return 0
 	}
 	return n
+}
+
+func parseKeepRetention(value string) (int, time.Duration, bool) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" || value == "none" {
+		return 0, 0, false
+	}
+	if value == "forever" {
+		return 0, 0, true
+	}
+	if count := parseKeepString(value); count > 0 {
+		return count, 0, false
+	}
+	if len(value) < 2 {
+		return 0, 0, false
+	}
+	count, err := strconv.Atoi(value[:len(value)-1])
+	if err != nil || count <= 0 {
+		return 0, 0, false
+	}
+	var unit time.Duration
+	switch value[len(value)-1] {
+	case 'd':
+		unit = 24 * time.Hour
+	case 'w':
+		unit = 7 * 24 * time.Hour
+	case 'm':
+		unit = 365 * 24 * time.Hour / 12
+	default:
+		return 0, 0, false
+	}
+	return 0, time.Duration(count) * unit, false
 }
 
 // Close closes all log files
@@ -1227,31 +1358,116 @@ func (l *AppLogger) Audit(event, actorID, actorType, actorIP, result string, det
 	if !ok {
 		return
 	}
+	l.mu.Lock()
+	if l.auditPrevious == "" {
+		l.auditPrevious = zeroAuditHash
+	}
+	if details == nil {
+		details = make(map[string]interface{})
+	} else {
+		copyOfDetails := make(map[string]interface{}, len(details)+1)
+		for key, value := range details {
+			copyOfDetails[key] = value
+		}
+		details = copyOfDetails
+	}
+	details["audit_id"] = generateAuditID()
+	entryID := details["audit_id"].(string)
+	actorType, actorID, actorIP = normalizeAuditActor(actorType, actorID, actorIP)
+	if result != "success" {
+		result = "failure"
+	}
 
+	source, _ := details["source"].(string)
 	entry := AuditEntry{
-		ID:       generateAuditID(),
+		ID:       entryID,
 		Time:     time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
 		Event:    event,
 		Category: auditCategory(event),
 		Severity: auditSeverity(event, result),
 		Actor: AuditActor{
 			Type: actorType,
-			ID:   MaskUsername(actorID),
+			ID:   actorID,
 			IP:   actorIP,
 		},
 		Result:  result,
 		Details: SanitizeLogFields(details),
+		Prev:    l.auditPrevious,
+		Source:  source,
 	}
 
 	data, err := json.Marshal(entry)
 	if err != nil {
+		l.mu.Unlock()
 		return
 	}
 
+	line := append(data, '\n')
+	n, writeErr := w.Write(line)
+	if writeErr == nil && n == len(line) {
+		l.auditPrevious = auditLineHash(data)
+		if syncer, ok := w.(interface{ Sync() error }); ok {
+			writeErr = syncer.Sync()
+		}
+	} else if writeErr == nil {
+		writeErr = io.ErrShortWrite
+	}
+	if writeErr != nil {
+		fmt.Fprintf(os.Stderr, "audit.log append failed: %v\n", writeErr)
+		l.mu.Unlock()
+		return
+	}
+	mirror := l.auditMirror
+	l.mu.Unlock()
+	if mirror != nil && event != "audit.mirror_failed" {
+		if err := mirror(entry); err != nil {
+			l.Audit("audit.mirror_failed", "", "system", "", "failure", map[string]interface{}{"failed_audit_id": entry.ID, "error": err.Error()})
+		}
+	}
 	l.mu.Lock()
-	defer l.mu.Unlock()
-	_, _ = w.Write(data)
-	_, _ = w.Write([]byte("\n"))
+	if l.auditIssue != nil {
+		issue := *l.auditIssue
+		l.auditIssue = nil
+		l.auditReportedBroken = true
+		l.mu.Unlock()
+		l.Audit("security.audit_chain_broken", "", "system", "", "failure", map[string]interface{}{"file": filepath.Base(issue.file), "line": issue.line, "reason": issue.reason})
+		return
+	}
+	l.mu.Unlock()
+}
+
+func normalizeAuditActor(actorType, actorID, actorIP string) (string, string, string) {
+	switch strings.ToLower(strings.TrimSpace(actorType)) {
+	case "owner":
+		return "owner", actorID, actorIP
+	case "user":
+		return "owner", actorID, actorIP
+	case "operator", "admin":
+		return "operator", MaskUsername(actorID), actorIP
+	case "anonymous":
+		return "anonymous", "", actorIP
+	default:
+		return "system", "", ""
+	}
+}
+
+func (l *AppLogger) SetAuditMirror(mirror func(AuditEntry) error) {
+	l.mu.Lock()
+	l.auditMirror = mirror
+	l.mu.Unlock()
+}
+
+func (l *AppLogger) ReportAuditChainIssue() {
+	l.mu.Lock()
+	issue := l.auditIssue
+	l.auditIssue = nil
+	if issue != nil {
+		l.auditReportedBroken = true
+	}
+	l.mu.Unlock()
+	if issue != nil {
+		l.Audit("security.audit_chain_broken", "", "system", "", "failure", map[string]interface{}{"file": filepath.Base(issue.file), "line": issue.line, "reason": issue.reason})
+	}
 }
 
 // Auth logs an authentication event to auth.log in syslog RFC 3164 format per AI.md PART 11.

@@ -58,7 +58,7 @@
     <div class="cookie-banner-content">
         <span class="cookie-message">
             {{.ConsentMessage}} -
-            <a href="{{.ConsentPolicyURL}}" class="policy-link">{{.ConsentPolicyText}}</a>
+            {{if .TorRequest}}{{.ConsentPolicyURL}}{{else}}<a href="{{.ConsentPolicyURL}}" class="policy-link">{{.ConsentPolicyText}}</a>{{end}}
         </span>
         <div class="cookie-buttons">
             <form method="post" action="{{ path "/server/consent" }}">

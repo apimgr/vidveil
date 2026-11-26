@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/pgp"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
 	"github.com/apimgr/vidveil/src/server/service/system"
@@ -28,14 +29,18 @@ func TestApplySchedulerConfig(t *testing.T) {
 	appConfig := config.DefaultAppConfig()
 	appConfig.Server.Schedule.Timezone = "Asia/Tokyo"
 	appConfig.Server.Schedule.Tasks = map[string]config.ScheduleTaskConfig{
-		"configured":    {Schedule: "@every 2h", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
-		"backup_hourly": {Schedule: "@hourly", Enabled: false},
+		"configured":     {Schedule: "@every 2h", Enabled: true, RetryOnFail: true, RetryDelay: "1h"},
+		"database_check": {Schedule: "@every 3m", Enabled: true},
+		"backup_hourly":  {Schedule: "@hourly", Enabled: false},
 	}
 	sched := scheduler.NewScheduler()
 	if err := sched.RegisterTask("configured", "Configured", "test", "@every 1h", func(context.Context) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if err := sched.RegisterTask("backup_hourly", "Hourly Backup", "test", "@hourly", func(context.Context) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := sched.RegisterTask("database_check", "Database Check", "test", "@every 1m", func(context.Context) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	applySchedulerConfig(sched, appConfig, nil)
@@ -52,6 +57,13 @@ func TestApplySchedulerConfig(t *testing.T) {
 	}
 	if hourly.Enabled {
 		t.Fatal("backup_hourly remained enabled after configured disable")
+	}
+	databaseCheck, err := sched.GetTask("database_check")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if databaseCheck.Schedule != "@every 3m" {
+		t.Fatalf("database check schedule = %q, want @every 3m", databaseCheck.Schedule)
 	}
 	if got := configured.NextRun.Location().String(); got != "Asia/Tokyo" {
 		t.Fatalf("timezone = %q, want Asia/Tokyo", got)
@@ -481,6 +493,39 @@ func TestPrintComplianceReport_Enabled(t *testing.T) {
 	}
 	if !strings.Contains(out, "data export") {
 		t.Errorf("expected data-subject controls, got: %q", out)
+	}
+}
+
+func TestPrintComplianceDataSummaryUsesConfiguredSQLiteAndAuditIntegrity(t *testing.T) {
+	dataDir := t.TempDir()
+	cfg := config.DefaultAppConfig()
+	cfg.Server.Database.SQLite.Dir = filepath.Join(dataDir, "db")
+	cfg.Server.Database.SQLite.ServerDB = "server.db"
+	auditPath := filepath.Join(dataDir, "logs", "audit.log")
+	cfg.Server.Logs.Audit.Filename = auditPath
+	manager, err := database.NewSchemaManager(filepath.Join(cfg.Server.Database.SQLite.Dir, cfg.Server.Database.SQLite.ServerDB))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.GetDB().Exec(`INSERT INTO audit_log(timestamp,category,action,success) VALUES (strftime('%s','now'),'compliance','compliance.test',1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(auditPath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	auditEntry := `{"id":"01KB0S9QYJAHQ6JJ1ZZ7N4JX4R","prev":"0000000000000000000000000000000000000000000000000000000000000000"}` + "\n"
+	if err := os.WriteFile(auditPath, []byte(auditEntry), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(func() { printComplianceDataSummary(dataDir, cfg) })
+	if !strings.Contains(out, "compliance events (30 days): 1") || !strings.Contains(out, "Audit log integrity: intact (1 entries)") {
+		t.Fatalf("compliance data summary missing queried values: %q", out)
 	}
 }
 

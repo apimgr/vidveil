@@ -15,8 +15,8 @@ type SelfHealingStatus struct {
 	Enabled     bool       `json:"enabled"`
 	Exhausted   bool       `json:"exhausted"`
 	Attempts    uint64     `json:"attempts"`
-	LastAttempt *time.Time `json:"last_attempt,omitempty"`
-	NextAttempt *time.Time `json:"next_attempt,omitempty"`
+	LastAttempt *time.Time `json:"last_attempt"`
+	NextAttempt *time.Time `json:"next_attempt"`
 }
 
 type MaintenanceStatus struct {

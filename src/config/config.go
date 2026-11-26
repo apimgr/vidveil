@@ -698,17 +698,15 @@ type NotificationsConfig struct {
 
 // DatabaseErrorConfig controls the database connection failure trigger.
 type DatabaseErrorConfig struct {
-	Enabled       bool   `yaml:"enabled"`
-	Failures      int    `yaml:"failures"`
-	CheckInterval string `yaml:"check_interval"`
-	Repeat        string `yaml:"repeat"`
+	Enabled  bool   `yaml:"enabled"`
+	Failures int    `yaml:"failures"`
+	Repeat   string `yaml:"repeat"`
 }
 
 // DiskLowConfig controls low disk space checks and notification thresholds.
 type DiskLowConfig struct {
 	Enabled          bool   `yaml:"enabled"`
 	ThresholdPercent int    `yaml:"threshold_percent"`
-	CheckInterval    string `yaml:"check_interval"`
 	Repeat           string `yaml:"repeat"`
 }
 
@@ -2013,10 +2011,10 @@ func DefaultAppConfig() *AppConfig {
 			},
 			Notifications: NotificationsConfig{
 				DatabaseError: DatabaseErrorConfig{
-					Enabled: true, Failures: 3, CheckInterval: "1m", Repeat: "24h",
+					Enabled: true, Failures: 3, Repeat: "24h",
 				},
 				DiskLow: DiskLowConfig{
-					Enabled: true, ThresholdPercent: 85, CheckInterval: "5m", Repeat: "24h",
+					Enabled: true, ThresholdPercent: 85, Repeat: "24h",
 				},
 				Email: EmailNotificationsConfig{
 					SMTP: SMTPConfig{

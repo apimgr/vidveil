@@ -161,6 +161,50 @@ func TestRegistryMountUsesBoundHandler(t *testing.T) {
 	}
 }
 
+func TestRegistrySeparatesDebugMountingFromInternalVisibility(t *testing.T) {
+	registry := NewRegistry()
+	for _, route := range []Route{
+		{Definition: Definition{Method: http.MethodGet, Path: "/api/{api_version}/metrics", OperationID: "metrics", Internal: true, Condition: "metrics"}, Handler: http.NotFound},
+		{Definition: Definition{Method: http.MethodGet, Path: "/api/{api_version}/debug", OperationID: "debug", Internal: true, DebugOnly: true}, Handler: http.NotFound},
+	} {
+		if err := registry.Add(route); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mounter := &testMounter{}
+	if err := registry.Mount(mounter, "/api/v1", func(condition string) bool { return condition == "metrics" }, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(mounter.paths) != 1 || mounter.paths[0] != "GET /api/v1/metrics" {
+		t.Fatalf("internal/debug route mounts = %v, want only always-mounted metrics route", mounter.paths)
+	}
+	if err := registry.Mount(mounter, "/api/v1", func(condition string) bool { return condition == "debug" || condition == "metrics" }, nil); err != nil {
+		t.Fatal(err)
+	}
+	debugMounted := false
+	for _, path := range mounter.paths {
+		debugMounted = debugMounted || path == "GET /api/v1/debug"
+	}
+	if !debugMounted {
+		t.Fatalf("debug-only route did not mount when enabled: %v", mounter.paths)
+	}
+}
+
+func TestHealthDefinitionHasTextSuffixAlias(t *testing.T) {
+	for _, definition := range Definitions() {
+		if definition.OperationID != "getServerHealth" {
+			continue
+		}
+		for _, alias := range definition.Aliases {
+			if alias.Method == http.MethodGet && alias.Path == "/api/{api_version}/server/healthz.txt" {
+				return
+			}
+		}
+		t.Fatal("health route is missing its .txt API alias")
+	}
+	t.Fatal("health route definition is missing")
+}
+
 type capturingMounter struct {
 	handler http.Handler
 }

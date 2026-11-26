@@ -57,6 +57,17 @@ func TestNewRotatingFile_DefaultFileMode(t *testing.T) {
 	}
 }
 
+func TestNewRotatingFileCanDisableSizeRotation(t *testing.T) {
+	rf, err := NewRotatingFile(filepath.Join(t.TempDir(), "audit.log"), RotationConfig{Interval: "daily", DisableSize: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rf.Close() }()
+	if rf.maxSize != 0 {
+		t.Fatalf("maxSize = %d, want disabled", rf.maxSize)
+	}
+}
+
 // ── RotatingFile.rotate ───────────────────────────────────────────────────────
 
 func TestRotate_TriggeredBySecondWrite(t *testing.T) {
@@ -210,6 +221,30 @@ func TestCleanupOldFiles_NoFilesNoPanic(t *testing.T) {
 	dir := t.TempDir()
 	rf := &RotatingFile{path: filepath.Join(dir, "app.log"), keepCount: 2}
 	rf.cleanupOldFiles()
+}
+
+func TestCleanupOldFiles_KeepDuration(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "audit.log")
+	oldPath := base + ".old.gz"
+	newPath := base + ".new.gz"
+	for _, path := range []string{oldPath, newPath} {
+		if err := os.WriteFile(path, []byte("archive"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldTime := time.Now().Add(-31 * 24 * time.Hour)
+	if err := os.Chtimes(oldPath, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	rf := &RotatingFile{path: base, keepDuration: 30 * 24 * time.Hour}
+	rf.cleanupOldFiles()
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Errorf("expired archive still exists: %v", err)
+	}
+	if _, err := os.Stat(newPath); err != nil {
+		t.Errorf("current archive was removed: %v", err)
+	}
 }
 
 // ── AppLogger.Close with file output ──────────────────────────────────────────

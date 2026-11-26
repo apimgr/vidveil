@@ -7,6 +7,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/google/uuid"
 )
 
@@ -128,6 +130,9 @@ func (sm *SchemaManager) EnsureSchema() error {
 	if err := sm.ensureFavoriteOwnerColumn(ctx); err != nil {
 		return err
 	}
+	if err := sm.ensureAuditMirrorColumns(ctx); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -156,6 +161,93 @@ func (sm *SchemaManager) ensureFavoriteOwnerColumn(ctx context.Context) error {
 	}
 	if _, err := sm.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_favorites_owner_id ON favorites(owner_id)`); err != nil {
 		return fmt.Errorf("index favorite owners: %w", err)
+	}
+	return nil
+}
+
+func (sm *SchemaManager) ensureAuditMirrorColumns(ctx context.Context) error {
+	table := sm.auditTableName()
+	columns := map[string]string{
+		"level":       `TEXT NOT NULL DEFAULT 'info'`,
+		"category":    `TEXT NOT NULL DEFAULT 'system'`,
+		"actor_ip":    `TEXT`,
+		"target_type": `TEXT`,
+		"target_id":   `TEXT`,
+		"success":     `INTEGER NOT NULL DEFAULT 1`,
+	}
+	known := make(map[string]bool)
+	rows, err := sm.db.QueryContext(ctx, "PRAGMA table_info('"+table+"')")
+	if err != nil {
+		return fmt.Errorf("inspect audit mirror schema: %w", err)
+	}
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("read audit mirror schema: %w", err)
+		}
+		known[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("read audit mirror schema: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close audit mirror schema rows: %w", err)
+	}
+	for name, definition := range columns {
+		if known[name] {
+			continue
+		}
+		if _, err := sm.db.ExecContext(ctx, "ALTER TABLE "+table+" ADD COLUMN "+name+" "+definition); err != nil {
+			return fmt.Errorf("add audit mirror column %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func (sm *SchemaManager) auditTableName() string {
+	if normalizeDriver(sm.driver) == DriverLibSQL {
+		return "srv_audit_log"
+	}
+	return "audit_log"
+}
+
+func (sm *SchemaManager) InsertAuditMirror(ctx context.Context, entry logging.AuditEntry) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	writeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	details := make(map[string]interface{}, len(entry.Details)+1)
+	for key, value := range entry.Details {
+		details[key] = value
+	}
+	details["audit_id"] = entry.ID
+	encodedDetails, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("encode audit mirror details: %w", err)
+	}
+	timestamp, err := time.Parse("2006-01-02T15:04:05.000Z", entry.Time)
+	if err != nil {
+		return fmt.Errorf("parse audit mirror timestamp: %w", err)
+	}
+	success := 0
+	if entry.Result == "success" {
+		success = 1
+	}
+	var targetType, targetID, actorIP any
+	if entry.Target != nil {
+		targetType, targetID = entry.Target.Type, entry.Target.ID
+	}
+	if entry.Actor.IP != "" {
+		actorIP = entry.Actor.IP
+	}
+	query := "INSERT INTO " + sm.auditTableName() + " (timestamp, level, category, action, actor_ip, target_type, target_id, details, success) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+	if _, err := sm.db.ExecContext(writeCtx, query, timestamp.Unix(), entry.Severity, entry.Category, entry.Event, actorIP, targetType, targetID, string(encodedDetails), success); err != nil {
+		return fmt.Errorf("insert audit mirror: %w", err)
 	}
 	return nil
 }
@@ -366,7 +458,14 @@ func nullInt64Value(value sql.NullInt64) any {
 // getTablesDDL returns CREATE TABLE statements.
 // SQLite and libsql share the same DDL dialect per AI.md PART 10.
 func (sm *SchemaManager) getTablesDDL() []string {
-	return sm.getSQLiteDDL()
+	statements := sm.getSQLiteDDL()
+	if normalizeDriver(sm.driver) == DriverLibSQL {
+		for index := range statements {
+			statements[index] = strings.ReplaceAll(statements[index], "audit_log", "srv_audit_log")
+			statements[index] = strings.ReplaceAll(statements[index], "idx_audit_", "srv_idx_audit_")
+		}
+	}
+	return statements
 }
 
 // getSQLiteDDL returns SQLite/libsql DDL
@@ -375,15 +474,20 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 		// Audit log table for tracking actions
 		`CREATE TABLE IF NOT EXISTS audit_log (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-			user_id TEXT,
-			username TEXT,
+			timestamp INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+			level TEXT NOT NULL DEFAULT 'info',
+			category TEXT NOT NULL DEFAULT 'system',
 			action TEXT NOT NULL,
-			resource TEXT,
+			actor_ip TEXT,
+			target_type TEXT,
+			target_id TEXT,
 			details TEXT,
-			ip_address TEXT,
-			user_agent TEXT
+			success INTEGER NOT NULL DEFAULT 1
 		)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_category ON audit_log(category)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_actor_ip ON audit_log(actor_ip)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id)`,
 
 		// Settings table for runtime config
 		`CREATE TABLE IF NOT EXISTS settings (

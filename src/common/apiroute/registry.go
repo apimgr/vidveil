@@ -19,6 +19,8 @@ type Definition struct {
 	Summary     string
 	Auth        string
 	Listed      bool
+	Internal    bool
+	DebugOnly   bool
 	Request     any
 	Response    any
 	Primary     string
@@ -159,6 +161,9 @@ func (r *Registry) Mount(router Mounter, apiBase string, enabled func(string) bo
 	}
 	for _, route := range r.Routes() {
 		if !conditionEnabled(route.Condition, enabled) {
+			continue
+		}
+		if route.DebugOnly && (enabled == nil || !enabled("debug")) {
 			continue
 		}
 		if route.Handler == nil {

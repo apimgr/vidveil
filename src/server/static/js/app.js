@@ -3782,7 +3782,7 @@ document.addEventListener('error', function(e) {
             if (countdown) countdown.textContent = seconds;
             if (seconds <= 0) {
                 seconds = 30;
-                fetch('/healthz.json', {cache: 'no-store'})
+                fetch('/healthz', {cache: 'no-store', headers: {'Accept': 'application/json'}})
                     .then(function(r) { return r.json(); })
                     .then(applyUpdate)
                     .catch(function() { location.reload(); });

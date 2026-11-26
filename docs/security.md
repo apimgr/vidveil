@@ -30,7 +30,7 @@ internal IPs, query strings, or stack traces.
 | Endpoint                             | Purpose                                       |
 |--------------------------------------|-----------------------------------------------|
 | `GET https://x.scour.li/server/healthz`               | Health, version, build info, uptime.          |
-| `GET https://x.scour.li/api/v1/server/healthz`        | Same data, JSON by default; text is negotiable. |
+| `GET https://x.scour.li/api/v1/server/healthz`        | Same data, JSON by default; `Accept: text/plain` or `.txt` returns text. |
 | `GET https://x.scour.li/.well-known/security.txt`     | Machine-readable security contact metadata.   |
 | `GET https://x.scour.li/.well-known/pgp-key.asc`       | Public reporting key, when configured.         |
 | `GET https://x.scour.li/server/security`               | Security contacts and reporting guidance.     |

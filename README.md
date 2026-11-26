@@ -235,10 +235,14 @@ GET https://x.scour.li/api/v1/engines/{name}
 
 ```
 GET https://x.scour.li/api/v1/server/healthz
+GET https://x.scour.li/api/v1/server/healthz.txt
+GET https://x.scour.li/server/healthz.txt
 ```
 
 The canonical frontend health route is `https://x.scour.li/server/healthz`.
-The root `/healthz` alias is disabled by default.
+API health is JSON by default; request the `.txt` form or send
+`Accept: text/plain` for text. The root `/healthz` alias is disabled by
+default and has no suffix form.
 During automatic maintenance, operators can retrieve detailed recovery
 diagnostics from `/api/v1/status` with the configured `server.token` Bearer
 credential; public health responses omit raw diagnostic details.

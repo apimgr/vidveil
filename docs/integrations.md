@@ -117,7 +117,8 @@ locally and do not require the visitor's browser to contact a third-party CDN.
 ### Health / Status
 
 - `GET /server/healthz` — content-negotiated public status.
-- `GET /api/v1/server/healthz` — JSON by default; API clients may request text.
+- `GET /api/v1/server/healthz` — JSON by default; use `.txt` or
+  `Accept: text/plain` for text.
   Enabled dataset checks appear after core and overlay checks, with public-safe
   status values only.
 - `GET /metrics` — Prometheus exposition when the root alias is enabled.

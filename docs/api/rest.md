@@ -119,11 +119,15 @@ GET https://x.scour.li/api/v1/version
 
 ```http
 GET https://x.scour.li/api/v1/server/healthz
+GET https://x.scour.li/api/v1/server/healthz.txt
 GET https://x.scour.li/server/healthz
 ```
 
-`/server/healthz` is the canonical frontend health route. `/healthz` is an
-optional root alias controlled by `server.healthz.root.enabled`.
+`/server/healthz` is the canonical frontend health route. The versioned API
+returns JSON by default and supports text through `.txt` or
+`Accept: text/plain`. `/healthz` is an optional root alias controlled by
+`server.healthz.root.enabled`; it has no suffix form and negotiates like
+`/server/healthz`.
 Browser requests receive the server-rendered status page; frontend text
 negotiation uses human-readable values, while JSON and API text responses keep
 machine values. `checks` contains the core components, enabled Tor/I2P checks,

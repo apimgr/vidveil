@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -45,9 +44,9 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server/model"
-	"github.com/apimgr/vidveil/src/server/service/alertcheck"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/cache"
+	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
 	"github.com/apimgr/vidveil/src/server/service/health"
@@ -308,13 +307,13 @@ type SearchHandler struct {
 	configDir         string
 	engineMgr         *engine.EngineManager
 	searchCache       cache.SearchResultCache
+	cacheDegraded     bool
 	metrics           *ServerMetrics
 	torSvc            TorStatusChecker
 	i2pSvc            I2PStatusChecker
 	geoipSvc          GeoIPChecker
 	secretsMgr        *secret.Manager
-	healthDB          *sql.DB
-	readHealthDB      *sql.DB
+	store             *database.AppDatabase
 	healthRegistry    *health.Registry
 	maintenanceStatus atomic.Pointer[maintenance.MaintenanceStatus]
 	tokenManager      *apitoken.Manager
@@ -427,11 +426,13 @@ func NewSearchHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManag
 	if appConfig == nil {
 		appConfig = config.DefaultAppConfig()
 	}
+	searchCache, cacheDegraded := newSearchResultCache(appConfig.Server.Cache)
 
 	return &SearchHandler{
-		appConfig:   appConfig,
-		engineMgr:   engineMgr,
-		searchCache: newSearchResultCache(appConfig.Server.Cache),
+		appConfig:     appConfig,
+		engineMgr:     engineMgr,
+		searchCache:   searchCache,
+		cacheDegraded: cacheDegraded,
 	}
 }
 
@@ -439,9 +440,9 @@ func NewSearchHandler(appConfig *config.AppConfig, engineMgr *engine.EngineManag
 // AI.md PART 12 from the server cache config, selecting the memory/valkey/redis
 // driver. On any backend error it falls back to the in-process memory cache so
 // search never hard-fails on a missing external cache.
-func newSearchResultCache(cc config.CacheConfig) cache.SearchResultCache {
+func newSearchResultCache(cc config.CacheConfig) (cache.SearchResultCache, bool) {
 	if cc.Type == "none" {
-		return nil
+		return nil, false
 	}
 	// Per AI.md PART 12 the url takes precedence; only synthesize an addr from
 	// host/port when no url is supplied.
@@ -466,9 +467,9 @@ func newSearchResultCache(cc config.CacheConfig) cache.SearchResultCache {
 	c, err := cache.NewSearchResultCache(cfg)
 	if err != nil {
 		log.Printf("cache: %s backend unavailable (%v); using in-process memory cache", cc.Type, err)
-		return cache.NewSearchCache(time.Duration(cc.TTL)*time.Second, 1000)
+		return cache.NewSearchCache(time.Duration(cc.TTL)*time.Second, 1000), true
 	}
-	return c
+	return c, false
 }
 
 // SetDataDir sets the data directory (used for thumbnail disk cache)
@@ -494,6 +495,7 @@ func (h *SearchHandler) SetConfigDir(dir string) {
 // SetMetrics sets the metrics collector for statistics display
 func (h *SearchHandler) SetMetrics(m *ServerMetrics) {
 	h.metrics = m
+	h.registerProjectHealthStats()
 }
 
 // SetTorService sets the Tor service for healthz display
@@ -549,21 +551,57 @@ func (h *SearchHandler) SetGeoIPService(g GeoIPChecker) {
 	h.geoipSvc = g
 }
 
-// SetHealthDB wires the database handle used by the /server/healthz database
-// check per AI.md PART 13. When nil, the database check reports "ok" (nothing
-// to probe).
-func (h *SearchHandler) SetHealthDB(db *sql.DB) {
-	h.healthDB = db
-}
-
-// SetReadHealthDB wires the separate read handle used by the database probe.
-func (h *SearchHandler) SetReadHealthDB(db *sql.DB) {
-	h.readHealthDB = db
+// SetDatabase wires the shared store used by request handlers and health checks.
+func (h *SearchHandler) SetDatabase(db *database.AppDatabase) {
+	h.store = db
 }
 
 // SetHealthRegistry wires cached dataset and dependency health checks.
 func (h *SearchHandler) SetHealthRegistry(registry *health.Registry) {
 	h.healthRegistry = registry
+	if registry != nil {
+		if err := registry.Register("cache", false, h.probeCache); err != nil {
+			log.Printf("health: failed to register cache check: %v", err)
+		}
+	}
+	h.registerProjectHealthStats()
+}
+
+func (h *SearchHandler) registerProjectHealthStats() {
+	if h.healthRegistry == nil {
+		return
+	}
+	if h.metrics == nil {
+		h.healthRegistry.Refresh()
+		return
+	}
+	if err := h.healthRegistry.RegisterStat("searches_total", h.metrics.GetSearchesTotal); err != nil {
+		log.Printf("health: failed to register searches_total: %v", err)
+		return
+	}
+	h.healthRegistry.Refresh()
+}
+
+func (h *SearchHandler) registeredHealthStats() []health.StatResult {
+	if h.healthRegistry == nil {
+		return nil
+	}
+	return h.healthRegistry.Stats()
+}
+
+func (h *SearchHandler) probeCache() string {
+	if h.cacheDegraded {
+		return health.StatusDegraded
+	}
+	if h.searchCache == nil {
+		return health.StatusOK
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := h.searchCache.Check(ctx); err != nil {
+		return health.StatusDegraded
+	}
+	return health.StatusOK
 }
 
 // SetOwnerTokenManager wires anonymous resource ownership to API tokens.
@@ -1277,6 +1315,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 		results.Data.InvalidBang = parsed.InvalidBang
 		if h.metrics != nil {
 			h.metrics.IncrementSearches()
+			h.metrics.RecordSearchResult(time.Duration(results.Data.SearchTimeMS)*time.Millisecond, len(results.Data.Results))
 		}
 
 		// Search capacity exceeded (searchSem saturated) — answer fast with a
@@ -1371,6 +1410,7 @@ func (h *SearchHandler) SearchPage(w http.ResponseWriter, r *http.Request) {
 
 	if h.metrics != nil {
 		h.metrics.IncrementSearches()
+		h.metrics.RecordSearchResult(time.Duration(results.Data.SearchTimeMS)*time.Millisecond, len(results.Data.Results))
 	}
 
 	// Search capacity exceeded — respond fast and retryable regardless of the
@@ -2360,22 +2400,41 @@ func getAPIResponseFormat(r *http.Request) string {
 type HealthResponse struct {
 	Project ProjectInfo `json:"project"`
 
-	Status         string   `json:"status"`
-	PendingRestart bool     `json:"pending_restart,omitempty"`
-	RestartReason  []string `json:"restart_reason,omitempty"`
+	Status         string                 `json:"status"`
+	PendingRestart bool                   `json:"pending_restart,omitempty"`
+	RestartReason  []string               `json:"restart_reason,omitempty"`
+	Maintenance    *HealthMaintenanceInfo `json:"maintenance,omitempty"`
 
 	Version   string    `json:"version"`
 	GoVersion string    `json:"go_version"`
 	Build     BuildInfo `json:"build"`
 
-	Uptime      string                         `json:"uptime"`
-	Mode        string                         `json:"mode"`
-	Timestamp   string                         `json:"timestamp"`
-	Maintenance *maintenance.MaintenanceStatus `json:"maintenance,omitempty"`
+	Uptime    string `json:"uptime"`
+	Mode      string `json:"mode"`
+	Timestamp string `json:"timestamp"`
 
 	Features FeaturesInfo `json:"features"`
 	Checks   ChecksInfo   `json:"checks"`
 	Stats    StatsInfo    `json:"stats"`
+}
+
+// HealthMaintenanceInfo is the public-safe maintenance shape. Diagnostics
+// remain available to local operator state but are never exposed by health.
+type HealthMaintenanceInfo struct {
+	Reason      string                        `json:"reason"`
+	Message     string                        `json:"message"`
+	Since       time.Time                     `json:"since"`
+	SelfHealing maintenance.SelfHealingStatus `json:"self_healing"`
+}
+
+func publicHealthMaintenance(status *maintenance.MaintenanceStatus) *HealthMaintenanceInfo {
+	if status == nil {
+		return nil
+	}
+	return &HealthMaintenanceInfo{
+		Reason: status.Reason, Message: status.Message,
+		Since: status.Since.UTC(), SelfHealing: status.SelfHealing,
+	}
 }
 
 // ProjectInfo is the project-identification block of HealthResponse,
@@ -2466,26 +2525,47 @@ func (c ChecksInfo) MarshalJSON() ([]byte, error) {
 
 // StatsInfo holds public-safe aggregate statistics per AI.md PART 13.
 type StatsInfo struct {
-	RequestsTotal     uint64 `json:"requests_total"`
-	Requests24h       uint64 `json:"requests_24h"`
-	ActiveConnections int64  `json:"active_connections"`
-	SearchesTotal     uint64 `json:"searches_total"`
+	RequestsTotal     uint64              `json:"requests_total"`
+	Requests24h       uint64              `json:"requests_24h"`
+	ActiveConnections int64               `json:"active_connections"`
+	Registered        []health.StatResult `json:"-"`
+}
+
+func (s StatsInfo) MarshalJSON() ([]byte, error) {
+	core := struct {
+		RequestsTotal     uint64 `json:"requests_total"`
+		Requests24h       uint64 `json:"requests_24h"`
+		ActiveConnections int64  `json:"active_connections"`
+	}{s.RequestsTotal, s.Requests24h, s.ActiveConnections}
+	encoded, err := json.Marshal(core)
+	if err != nil || len(s.Registered) == 0 {
+		return encoded, err
+	}
+	encoded = encoded[:len(encoded)-1]
+	for _, item := range s.Registered {
+		key, err := json.Marshal(item.Key)
+		if err != nil {
+			return nil, err
+		}
+		value, err := json.Marshal(item.Value)
+		if err != nil {
+			return nil, err
+		}
+		encoded = append(encoded, ',')
+		encoded = append(encoded, key...)
+		encoded = append(encoded, ':')
+		encoded = append(encoded, value...)
+	}
+	return append(encoded, '}'), nil
 }
 
 // checkDatabase probes both database handles per AI.md PART 13. A nil handle
 // reports "ok" since there is no database configured.
 func (h *SearchHandler) checkDatabase(ctx context.Context) string {
-	if h.healthDB == nil {
+	if h.store == nil {
 		return "ok"
 	}
-	if err := alertcheck.ProbeDatabase(ctx, h.healthDB); err != nil {
-		return "error"
-	}
-	readDB := h.readHealthDB
-	if readDB == nil {
-		readDB = h.healthDB
-	}
-	if err := alertcheck.ProbeDatabase(ctx, readDB); err != nil {
+	if err := h.store.PingContext(ctx); err != nil {
 		return "error"
 	}
 	return "ok"
@@ -2497,7 +2577,17 @@ func (h *SearchHandler) checkDatabase(ctx context.Context) string {
 // that can report unhealthy, so this is always "ok" — the meaningful failure
 // probes are database, disk, and scheduler.
 func (h *SearchHandler) checkCache() string {
-	return "ok"
+	if h.healthRegistry != nil {
+		for _, item := range h.healthRegistry.Snapshot() {
+			if item.Key == "cache" {
+				return item.Status
+			}
+		}
+	}
+	if h.cacheDegraded {
+		return health.StatusDegraded
+	}
+	return health.StatusOK
 }
 
 // checkDisk verifies the data directory's filesystem is reachable and not
@@ -2597,6 +2687,9 @@ func (h *SearchHandler) cachedDatasetChecks() ([]health.CheckResult, map[string]
 		return datasets, keys, critical
 	}
 	for _, item := range h.healthRegistry.Snapshot() {
+		if item.Key == "cache" {
+			continue
+		}
 		datasets = append(datasets, item)
 		keys[item.Key] = true
 		critical[item.Key] = item.Critical
@@ -2731,6 +2824,9 @@ func (h *SearchHandler) writeFrontendHealthText(w http.ResponseWriter, httpStatu
 	_, _ = fmt.Fprintf(w, "  %-24s %s\n", label("healthz.requests_total_label")+":", humanformat.Count(int64(h.getRequestsTotal()), locale))
 	_, _ = fmt.Fprintf(w, "  %-24s %s\n", label("healthz.requests_24h_label")+":", humanformat.Count(int64(h.getRequests24h()), locale))
 	_, _ = fmt.Fprintf(w, "  %-24s %s\n", label("healthz.active_connections_label")+":", humanformat.Count(h.getActiveConnections(), locale))
+	for _, item := range h.registeredHealthStats() {
+		_, _ = fmt.Fprintf(w, "  %-24s %s\n", healthStatLabel(locale, item.Key)+":", humanformat.Count(int64(item.Value), locale))
+	}
 }
 
 // HealthCheck handles /healthz endpoint with content negotiation
@@ -2827,7 +2923,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 			Uptime:      uptime,
 			Mode:        appMode,
 			Timestamp:   timestamp,
-			Maintenance: maintenanceInfo,
+			Maintenance: publicHealthMaintenance(maintenanceInfo),
 			Features: FeaturesInfo{
 				Tor: TorInfo{
 					Enabled:  h.torSvc != nil && h.torSvc.IsEnabled(),
@@ -2859,7 +2955,7 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 				RequestsTotal:     h.getRequestsTotal(),
 				Requests24h:       h.getRequests24h(),
 				ActiveConnections: h.getActiveConnections(),
-				SearchesTotal:     h.getSearchCount(),
+				Registered:        h.registeredHealthStats(),
 			},
 		}
 
@@ -3038,12 +3134,15 @@ func healthCheckLabel(locale, key string) string {
 	if translated := i18n.Translate(locale, translationKey); translated != translationKey {
 		return translated
 	}
-	parts := strings.SplitN(key, "_", 2)
-	if len(parts) == 1 {
-		return strings.ToUpper(parts[0][:1]) + parts[0][1:]
+	return i18n.TranslateFormat(locale, "health.check.unknown", "key", key)
+}
+
+func healthStatLabel(locale, key string) string {
+	translationKey := "health.stat." + key
+	if translated := i18n.Translate(locale, translationKey); translated != translationKey {
+		return translated
 	}
-	kind := strings.ToUpper(parts[0][:1]) + parts[0][1:]
-	return kind + ": " + strings.ReplaceAll(parts[1], "_", " ")
+	return i18n.TranslateFormat(locale, "health.stat.unknown", "key", key)
 }
 
 func datasetHealthDisplay(registry *health.Registry, locale string) []HealthCheckDisplay {
@@ -3063,6 +3162,12 @@ type StatsData struct {
 	RequestsTotal     uint64
 	Requests24h       uint64
 	ActiveConnections int64
+	Registered        []HealthStatDisplay
+}
+
+type HealthStatDisplay struct {
+	Label string
+	Value uint64
 }
 
 // renderHealthzHTML renders the healthz HTML template per AI.md PART 13
@@ -3158,6 +3263,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 				}
 				return 0
 			}(),
+			Registered: healthStatDisplay(h.registeredHealthStats(), lang),
 		},
 
 		// Timestamp
@@ -3377,6 +3483,14 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	}
 	w.WriteHeader(httpStatus)
 	_, _ = w.Write(buf.Bytes())
+}
+
+func healthStatDisplay(stats []health.StatResult, locale string) []HealthStatDisplay {
+	display := make([]HealthStatDisplay, 0, len(stats))
+	for _, stat := range stats {
+		display = append(display, HealthStatDisplay{Label: healthStatLabel(locale, stat.Key), Value: stat.Value})
+	}
+	return display
 }
 
 // publicIndexablePaths lists the routes explicitly marked public for the
@@ -3998,6 +4112,7 @@ func (h *SearchHandler) APISearch(w http.ResponseWriter, r *http.Request) {
 		}
 		if h.metrics != nil {
 			h.metrics.IncrementSearches()
+			h.metrics.RecordSearchResult(time.Duration(results.Data.SearchTimeMS)*time.Millisecond, len(results.Data.Results))
 		}
 	}
 
@@ -4131,6 +4246,7 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 	enginesWithResults := make(map[string]struct{})
 	displayCountOffset := parseDisplayCountOffset(r)
 	displayResultCount := displayCountOffset
+	resultCount := 0
 
 	for result := range resultsChan {
 		// searchSem could not be acquired within searchQueueTimeout (AI.md
@@ -4148,6 +4264,7 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 			enginesWithResults[result.Engine] = struct{}{}
 		}
 		if result.Result.Title != "" {
+			resultCount++
 			if displayResultCount < int(^uint(0)>>1) {
 				displayResultCount++
 			}
@@ -4169,6 +4286,9 @@ func (h *SearchHandler) handleSearchSSE(w http.ResponseWriter, r *http.Request, 
 	// re-derived from streamed messages in JS) per PART 14's server-side
 	// processing philosophy — the client only displays these numbers.
 	elapsedMS := time.Since(requestStart).Milliseconds()
+	if h.metrics != nil {
+		h.metrics.RecordSearchResult(time.Duration(elapsedMS)*time.Millisecond, resultCount)
+	}
 	doneEvent, err := json.Marshal(map[string]interface{}{
 		"done":                 true,
 		"engine":               "all",
@@ -4686,6 +4806,9 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, "stats.requests_total: %d\n", h.getRequestsTotal())
 		_, _ = fmt.Fprintf(w, "stats.requests_24h: %d\n", h.getRequests24h())
 		_, _ = fmt.Fprintf(w, "stats.active_connections: %d\n", h.getActiveConnections())
+		for _, item := range h.registeredHealthStats() {
+			_, _ = fmt.Fprintf(w, "stats.%s: %d\n", item.Key, item.Value)
+		}
 		return
 	}
 
@@ -4709,7 +4832,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 		Uptime:      uptime,
 		Mode:        appMode,
 		Timestamp:   timestamp,
-		Maintenance: maintenanceInfo,
+		Maintenance: publicHealthMaintenance(maintenanceInfo),
 		Features: FeaturesInfo{
 			Tor: TorInfo{
 				Enabled:  torEnabled,
@@ -4741,7 +4864,7 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 			RequestsTotal:     h.getRequestsTotal(),
 			Requests24h:       h.getRequests24h(),
 			ActiveConnections: h.getActiveConnections(),
-			SearchesTotal:     h.getSearchCount(),
+			Registered:        h.registeredHealthStats(),
 		},
 	}
 
@@ -5211,149 +5334,6 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(buf.Bytes())
-}
-
-// DebugEngine probes a specific engine and returns detailed results
-// GET {api_version}/debug/engines/{name}?q={query}
-// Returns: engine info, capabilities, sample results with all fields
-func (h *SearchHandler) DebugEngine(w http.ResponseWriter, r *http.Request) {
-	name := chi.URLParam(r, "name")
-	query := r.URL.Query().Get("q")
-	if query == "" {
-		// Default test query
-		query = "test"
-	}
-
-	eng, ok := h.engineMgr.GetEngine(name)
-	if !ok {
-		h.jsonError(w, "Engine not found", CodeNotFound, http.StatusNotFound)
-		return
-	}
-
-	// Get engine capabilities
-	caps := eng.Capabilities()
-
-	// Perform test search
-	results, err := eng.Search(r.Context(), query, 1)
-
-	// Build debug response
-	response := map[string]interface{}{
-		"ok": true,
-		"engine": map[string]interface{}{
-			"name":         eng.Name(),
-			"display_name": eng.DisplayName(),
-			"tier":         eng.Tier(),
-			"available":    eng.IsAvailable(),
-		},
-		"capabilities": caps,
-		"query":        query,
-	}
-
-	if err != nil {
-		// Per AI.md PART 9: Never expose error details in responses
-		response["error"] = "Search failed"
-		response["results"] = []interface{}{}
-		response["result_count"] = 0
-	} else {
-		response["results"] = results
-		response["result_count"] = len(results)
-
-		// Analyze what fields are populated
-		fieldStats := analyzeResultFields(results)
-		response["field_stats"] = fieldStats
-	}
-
-	WriteJSON(w, http.StatusOK, response)
-}
-
-// analyzeResultFields checks which fields are populated in results
-func analyzeResultFields(results []model.VideoResult) map[string]interface{} {
-	stats := map[string]int{
-		"has_title":        0,
-		"has_url":          0,
-		"has_thumbnail":    0,
-		"has_preview_url":  0,
-		"has_download_url": 0,
-		"has_duration":     0,
-		"has_views":        0,
-		"has_rating":       0,
-		"has_quality":      0,
-		"has_published":    0,
-	}
-
-	for _, r := range results {
-		if r.Title != "" {
-			stats["has_title"]++
-		}
-		if r.URL != "" {
-			stats["has_url"]++
-		}
-		if r.Thumbnail != "" {
-			stats["has_thumbnail"]++
-		}
-		if r.PreviewURL != "" {
-			stats["has_preview_url"]++
-		}
-		if r.DownloadURL != "" {
-			stats["has_download_url"]++
-		}
-		if r.Duration != "" || r.DurationSeconds > 0 {
-			stats["has_duration"]++
-		}
-		if r.Views != "" || r.ViewsCount > 0 {
-			stats["has_views"]++
-		}
-		if r.Rating > 0 {
-			stats["has_rating"]++
-		}
-		if r.Quality != "" {
-			stats["has_quality"]++
-		}
-		if !r.Published.IsZero() {
-			stats["has_published"]++
-		}
-	}
-
-	total := len(results)
-	return map[string]interface{}{
-		"total_results": total,
-		"fields":        stats,
-	}
-}
-
-// DebugEnginesList returns all engines with their capabilities
-// GET {api_version}/debug/engines
-func (h *SearchHandler) DebugEnginesList(w http.ResponseWriter, r *http.Request) {
-	engines := h.engineMgr.ListEngines()
-
-	type engineDebug struct {
-		Name         string              `json:"name"`
-		DisplayName  string              `json:"display_name"`
-		Tier         int                 `json:"tier"`
-		Enabled      bool                `json:"enabled"`
-		Capabilities engine.Capabilities `json:"capabilities"`
-	}
-
-	var list []engineDebug
-	for _, info := range engines {
-		eng, ok := h.engineMgr.GetEngine(info.Name)
-		if !ok {
-			continue
-		}
-		list = append(list, engineDebug{
-			Name:         info.Name,
-			DisplayName:  info.DisplayName,
-			Tier:         info.Tier,
-			Enabled:      info.Enabled,
-			Capabilities: eng.Capabilities(),
-		})
-	}
-
-	WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ok":      true,
-		"count":   len(list),
-		"engines": list,
-	})
 }
 
 // privateCIDRs lists every range the SSRF guard treats as off-limits:

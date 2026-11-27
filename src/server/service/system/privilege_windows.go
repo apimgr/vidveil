@@ -8,12 +8,17 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/user"
 	"strings"
 	"syscall"
 
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"golang.org/x/sys/windows"
 )
+
+func validateExistingServiceAccount(account *user.User, uid, gid int) error {
+	return nil
+}
 
 // DropPrivileges is a no-op on Windows per AI.md PART 23
 // Windows uses Virtual Service Account (NT SERVICE\vidveil) which is already minimal-privilege

@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -25,13 +26,9 @@ const ownerTokenRevealCookie = "vidveil_token_reveal_once"
 
 func (s *Server) ownerTokenPrincipal(w http.ResponseWriter, r *http.Request) (apitoken.Principal, bool) {
 	w.Header().Set("Cache-Control", "no-store")
-	if s.tokenManager == nil {
-		handler.SendError(w, "SERVER_ERROR", "Token management is unavailable")
-		return apitoken.Principal{}, false
-	}
 	path := r.URL.Path
-	sensitive := strings.HasSuffix(path, "/reveal") || strings.HasSuffix(path, "/rotate") || strings.HasSuffix(path, "/restore")
-	if r.Method == http.MethodPost && sensitive && s.tokenActionLimiter != nil && !s.tokenActionLimiter.Allow(urlvar.ResolveClientIP(r)) {
+	sensitive := strings.HasSuffix(path, "/reveal") || strings.HasSuffix(path, "/rotate") || strings.HasSuffix(path, "/restore") || (r.Method == http.MethodDelete && strings.HasSuffix(path, "/tokens/primary"))
+	if sensitive && s.tokenActionLimiter != nil && !s.tokenActionLimiter.Allow(urlvar.ResolveClientIP(r)) {
 		w.Header().Set("Retry-After", "900")
 		handler.SendError(w, "RATE_LIMITED", "Too many token actions; try again later")
 		return apitoken.Principal{}, false
@@ -41,6 +38,10 @@ func (s *Server) ownerTokenPrincipal(w http.ResponseWriter, r *http.Request) (ap
 	if !bearer {
 		handler.SetBearerChallenge(w, "")
 		handler.SendError(w, "UNAUTHORIZED", "Authentication required")
+		return apitoken.Principal{}, false
+	}
+	if s.tokenManager == nil {
+		handler.SendError(w, "SERVER_ERROR", "Token management is unavailable")
 		return apitoken.Principal{}, false
 	}
 	principal, err := s.tokenManager.Authenticate(r.Context(), token)
@@ -206,6 +207,35 @@ func (s *Server) ownerTokenWebRotatePrimary(w http.ResponseWriter, r *http.Reque
 	s.redirectOwnerTokenReveal(w, r, issued.Token, "", true, "token-rotated")
 }
 
+func (s *Server) ownerTokenWebRevokePrimary(w http.ResponseWriter, r *http.Request) {
+	principal, ok := s.ownerTokenWebPrincipal(w, r, true)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid token revocation form", http.StatusBadRequest)
+		return
+	}
+	counts, err := s.tokenManager.RevokePrimary(r.Context(), principal, r.FormValue("confirm"))
+	if errors.Is(err, apitoken.ErrInvalidConfirmation) {
+		http.Error(w, "Primary-token confirmation did not match", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		s.ownerTokenOperationError(w, err)
+		return
+	}
+	if s.logger != nil {
+		s.logger.Audit("token.revoked", principal.OwnerID, "owner", urlvar.ResolveClientIP(r), "success", map[string]interface{}{
+			"owner_id": principal.OwnerID, "token_prefix": counts.Prefix, "scope": "owner",
+			"tokens": counts.Tokens, "resources": counts.Resources, "source": "web",
+		})
+	}
+	http.SetCookie(w, &http.Cookie{Name: apitoken.OwnerCookieName, Value: "", Path: "/", MaxAge: 0, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+	w.Header().Set("Clear-Site-Data", `"storage"`)
+	http.Redirect(w, r, urlvar.BuildURL(r, "/server/preferences/tokens"), http.StatusSeeOther)
+}
+
 func (s *Server) ownerTokenWebCreateLinked(w http.ResponseWriter, r *http.Request) {
 	principal, ok := s.ownerTokenWebPrincipal(w, r, false)
 	if !ok {
@@ -220,7 +250,11 @@ func (s *Server) ownerTokenWebCreateLinked(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Invalid token expiry", http.StatusBadRequest)
 		return
 	}
-	issued, err := s.tokenManager.CreateLinked(r.Context(), principal, r.FormValue("name"), expires, s.appConfig.Server.Tokens.MaxLinked)
+	scope := r.FormValue("scope")
+	if scope == "" {
+		scope = "read-write"
+	}
+	issued, err := s.tokenManager.CreateLinkedWithScope(r.Context(), principal, r.FormValue("name"), scope, expires, s.appConfig.Server.Tokens.MaxLinked)
 	if err != nil {
 		s.ownerTokenOperationError(w, err)
 		return
@@ -396,16 +430,54 @@ func (s *Server) ownerTokensAPIList(w http.ResponseWriter, r *http.Request) {
 		} else if token.ExpiresAt.Valid && token.ExpiresAt.Int64 <= now {
 			status = "expired"
 		}
-		items = append(items, map[string]any{
-			"id": token.ID, "name": token.Name, "prefix": token.Prefix, "suffix": token.Suffix,
-			"created_at": token.CreatedAt, "last_used_at": nullInt(token.LastUsed),
-			"expires_at": nullInt(token.ExpiresAt), "status": status,
-		})
+		items = append(items, ownerTokenJSON(token.ID, token.Name, "linked", token.Scope, token.Prefix, token.Suffix, token.CreatedAt, token.LastUsed, token.ExpiresAt, status))
 	}
 	handler.SendOK(w, map[string]any{
-		"primary": map[string]any{"id": primary.ID, "prefix": primary.Prefix, "suffix": primary.Suffix, "created_at": primary.CreatedAt, "last_used_at": nullInt(primary.LastUsed)},
-		"linked":  items,
+		"primary": ownerTokenJSON(primary.ID, "", "primary", "global", primary.Prefix, primary.Suffix, primary.CreatedAt, primary.LastUsed, sql.NullInt64{}, "active"),
+		"linked":  items, "max_linked": s.appConfig.Server.Tokens.MaxLinked,
 	})
+}
+
+func ownerTokenJSON(id, name, kind, scope, prefix, suffix string, created int64, lastUsed, expires sql.NullInt64, status string) map[string]any {
+	var lastUsedAt, expiresAt any
+	var tokenName any = name
+	if kind == "primary" {
+		tokenName = nil
+	}
+	maskedPrefix := strings.SplitN(prefix, "_", 2)[0] + "_..."
+	if lastUsed.Valid {
+		lastUsedAt = time.Unix(lastUsed.Int64, 0).UTC().Format(time.RFC3339)
+	}
+	if expires.Valid {
+		expiresAt = time.Unix(expires.Int64, 0).UTC().Format(time.RFC3339)
+	}
+	return map[string]any{
+		"id": id, "name": tokenName, "kind": kind, "scope": scope,
+		"token_masked": maskedPrefix + suffix,
+		"created_at":   time.Unix(created, 0).UTC().Format(time.RFC3339),
+		"last_used_at": lastUsedAt, "expires_at": expiresAt, "status": status,
+	}
+}
+
+func (s *Server) linkedTokenJSON(ctx context.Context, primary apitoken.Principal, id string) (map[string]any, error) {
+	linked, err := s.tokenManager.ListLinked(ctx, primary)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().Unix()
+	for _, token := range linked {
+		if token.ID != id {
+			continue
+		}
+		status := "active"
+		if token.RevokedAt.Valid {
+			status = "revoked"
+		} else if token.ExpiresAt.Valid && token.ExpiresAt.Int64 <= now {
+			status = "expired"
+		}
+		return ownerTokenJSON(token.ID, token.Name, "linked", token.Scope, token.Prefix, token.Suffix, token.CreatedAt, token.LastUsed, token.ExpiresAt, status), nil
+	}
+	return nil, apitoken.ErrInvalidToken
 }
 
 // ownerTokensAPIIssuePrimary issues a new anonymous primary token when the
@@ -454,25 +526,59 @@ func (s *Server) ownerTokensAPICreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Name    string `json:"name"`
-		Expires string `json:"expires"`
+		Name      string `json:"name"`
+		Scope     string `json:"scope"`
+		Expires   string `json:"expires"`
+		ExpiresOn string `json:"expires_on"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 8<<10)).Decode(&input); err != nil {
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 8<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
 		handler.SendError(w, "VALIDATION_FAILED", "Invalid token payload")
 		return
 	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		handler.SendError(w, "VALIDATION_FAILED", "Invalid token payload")
+		return
+	}
+	if len(strings.TrimSpace(input.Name)) < 1 || len(strings.TrimSpace(input.Name)) > 64 {
+		handler.SendError(w, "VALIDATION_FAILED", "Token name must be 1 to 64 characters")
+		return
+	}
+	if input.Expires != "" && input.ExpiresOn != "" {
+		handler.SendError(w, "VALIDATION_FAILED", "Choose either expires or expires_on")
+		return
+	}
 	expires, err := parseOwnerTokenExpiry(input.Expires)
+	if input.ExpiresOn != "" {
+		expires, err = parseOwnerTokenDate(input.ExpiresOn)
+	}
 	if err != nil {
 		handler.SendError(w, "VALIDATION_FAILED", "Invalid token expiry")
 		return
 	}
-	issued, err := s.tokenManager.CreateLinked(r.Context(), principal, input.Name, expires, s.appConfig.Server.Tokens.MaxLinked)
+	if input.Scope == "" {
+		input.Scope = "read-write"
+	}
+	if input.Scope != "read" && input.Scope != "read-write" {
+		handler.SendError(w, "VALIDATION_FAILED", "Invalid linked-token scope")
+		return
+	}
+	issued, err := s.tokenManager.CreateLinkedWithScope(r.Context(), principal, input.Name, input.Scope, expires, s.appConfig.Server.Tokens.MaxLinked)
 	if err != nil {
 		s.ownerTokenOperationError(w, err)
 		return
 	}
 	s.auditOwnerToken("token.created", principal.OwnerID, issued.Prefix, r)
-	handler.SendOK(w, map[string]any{"id": issued.TokenID, "name": strings.TrimSpace(input.Name), "token": issued.Token, "prefix": issued.Prefix})
+	w.WriteHeader(http.StatusCreated)
+	createdAt := time.Now().UTC().Unix()
+	var expiresAt sql.NullInt64
+	if expires != nil {
+		expiresAt = sql.NullInt64{Int64: *expires, Valid: true}
+	}
+	result := ownerTokenJSON(issued.TokenID, strings.TrimSpace(input.Name), "linked", input.Scope, issued.Prefix, issued.Token[len(issued.Token)-4:], createdAt, sql.NullInt64{}, expiresAt, "active")
+	result["linked_token"] = issued.Token
+	handler.SendOK(w, result)
 }
 
 func (s *Server) ownerTokensAPIRevealPrimary(w http.ResponseWriter, r *http.Request) {
@@ -503,6 +609,38 @@ func (s *Server) ownerTokensAPIRotatePrimary(w http.ResponseWriter, r *http.Requ
 	handler.SendOK(w, map[string]string{"token": issued.Token, "prefix": issued.Prefix})
 }
 
+func (s *Server) ownerTokensAPIRevokePrimary(w http.ResponseWriter, r *http.Request) {
+	principal, ok := s.ownerTokenPrincipal(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		Confirm string `json:"confirm"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 8<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		handler.SendError(w, "VALIDATION_FAILED", "A valid confirmation is required")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		handler.SendError(w, "VALIDATION_FAILED", "A valid confirmation is required")
+		return
+	}
+	counts, err := s.tokenManager.RevokePrimary(r.Context(), principal, input.Confirm)
+	if err != nil {
+		s.ownerTokenOperationError(w, err)
+		return
+	}
+	if s.logger != nil {
+		s.logger.Audit("token.revoked", principal.OwnerID, "owner", urlvar.ResolveClientIP(r), "success", map[string]interface{}{
+			"owner_id": principal.OwnerID, "token_prefix": counts.Prefix, "scope": "owner",
+			"tokens": counts.Tokens, "resources": counts.Resources, "source": "api",
+		})
+	}
+	handler.SendOK(w, map[string]int64{"tokens": counts.Tokens, "resources": counts.Resources})
+}
+
 func (s *Server) ownerTokensAPIRevealLinked(w http.ResponseWriter, r *http.Request) {
 	principal, id, ok := s.ownerTokenRequestID(w, r)
 	if !ok {
@@ -514,7 +652,13 @@ func (s *Server) ownerTokensAPIRevealLinked(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s.auditOwnerToken("token.revealed", principal.OwnerID, token[:12], r)
-	handler.SendOK(w, map[string]string{"token": token})
+	result, err := s.linkedTokenJSON(r.Context(), principal, id)
+	if err != nil {
+		s.ownerTokenOperationError(w, err)
+		return
+	}
+	result["linked_token"] = token
+	handler.SendOK(w, result)
 }
 
 func (s *Server) ownerTokensAPIRotateLinked(w http.ResponseWriter, r *http.Request) {
@@ -528,7 +672,13 @@ func (s *Server) ownerTokensAPIRotateLinked(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s.auditOwnerToken("token.rotated", principal.OwnerID, issued.Prefix, r)
-	handler.SendOK(w, map[string]string{"token": issued.Token, "prefix": issued.Prefix})
+	result, err := s.linkedTokenJSON(r.Context(), principal, id)
+	if err != nil {
+		s.ownerTokenOperationError(w, err)
+		return
+	}
+	result["linked_token"] = issued.Token
+	handler.SendOK(w, result)
 }
 
 func (s *Server) ownerTokensAPIUpdateLinked(w http.ResponseWriter, r *http.Request) {
@@ -537,23 +687,69 @@ func (s *Server) ownerTokensAPIUpdateLinked(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var input struct {
-		Name    string `json:"name"`
-		Expires string `json:"expires"`
+		Name      *string `json:"name"`
+		Expires   *string `json:"expires"`
+		ExpiresOn *string `json:"expires_on"`
 	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 8<<10)).Decode(&input); err != nil {
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 8<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
 		handler.SendError(w, "VALIDATION_FAILED", "Invalid token payload")
 		return
 	}
-	expires, err := parseOwnerTokenExpiry(input.Expires)
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		handler.SendError(w, "VALIDATION_FAILED", "Invalid token payload")
+		return
+	}
+	if input.Expires != nil && input.ExpiresOn != nil {
+		handler.SendError(w, "VALIDATION_FAILED", "Choose either expires or expires_on")
+		return
+	}
+	current, err := s.linkedTokenJSON(r.Context(), principal, id)
+	if err != nil {
+		s.ownerTokenOperationError(w, err)
+		return
+	}
+	name := current["name"].(string)
+	if input.Name != nil {
+		name = *input.Name
+	}
+	if len(strings.TrimSpace(name)) < 1 || len(strings.TrimSpace(name)) > 64 {
+		handler.SendError(w, "VALIDATION_FAILED", "Token name must be 1 to 64 characters")
+		return
+	}
+	var expires *int64
+	if input.Expires != nil || input.ExpiresOn != nil {
+		value := ""
+		if input.Expires != nil {
+			value = *input.Expires
+			expires, err = parseOwnerTokenExpiry(value)
+		} else {
+			expires, err = parseOwnerTokenDate(*input.ExpiresOn)
+		}
+	} else if currentExpiry, ok := current["expires_at"].(string); ok {
+		parsed, parseErr := time.Parse(time.RFC3339, currentExpiry)
+		if parseErr != nil {
+			err = parseErr
+		} else {
+			value := parsed.Unix()
+			expires = &value
+		}
+	}
 	if err != nil {
 		handler.SendError(w, "VALIDATION_FAILED", "Invalid token expiry")
 		return
 	}
-	if err := s.tokenManager.UpdateLinked(r.Context(), principal, id, input.Name, expires); err != nil {
+	if err := s.tokenManager.UpdateLinked(r.Context(), principal, id, name, expires); err != nil {
 		s.ownerTokenOperationError(w, err)
 		return
 	}
-	handler.SendOK(w, map[string]bool{"updated": true})
+	result, err := s.linkedTokenJSON(r.Context(), principal, id)
+	if err != nil {
+		s.ownerTokenOperationError(w, err)
+		return
+	}
+	handler.SendOK(w, result)
 }
 
 func (s *Server) ownerTokensAPIRevokeLinked(w http.ResponseWriter, r *http.Request) {
@@ -575,7 +771,7 @@ func (s *Server) ownerTokensAPIRevokeLinked(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s.auditOwnerToken("token.revoked", principal.OwnerID, prefix, r)
-	handler.SendOK(w, map[string]bool{"revoked": true})
+	handler.SendOK(w, map[string]string{"id": id, "status": "revoked"})
 }
 
 func (s *Server) ownerTokenRequestID(w http.ResponseWriter, r *http.Request) (apitoken.Principal, string, bool) {
@@ -599,7 +795,9 @@ func (s *Server) ownerTokenOperationError(w http.ResponseWriter, err error) {
 	case errors.Is(err, apitoken.ErrInvalidToken):
 		handler.SendError(w, "NOT_FOUND", "Token not found")
 	case errors.Is(err, apitoken.ErrLinkedTokenLimit), errors.Is(err, apitoken.ErrDuplicateTokenName):
-		handler.SendError(w, "VALIDATION_FAILED", err.Error())
+		handler.SendError(w, "CONFLICT", err.Error())
+	case errors.Is(err, apitoken.ErrInvalidConfirmation):
+		handler.SendError(w, "VALIDATION_FAILED", "Primary-token confirmation did not match")
 	default:
 		handler.SendError(w, "SERVER_ERROR", "Token operation failed")
 	}
@@ -621,17 +819,21 @@ func parseOwnerTokenExpiry(value string) (*int64, error) {
 		expires := time.Now().Add(duration).Unix()
 		return &expires, nil
 	default:
-		date, err := time.Parse("2006-01-02", value)
-		if err != nil {
-			return nil, err
-		}
-		date = date.Add(24*time.Hour - time.Second)
-		expires := date.Unix()
-		if expires <= time.Now().Unix() {
-			return nil, errors.New("expiry must be in the future")
-		}
-		return &expires, nil
+		return parseOwnerTokenDate(value)
 	}
+}
+
+func parseOwnerTokenDate(value string) (*int64, error) {
+	date, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return nil, err
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	if value < today {
+		return nil, errors.New("expiry date must be today or later in UTC")
+	}
+	expires := date.UTC().Add(24 * time.Hour).Unix()
+	return &expires, nil
 }
 
 func ownerTokenExpiryFromForm(r *http.Request) (*int64, error) {
@@ -649,11 +851,4 @@ func ownerTokenExpiryFromForm(r *http.Request) (*int64, error) {
 		return parseOwnerTokenExpiry(date)
 	}
 	return parseOwnerTokenExpiry(r.FormValue("expires"))
-}
-
-func nullInt(value sql.NullInt64) any {
-	if value.Valid {
-		return value.Int64
-	}
-	return nil
 }

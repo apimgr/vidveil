@@ -128,6 +128,14 @@ local: clean
 # =============================================================================
 # RELEASE — Manual local release build with source archive
 # =============================================================================
+# Stable SemVer only; reject existing immutable tags before build can clean or replace release artifacts.
+release-check:
+	@echo "$(VERSION)" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$$' >/dev/null || { echo "ERROR: make release needs a stable SemVer X.Y.Z in release.txt (got '$(VERSION)')" >&2; exit 78; }
+	@set -eu; tag="refs/tags/v$(VERSION)"; \
+		if git rev-parse -q --verify "$$tag" >/dev/null; then echo "ERROR: tag v$(VERSION) already exists locally; release tags are immutable" >&2; exit 1; fi; \
+		remote_tags=$$(git ls-remote --tags origin "$$tag"); \
+		if [ -n "$$remote_tags" ]; then echo "ERROR: tag v$(VERSION) already exists on origin; release tags are immutable" >&2; exit 1; fi
+
 release: release-check build
 	@mkdir -p $(RELDIR)
 	@echo "Preparing release $(VERSION)..."
@@ -144,17 +152,18 @@ release: release-check build
 	@cd $(RELDIR) && rm -f sha256.txt sha512.txt && \
 		sha256sum $$(ls | grep -v -e '^sha256.txt$$' -e '^sha512.txt$$') > sha256.txt && \
 		sha512sum $$(ls | grep -v -e '^sha256.txt$$' -e '^sha512.txt$$') > sha512.txt
-	@gh release delete $(RELEASE_TAG) --yes 2>/dev/null || true
-	@git tag -d $(RELEASE_TAG) 2>/dev/null || true
-	@git push origin :refs/tags/$(RELEASE_TAG) 2>/dev/null || true
-	@gh release create $(RELEASE_TAG) $(RELDIR)/* \
-		--title "$(PROJECT_NAME) $(RELEASE_TAG)" \
-		--notes "Release $(RELEASE_TAG)" \
+	# Stable release tags are immutable; never delete, move, or recreate an existing tag.
+	@if git rev-parse -q --verify "refs/tags/v$(VERSION)" >/dev/null || git ls-remote --exit-code --tags origin "refs/tags/v$(VERSION)" >/dev/null 2>&1; then echo "ERROR: tag v$(VERSION) already exists; release tags are never moved or recreated" >&2; exit 1; fi
+	@git tag "v$(VERSION)"
+	@git push origin "refs/tags/v$(VERSION)"
+	@gh release create "v$(VERSION)" $(RELDIR)/* \
+		--title "v$(VERSION)" \
+		--notes "Release v$(VERSION)" \
 		--latest
-	@echo "Release complete: $(RELEASE_TAG)"
+	@echo "Release complete: v$(VERSION)"
 
 # =============================================================================
-# DOCKER — Build and push multi-arch container image to registry
+# DOCKER — Build the host-platform container image locally; CI/CD publishes images
 # =============================================================================
 docker:
 	@echo "Building Docker image $(VERSION)..."
@@ -163,8 +172,7 @@ docker:
 		docker buildx use multiarch-builder
 	@timeout -k 30 $(DOCKER_TIMEOUT) docker buildx build \
 		-f docker/Dockerfile \
-		--platform linux/amd64,linux/arm64 \
-		--push \
+		--load \
 		--build-arg VERSION="$(VERSION)" \
 		--build-arg BUILD_EPOCH="$(BUILD_EPOCH)" \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
@@ -252,13 +260,14 @@ test:
 	@mkdir -p "$${TMPDIR:-/tmp}/$(PROJECT_ORG)" $(GO_CACHE) $(GO_BUILD)
 	@COVDIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECT_ORG)/$(INTERNAL_NAME)-XXXXXX") && \
 	trap 'rm -rf "$$COVDIR"' EXIT && \
-	$(GO_DOCKER_RUN) -v "$$COVDIR:/coverage" casjaysdev/go:latest sh -c 'set -eu; go mod download; go generate ./src/swagger; go vet ./...; govulncheck ./...; \
+	$(GO_DOCKER_RUN) -v "$$COVDIR:/coverage" casjaysdev/go:latest sh -c 'set -eu; go mod download; go generate ./src/swagger; go vet ./...; staticcheck ./...; govulncheck ./...; \
 		mkdir -p /coverage/data; \
 		go test -cover ./... -args -test.gocoverdir=/coverage/data; \
 		go tool covdata textfmt -i=/coverage/data -o=/coverage/coverage.out; \
 		COVERAGE=$$(go tool cover -func=/coverage/coverage.out | awk '\''/^total:/ {gsub("%", "", $$3); print $$3}'\''); \
 		awk -v coverage="$$COVERAGE" '\''BEGIN { if (coverage < 60) { printf "coverage %.1f%% is below the 60%% minimum\\n", coverage; exit 1 } }'\''; \
 		printf "Coverage: %s%%\\n" "$$COVERAGE"'
+	@./tests/run_tests.sh
 
 # =============================================================================
 # DEV — Quick build to a temp dir for rapid iteration (AI.md PART 25)

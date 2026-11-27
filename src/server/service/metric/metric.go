@@ -3,13 +3,23 @@
 package metric
 
 import (
+	"bufio"
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"math"
+	"net"
 	"net/http"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -17,9 +27,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/apimgr/vidveil/src/common/authpad"
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/common/outsan"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/logging"
+	gocpu "github.com/shirou/gopsutil/v4/cpu"
+	godisk "github.com/shirou/gopsutil/v4/disk"
+	gomem "github.com/shirou/gopsutil/v4/mem"
 )
 
 // uuidPathSegment matches a UUID path segment (any version).
@@ -50,6 +64,46 @@ func normalizePath(p string) string {
 	return strings.Join(segments, "/")
 }
 
+func ConfigureHTTPBuckets(duration, size []float64) error {
+	if err := validateBuckets(duration); err != nil {
+		return fmt.Errorf("invalid HTTP duration buckets: %w", err)
+	}
+	if err := validateBuckets(size); err != nil {
+		return fmt.Errorf("invalid HTTP size buckets: %w", err)
+	}
+	registry := prometheus.DefaultRegisterer
+	registry.Unregister(HTTPRequestDuration)
+	registry.Unregister(HTTPRequestSize)
+	registry.Unregister(HTTPResponseSize)
+	HTTPRequestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "vidveil_http_request_duration_seconds", Help: "HTTP request duration in seconds", Buckets: append([]float64(nil), duration...),
+	}, []string{"method", "path"})
+	HTTPRequestSize = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "vidveil_http_request_size_bytes", Help: "HTTP request size in bytes", Buckets: append([]float64(nil), size...),
+	}, []string{"method", "path"})
+	HTTPResponseSize = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "vidveil_http_response_size_bytes", Help: "HTTP response size in bytes", Buckets: append([]float64(nil), size...),
+	}, []string{"method", "path"})
+	for _, collector := range []prometheus.Collector{HTTPRequestDuration, HTTPRequestSize, HTTPResponseSize} {
+		if err := registry.Register(collector); err != nil {
+			return fmt.Errorf("register configured HTTP histogram: %w", err)
+		}
+	}
+	return nil
+}
+
+func validateBuckets(buckets []float64) error {
+	if len(buckets) == 0 {
+		return errors.New("at least one bucket is required")
+	}
+	for i, bucket := range buckets {
+		if bucket <= 0 || math.IsNaN(bucket) || math.IsInf(bucket, 0) || i > 0 && bucket <= buckets[i-1] {
+			return fmt.Errorf("buckets must be finite, positive, and strictly increasing")
+		}
+	}
+	return nil
+}
+
 var (
 	// Application metrics per AI.md PART 20
 	AppInfo = promauto.NewGaugeVec(
@@ -73,6 +127,12 @@ var (
 			Help: "Unix timestamp of application start",
 		},
 	)
+
+	GoGoroutines          = promauto.NewGauge(prometheus.GaugeOpts{Name: "vidveil_go_goroutines", Help: "Current number of goroutines"})
+	GoMemAllocBytes       = promauto.NewGauge(prometheus.GaugeOpts{Name: "vidveil_go_mem_alloc_bytes", Help: "Bytes allocated and in use on the Go heap"})
+	GoMemSysBytes         = promauto.NewGauge(prometheus.GaugeOpts{Name: "vidveil_go_mem_sys_bytes", Help: "Bytes obtained from the system by the Go runtime"})
+	GoGCRunsTotal         = promauto.NewCounter(prometheus.CounterOpts{Name: "vidveil_go_gc_runs_total", Help: "Total number of completed Go garbage collections"})
+	GoGCPauseTotalSeconds = promauto.NewCounter(prometheus.CounterOpts{Name: "vidveil_go_gc_pause_total_seconds", Help: "Total time spent in Go garbage collection pauses"})
 
 	// HTTP metrics per AI.md PART 20
 	HTTPRequestsTotal = promauto.NewCounterVec(
@@ -157,6 +217,17 @@ var (
 		[]string{"operation", "error_type"},
 	)
 
+	DBBusyTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "vidveil_db_busy_total",
+		Help: "SQLite writes that hit a busy or locked error and were retried",
+	})
+
+	DBWriteWaitSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "vidveil_db_write_wait_seconds",
+		Help:    "Time SQLite writes wait for a writer connection or file lock",
+		Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+	})
+
 	// Authentication metrics per AI.md PART 20
 	AuthAttemptsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -166,11 +237,12 @@ var (
 		[]string{"method", "status"},
 	)
 
-	AuthSessionsActive = promauto.NewGauge(
+	OwnerTokensActive = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "vidveil_auth_sessions_active",
-			Help: "Number of active authentication sessions",
+			Name: "vidveil_owner_tokens_active",
+			Help: "Number of active owner tokens by kind",
 		},
+		[]string{"kind"},
 	)
 
 	// Cache metrics per AI.md PART 20 — label "cache" = cache name/purpose
@@ -224,7 +296,7 @@ var (
 
 	SearchResultsTotal = promauto.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "vidveil_search_results_total",
+			Name:    "vidveil_search_results",
 			Help:    "Number of results per search",
 			Buckets: []float64{0, 1, 5, 10, 20, 50, 100, 200, 500},
 		},
@@ -406,19 +478,164 @@ var (
 	)
 )
 
+func init() {
+	OwnerTokensActive.WithLabelValues("primary").Set(0)
+	OwnerTokensActive.WithLabelValues("linked").Set(0)
+}
+
+// RefreshOwnerTokenMetrics publishes counts of unrevoked, unexpired primary
+// and linked owner tokens. Both series exist even before the first token.
+type metricsReadStore interface {
+	Read(context.Context, func(context.Context, dbstore.Reader) error) error
+}
+
+func RefreshOwnerTokenMetrics(db metricsReadStore) error {
+	if db == nil {
+		return nil
+	}
+	counts := map[string]float64{"primary": 0, "linked": 0}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+		rows, err := readDB.QueryContext(readCtx, `SELECT kind, COUNT(*) FROM api_tokens WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?) GROUP BY kind`, time.Now().Unix())
+		if err != nil {
+			return err
+		}
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var kind string
+			var count int64
+			if err := rows.Scan(&kind, &count); err != nil {
+				return err
+			}
+			if _, expected := counts[kind]; expected {
+				counts[kind] = float64(count)
+			}
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return err
+	}
+	OwnerTokensActive.WithLabelValues("primary").Set(counts["primary"])
+	OwnerTokensActive.WithLabelValues("linked").Set(counts["linked"])
+	return nil
+}
+
 // InitMetricsAppInfo initialises application-level metric values and starts the uptime updater.
 // Call once from main after build variables are resolved.
-func InitMetricsAppInfo(ver, commit, buildDate, goVer string) {
-	AppInfo.WithLabelValues(ver, commit, buildDate, goVer).Set(1)
-	start := time.Now()
-	AppStartTimestamp.Set(float64(start.Unix()))
-	go func() {
-		t := time.NewTicker(5 * time.Second)
-		defer t.Stop()
-		for range t.C {
-			AppUptimeSeconds.Set(time.Since(start).Seconds())
+var initAppMetricsOnce sync.Once
+var initSystemMetricsOnce sync.Once
+var runtimeMetricsEnabled = true
+var systemMetricsRegistered = true
+
+func ConfigureRuntimeMetrics(enabled bool) {
+	collectors := []prometheus.Collector{GoGoroutines, GoMemAllocBytes, GoMemSysBytes, GoGCRunsTotal, GoGCPauseTotalSeconds}
+	if enabled == runtimeMetricsEnabled {
+		return
+	}
+	for _, collector := range collectors {
+		if enabled {
+			if err := prometheus.DefaultRegisterer.Register(collector); err != nil {
+				log.Printf("metrics: unable to enable Go runtime collector: %v", err)
+			}
+		} else {
+			prometheus.DefaultRegisterer.Unregister(collector)
 		}
-	}()
+	}
+	runtimeMetricsEnabled = enabled
+}
+
+func InitMetricsAppInfo(ver, commit, buildDate, goVer string) {
+	initAppMetricsOnce.Do(func() {
+		AppInfo.WithLabelValues(ver, commit, buildDate, goVer).Set(1)
+		start := time.Now()
+		AppStartTimestamp.Set(float64(start.Unix()))
+		var lastGC uint32
+		var lastPause uint64
+		updateRuntime := func() {
+			if !runtimeMetricsEnabled {
+				return
+			}
+			var stats runtime.MemStats
+			runtime.ReadMemStats(&stats)
+			GoGoroutines.Set(float64(runtime.NumGoroutine()))
+			GoMemAllocBytes.Set(float64(stats.Alloc))
+			GoMemSysBytes.Set(float64(stats.Sys))
+			if stats.NumGC > lastGC {
+				GoGCRunsTotal.Add(float64(stats.NumGC - lastGC))
+				lastGC = stats.NumGC
+			}
+			if stats.PauseTotalNs > lastPause {
+				GoGCPauseTotalSeconds.Add(float64(stats.PauseTotalNs-lastPause) / float64(time.Second))
+				lastPause = stats.PauseTotalNs
+			}
+		}
+		updateRuntime()
+		go func() {
+			t := time.NewTicker(5 * time.Second)
+			defer t.Stop()
+			for range t.C {
+				AppUptimeSeconds.Set(time.Since(start).Seconds())
+				updateRuntime()
+			}
+		}()
+	})
+}
+
+// ConfigureSystemMetrics starts the platform-aware host collector when enabled.
+func ConfigureSystemMetrics(enabled bool, dataPath string) {
+	collectors := []prometheus.Collector{SystemCPUUsagePercent, SystemMemoryUsagePercent, SystemMemoryUsedBytes, SystemMemoryTotalBytes, SystemDiskUsagePercent, SystemDiskUsedBytes, SystemDiskTotalBytes}
+	if !enabled {
+		if systemMetricsRegistered {
+			for _, collector := range collectors {
+				prometheus.DefaultRegisterer.Unregister(collector)
+			}
+			systemMetricsRegistered = false
+		}
+		return
+	}
+	if !systemMetricsRegistered {
+		for _, collector := range collectors {
+			if err := prometheus.DefaultRegisterer.Register(collector); err != nil {
+				log.Printf("metrics: unable to enable system collector: %v", err)
+			}
+		}
+		systemMetricsRegistered = true
+	}
+	initSystemMetricsOnce.Do(func() {
+		refresh := func() {
+			if usage, err := gocpu.Percent(0, false); err == nil && len(usage) > 0 {
+				SystemCPUUsagePercent.Set(usage[0])
+			} else if err != nil {
+				log.Printf("metrics: unable to read system CPU usage: %v", err)
+			}
+			if memory, err := gomem.VirtualMemory(); err == nil {
+				SystemMemoryUsagePercent.Set(memory.UsedPercent)
+				SystemMemoryUsedBytes.Set(float64(memory.Used))
+				SystemMemoryTotalBytes.Set(float64(memory.Total))
+			} else {
+				log.Printf("metrics: unable to read system memory usage: %v", err)
+			}
+			if dataPath != "" {
+				if disk, err := godisk.Usage(dataPath); err == nil {
+					SystemDiskUsagePercent.WithLabelValues(dataPath).Set(disk.UsedPercent)
+					SystemDiskUsedBytes.WithLabelValues(dataPath).Set(float64(disk.Used))
+					SystemDiskTotalBytes.WithLabelValues(dataPath).Set(float64(disk.Total))
+				} else {
+					log.Printf("metrics: unable to read data filesystem usage: %v", err)
+				}
+			}
+		}
+		refresh()
+		go func() {
+			ticker := time.NewTicker(15 * time.Second)
+			defer ticker.Stop()
+			for range ticker.C {
+				refresh()
+			}
+		}()
+	})
 }
 
 // boolGauge maps a boolean state onto the 1/0 gauge encoding AI.md PART 20
@@ -555,17 +772,19 @@ func writeSanitizedJSON(w http.ResponseWriter, data any) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(append(output, '\n'))
+	if _, err := w.Write(append(output, '\n')); err != nil {
+		log.Printf("metrics: failed to write JSON response: %v", err)
+	}
 }
 
 // grafanaPanel is a minimal Grafana dashboard panel definition.
 type grafanaPanel struct {
-	ID         int             `json:"id"`
-	Title      string          `json:"title"`
-	Type       string          `json:"type"`
-	Datasource string          `json:"datasource"`
-	Targets    []grafanaTarget `json:"targets"`
-	GridPos    grafanaGridPos  `json:"gridPos"`
+	ID         int               `json:"id"`
+	Title      string            `json:"title"`
+	Type       string            `json:"type"`
+	Datasource map[string]string `json:"datasource"`
+	Targets    []grafanaTarget   `json:"targets"`
+	GridPos    grafanaGridPos    `json:"gridPos"`
 }
 
 type grafanaTarget struct {
@@ -589,20 +808,36 @@ func buildGrafanaDashboard() map[string]interface{} {
 		expr  string
 	}
 	specs := []panelSpec{
-		{"App Uptime", "vidveil_app_uptime_seconds"},
+		{"Application Uptime", "vidveil_app_uptime_seconds"},
 		{"HTTP Requests Total", "rate(vidveil_http_requests_total[5m])"},
 		{"HTTP Request Duration", "histogram_quantile(0.95, rate(vidveil_http_request_duration_seconds_bucket[5m]))"},
+		{"HTTP Response Bytes", "rate(vidveil_http_response_size_bytes_sum[5m])"},
 		{"Active HTTP Requests", "vidveil_http_active_requests"},
 		{"Database Queries Total", "rate(vidveil_db_queries_total[5m])"},
 		{"Database Errors Total", "rate(vidveil_db_errors_total[5m])"},
 		{"Database Connections Open", "vidveil_db_connections_open"},
+		{"Database Connections In Use", "vidveil_db_connections_in_use"},
+		{"Database Write Wait", "histogram_quantile(0.95, rate(vidveil_db_write_wait_seconds_bucket[5m]))"},
+		{"Database Busy Retries", "rate(vidveil_db_busy_total[5m])"},
 		{"Cache Hit Ratio", "rate(vidveil_cache_hits_total[5m]) / (rate(vidveil_cache_hits_total[5m]) + rate(vidveil_cache_misses_total[5m]))"},
+		{"Cache Size", "vidveil_cache_size"},
+		{"Cache Bytes", "vidveil_cache_bytes"},
+		{"Cache Evictions", "rate(vidveil_cache_evictions_total[5m])"},
 		{"Scheduler Tasks Total", "rate(vidveil_scheduler_tasks_total[5m])"},
 		{"Scheduler Tasks Running", "vidveil_scheduler_tasks_running"},
 		{"System CPU Usage", "vidveil_system_cpu_usage_percent"},
 		{"System Memory Usage", "vidveil_system_memory_usage_percent"},
+		{"System Disk Usage", "vidveil_system_disk_usage_percent"},
+		{"Go Goroutines", "vidveil_go_goroutines"},
+		{"Go Heap Allocation", "vidveil_go_mem_alloc_bytes"},
+		{"Go GC Pause Time", "rate(vidveil_go_gc_pause_total_seconds[5m])"},
+		{"Authentication Attempts", "rate(vidveil_auth_attempts_total[5m])"},
+		{"Active Owner Tokens", "vidveil_owner_tokens_active"},
+		{"Rate Limited Requests", "rate(vidveil_ratelimit_requests_total{status=\"limited\"}[5m])"},
+		{"Tor State", "vidveil_tor_running"},
 		{"Search Queries Total", "rate(vidveil_search_queries_total[5m])"},
 		{"Search Duration", "histogram_quantile(0.95, rate(vidveil_search_duration_seconds_bucket[5m]))"},
+		{"Search Results (p95)", "histogram_quantile(0.95, rate(vidveil_search_results_bucket[5m]))"},
 	}
 
 	panels := make([]grafanaPanel, 0, len(specs))
@@ -611,7 +846,7 @@ func buildGrafanaDashboard() map[string]interface{} {
 			ID:         i + 1,
 			Title:      s.title,
 			Type:       "timeseries",
-			Datasource: "${DS_PROMETHEUS}",
+			Datasource: map[string]string{"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
 			Targets: []grafanaTarget{
 				{Expr: s.expr, LegendFormat: s.title, RefID: "A"},
 			},
@@ -637,6 +872,8 @@ func buildGrafanaDashboard() map[string]interface{} {
 		"timezone":      "browser",
 		"editable":      true,
 		"panels":        panels,
+		"annotations":   map[string]interface{}{"list": []interface{}{}},
+		"refresh":       "30s",
 		"time": map[string]string{
 			"from": "now-6h",
 			"to":   "now",
@@ -694,20 +931,79 @@ func serveLokiStreams(w http.ResponseWriter, lokiCfg config.MetricsLokiConfig, l
 // statusWriter wraps http.ResponseWriter to capture the status code and bytes written.
 type statusWriter struct {
 	http.ResponseWriter
-	status  int
-	written int64
+	status      int
+	written     int64
+	wroteHeader bool
 }
 
 // WriteHeader intercepts the status code so we can record it.
 func (sw *statusWriter) WriteHeader(code int) {
+	if sw.wroteHeader {
+		return
+	}
 	sw.status = code
+	sw.wroteHeader = true
 	sw.ResponseWriter.WriteHeader(code)
 }
 
 // Write counts bytes written so HTTPResponseSize can observe them.
 func (sw *statusWriter) Write(b []byte) (int, error) {
+	if !sw.wroteHeader {
+		sw.WriteHeader(http.StatusOK)
+	}
 	n, err := sw.ResponseWriter.Write(b)
 	sw.written += int64(n)
+	return n, err
+}
+
+func (sw *statusWriter) Flush() {
+	if !sw.wroteHeader {
+		sw.WriteHeader(http.StatusOK)
+	}
+	if flusher, ok := sw.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (sw *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := sw.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("response writer does not support hijacking")
+	}
+	return hijacker.Hijack()
+}
+
+func (sw *statusWriter) Push(target string, opts *http.PushOptions) error {
+	if pusher, ok := sw.ResponseWriter.(http.Pusher); ok {
+		return pusher.Push(target, opts)
+	}
+	return http.ErrNotSupported
+}
+
+func (sw *statusWriter) ReadFrom(r io.Reader) (int64, error) {
+	if !sw.wroteHeader {
+		sw.WriteHeader(http.StatusOK)
+	}
+	if readerFrom, ok := sw.ResponseWriter.(io.ReaderFrom); ok {
+		n, err := readerFrom.ReadFrom(r)
+		sw.written += n
+		return n, err
+	}
+	n, err := io.Copy(struct{ io.Writer }{sw.ResponseWriter}, r)
+	sw.written += n
+	return n, err
+}
+
+func (sw *statusWriter) Unwrap() http.ResponseWriter { return sw.ResponseWriter }
+
+type countedRequestBody struct {
+	io.ReadCloser
+	read int64
+}
+
+func (body *countedRequestBody) Read(p []byte) (int, error) {
+	n, err := body.ReadCloser.Read(p)
+	body.read += int64(n)
 	return n, err
 }
 
@@ -718,23 +1014,31 @@ func InstrumentMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		HTTPActiveRequests.Inc()
+		requestBody := &countedRequestBody{ReadCloser: r.Body}
+		r.Body = requestBody
+		completed := false
+		defer func() {
+			HTTPActiveRequests.Dec()
+			if !completed && !sw.wroteHeader {
+				sw.status = http.StatusInternalServerError
+			}
+			method := r.Method
+			path := normalizePath(r.URL.Path)
+			status := strconv.Itoa(sw.status)
+			HTTPRequestsTotal.WithLabelValues(method, path, status).Inc()
+			HTTPRequestDuration.WithLabelValues(method, path).Observe(time.Since(start).Seconds())
+			requestSize := requestBody.read
+			if r.ContentLength > requestSize {
+				requestSize = r.ContentLength
+			}
+			if requestSize > 0 {
+				HTTPRequestSize.WithLabelValues(method, path).Observe(float64(requestSize))
+			}
+			if sw.written > 0 {
+				HTTPResponseSize.WithLabelValues(method, path).Observe(float64(sw.written))
+			}
+		}()
 		next.ServeHTTP(sw, r)
-		HTTPActiveRequests.Dec()
-
-		method := r.Method
-		// Normalize the path so IDs/UUIDs collapse to :id — prevents unbounded
-		// label cardinality per AI.md PART 20.
-		path := normalizePath(r.URL.Path)
-		status := strconv.Itoa(sw.status)
-
-		HTTPRequestsTotal.WithLabelValues(method, path, status).Inc()
-		HTTPRequestDuration.WithLabelValues(method, path).Observe(time.Since(start).Seconds())
-
-		if r.ContentLength > 0 {
-			HTTPRequestSize.WithLabelValues(method, path).Observe(float64(r.ContentLength))
-		}
-		if sw.written > 0 {
-			HTTPResponseSize.WithLabelValues(method, path).Observe(float64(sw.written))
-		}
+		completed = true
 	})
 }

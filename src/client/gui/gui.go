@@ -34,16 +34,21 @@ import (
 
 // Config holds the configuration passed to the GUI launcher.
 type Config struct {
-	ServerURL  string
-	Token      string
-	APIVersion string
-	Timeout    int
-	Version    string
-	BinaryName string
-	Language   string
-	FirstRun   bool
-	SaveLogin  func(serverURL, token string) error
-	SaveServer func(serverURL, token string) error
+	ServerURL        string
+	Token            string
+	APIVersion       string
+	Timeout          int
+	Version          string
+	BinaryName       string
+	Language         string
+	FirstRun         bool
+	SaveLogin        func(serverURL, token string) error
+	SaveServer       func(serverURL, token string) error
+	SaveSetup        func(serverURL, token string, save, setAsDefault bool) error
+	AutostartEnabled func() bool
+	SetAutostart     func(bool) error
+	CheckUpdate      func() (string, error)
+	ApplyUpdate      func() error
 }
 
 // IsAvailable reports whether a native GUI can be launched in the current environment.

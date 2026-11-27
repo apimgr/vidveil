@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
@@ -17,6 +18,7 @@ import (
 type ownerTokenPageItem struct {
 	ID          string
 	Name        string
+	Scope       string
 	TokenPrefix string
 	Suffix      string
 	Created     string
@@ -61,13 +63,15 @@ func OwnerTokenRevealFromContext(ctx context.Context) (OwnerTokenReveal, bool) {
 func (h *SearchHandler) OwnerTokensPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	data := map[string]interface{}{
-		"Title":         "Owner tokens - " + h.appConfig.Server.Branding.Title,
-		"ActiveNav":     "preferences",
-		"NoJSTemplate":  "nojs/owner-tokens",
-		"TokensEnabled": false,
-		"PrimaryToken":  ownerTokenPageItem{},
-		"LinkedTokens":  []ownerTokenPageItem{},
-		"PathPrefix":    ownerTokenPathPrefix(r),
+		"Title":            "Owner tokens - " + h.appConfig.Server.Branding.Title,
+		"ActiveNav":        "preferences",
+		"NoJSTemplate":     "nojs/owner-tokens",
+		"TokensEnabled":    false,
+		"PrimaryToken":     ownerTokenPageItem{},
+		"LinkedTokens":     []ownerTokenPageItem{},
+		"LinkedTokenCount": int64(0),
+		"ResourceCount":    int64(0),
+		"PathPrefix":       ownerTokenPathPrefix(r),
 	}
 	noticeKeys := map[string]string{
 		"token-created": "owner_tokens.notice_created",
@@ -92,7 +96,23 @@ func (h *SearchHandler) OwnerTokensPage(w http.ResponseWriter, r *http.Request) 
 					writeGuaranteedErrorPage(w, r, http.StatusInternalServerError)
 					return
 				}
+				var linkedCount, resourceCount int64
+				if h.store == nil {
+					writeGuaranteedErrorPage(w, r, http.StatusInternalServerError)
+					return
+				}
+				if countErr := h.store.Read(r.Context(), func(ctx context.Context, reader dbstore.Reader) error {
+					if err := reader.QueryRowContext(ctx, `SELECT COUNT(*) FROM api_tokens WHERE owner_id = ? AND kind = 'linked'`, principal.OwnerID).Scan(&linkedCount); err != nil {
+						return err
+					}
+					return reader.QueryRowContext(ctx, `SELECT COUNT(*) FROM favorites WHERE owner_id = ?`, principal.OwnerID).Scan(&resourceCount)
+				}); countErr != nil {
+					writeGuaranteedErrorPage(w, r, http.StatusInternalServerError)
+					return
+				}
 				data["TokensEnabled"] = true
+				data["LinkedTokenCount"] = linkedCount
+				data["ResourceCount"] = resourceCount
 				data["PrimaryToken"] = ownerTokenPageItem{
 					TokenPrefix: maskedOwnerTokenPrefix(primary.Prefix),
 					Suffix:      primary.Suffix,
@@ -118,6 +138,7 @@ func (h *SearchHandler) OwnerTokensPage(w http.ResponseWriter, r *http.Request) 
 					}
 					item := ownerTokenPageItem{
 						ID: token.ID, Name: token.Name, TokenPrefix: maskedOwnerTokenPrefix(token.Prefix), Suffix: token.Suffix,
+						Scope:    token.Scope,
 						Created:  time.Unix(token.CreatedAt, 0).UTC().Format(time.RFC3339),
 						LastUsed: formatOwnerTokenTime(token.LastUsed), Expires: expires, Status: status,
 						RevealURL: fmt.Sprintf("%s/server/preferences/tokens/%s/reveal", ownerTokenPathPrefix(r), token.ID),

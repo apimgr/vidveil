@@ -103,8 +103,8 @@ func (s *Server) handleDebugCache(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDebugDB(w http.ResponseWriter, r *http.Request) {
 	// Get database stats from migration manager if available
-	db := s.migrationMgr.GetDB()
-	if db == nil {
+	store := s.migrationMgr.GetAppDatabase()
+	if store == nil {
 		data := map[string]interface{}{
 			"status": "database not available",
 		}
@@ -112,7 +112,7 @@ func (s *Server) handleDebugDB(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats := db.Stats()
+	stats := store.Stats()
 	data := map[string]interface{}{
 		"open_connections":    stats.OpenConnections,
 		"in_use":              stats.InUse,

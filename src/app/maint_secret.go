@@ -77,7 +77,7 @@ func rotateInstallationSecret(configDir, dataDir string) error {
 	defer func() { _ = mgr.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	secrets := secret.NewManager(mgr.GetDB())
+	secrets := secret.NewManager(mgr.GetAppDatabase())
 	if err := secrets.EnsureSecrets(ctx); err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func rotateEncryptionKey(configDir, dataDir string) error {
 		return fmt.Errorf("open database: %w", err)
 	}
 	defer func() { _ = mgr.Close() }()
-	db := mgr.GetDB()
+	db := mgr.GetAppDatabase()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	if unlock := secreport.LockKeyRotation(); unlock != nil {
@@ -144,15 +144,9 @@ func rotateEncryptionKey(configDir, dataDir string) error {
 		if err := completeEncryptionKeyRotation(ctx, db, old, previous); err != nil {
 			return fmt.Errorf("cannot rotate again until previous encryption-key data is complete: %w", err)
 		}
-		cleanupTx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		if err := secret.DeletePreviousEncryptionKey(ctx, cleanupTx); err != nil {
-			_ = cleanupTx.Rollback()
-			return err
-		}
-		if err := cleanupTx.Commit(); err != nil {
+		if err := db.Write(ctx, func(tx *sql.Tx) error {
+			return secret.DeletePreviousEncryptionKey(ctx, tx)
+		}); err != nil {
 			return err
 		}
 	}
@@ -161,19 +155,12 @@ func rotateEncryptionKey(configDir, dataDir string) error {
 		return err
 	}
 	newKey := hex.EncodeToString(newBytes)
-	rotationTx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if _, err := rotationTx.ExecContext(ctx, `UPDATE api_tokens SET token_prefix = token_prefix WHERE id = ''`); err != nil {
-		_ = rotationTx.Rollback()
-		return err
-	}
-	if err := secret.StorePreviousEncryptionKey(ctx, rotationTx, old, newKey, time.Now().UTC().Add(30*24*time.Hour)); err != nil {
-		_ = rotationTx.Rollback()
-		return err
-	}
-	if err := rotationTx.Commit(); err != nil {
+	if err := db.Write(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_prefix = token_prefix WHERE id = ''`); err != nil {
+			return err
+		}
+		return secret.StorePreviousEncryptionKey(ctx, tx, old, newKey, time.Now().UTC().Add(30*24*time.Hour))
+	}); err != nil {
 		return fmt.Errorf("persist wrapped previous encryption key: %w", err)
 	}
 	cfg.Server.Security.EncryptionKey = newKey
@@ -191,15 +178,9 @@ func rotateEncryptionKey(configDir, dataDir string) error {
 	if err := emitSecretRotationAudit(configDir, dataDir, "security.encryption_key_rotated"); err != nil {
 		return err
 	}
-	cleanupTx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := secret.DeletePendingEncryptionKey(ctx, cleanupTx); err != nil {
-		_ = cleanupTx.Rollback()
-		return err
-	}
-	if err := cleanupTx.Commit(); err != nil {
+	if err := db.Write(ctx, func(tx *sql.Tx) error {
+		return secret.DeletePendingEncryptionKey(ctx, tx)
+	}); err != nil {
 		return err
 	}
 	return nil
@@ -207,168 +188,162 @@ func rotateEncryptionKey(configDir, dataDir string) error {
 
 // completeEncryptionKeyRotation eagerly rewrites any AES data still readable
 // only with the wrapped grace-period key. It is safe to rerun after a crash.
-func completeEncryptionKeyRotation(ctx context.Context, db *sql.DB, currentKey, previousKey string) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin AES re-encryption recovery: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_prefix = token_prefix WHERE id = ''`); err != nil {
-		return fmt.Errorf("lock AES re-encryption recovery: %w", err)
-	}
+func completeEncryptionKeyRotation(ctx context.Context, db *database.AppDatabase, currentKey, previousKey string) error {
 	const batch = 100
 	for offset := 0; ; offset += batch {
-		rows, err := tx.QueryContext(ctx, `SELECT id, token_hash, token_enc FROM api_tokens ORDER BY id LIMIT ? OFFSET ?`, batch, offset)
-		if err != nil {
-			return fmt.Errorf("read owner-token encryption state: %w", err)
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-		type item struct{ id, hash, token string }
-		items := make([]item, 0, batch)
-		for rows.Next() {
-			var value item
-			if err := rows.Scan(&value.id, &value.hash, &value.token); err != nil {
+		count := 0
+		err := db.Write(ctx, func(tx *sql.Tx) error {
+			rows, err := tx.QueryContext(ctx, `SELECT id, token_hash, token_enc FROM api_tokens ORDER BY id LIMIT ? OFFSET ?`, batch, offset)
+			if err != nil {
+				return fmt.Errorf("read owner-token encryption state: %w", err)
+			}
+			type item struct{ id, hash, token string }
+			items := make([]item, 0, batch)
+			for rows.Next() {
+				var value item
+				if err := rows.Scan(&value.id, &value.hash, &value.token); err != nil {
+					_ = rows.Close()
+					return err
+				}
+				items = append(items, value)
+			}
+			if err := rows.Err(); err != nil {
 				_ = rows.Close()
 				return err
 			}
-			items = append(items, value)
-		}
-		if err := rows.Err(); err != nil {
-			_ = rows.Close()
-			return err
-		}
-		if err := rows.Close(); err != nil {
-			return err
-		}
-		if len(items) == 0 {
-			break
-		}
-		for _, value := range items {
-			if hash, usedPrevious, err := apitoken.DecryptHashWithPrevious(currentKey, previousKey, value.hash); err != nil {
-				return fmt.Errorf("decrypt API token digest %s during recovery: %w", value.id, err)
-			} else if usedPrevious {
-				if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_hash = ? WHERE id = ?`, hash, value.id); err != nil {
-					return err
+			if err := rows.Close(); err != nil {
+				return err
+			}
+			count = len(items)
+			for _, value := range items {
+				if hash, usedPrevious, err := apitoken.DecryptHashWithPrevious(currentKey, previousKey, value.hash); err != nil {
+					return fmt.Errorf("decrypt API token digest %s during recovery: %w", value.id, err)
+				} else if usedPrevious {
+					if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_hash = ? WHERE id = ?`, hash, value.id); err != nil {
+						return err
+					}
+				}
+				if value.token != "" {
+					token, usedPrevious, err := apitoken.DecryptTokenWithPrevious(currentKey, previousKey, value.token)
+					if err != nil {
+						return fmt.Errorf("decrypt API token %s during recovery: %w", value.id, err)
+					}
+					if usedPrevious {
+						encrypted, err := apitoken.EncryptToken(currentKey, token)
+						if err != nil {
+							return err
+						}
+						if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_enc = ? WHERE id = ?`, encrypted, value.id); err != nil {
+							return err
+						}
+					}
 				}
 			}
-			if value.token != "" {
-				token, usedPrevious, err := apitoken.DecryptTokenWithPrevious(currentKey, previousKey, value.token)
-				if err != nil {
-					return fmt.Errorf("decrypt API token %s during recovery: %w", value.id, err)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		if count < batch {
+			break
+		}
+		if err := yieldRotationBatch(ctx); err != nil {
+			return err
+		}
+	}
+
+	for _, field := range []struct{ column, label string }{{"body_enc", "security report"}, {"contact_enc", "security contact"}} {
+		for offset := 0; ; offset += batch {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			count := 0
+			err := db.Write(ctx, func(tx *sql.Tx) error {
+				query := `SELECT tracking_id, ` + field.column + ` FROM security_reports WHERE ` + field.column + ` IS NOT NULL`
+				if field.column == "body_enc" {
+					query += ` AND body_alg = ? ORDER BY tracking_id LIMIT ? OFFSET ?`
+				} else {
+					query += ` ORDER BY tracking_id LIMIT ? OFFSET ?`
 				}
-				if usedPrevious {
-					encrypted, err := apitoken.EncryptToken(currentKey, token)
+				var rows *sql.Rows
+				var err error
+				if field.column == "body_enc" {
+					rows, err = tx.QueryContext(ctx, query, string(secreport.EncryptionMethodAES), batch, offset)
+				} else {
+					rows, err = tx.QueryContext(ctx, query, batch, offset)
+				}
+				if err != nil {
+					return fmt.Errorf("read %s during recovery: %w", field.label, err)
+				}
+				type blob struct {
+					id   string
+					data []byte
+				}
+				items := make([]blob, 0, batch)
+				for rows.Next() {
+					var value blob
+					if err := rows.Scan(&value.id, &value.data); err != nil {
+						_ = rows.Close()
+						return err
+					}
+					items = append(items, value)
+				}
+				if err := rows.Err(); err != nil {
+					_ = rows.Close()
+					return err
+				}
+				if err := rows.Close(); err != nil {
+					return err
+				}
+				count = len(items)
+				for _, value := range items {
+					_, err := secreport.DecryptAESGCM(currentKey, value.data)
+					if err == nil {
+						continue
+					}
+					if previousKey == "" {
+						return fmt.Errorf("decrypt %s %s with current encryption key: %w", field.label, value.id, err)
+					}
+					plain, previousErr := secreport.DecryptAESGCM(previousKey, value.data)
+					if previousErr != nil {
+						return fmt.Errorf("decrypt %s %s with current or previous encryption key: %w", field.label, value.id, previousErr)
+					}
+					encrypted, err := secreport.EncryptAESGCM(currentKey, plain)
 					if err != nil {
 						return err
 					}
-					if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_enc = ? WHERE id = ?`, encrypted, value.id); err != nil {
+					if _, err := tx.ExecContext(ctx, `UPDATE security_reports SET `+field.column+` = ?, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = ?`, encrypted, value.id); err != nil {
 						return err
 					}
 				}
-			}
-		}
-	}
-	for offset := 0; ; offset += batch {
-		rows, err := tx.QueryContext(ctx, `SELECT tracking_id, body_enc FROM security_reports WHERE body_alg = ? ORDER BY tracking_id LIMIT ? OFFSET ?`, string(secreport.EncryptionMethodAES), batch, offset)
-		if err != nil {
-			return fmt.Errorf("read AES report bodies during recovery: %w", err)
-		}
-		type blob struct {
-			id   string
-			data []byte
-		}
-		items := make([]blob, 0, batch)
-		for rows.Next() {
-			var value blob
-			if err := rows.Scan(&value.id, &value.data); err != nil {
-				_ = rows.Close()
-				return err
-			}
-			items = append(items, value)
-		}
-		if err := rows.Err(); err != nil {
-			_ = rows.Close()
-			return err
-		}
-		if err := rows.Close(); err != nil {
-			return err
-		}
-		if len(items) == 0 {
-			break
-		}
-		for _, value := range items {
-			_, err := secreport.DecryptAESGCM(currentKey, value.data)
-			if err == nil {
-				continue
-			}
-			if previousKey == "" {
-				return fmt.Errorf("decrypt security report %s with current encryption key: %w", value.id, err)
-			}
-			plain, err := secreport.DecryptAESGCM(previousKey, value.data)
-			if err != nil {
-				return fmt.Errorf("decrypt security report %s with current or previous encryption key: %w", value.id, err)
-			}
-			encrypted, err := secreport.EncryptAESGCM(currentKey, plain)
+				return nil
+			})
 			if err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `UPDATE security_reports SET body_enc = ?, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = ?`, encrypted, value.id); err != nil {
+			if count < batch {
+				break
+			}
+			if err := yieldRotationBatch(ctx); err != nil {
 				return err
 			}
 		}
-	}
-	for offset := 0; ; offset += batch {
-		rows, err := tx.QueryContext(ctx, `SELECT tracking_id, contact_enc FROM security_reports WHERE contact_enc IS NOT NULL ORDER BY tracking_id LIMIT ? OFFSET ?`, batch, offset)
-		if err != nil {
-			return fmt.Errorf("read report contacts during recovery: %w", err)
-		}
-		type blob struct {
-			id   string
-			data []byte
-		}
-		items := make([]blob, 0, batch)
-		for rows.Next() {
-			var value blob
-			if err := rows.Scan(&value.id, &value.data); err != nil {
-				_ = rows.Close()
-				return err
-			}
-			items = append(items, value)
-		}
-		if err := rows.Err(); err != nil {
-			_ = rows.Close()
-			return err
-		}
-		if err := rows.Close(); err != nil {
-			return err
-		}
-		if len(items) == 0 {
-			break
-		}
-		for _, value := range items {
-			_, err := secreport.DecryptAESGCM(currentKey, value.data)
-			if err == nil {
-				continue
-			}
-			if previousKey == "" {
-				return fmt.Errorf("decrypt security contact %s with current encryption key: %w", value.id, err)
-			}
-			plain, err := secreport.DecryptAESGCM(previousKey, value.data)
-			if err != nil {
-				return fmt.Errorf("decrypt security contact %s with current or previous encryption key: %w", value.id, err)
-			}
-			encrypted, err := secreport.EncryptAESGCM(currentKey, plain)
-			if err != nil {
-				return err
-			}
-			if _, err := tx.ExecContext(ctx, `UPDATE security_reports SET contact_enc = ?, updated_at = CURRENT_TIMESTAMP WHERE tracking_id = ?`, encrypted, value.id); err != nil {
-				return err
-			}
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit AES re-encryption recovery: %w", err)
 	}
 	return nil
+}
+
+func yieldRotationBatch(ctx context.Context) error {
+	timer := time.NewTimer(10 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func emitSecretRotationAudit(configDir, dataDir, event string) error {

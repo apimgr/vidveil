@@ -4,209 +4,30 @@ package email
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/tls"
-	"embed"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
+	"html"
+	"log"
 	"mime"
+	"mime/quotedprintable"
 	"net"
+	"net/mail"
+	"net/netip"
 	"net/smtp"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	emailtemplates "github.com/apimgr/vidveil/src/server/template/email"
 )
-
-//go:embed template/*.txt
-var embeddedTemplates embed.FS
-
-// Default templates per AI.md PART 17.
-// Only system/operator notification templates — no account-related emails.
-var defaultTemplates = map[string]string{
-	"security_alert": `Subject: Security Alert - {app_name}
----
-SECURITY ALERT
-
-From: {app_name} ({fqdn})
-Time: {timestamp}
-
-{event}
-
-Details:
-  Source IP: {ip}
-  {details}
-
-────────────────────────────────────────────────────────────────────────
-{app_name}
-{app_url}`,
-
-	"security_report_maintainer": `Subject: [Security Report] {severity} - {component} ({tracking_id})
----
-A new coordinated-disclosure security report was submitted.
-
-Tracking ID: {tracking_id}
-Severity: {severity}
-Component: {component}
-Endpoint: {endpoint}
-Summary: {summary}
-
-Full details (steps to reproduce, impact, suggested fix) are stored
-encrypted at rest; consult the admin security queue to review the
-complete report body.
-
-────────────────────────────────────────────────────────────────────────
-{app_name}
-{app_url}`,
-
-	"security_report_researcher_ack": `Subject: Security report received - {tracking_id}
----
-Tracking ID: {tracking_id}
-Status URL: {report_status_url}`,
-
-	"backup_complete": `Subject: Backup Complete - {app_name}
----
-BACKUP COMPLETE
-
-From: {app_name} ({fqdn})
-Time: {timestamp}
-
-Your backup completed successfully.
-
-Filename: {filename}
-Size: {size}
-
---
-{app_name}
-{app_url}`,
-
-	"backup_failed": `Subject: Backup Failed - {app_name}
----
-BACKUP FAILED
-
-From: {app_name} ({fqdn})
-Time: {timestamp}
-
-A backup operation failed.
-
-Error: {error}
-
-Please check your server logs.
-
---
-{app_name}
-{app_url}`,
-
-	"ssl_expiring": `Subject: SSL Certificate Expiring - {app_name}
----
-Hello,
-
-Your SSL certificate for {domain} is expiring soon.
-
-Expires in: {expires_in} days
-Expiry date: {expiry_date}
-
-Please renew your certificate.
-
---
-{app_name}
-{app_url}`,
-
-	"ssl_renewed": `Subject: SSL Certificate Renewed - {app_name}
----
-Hello,
-
-Your SSL certificate for {domain} has been renewed.
-
-Valid until: {valid_until}
-
---
-{app_name}
-{app_url}`,
-
-	"ssl_renewal_failed": `Subject: SSL Renewal Failed - {app_name}
----
-SSL CERTIFICATE RENEWAL FAILED
-
-From: {app_name} ({fqdn})
-Time: {timestamp}
-
-Automatic SSL certificate renewal failed for domain: {fqdn}
-
-Error: {error}
-
-Current certificate expires in {expires_in} days ({expiry_date}).
-The system will retry automatically: {next_retry}
-
---
-{app_name}
-{app_url}`,
-
-	"scheduler_error": `Subject: Scheduled Task Failed - {app_name}
----
-SCHEDULED TASK FAILED
-
-From: {app_name} ({fqdn})
-Time: {timestamp}
-
-The scheduled task "{task_name}" failed.
-
-Error: {error}
-Next run: {next_run}
-
---
-{app_name}
-{app_url}`,
-
-	"update_available": `Subject: Update Available - {app_name}
----
-UPDATE AVAILABLE
-
-From: {app_name} ({fqdn})
-Time: {timestamp}
-
-A new version of {app_name} is available.
-
-Current version: {current_version}
-New version: {new_version}
-Channel: {channel}
-
---
-{app_name}
-{app_url}`,
-
-	"update_installed": `Subject: Update Installed - {app_name}
----
-UPDATE INSTALLED
-
-From: {app_name} ({fqdn})
-Time: {timestamp}
-
-{app_name} has been updated.
-
-Previous version: {previous_version}
-New version: {new_version}
-
---
-{app_name}
-{app_url}`,
-
-	"test": `Subject: Test Email - {app_name}
----
-Hello,
-
-This is a test email from {app_name}.
-
-If you received this, your email settings are configured correctly.
-
-Time: {timestamp}
-
---
-{app_name}
-{app_url}`,
-}
 
 // EmailService provides email sending functionality
 type EmailService struct {
@@ -214,11 +35,22 @@ type EmailService struct {
 	templateDir string
 }
 
+// TemplatePreview contains the fully substituted subject and body for CLI validation.
+type TemplatePreview struct {
+	Name    string
+	Subject string
+	Body    string
+}
+
 // NewEmailService creates a new email service
 func NewEmailService(appConfig *config.AppConfig) *EmailService {
 	paths := config.GetAppPaths("", "")
-	templateDir := filepath.Join(paths.Config, "template", "email")
+	return NewEmailServiceAt(appConfig, paths.Config)
+}
 
+// NewEmailServiceAt uses an explicit config directory for CLI and isolated setups.
+func NewEmailServiceAt(appConfig *config.AppConfig, configDir string) *EmailService {
+	templateDir := filepath.Join(configDir, "template", "email")
 	return &EmailService{
 		appConfig:   appConfig,
 		templateDir: templateDir,
@@ -290,14 +122,23 @@ func BuildRawAttachmentMessage(fromName, fromAddr, to, subject, body, filename, 
 	if contentType == "" || strings.ContainsAny(contentType, "\r\n") {
 		return nil, fmt.Errorf("invalid email attachment content type")
 	}
-	boundary := fmt.Sprintf("vidveil-%x", time.Now().UnixNano())
-	var msg bytes.Buffer
-	fromHeader := sanitizeEmailHeader(fromAddr)
-	if fromName != "" {
-		fromHeader = sanitizeEmailHeader(fromName) + " <" + fromHeader + ">"
+	if _, _, err := mime.ParseMediaType(contentType); err != nil {
+		return nil, fmt.Errorf("invalid email attachment content type: %w", err)
 	}
-	fmt.Fprintf(&msg, "From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=%q\r\n\r\n", fromHeader, sanitizeEmailHeader(to), sanitizeEmailHeader(subject), boundary)
-	fmt.Fprintf(&msg, "--%s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s\r\n", boundary, body)
+	if err := validateMessageFields(fromName, fromAddr, to, subject, body); err != nil {
+		return nil, err
+	}
+	messageID, err := newMessageID(fromAddr)
+	if err != nil {
+		return nil, err
+	}
+	boundary := "vidveil-" + strings.Trim(messageID, "<>")
+	alternativeBoundary := boundary + "-alternative"
+	var msg bytes.Buffer
+	writeMessageHeaders(&msg, fromName, fromAddr, to, subject, messageID, "multipart/mixed; boundary=\""+boundary+"\"")
+	fmt.Fprintf(&msg, "--%s\r\nContent-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", boundary, alternativeBoundary)
+	writeAlternativeBody(&msg, alternativeBoundary, body)
+	fmt.Fprintf(&msg, "--%s--\r\n", alternativeBoundary)
 	params := mime.FormatMediaType("attachment", map[string]string{"filename": filename})
 	fmt.Fprintf(&msg, "--%s\r\nContent-Type: %s\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: %s\r\n\r\n", boundary, contentType, params)
 	for offset := 0; offset < len(payload); offset += 57 {
@@ -312,32 +153,120 @@ func BuildRawAttachmentMessage(fromName, fromAddr, to, subject, body, filename, 
 	return msg.Bytes(), nil
 }
 
+func validateMessageFields(fromName, fromAddr, to, subject, body string) error {
+	for name, value := range map[string]string{"from name": fromName, "from address": fromAddr, "recipient": to, "subject": subject} {
+		if strings.ContainsAny(value, "\r\n") {
+			return fmt.Errorf("email %s contains a line break", name)
+		}
+	}
+	if strings.TrimSpace(body) == "" {
+		return fmt.Errorf("email body cannot be empty")
+	}
+	for name, value := range map[string]string{"from address": fromAddr, "recipient": to} {
+		parsed, err := mail.ParseAddress(value)
+		if err != nil || parsed.Address != value {
+			return fmt.Errorf("email %s is not a valid addr-spec", name)
+		}
+	}
+	if strings.TrimSpace(subject) == "" {
+		return fmt.Errorf("email subject cannot be empty")
+	}
+	return nil
+}
+
+func smtpTLSConfig(host string) *tls.Config {
+	config := &tls.Config{ServerName: strings.Trim(host, "[]")}
+	address, err := netip.ParseAddr(strings.Trim(host, "[]"))
+	if err != nil {
+		return config
+	}
+	private := address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast()
+	if address.Is4() {
+		private = private || netip.MustParsePrefix("100.64.0.0/10").Contains(address)
+	}
+	if private {
+		config.InsecureSkipVerify = true
+	}
+	return config
+}
+
+// SMTPTLSVerificationSkipped reports whether the literal relay address uses the
+// PART 17 private-network TLS exception.
+func SMTPTLSVerificationSkipped(host string) bool {
+	return smtpTLSConfig(host).InsecureSkipVerify
+}
+
+func newMessageID(fromAddr string) (string, error) {
+	parsed, err := mail.ParseAddress(fromAddr)
+	if err != nil {
+		return "", fmt.Errorf("parse sender address: %w", err)
+	}
+	_, domain, ok := strings.Cut(parsed.Address, "@")
+	if !ok || domain == "" {
+		return "", fmt.Errorf("sender address has no domain")
+	}
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return "", fmt.Errorf("generate message id: %w", err)
+	}
+	return "<" + hex.EncodeToString(random[:]) + "@" + domain + ">", nil
+}
+
+func buildEmailMessage(fromName, fromAddr, to, subject, body, replyTo string) ([]byte, error) {
+	if err := validateMessageFields(fromName, fromAddr, to, subject, body); err != nil {
+		return nil, err
+	}
+	if strings.ContainsAny(replyTo, "\r\n") {
+		return nil, fmt.Errorf("email reply-to contains a line break")
+	}
+	if replyTo = strings.TrimSpace(replyTo); replyTo != "" {
+		parsed, err := mail.ParseAddress(replyTo)
+		if err != nil || parsed.Address != replyTo {
+			return nil, fmt.Errorf("email reply-to is not a valid addr-spec")
+		}
+	}
+	messageID, err := newMessageID(fromAddr)
+	if err != nil {
+		return nil, err
+	}
+	boundary := "vidveil-" + strings.Trim(messageID, "<>")
+	var message bytes.Buffer
+	writeMessageHeaders(&message, fromName, fromAddr, to, subject, messageID, "multipart/alternative; boundary=\""+boundary+"\"")
+	if replyTo != "" {
+		message.WriteString("Reply-To: " + replyTo + "\r\n")
+	}
+	message.WriteString("\r\n")
+	writeAlternativeBody(&message, boundary, body)
+	return message.Bytes(), nil
+}
+
+func writeMessageHeaders(msg *bytes.Buffer, fromName, fromAddr, to, subject, messageID, contentType string) {
+	from := fromAddr
+	if fromName != "" {
+		from = (&mail.Address{Name: fromName, Address: fromAddr}).String()
+	}
+	fmt.Fprintf(msg, "From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: %s\r\nAuto-Submitted: auto-generated\r\nMIME-Version: 1.0\r\nContent-Type: %s\r\n", from, to, mime.QEncoding.Encode("UTF-8", subject), time.Now().Format("Mon, 02 Jan 2006 15:04:05 -0700"), messageID, contentType)
+}
+
+func writeAlternativeBody(msg *bytes.Buffer, boundary, body string) {
+	fmt.Fprintf(msg, "--%s\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n", boundary)
+	plain := quotedprintable.NewWriter(msg)
+	_, _ = plain.Write([]byte(body + "\r\n"))
+	_ = plain.Close()
+	fmt.Fprintf(msg, "--%s\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n", boundary)
+	htmlBody := "<!doctype html><html><body><pre>" + html.EscapeString(body) + "</pre></body></html>\r\n"
+	encoded := quotedprintable.NewWriter(msg)
+	_, _ = encoded.Write([]byte(htmlBody))
+	_ = encoded.Close()
+	fmt.Fprintf(msg, "--%s--\r\n", boundary)
+}
+
 func (s *EmailService) sendPrepared(to string, message []byte) error {
 	host, port, username, password, fromAddr, _, tlsMode := s.effectiveEmailConfig()
 	if host == "" {
-		if h, p := s.autodetectSMTP(); h != "" {
-			host, port = h, p
-		}
-	}
-	if host == "" {
 		return fmt.Errorf("no SMTP server configured")
 	}
-	addr := net.JoinHostPort(host, strconv.Itoa(port))
-	var auth smtp.Auth
-	if username != "" {
-		auth = smtp.PlainAuth("", username, password, host)
-	}
-	if tlsMode == "" || tlsMode == "auto" {
-		if port == 465 {
-			tlsMode = "tls"
-		} else {
-			tlsMode = "starttls"
-		}
-	}
-	if tlsMode == "tls" {
-		return s.sendTLS(addr, host, auth, fromAddr, to, message)
-	}
-	return smtp.SendMail(addr, auth, fromAddr, []string{to}, message)
+	return s.deliverSMTP(host, port, username, password, fromAddr, to, tlsMode, message)
 }
 
 // SendContact sends a plain-text contact message from the configured server
@@ -355,23 +284,97 @@ func (s *EmailService) SendContact(to, replyTo, subject, body string) error {
 
 // getTemplate returns template content, preferring custom over embedded
 func (s *EmailService) getTemplate(name string) (string, error) {
+	if !validTemplateName(name) {
+		return "", fmt.Errorf("invalid email template name")
+	}
 	// Check for custom template first
 	customPath := filepath.Join(s.templateDir, name+".txt")
 	if data, err := os.ReadFile(customPath); err == nil {
-		return string(data), nil
+		if validationErr := ValidateTemplate(string(data)); validationErr == nil {
+			return string(data), nil
+		} else {
+			log.Printf("WARN invalid custom email template %s: %v; using embedded default", name, validationErr)
+		}
 	}
 
-	// Check embedded templates
-	if data, err := embeddedTemplates.ReadFile("template/" + name + ".txt"); err == nil {
+	if data, err := emailtemplates.Files.ReadFile(name + ".txt"); err == nil {
 		return string(data), nil
-	}
-
-	// Fall back to default templates
-	if tmpl, ok := defaultTemplates[name]; ok {
-		return tmpl, nil
 	}
 
 	return "", fmt.Errorf("template not found: %s", name)
+}
+
+func validTemplateName(name string) bool {
+	return name != "" && name != "." && name != ".." && filepath.Base(name) == name && !strings.ContainsAny(name, "/\\")
+}
+
+var knownTemplateVariables = map[string]struct{}{
+	"app_name": {}, "app_url": {}, "fqdn": {}, "onion_url": {}, "onion_address": {}, "i2p_url": {}, "i2p_address": {},
+	"notification_reply_to": {}, "timestamp": {}, "year": {}, "event": {}, "ip": {}, "details": {}, "filename": {}, "size": {},
+	"error": {}, "domain": {}, "expires_in": {}, "expiry_date": {}, "valid_until": {}, "next_retry": {}, "task_name": {}, "next_run": {}, "hostname": {},
+	"version": {}, "mode": {}, "reason": {}, "path": {}, "used_percent": {}, "free": {}, "threshold_percent": {}, "since": {},
+	"current_version": {}, "new_version": {}, "channel": {}, "previous_version": {}, "tracking_id": {}, "severity": {}, "component": {},
+	"endpoint": {}, "summary": {}, "report_status_url": {},
+}
+
+var templateVariablePattern = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)\}`)
+
+// ValidateTemplate rejects malformed overrides before they replace embedded defaults.
+func ValidateTemplate(content string) error {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	if strings.Contains(content, "\r") {
+		return fmt.Errorf("invalid template syntax: bare carriage return")
+	}
+	parts := strings.SplitN(content, "\n---\n", 2)
+	if len(parts) != 2 || !strings.HasPrefix(strings.TrimSpace(parts[0]), "Subject:") {
+		return fmt.Errorf("invalid template syntax: expected Subject line and --- separator")
+	}
+	if strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(parts[0]), "Subject:")) == "" {
+		return fmt.Errorf("subject cannot be empty")
+	}
+	if strings.TrimSpace(parts[1]) == "" {
+		return fmt.Errorf("body cannot be empty")
+	}
+	for _, match := range templateVariablePattern.FindAllStringSubmatch(content, -1) {
+		if _, ok := knownTemplateVariables[match[1]]; !ok {
+			return fmt.Errorf("unknown variable: {%s}", match[1])
+		}
+	}
+	return nil
+}
+
+// DryRunTemplates validates every built-in template and override, then renders previews.
+func (s *EmailService) DryRunTemplates() ([]TemplatePreview, []error) {
+	previews := make([]TemplatePreview, 0)
+	errors := make([]error, 0)
+	sample := s.getGlobalVars()
+	for key, value := range map[string]string{
+		"ip": "192.168.1.100", "event": "Sample security event", "details": "Sample details", "filename": "backup.tar.gz", "size": "1.2 MB",
+		"domain": "example.com", "expires_in": "7", "expiry_date": "2030-01-01", "valid_until": "2031-01-01", "task_name": "sample_task",
+		"next_run": "2030-01-02T03:04:05Z", "next_retry": "2030-01-02T03:04:05Z", "hostname": "server.example.com", "version": "1.2.3", "mode": "production", "reason": "signal",
+		"path": "/var/lib/vidveil", "used_percent": "86", "free": "14 GB", "threshold_percent": "85", "since": "2030-01-01T00:00:00Z",
+		"current_version": "1.2.2", "new_version": "1.2.3", "channel": "stable", "previous_version": "1.2.2", "tracking_id": "sec_0123456789abcdef",
+		"severity": "medium", "component": "API", "endpoint": "/api/v1/search", "summary": "Sample report", "report_status_url": "https://example.com/status",
+	} {
+		sample[key] = value
+	}
+	for _, name := range s.GetTemplateList() {
+		content, err := os.ReadFile(filepath.Join(s.templateDir, name+".txt"))
+		if err != nil {
+			content, err = emailtemplates.Files.ReadFile(name + ".txt")
+		}
+		if err != nil {
+			errors = append(errors, fmt.Errorf("%s: %w", name, err))
+			continue
+		}
+		if err := ValidateTemplate(string(content)); err != nil {
+			errors = append(errors, fmt.Errorf("%s: %w", name, err))
+			continue
+		}
+		subject, body := s.parseTemplate(string(content))
+		previews = append(previews, TemplatePreview{Name: name, Subject: s.applyVars(s.applyVars(subject, sample), s.getGlobalVars()), Body: s.applyVars(s.applyVars(body, sample), s.getGlobalVars())})
+	}
+	return previews, errors
 }
 
 // parseTemplate extracts subject and body from template
@@ -393,23 +396,11 @@ func (s *EmailService) parseTemplate(template string) (subject, body string) {
 	return
 }
 
-// sanitizeEmailHeader removes CRLF sequences that could enable header injection.
-// Header values must never contain line breaks; message bodies are not passed here.
-func sanitizeEmailHeader(v string) string {
-	return strings.NewReplacer("\r", "", "\n", "").Replace(v)
-}
-
-// sanitizeEmailVar removes CRLF sequences from template variables. Variables
-// may appear in the Subject header as well as the text body, so they use the
-// same header-safe representation.
-func sanitizeEmailVar(v string) string {
-	return sanitizeEmailHeader(v)
-}
-
-// applyVars replaces {var} placeholders with values, sanitizing to prevent header injection
+// applyVars replaces template variables. Header values are rejected at message
+// construction instead of silently changing submitted content.
 func (s *EmailService) applyVars(text string, vars map[string]string) string {
 	for k, v := range vars {
-		text = strings.ReplaceAll(text, "{"+k+"}", sanitizeEmailVar(v))
+		text = strings.ReplaceAll(text, "{"+k+"}", v)
 	}
 	return text
 }
@@ -472,22 +463,12 @@ func (s *EmailService) effectiveEmailConfig() (host string, port int, username, 
 	}
 
 	// SMTP_* env var overrides (PART 17)
-	if v := os.Getenv("SMTP_HOST"); v != "" {
-		host = v
-	}
-	if v := os.Getenv("SMTP_PORT"); v != "" {
-		if p, err := strconv.Atoi(v); err == nil && p > 0 {
-			port = p
-		}
-	}
+	host, port, tlsMode, _ = ResolveSMTPSettings(host, port, tlsMode)
 	if v := os.Getenv("SMTP_USERNAME"); v != "" {
 		username = v
 	}
 	if v := os.Getenv("SMTP_PASSWORD"); v != "" {
 		password = v
-	}
-	if v := os.Getenv("SMTP_TLS"); v != "" {
-		tlsMode = v
 	}
 	if v := os.Getenv("SMTP_FROM_NAME"); v != "" {
 		fromName = v
@@ -499,6 +480,40 @@ func (s *EmailService) effectiveEmailConfig() (host string, port int, username, 
 	return
 }
 
+// ResolveSMTPSettings applies environment overrides and the PART 17 defaults.
+func ResolveSMTPSettings(host string, port int, tlsMode string) (string, int, string, []string) {
+	warnings := make([]string, 0)
+	if value := os.Getenv("SMTP_HOST"); value != "" {
+		host = value
+	}
+	if value := os.Getenv("SMTP_PORT"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 65535 {
+			warnings = append(warnings, "invalid SMTP_PORT; using configured/default port")
+		} else {
+			port = parsed
+		}
+	}
+	if port < 1 || port > 65535 {
+		warnings = append(warnings, "invalid SMTP port; using default 587")
+		port = 587
+	}
+	if value := os.Getenv("SMTP_TLS"); value != "" {
+		tlsMode = value
+	}
+	tlsMode = strings.ToLower(strings.TrimSpace(tlsMode))
+	if tlsMode == "" {
+		tlsMode = "auto"
+	}
+	switch tlsMode {
+	case "auto", "starttls", "tls", "none":
+	default:
+		warnings = append(warnings, "invalid SMTP TLS mode; using auto")
+		tlsMode = "auto"
+	}
+	return strings.TrimSpace(host), port, tlsMode, warnings
+}
+
 // sendEmail sends the actual email via SMTP
 func (s *EmailService) sendEmail(to, subject, body string) error {
 	return s.sendEmailWithReplyTo(to, subject, body, s.appConfig.Server.Notifications.Email.ReplyTo)
@@ -506,120 +521,89 @@ func (s *EmailService) sendEmail(to, subject, body string) error {
 
 func (s *EmailService) sendEmailWithReplyTo(to, subject, body, replyTo string) error {
 	host, port, username, password, fromAddr, fromName, tlsMode := s.effectiveEmailConfig()
-
-	// Try autodetect if host is empty (per AI.md PART 17: autodetect is always enabled)
-	if host == "" {
-		h, p := s.autodetectSMTP()
-		if h != "" {
-			host, port = h, p
-		}
-	}
-
 	if host == "" {
 		return fmt.Errorf("no SMTP server configured")
 	}
 
-	// Build the RFC 5322 From header: "Name <email>" or just "email".
-	// The SMTP envelope sender (MAIL FROM) must stay the bare address.
-	fromHeader := sanitizeEmailHeader(fromAddr)
-	if fromName != "" {
-		fromHeader = fmt.Sprintf("%s <%s>", sanitizeEmailHeader(fromName), fromHeader)
+	msg, err := buildEmailMessage(fromName, fromAddr, to, subject, body, replyTo)
+	if err != nil {
+		return err
 	}
 
-	// Build message. Sanitize every caller/config-derived header value here as
-	// the final defense, including SendRaw subjects that bypass applyVars.
-	var msg bytes.Buffer
-	_, _ = fmt.Fprintf(&msg, "From: %s\r\n", fromHeader)
-	_, _ = fmt.Fprintf(&msg, "To: %s\r\n", sanitizeEmailHeader(to))
-	if replyTo = strings.TrimSpace(replyTo); replyTo != "" {
-		_, _ = fmt.Fprintf(&msg, "Reply-To: %s\r\n", sanitizeEmailHeader(replyTo))
-	}
-	_, _ = fmt.Fprintf(&msg, "Subject: %s\r\n", sanitizeEmailHeader(subject))
-	msg.WriteString("MIME-Version: 1.0\r\n")
-	msg.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
-	msg.WriteString("\r\n")
-	msg.WriteString(body)
+	return s.deliverSMTP(host, port, username, password, fromAddr, to, tlsMode, msg)
+}
 
-	addr := net.JoinHostPort(host, strconv.Itoa(port))
-
-	// Determine auth (uses env-var-resolved username/password)
-	var auth smtp.Auth
-	if username != "" {
-		auth = smtp.PlainAuth("", username, password, host)
-	}
-
-	// Resolve TLS mode per PART 17: auto, starttls, tls, none
+func (s *EmailService) deliverSMTP(host string, port int, username, password, from, to, tlsMode string, message []byte) error {
 	if tlsMode == "" || tlsMode == "auto" {
 		if port == 465 {
 			tlsMode = "tls"
 		} else {
-			tlsMode = "starttls"
+			tlsMode = "auto-starttls"
 		}
 	}
-
+	address := net.JoinHostPort(host, strconv.Itoa(port))
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	var conn net.Conn
+	var err error
 	if tlsMode == "tls" {
-		// Implicit TLS (port 465)
-		return s.sendTLS(addr, host, auth, fromAddr, to, msg.Bytes())
+		conn, err = tls.DialWithDialer(dialer, "tcp", address, smtpTLSConfig(host))
+	} else {
+		conn, err = dialer.Dial("tcp", address)
 	}
-
-	// Standard SMTP with optional STARTTLS (tlsMode == "starttls" or "none")
-	return smtp.SendMail(addr, auth, fromAddr, []string{to}, msg.Bytes())
-}
-
-// sendTLS sends email over implicit TLS
-func (s *EmailService) sendTLS(addr, host string, auth smtp.Auth, from, to string, msg []byte) error {
-	tlsConfig := &tls.Config{
-		ServerName: host,
-	}
-
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = conn.Close() }()
-
+	tlsEstablished := tlsMode == "tls"
+	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = client.Close() }()
-
-	if auth != nil {
-		if err := client.Auth(auth); err != nil {
+	if tlsMode == "starttls" || tlsMode == "auto-starttls" {
+		if ok, _ := client.Extension("STARTTLS"); !ok && tlsMode == "starttls" {
+			return fmt.Errorf("SMTP server does not offer required STARTTLS")
+		} else if ok {
+			if err := client.StartTLS(smtpTLSConfig(host)); err != nil {
+				return err
+			}
+			tlsEstablished = true
+		}
+	}
+	if username != "" {
+		if !tlsEstablished {
+			return fmt.Errorf("SMTP authentication requires an established TLS connection")
+		}
+		if err := client.Auth(smtp.PlainAuth("", username, password, host)); err != nil {
 			return err
 		}
 	}
-
 	if err := client.Mail(from); err != nil {
 		return err
 	}
-
 	if err := client.Rcpt(to); err != nil {
 		return err
 	}
-
-	w, err := client.Data()
+	writer, err := client.Data()
 	if err != nil {
 		return err
 	}
-
-	_, err = w.Write(msg)
-	if err != nil {
+	if _, err := writer.Write(message); err != nil {
+		_ = writer.Close()
 		return err
 	}
-
-	err = w.Close()
-	if err != nil {
+	if err := writer.Close(); err != nil {
 		return err
 	}
-
 	return client.Quit()
 }
 
+// sendTLS sends email over implicit TLS
 // buildSMTPAutodetectHosts builds the SMTP autodetect host list per AI.md PART 17 priority order:
 // 1: 127.0.0.1, 2: Docker bridge 172.17.0.1, 3: default gateway, 4: FQDN,
 // 5: global IPv4, 6: mail.{fqdn}, 7: smtp.{fqdn}.
-func buildSMTPAutodetectHosts(fqdn string) []string {
+func SMTPAutodetectHosts(fqdn string) []string {
 	hosts := []string{"127.0.0.1", "172.17.0.1"}
 	if gw := getGatewayIP(); gw != "" {
 		hosts = append(hosts, gw)
@@ -640,13 +624,6 @@ func buildSMTPAutodetectHosts(fqdn string) []string {
 	return hosts
 }
 
-// autodetectSMTP tries to find an SMTP server per AI.md PART 17.
-// Hosts are always built from the spec priority list; ports are always {25, 465, 587}.
-func (s *EmailService) autodetectSMTP() (string, int) {
-	hosts := buildSMTPAutodetectHosts(s.appConfig.Server.FQDN)
-	return AutodetectSMTP(hosts, nil)
-}
-
 // AutodetectSMTP tries to find an SMTP server per AI.md PART 17
 // It performs actual SMTP EHLO handshake (not just TCP connect)
 // Returns host, port on success; empty string, 0 on failure
@@ -654,15 +631,12 @@ func AutodetectSMTP(customHosts []string, customPorts []int) (string, int) {
 	hosts := customHosts
 	if len(hosts) == 0 {
 		// Per AI.md PART 17: full priority list (no FQDN available here)
-		hosts = []string{"127.0.0.1", "172.17.0.1"}
-		if gw := getGatewayIP(); gw != "" {
-			hosts = append(hosts, gw)
-		}
+		hosts = SMTPAutodetectHosts("")
 	}
 
 	ports := customPorts
 	if len(ports) == 0 {
-		ports = []int{25, 587, 465}
+		ports = []int{25, 465, 587}
 	}
 
 	for _, host := range hosts {
@@ -678,6 +652,17 @@ func AutodetectSMTP(customHosts []string, customPorts []int) (string, int) {
 
 // testSMTPConnection tests an SMTP server with EHLO handshake per AI.md PART 17
 func testSMTPConnection(host string, port int) bool {
+	return testSMTPConnectionMode(host, port, "auto")
+}
+
+func testSMTPConnectionMode(host string, port int, tlsMode string) bool {
+	if tlsMode == "" || tlsMode == "auto" {
+		if port == 465 {
+			tlsMode = "tls"
+		} else {
+			tlsMode = "auto-starttls"
+		}
+	}
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
 
 	// Connect with timeout
@@ -693,12 +678,8 @@ func testSMTPConnection(host string, port int) bool {
 	}
 
 	// For port 465 (SMTPS), wrap in TLS first
-	if port == 465 {
-		tlsConn := tls.Client(conn, &tls.Config{
-			ServerName: host,
-			// Allow self-signed for local servers
-			InsecureSkipVerify: true,
-		})
+	if tlsMode == "tls" {
+		tlsConn := tls.Client(conn, smtpTLSConfig(host))
 		if err := tlsConn.Handshake(); err != nil {
 			return false
 		}
@@ -716,6 +697,15 @@ func testSMTPConnection(host string, port int) bool {
 	if err := client.Hello("localhost"); err != nil {
 		return false
 	}
+	if tlsMode == "starttls" || tlsMode == "auto-starttls" {
+		if ok, _ := client.Extension("STARTTLS"); !ok && tlsMode == "starttls" {
+			return false
+		} else if ok {
+			if err := client.StartTLS(smtpTLSConfig(host)); err != nil {
+				return false
+			}
+		}
+	}
 
 	return true
 }
@@ -723,10 +713,16 @@ func testSMTPConnection(host string, port int) bool {
 // TestSMTPConfig tests a specific SMTP configuration per AI.md PART 17
 // Returns nil on success, error on failure
 func TestSMTPConfig(host string, port int) error {
+	return TestSMTPConfigMode(host, port, "auto")
+}
+
+// TestSMTPConfigMode verifies the greeting and configured TLS requirements.
+func TestSMTPConfigMode(host string, port int, tlsMode string) error {
 	if host == "" {
 		return fmt.Errorf("no SMTP host configured")
 	}
-	if !testSMTPConnection(host, port) {
+	host, port, tlsMode, _ = ResolveSMTPSettings(host, port, tlsMode)
+	if !testSMTPConnectionMode(host, port, tlsMode) {
 		return fmt.Errorf("SMTP connection failed to %s:%d", host, port)
 	}
 	return nil
@@ -753,15 +749,22 @@ func getGatewayIP() string {
 
 // SendTest sends a test email
 func (s *EmailService) SendTest(to string) error {
-	return s.Send("test", to, nil)
+	if !s.appConfig.Server.Notifications.Email.Enabled {
+		return fmt.Errorf("email is not enabled")
+	}
+	template, err := s.getTemplate("test")
+	if err != nil {
+		return err
+	}
+	subject, body := s.parseTemplate(template)
+	vars := s.getGlobalVars()
+	return s.sendEmail(to, "[TEST] "+s.applyVars(subject, vars), s.applyVars(body, vars))
 }
 
 // GetTemplateList returns list of available templates
 func (s *EmailService) GetTemplateList() []string {
-	templates := make([]string, 0, len(defaultTemplates))
-	for name := range defaultTemplates {
-		templates = append(templates, name)
-	}
+	templates := emailtemplates.Names()
+	sort.Strings(templates)
 	return templates
 }
 
@@ -772,15 +775,25 @@ func (s *EmailService) GetTemplate(name string) (string, error) {
 
 // SaveTemplate saves a custom template
 func (s *EmailService) SaveTemplate(name, content string) error {
+	if !validTemplateName(name) {
+		return fmt.Errorf("invalid email template name")
+	}
+	if err := ValidateTemplate(content); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(s.templateDir, 0755); err != nil {
 		return err
 	}
 	path := filepath.Join(s.templateDir, name+".txt")
+	content = strings.TrimRight(content, "\r\n") + "\n"
 	return os.WriteFile(path, []byte(content), 0644)
 }
 
 // ResetTemplate deletes a custom template (falls back to default)
 func (s *EmailService) ResetTemplate(name string) error {
+	if !validTemplateName(name) {
+		return fmt.Errorf("invalid email template name")
+	}
 	path := filepath.Join(s.templateDir, name+".txt")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil
@@ -790,6 +803,9 @@ func (s *EmailService) ResetTemplate(name string) error {
 
 // IsCustomTemplate checks if a template is customized
 func (s *EmailService) IsCustomTemplate(name string) bool {
+	if !validTemplateName(name) {
+		return false
+	}
 	path := filepath.Join(s.templateDir, name+".txt")
 	_, err := os.Stat(path)
 	return err == nil

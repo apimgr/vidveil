@@ -12,7 +12,6 @@ import (
 	"crypto/hmac"
 	cryptoRand "crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -33,14 +32,15 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
 	projectpath "github.com/apimgr/vidveil/src/paths"
+	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/pgp"
 	"golang.org/x/crypto/argon2"
 	"gopkg.in/yaml.v3"
-	_ "modernc.org/sqlite"
 )
 
 var maintenanceOperationMu sync.Mutex
@@ -50,10 +50,12 @@ var ErrBackupPasswordWhitespace = errors.New("backup password must not start or 
 
 // MaintenanceManager handles maintenance operations
 type MaintenanceManager struct {
-	paths      *config.AppPaths
-	version    string
-	buildEpoch int64
-	limits     RestoreLimits
+	paths         *config.AppPaths
+	version       string
+	buildEpoch    int64
+	limits        RestoreLimits
+	diskThreshold int
+	diskSpaceFn   func(string) (uint64, uint64, error)
 	// logger is optional — when nil, audit events per AI.md PART 21 "Audit Events"
 	// are silently skipped. Set via SetLogger once a logger is available.
 	logger *logging.AppLogger
@@ -211,10 +213,26 @@ type BackupTestResult struct {
 // NewMaintenanceManager creates a new maintenance manager
 func NewMaintenanceManager(configDir, dataDir, version string) *MaintenanceManager {
 	return &MaintenanceManager{
-		paths:   config.GetAppPaths(configDir, dataDir),
-		version: version,
-		limits:  DefaultRestoreLimits(),
+		paths:         config.GetAppPaths(configDir, dataDir),
+		version:       version,
+		limits:        DefaultRestoreLimits(),
+		diskThreshold: 90,
+		diskSpaceFn:   diskSpace,
 	}
+}
+
+// SetDiskThreshold configures the backup disk-usage limit as a percentage.
+func (m *MaintenanceManager) SetDiskThreshold(percent int) {
+	if percent >= 1 && percent <= 99 {
+		m.diskThreshold = percent
+	}
+}
+
+func (m *MaintenanceManager) diskSpaceForPath(path string) (uint64, uint64, error) {
+	if m.diskSpaceFn != nil {
+		return m.diskSpaceFn(path)
+	}
+	return diskSpace(path)
 }
 
 // Backup creates a backup of configuration and data (simple version)
@@ -312,19 +330,17 @@ func (m *MaintenanceManager) snapshotDatabase() (*backupSnapshot, error) {
 		return nil, err
 	}
 	databasePath := filepath.Join(temporary, "server.db")
-	db, err := sql.Open("sqlite", source+"?_busy_timeout=5000")
+	db, err := database.NewAppDatabase(database.DatabaseConfig{Driver: database.DriverSQLite, Path: source})
 	if err != nil {
 		_ = os.RemoveAll(temporary)
 		return nil, err
 	}
+	defer func() { _ = db.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	statement := "VACUUM INTO '" + strings.ReplaceAll(databasePath, "'", "''") + "'"
-	_, execErr := db.ExecContext(ctx, statement)
-	closeErr := db.Close()
-	if execErr != nil || closeErr != nil {
+	if err := db.VacuumInto(ctx, databasePath); err != nil {
 		_ = os.RemoveAll(temporary)
-		return nil, errors.Join(execErr, closeErr)
+		return nil, err
 	}
 	if err := os.Chmod(databasePath, 0600); err != nil {
 		_ = os.RemoveAll(temporary)
@@ -499,7 +515,10 @@ func validBackupKeyID(value []byte) bool {
 		return false
 	}
 	for _, char := range value {
-		if !(char >= '0' && char <= '9') && !(char >= 'a' && char <= 'f') {
+		switch {
+		case char >= '0' && char <= '9':
+		case char >= 'a' && char <= 'f':
+		default:
 			return false
 		}
 	}
@@ -540,12 +559,12 @@ func (m *MaintenanceManager) latestFullManifest(password string) (BackupInfo, *B
 	return BackupInfo{}, nil, os.ErrNotExist
 }
 
-func parseBackupManifest(archiveData []byte) (BackupManifest, error) {
+func parseBackupManifest(archiveData []byte) (manifest BackupManifest, retErr error) {
 	reader, err := gzip.NewReader(bytes.NewReader(archiveData))
 	if err != nil {
 		return BackupManifest{}, err
 	}
-	defer reader.Close()
+	defer func() { retErr = errors.Join(retErr, reader.Close()) }()
 	tr := tar.NewReader(reader)
 	for {
 		header, err := tr.Next()
@@ -736,10 +755,10 @@ func (m *MaintenanceManager) backupWithDatabaseSnapshot(opts BackupOptions, appl
 	}
 
 	// Disk-space precheck per AI.md PART 21: abort (do NOT create the backup) if
-	// free space < 2x the most recent existing backup, or disk usage > 90%.
+	// free space is insufficient or configured disk usage threshold is exceeded.
 	if err := m.checkDiskSpace(backupDir); err != nil {
 		fmt.Printf("backup.skipped_disk_full: %v\n", err)
-		total, free, _ := diskSpace(backupDir)
+		total, free, _ := m.diskSpaceForPath(backupDir)
 		usagePct := 0.0
 		if total > 0 {
 			usagePct = float64(total-free) / float64(total) * 100
@@ -747,7 +766,7 @@ func (m *MaintenanceManager) backupWithDatabaseSnapshot(opts BackupOptions, appl
 		m.audit("backup.skipped_disk_full", "failure", map[string]interface{}{
 			"free_bytes": free,
 			"disk_usage": fmt.Sprintf("%.1f%%", usagePct),
-			"threshold":  "90%",
+			"threshold":  fmt.Sprintf("%d%%", m.diskThreshold),
 			"reason":     err.Error(),
 		})
 		return err
@@ -1105,7 +1124,7 @@ func directoryRegularFileBytes(root string) (int64, error) {
 }
 
 func (m *MaintenanceManager) checkDiskSpace(backupDir string) error {
-	total, free, err := diskSpace(backupDir)
+	total, free, err := m.diskSpaceForPath(backupDir)
 	if err != nil {
 		// Can't determine disk space (e.g. unsupported platform) - don't block the backup.
 		return nil
@@ -1113,8 +1132,8 @@ func (m *MaintenanceManager) checkDiskSpace(backupDir string) error {
 
 	if total > 0 {
 		used := total - free
-		if float64(used)/float64(total) > 0.90 {
-			return fmt.Errorf("disk usage exceeds 90%% threshold, aborting backup")
+		if float64(used)/float64(total) > float64(m.diskThreshold)/100 {
+			return fmt.Errorf("disk usage exceeds %d%% threshold, aborting backup", m.diskThreshold)
 		}
 	}
 
@@ -1483,12 +1502,18 @@ func (m *MaintenanceManager) TestBackup(backupFile, password string) (result Bac
 	if err := verifySQLiteIntegrity(databaseBytes); err != nil {
 		return result, fmt.Errorf("verify backed up database: %w", err)
 	}
-	db, err := sql.Open("sqlite", databasePath+"?mode=ro")
+	db, err := database.OpenReadOnlySQLite(databasePath)
 	if err != nil {
 		return result, fmt.Errorf("open backed up database: %w", err)
 	}
-	defer db.Close()
-	if err := db.Ping(); err != nil {
+	defer func() {
+		if err := db.Close(); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close verified backup database: %w", err))
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), database.TimeoutSimpleSelect)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
 		return result, fmt.Errorf("verify backed up database: %w", err)
 	}
 	result.DatabaseVerified = true
@@ -1496,7 +1521,9 @@ func (m *MaintenanceManager) TestBackup(backupFile, password string) (result Bac
 		return result, fmt.Errorf("backup is missing the PGP keypair")
 	}
 	encodedSecret := ""
-	if err := db.QueryRow("SELECT value FROM app_secrets WHERE key = ?", "installation_secret").Scan(&encodedSecret); err != nil {
+	if err := db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+		return readDB.QueryRowContext(readCtx, "SELECT value FROM app_secrets WHERE key = ?", "installation_secret").Scan(&encodedSecret)
+	}); err != nil {
 		return result, fmt.Errorf("read installation_secret from backed up database: %w", err)
 	}
 	installationSecret, err := base64.StdEncoding.DecodeString(encodedSecret)
@@ -2547,106 +2574,244 @@ func (m *MaintenanceManager) ApplyUpdateContext(parent context.Context, download
 	return m.applyUpdate(ctx, downloadURL)
 }
 
-func (m *MaintenanceManager) applyUpdate(ctx context.Context, downloadURL string) (retErr error) {
-	if downloadURL == "" {
-		info, err := m.checkUpdate(ctx)
-		if err != nil {
-			return err
-		}
-		if info == nil || !info.UpdateAvailable {
-			fmt.Println(terminal.StatusIcon(true) + " Already up to date")
-			return nil
-		}
-		if info.DownloadURL == "" {
-			return fmt.Errorf("no download available for %s/%s", runtime.GOOS, runtime.GOARCH)
-		}
-		downloadURL = info.DownloadURL
-	}
+type stagedUpdateMetadata struct {
+	Version string `json:"version"`
+}
 
-	// Download new binary
+// StageUpdateContext downloads and verifies a release into {data_dir}/update.
+// The privileged startup path independently resolves the release and verifies
+// the staged bytes again before replacing the installed executable.
+func (m *MaintenanceManager) StageUpdateContext(parent context.Context, version, downloadURL string) error {
+	ctx, cancel := updateContext(parent)
+	defer cancel()
+	version = strings.TrimSpace(strings.TrimPrefix(version, "v"))
+	if !validStagedUpdateVersion(version) || downloadURL == "" || !strings.HasPrefix(downloadURL, "https://") {
+		return fmt.Errorf("invalid staged update release metadata")
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 	if err != nil {
-		return fmt.Errorf("create update download request: %w", err)
+		return fmt.Errorf("create staged update request: %w", err)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to download update: %w", err)
+		return fmt.Errorf("download staged update: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
+	data, readErr := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil {
+		return errors.Join(fmt.Errorf("read staged update: %w", readErr), closeErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close staged update response: %w", closeErr)
+	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed with status %d", resp.StatusCode)
+		return fmt.Errorf("staged update download returned status %d", resp.StatusCode)
 	}
-
-	// Read into memory so we can verify checksum before touching the filesystem
-	binaryData, err := io.ReadAll(resp.Body)
+	if len(data) == 0 {
+		return fmt.Errorf("staged update binary is empty")
+	}
+	if err := verifyUpdateChecksumContext(ctx, downloadURL, data); err != nil {
+		return fmt.Errorf("staged update checksum verification failed: %w", err)
+	}
+	updateDir := filepath.Join(m.paths.Data, "update")
+	if err := os.MkdirAll(updateDir, 0700); err != nil {
+		return fmt.Errorf("create staged update directory: %w", err)
+	}
+	if err := os.Chmod(updateDir, 0700); err != nil {
+		return fmt.Errorf("secure staged update directory: %w", err)
+	}
+	if err := writeUpdateFileAtomic(filepath.Join(updateDir, "vidveil.new"), data, 0755); err != nil {
+		return err
+	}
+	metadata, err := json.Marshal(stagedUpdateMetadata{Version: version})
 	if err != nil {
-		return fmt.Errorf("failed to read update body: %w", err)
+		return fmt.Errorf("encode staged update metadata: %w", err)
 	}
-
-	// Per AI.md PART 22 step 3: verify SHA-256 checksum before replacing binary
-	if err := verifyUpdateChecksumContext(ctx, downloadURL, binaryData); err != nil {
-		return fmt.Errorf("update checksum verification failed: %w", err)
+	if err := writeUpdateFileAtomic(filepath.Join(updateDir, "version.json"), metadata, 0600); err != nil {
+		return err
 	}
+	m.audit("update.staged", "success", map[string]interface{}{"version": version})
+	return nil
+}
 
-	// Get current executable path
-	execPath, err := os.Executable()
+// RecordUpdateSkipped stores only the version and reason, as required for an
+// auto-update that cannot run with the process's original privileges.
+func (m *MaintenanceManager) RecordUpdateSkipped(version, reason string) {
+	m.audit("update.install_skipped", "success", map[string]interface{}{"version": version, "reason": reason})
+}
+
+func validStagedUpdateVersion(version string) bool {
+	if version == "" || strings.ContainsAny(version, `/\\`) || strings.ContainsRune(version, 0) {
+		return false
+	}
+	for _, r := range version {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '.', r == '-', r == '+':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// FailStagedUpdate removes untrusted staged files after a failed privileged
+// verification and records the failed version without exposing file contents.
+func (m *MaintenanceManager) FailStagedUpdate(cause error) error {
+	updateDir := filepath.Join(m.paths.Data, "update")
+	metadata, readErr := os.ReadFile(filepath.Join(updateDir, "version.json"))
+	var staged stagedUpdateMetadata
+	if readErr == nil {
+		if err := json.Unmarshal(metadata, &staged); err != nil {
+			readErr = fmt.Errorf("decode failed staged update metadata: %w", err)
+		}
+	}
+	removeErr := os.RemoveAll(updateDir)
+	if cause != nil {
+		m.audit("update.failed", "failure", map[string]interface{}{"version": staged.Version})
+	}
+	return errors.Join(readErrUnlessAbsent(readErr), removeErr)
+}
+
+func readErrUnlessAbsent(err error) error {
+	if os.IsNotExist(err) {
+		return nil
+	}
 	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
+		return fmt.Errorf("read failed staged update metadata: %w", err)
 	}
+	return nil
+}
 
-	// Create temp file for download
-	tempOrgDir := filepath.Join(os.TempDir(), projectpath.ProjectOrg)
-	if err := os.MkdirAll(tempOrgDir, 0755); err != nil {
-		return fmt.Errorf("failed to create temp base dir: %w", err)
+// ApplyStagedUpdateContext runs only during startup of a process that was
+// originally elevated. It resolves the recorded release from GitHub again and
+// verifies the staged binary against that release's official checksum asset.
+func (m *MaintenanceManager) ApplyStagedUpdateContext(parent context.Context) error {
+	updateDir := filepath.Join(m.paths.Data, "update")
+	metadataPath := filepath.Join(updateDir, "version.json")
+	metadataData, err := os.ReadFile(metadataPath)
+	if os.IsNotExist(err) {
+		return nil
 	}
-	tmpFile, err := os.CreateTemp(tempOrgDir, projectpath.ProjectName+"-")
 	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
+		return fmt.Errorf("read staged update metadata: %w", err)
 	}
-	tmpPath := tmpFile.Name()
+	var metadata stagedUpdateMetadata
+	if err := json.Unmarshal(metadataData, &metadata); err != nil || !validStagedUpdateVersion(metadata.Version) {
+		return fmt.Errorf("staged update metadata is invalid")
+	}
+	ctx, cancel := updateContext(parent)
+	defer cancel()
+	releases, err := m.fetchAllReleasesContext(ctx)
+	if err != nil {
+		return fmt.Errorf("re-fetch staged release metadata: %w", err)
+	}
+	var release *GitHubRelease
+	for i := range releases {
+		if strings.TrimPrefix(releases[i].TagName, "v") == metadata.Version {
+			release = &releases[i]
+			break
+		}
+	}
+	if release == nil {
+		return fmt.Errorf("staged release %q is no longer available", metadata.Version)
+	}
+	if strings.EqualFold(metadata.Version, "devel") {
+		if release.PublishedAt.Unix() <= m.buildEpoch {
+			return fmt.Errorf("staged devel release is not newer than running build")
+		}
+	} else if compareVersions(metadata.Version, strings.TrimPrefix(m.version, "v")) <= 0 {
+		return fmt.Errorf("staged release %q is not newer than running version %q", metadata.Version, m.version)
+	}
+	assetName := fmt.Sprintf("vidveil_%s_%s", runtime.GOOS, runtime.GOARCH)
+	var downloadURL string
+	for _, asset := range release.Assets {
+		if asset.Name == assetName || asset.Name == assetName+".exe" {
+			downloadURL = asset.BrowserDownloadURL
+			break
+		}
+	}
+	if downloadURL == "" {
+		return fmt.Errorf("official release has no binary for %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+	stagedPath := filepath.Join(updateDir, "vidveil.new")
+	data, err := os.ReadFile(stagedPath)
+	if err != nil {
+		return fmt.Errorf("read staged update binary: %w", err)
+	}
+	if err := verifyUpdateChecksumContext(ctx, downloadURL, data); err != nil {
+		return fmt.Errorf("root-phase staged update verification failed: %w", err)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve running executable: %w", err)
+	}
+	executable, err = filepath.EvalSymlinks(executable)
+	if err != nil {
+		return fmt.Errorf("resolve running executable symlink: %w", err)
+	}
+	if err := replaceRunningBinary(executable, stagedPath, data); err != nil {
+		return fmt.Errorf("replace executable with staged update: %w", err)
+	}
+	if err := os.RemoveAll(updateDir); err != nil {
+		return fmt.Errorf("remove applied staged update: %w", err)
+	}
+	return restartUpdatedExecutable(executable)
+}
+
+func writeUpdateFileAtomic(path string, data []byte, mode os.FileMode) (retErr error) {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".update-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create staged update file: %w", err)
+	}
+	tmpPath := tmp.Name()
 	defer func() {
 		if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
-			retErr = errors.Join(retErr, fmt.Errorf("remove temporary update file: %w", err))
+			retErr = errors.Join(retErr, fmt.Errorf("remove staged update temporary file: %w", err))
 		}
 	}()
-
-	// Write verified binary to temp file
-	if _, err = tmpFile.Write(binaryData); err != nil {
-		return errors.Join(fmt.Errorf("failed to write update: %w", err), tmpFile.Close())
+	if err := tmp.Chmod(mode); err != nil {
+		return errors.Join(fmt.Errorf("set staged update permissions: %w", err), tmp.Close())
 	}
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("failed to close downloaded update: %w", err)
+	if _, err := tmp.Write(data); err != nil {
+		return errors.Join(fmt.Errorf("write staged update: %w", err), tmp.Close())
 	}
-
-	// Make executable
-	if err := os.Chmod(tmpPath, 0755); err != nil {
-		return fmt.Errorf("failed to set permissions: %w", err)
+	if err := tmp.Sync(); err != nil {
+		return errors.Join(fmt.Errorf("sync staged update: %w", err), tmp.Close())
 	}
-
-	// Backup current binary
-	backupPath := execPath + ".bak"
-	if err := os.Rename(execPath, backupPath); err != nil {
-		return fmt.Errorf("failed to backup current binary: %w", err)
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close staged update: %w", err)
 	}
-
-	// Move new binary — atomic replace
-	if err := os.Rename(tmpPath, execPath); err != nil {
-		// Try to restore backup
-		if restoreErr := os.Rename(backupPath, execPath); restoreErr != nil {
-			return errors.Join(fmt.Errorf("failed to install update: %w", err), fmt.Errorf("failed to restore backup: %w", restoreErr))
-		}
-		return fmt.Errorf("failed to install update: %w", err)
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("install staged update file: %w", err)
 	}
-
-	// Remove backup
-	if err := os.Remove(backupPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("update installed but failed to remove backup: %w", err)
-	}
-
-	fmt.Println(terminal.StatusIcon(true) + " Update applied successfully")
-	fmt.Println("   Please restart the service to use the new version")
 	return nil
+}
+
+func (m *MaintenanceManager) applyUpdate(ctx context.Context, downloadURL string) error {
+	info, err := m.checkUpdate(ctx)
+	if err != nil {
+		return err
+	}
+	if info == nil || !info.UpdateAvailable {
+		fmt.Println(terminal.StatusIcon(true) + " Already up to date")
+		return nil
+	}
+	if info.DownloadURL == "" {
+		return fmt.Errorf("no download available for %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+	if downloadURL != "" && downloadURL != info.DownloadURL {
+		return fmt.Errorf("refusing update URL that does not match the selected official release")
+	}
+	if runtime.GOOS == "windows" {
+		return fmt.Errorf("automatic in-place update is unsupported for Windows services")
+	}
+	if err := m.StageUpdateContext(ctx, info.LatestVersion, info.DownloadURL); err != nil {
+		return err
+	}
+	return m.ApplyStagedUpdateContext(ctx)
 }
 
 // SetMaintenanceMode enables or disables maintenance mode

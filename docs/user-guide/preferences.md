@@ -47,9 +47,13 @@ Manage owner tokens at `/server/preferences/tokens`. If this browser has no
 primary owner token, issue a new one from the page; the token is shown once, so
 save it securely. To recover an existing owner on another browser, restore its
 primary token instead. Create a linked token for each automation or
-MCP client so it can be revoked independently. The primary token is required
-for token management; do not use it as an automation credential. The page
-supports revealing and rotating the primary or linked tokens, renaming,
+MCP client so it can be revoked independently. Choose `read` for resource reads
+or `read-write` (the default) when the client must change favorites. A `read`
+token cannot perform writes. Linked tokens can expire after 7, 30, or 90 days,
+after one year, on a UTC calendar date, or never. Their scope is fixed at
+creation; revoke and replace a token to change it. The primary token is
+required for token management; do not use it as an automation credential. The
+page supports revealing and rotating the primary or linked tokens, renaming,
 expiry changes, revocation, and forgetting the saved token in this browser.
 Forgetting the browser's saved token does not delete its favorites. The page
 works without JavaScript.

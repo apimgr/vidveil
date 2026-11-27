@@ -17,9 +17,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/paths"
+	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/system"
 )
@@ -77,7 +79,7 @@ func exportData(args []string, configDir, dataDir string) error {
 		return fmt.Errorf("open database: %w", err)
 	}
 	defer func() { _ = mgr.Close() }()
-	db := mgr.GetDB()
+	db := mgr.GetAppDatabase()
 	ownerID, err := resolveOwnerID(db, ownerPrefix)
 	if err != nil {
 		return err
@@ -91,7 +93,9 @@ func exportData(args []string, configDir, dataDir string) error {
 	}
 
 	var createdAt, lastSeenAt int64
-	if err := db.QueryRow(`SELECT created_at, last_seen_at FROM owners WHERE id = ?`, ownerID).Scan(&createdAt, &lastSeenAt); err != nil {
+	if err := db.Read(context.Background(), func(ctx context.Context, readDB dbstore.Reader) error {
+		return readDB.QueryRowContext(ctx, `SELECT created_at, last_seen_at FROM owners WHERE id = ?`, ownerID).Scan(&createdAt, &lastSeenAt)
+	}); err != nil {
 		return fmt.Errorf("read owner metadata: %w", err)
 	}
 	tokens, err := readOwnerTokens(db, ownerID)
@@ -159,28 +163,33 @@ func authorizeDataExport(configDir, dataDir string, stdoutOutput bool) error {
 	return authorizeSensitiveOperation(configDir, dataDir)
 }
 
-func resolveOwnerID(db *sql.DB, prefix string) (string, error) {
+func resolveOwnerID(db *database.AppDatabase, prefix string) (string, error) {
 	if strings.TrimSpace(prefix) != prefix || len(prefix) < 4 || len(prefix) > 64 {
 		return "", fmt.Errorf("owner token prefix must be 4 to 64 characters with no surrounding whitespace")
 	}
-	rows, err := db.Query(`SELECT DISTINCT owner_id FROM api_tokens WHERE owner_id IS NOT NULL AND substr(token_prefix, 1, length(?)) = ?`, prefix, prefix)
-	if err != nil {
-		return "", fmt.Errorf("find owner by token prefix: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
 	var ownerID string
-	for rows.Next() {
-		var candidate string
-		if err := rows.Scan(&candidate); err != nil {
-			return "", fmt.Errorf("read owner prefix match: %w", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+		rows, err := readDB.QueryContext(readCtx, `SELECT DISTINCT owner_id FROM api_tokens WHERE owner_id IS NOT NULL AND substr(token_prefix, 1, length(?)) = ?`, prefix, prefix)
+		if err != nil {
+			return fmt.Errorf("find owner by token prefix: %w", err)
 		}
-		if ownerID != "" && ownerID != candidate {
-			return "", fmt.Errorf("owner token prefix %q is ambiguous", prefix)
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var candidate string
+			if err := rows.Scan(&candidate); err != nil {
+				return fmt.Errorf("read owner prefix match: %w", err)
+			}
+			if ownerID != "" && ownerID != candidate {
+				return fmt.Errorf("owner token prefix %q is ambiguous", prefix)
+			}
+			ownerID = candidate
 		}
-		ownerID = candidate
-	}
-	if err := rows.Err(); err != nil {
-		return "", fmt.Errorf("read owner prefix matches: %w", err)
+		return rows.Err()
+	})
+	if err != nil {
+		return "", err
 	}
 	if ownerID == "" {
 		return "", fmt.Errorf("no owner matches token prefix %q", prefix)
@@ -188,38 +197,40 @@ func resolveOwnerID(db *sql.DB, prefix string) (string, error) {
 	return ownerID, nil
 }
 
-func readOwnerTokens(db *sql.DB, ownerID string) ([]map[string]any, error) {
-	rows, err := db.Query(`SELECT token_prefix, kind, COALESCE(name, ''), created_at, last_used_at, expires_at, revoked_at FROM api_tokens WHERE owner_id = ? ORDER BY created_at, id`, ownerID)
-	if err != nil {
-		return nil, fmt.Errorf("read owner token metadata: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
+func readOwnerTokens(db *database.AppDatabase, ownerID string) ([]map[string]any, error) {
 	tokens := make([]map[string]any, 0)
-	for rows.Next() {
-		var prefix, kind, name string
-		var created int64
-		var lastUsed, expires, revoked sql.NullInt64
-		if err := rows.Scan(&prefix, &kind, &name, &created, &lastUsed, &expires, &revoked); err != nil {
-			return nil, fmt.Errorf("scan owner token metadata: %w", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+		rows, err := readDB.QueryContext(readCtx, `SELECT token_prefix, kind, COALESCE(name, ''), created_at, last_used_at, expires_at, revoked_at FROM api_tokens WHERE owner_id = ? ORDER BY created_at, id`, ownerID)
+		if err != nil {
+			return fmt.Errorf("read owner token metadata: %w", err)
 		}
-		status := "active"
-		if revoked.Valid {
-			status = "revoked"
-		} else if expires.Valid && expires.Int64 <= time.Now().Unix() {
-			status = "expired"
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var prefix, kind, name string
+			var created int64
+			var lastUsed, expires, revoked sql.NullInt64
+			if err := rows.Scan(&prefix, &kind, &name, &created, &lastUsed, &expires, &revoked); err != nil {
+				return fmt.Errorf("scan owner token metadata: %w", err)
+			}
+			status := "active"
+			if revoked.Valid {
+				status = "revoked"
+			} else if expires.Valid && expires.Int64 <= time.Now().Unix() {
+				status = "expired"
+			}
+			tokens = append(tokens, map[string]any{
+				"prefix": prefix, "kind": kind, "name": name, "created_at": created,
+				"last_used_at": nullableInt64(lastUsed), "expires_at": nullableInt64(expires), "status": status,
+			})
 		}
-		tokens = append(tokens, map[string]any{
-			"prefix": prefix, "kind": kind, "name": name, "created_at": created,
-			"last_used_at": nullableInt64(lastUsed), "expires_at": nullableInt64(expires), "status": status,
-		})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read owner token metadata: %w", err)
-	}
-	return tokens, nil
+		return rows.Err()
+	})
+	return tokens, err
 }
 
-func readOwnerFavorites(db *sql.DB, ownerID string) ([]map[string]any, error) {
+func readOwnerFavorites(db *database.AppDatabase, ownerID string) ([]map[string]any, error) {
 	return readTableForExport(db, "favorites", ownerID)
 }
 
@@ -232,7 +243,7 @@ func nullableInt64(value sql.NullInt64) any {
 
 // readTableForExport uses a fixed query per table and decodes each row into a
 // map keyed by column name. Secret material is excluded by the query itself.
-func readTableForExport(db *sql.DB, table, ownerID string) (out []map[string]any, err error) {
+func readTableForExport(db *database.AppDatabase, table, ownerID string) (out []map[string]any, err error) {
 	query, ok := exportTableQuery(table)
 	if !ok {
 		return nil, fmt.Errorf("table %q is not exportable", table)
@@ -240,37 +251,39 @@ func readTableForExport(db *sql.DB, table, ownerID string) (out []map[string]any
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	rows, err := db.QueryContext(ctx, query, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if closeErr := rows.Close(); err == nil && closeErr != nil {
-			err = closeErr
+	err = db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+		rows, err := readDB.QueryContext(readCtx, query, ownerID)
+		if err != nil {
+			return err
 		}
-	}()
-
-	cols, err := rows.Columns()
-	if err != nil {
-		return nil, err
-	}
-	out = []map[string]any{}
-	for rows.Next() {
-		values := make([]any, len(cols))
-		scanArgs := make([]any, len(cols))
-		for i := range values {
-			scanArgs[i] = &values[i]
+		defer func() { _ = rows.Close() }()
+		cols, err := rows.Columns()
+		if err != nil {
+			return err
 		}
-		if err := rows.Scan(scanArgs...); err != nil {
-			return nil, err
+		out = []map[string]any{}
+		for rows.Next() {
+			values := make([]any, len(cols))
+			scanArgs := make([]any, len(cols))
+			for i := range values {
+				scanArgs[i] = &values[i]
+			}
+			if err := rows.Scan(scanArgs...); err != nil {
+				return err
+			}
+			row := map[string]any{}
+			for i, name := range cols {
+				row[name] = values[i]
+			}
+			out = append(out, row)
 		}
-		row := map[string]any{}
-		for i, name := range cols {
-			row[name] = values[i]
+		rowsErr := rows.Err()
+		if err := rows.Close(); err != nil {
+			return err
 		}
-		out = append(out, row)
-	}
-	return out, rows.Err()
+		return rowsErr
+	})
+	return out, err
 }
 
 // exportTableQuery returns explicit, reviewed resource queries scoped by owner.
@@ -312,7 +325,7 @@ func deleteData(args []string, configDir, dataDir string) error {
 		return fmt.Errorf("open database: %w", err)
 	}
 	defer func() { _ = mgr.Close() }()
-	db := mgr.GetDB()
+	db := mgr.GetAppDatabase()
 	ownerID, err := resolveOwnerID(db, ownerPrefix)
 	if err != nil {
 		return err
@@ -333,36 +346,61 @@ func deleteData(args []string, configDir, dataDir string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	tx, err := mgr.GetDB().BeginTx(ctx, nil)
+	deletedCount := 0
+	err = db.Write(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, `SELECT DISTINCT owner_id FROM api_tokens WHERE owner_id IS NOT NULL AND substr(token_prefix, 1, length(?)) = ?`, ownerPrefix, ownerPrefix)
+		if err != nil {
+			return fmt.Errorf("recheck owner token prefix: %w", err)
+		}
+		matched := ""
+		for rows.Next() {
+			var candidate string
+			if err := rows.Scan(&candidate); err != nil {
+				_ = rows.Close()
+				return fmt.Errorf("read owner prefix match: %w", err)
+			}
+			if matched != "" && matched != candidate {
+				_ = rows.Close()
+				return fmt.Errorf("owner token prefix %q became ambiguous; refusing to delete", ownerPrefix)
+			}
+			matched = candidate
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+		if matched != ownerID {
+			return fmt.Errorf("owner token prefix %q no longer resolves to the confirmed owner", ownerPrefix)
+		}
+		resourceCount, err := deleteOwnerResources(ctx, tx, ownerID)
+		if err != nil {
+			return err
+		}
+		deletedCount = resourceCount
+		tokenRes, err := tx.ExecContext(ctx, "DELETE FROM api_tokens WHERE owner_id = ?", ownerID)
+		if err != nil {
+			return fmt.Errorf("delete owner tokens: %w", err)
+		}
+		tokenCount, err := tokenRes.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("count deleted owner tokens: %w", err)
+		}
+		ownerRes, err := tx.ExecContext(ctx, "DELETE FROM owners WHERE id = ?", ownerID)
+		if err != nil {
+			return fmt.Errorf("delete owner record: %w", err)
+		}
+		ownerCount, err := ownerRes.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("count deleted owner record: %w", err)
+		}
+		deletedCount += int(tokenCount) + int(ownerCount)
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	deletedCount, err := deleteOwnerResources(ctx, tx, ownerID)
-	if err != nil {
-		return err
-	}
-	tokenRes, err := tx.ExecContext(ctx, "DELETE FROM api_tokens WHERE owner_id = ?", ownerID)
-	if err != nil {
-		return fmt.Errorf("delete owner tokens: %w", err)
-	}
-	tokenCount, err := tokenRes.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("count deleted owner tokens: %w", err)
-	}
-	ownerRes, err := tx.ExecContext(ctx, "DELETE FROM owners WHERE id = ?", ownerID)
-	if err != nil {
-		return fmt.Errorf("delete owner record: %w", err)
-	}
-	ownerCount, err := ownerRes.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("count deleted owner record: %w", err)
-	}
-	deletedCount += int(tokenCount) + int(ownerCount)
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit erasure: %w", err)
+		return fmt.Errorf("delete owner data: %w", err)
 	}
 	if err := emitDataAudit(configDir, dataDir, "compliance.data_deletion_completed", requestID, map[string]interface{}{"owner_id": anonymousID, "deleted_count": deletedCount, "anonymized_count": 0}); err != nil {
 		return err

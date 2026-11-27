@@ -128,9 +128,13 @@ func printFavorites(favorites []api.Favorite) error {
 		return nil
 	default:
 		writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(writer, "ID\tTITLE\tURL\tSOURCE")
+		if _, err := fmt.Fprintln(writer, "ID\tTITLE\tURL\tSOURCE"); err != nil {
+			return err
+		}
 		for _, favorite := range favorites {
-			fmt.Fprintf(writer, "%d\t%s\t%s\t%s\n", favorite.ID, favorite.Title, favorite.URL, favorite.Source)
+			if _, err := fmt.Fprintf(writer, "%d\t%s\t%s\t%s\n", favorite.ID, favorite.Title, favorite.URL, favorite.Source); err != nil {
+				return err
+			}
 		}
 		return writer.Flush()
 	}

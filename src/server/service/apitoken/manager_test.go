@@ -3,6 +3,9 @@ package apitoken
 
 import (
 	"context"
+	"database/sql"
+	"github.com/apimgr/vidveil/src/common/dbstore"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +13,19 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/google/uuid"
 )
+
+func storeExec(ctx context.Context, store *database.AppDatabase, query string, args ...any) error {
+	return store.Write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, query, args...)
+		return err
+	})
+}
+
+func storeQueryRow(ctx context.Context, store *database.AppDatabase, query string, args []any, dest ...any) error {
+	return store.Read(ctx, func(readCtx context.Context, db dbstore.Reader) error {
+		return db.QueryRowContext(readCtx, query, args...).Scan(dest...)
+	})
+}
 
 func TestCookieMaxAgeParsesConfiguredUnits(t *testing.T) {
 	for value, want := range map[string]int{"": 365 * 24 * 60 * 60, "1y": 365 * 24 * 60 * 60, "30d": 30 * 24 * 60 * 60, "12h": 12 * 60 * 60, "invalid": 365 * 24 * 60 * 60} {
@@ -22,6 +38,65 @@ func TestCookieMaxAgeParsesConfiguredUnits(t *testing.T) {
 	}
 }
 
+func TestManagerUsesPublicIDsForLegacyIntegerTokenKeys(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "server.db")
+	legacy, err := database.NewSchemaManager(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := storeExec(ctx, legacy.GetAppDatabase(), `CREATE TABLE api_tokens (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		token_hash TEXT NOT NULL UNIQUE,
+		token_prefix TEXT NOT NULL,
+		resource_type TEXT NOT NULL,
+		resource_id TEXT NOT NULL,
+		created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+		expires_at INTEGER,
+		last_used_at INTEGER,
+		revoked_at INTEGER,
+		revoked_reason TEXT
+	)`); err != nil {
+		_ = legacy.Close()
+		t.Fatal(err)
+	}
+	if err := legacy.EnsureSchema(); err != nil {
+		_ = legacy.Close()
+		t.Fatal(err)
+	}
+	manager, err := NewManager(legacy.GetAppDatabase(), strings.Repeat("ab", 32))
+	if err != nil {
+		_ = legacy.Close()
+		t.Fatal(err)
+	}
+	issued, err := manager.IssuePrimary(context.Background())
+	if err != nil {
+		_ = legacy.Close()
+		t.Fatal(err)
+	}
+	principal, err := manager.Authenticate(context.Background(), issued.Token)
+	if err != nil {
+		_ = legacy.Close()
+		t.Fatal(err)
+	}
+	if principal.TokenID != issued.TokenID || principal.TokenID == "1" {
+		_ = legacy.Close()
+		t.Fatalf("legacy token identity = %q, want public ID %q", principal.TokenID, issued.TokenID)
+	}
+	var idType string
+	if err := storeQueryRow(ctx, legacy.GetAppDatabase(), `SELECT type FROM pragma_table_info('api_tokens') WHERE name = 'id'`, nil, &idType); err != nil {
+		_ = legacy.Close()
+		t.Fatal(err)
+	}
+	if idType != "INTEGER" {
+		_ = legacy.Close()
+		t.Fatalf("legacy api_tokens.id type = %q, want INTEGER preserved", idType)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestIssuePrimaryAndAuthenticate(t *testing.T) {
 	schema, err := database.NewSchemaManager(":memory:")
 	if err != nil {
@@ -31,7 +106,7 @@ func TestIssuePrimaryAndAuthenticate(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := NewManager(schema.GetDB(), strings.Repeat("ab", 32))
+	manager, err := NewManager(schema.GetAppDatabase(), strings.Repeat("ab", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +142,7 @@ func TestAuthenticateRejectsTokensAssignedToSystemOwner(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := NewManager(schema.GetDB(), strings.Repeat("ab", 32))
+	manager, err := NewManager(schema.GetAppDatabase(), strings.Repeat("ab", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +150,7 @@ func TestAuthenticateRejectsTokensAssignedToSystemOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := schema.GetDB().Exec(`UPDATE api_tokens SET owner_id = 'system' WHERE id = ?`, issued.TokenID); err != nil {
+	if err := storeExec(context.Background(), schema.GetAppDatabase(), `UPDATE api_tokens SET owner_id = 'system' WHERE id = ?`, issued.TokenID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := manager.Authenticate(context.Background(), issued.Token); err != ErrInvalidToken {
@@ -92,7 +167,7 @@ func TestAuthenticateAcceptsLegacyOwnerTokenPrefix(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := NewManager(schema.GetDB(), strings.Repeat("ef", 32))
+	manager, err := NewManager(schema.GetAppDatabase(), strings.Repeat("ef", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +180,7 @@ func TestAuthenticateAcceptsLegacyOwnerTokenPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := schema.GetDB().Exec(`UPDATE api_tokens SET token_hash = ?, token_prefix = ?, token_last4 = ?, token_enc = ? WHERE id = ?`, hash, legacyToken[:12], legacyToken[len(legacyToken)-4:], encrypted, issued.TokenID); err != nil {
+	if err := storeExec(context.Background(), schema.GetAppDatabase(), `UPDATE api_tokens SET token_hash = ?, token_prefix = ?, token_last4 = ?, token_enc = ? WHERE id = ?`, hash, legacyToken[:12], legacyToken[len(legacyToken)-4:], encrypted, issued.TokenID); err != nil {
 		t.Fatal(err)
 	}
 	principal, err := manager.Authenticate(context.Background(), legacyToken)
@@ -126,7 +201,7 @@ func TestLinkedTokenLifecycleRequiresPrimary(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := NewManager(schema.GetDB(), strings.Repeat("cd", 32))
+	manager, err := NewManager(schema.GetAppDatabase(), strings.Repeat("cd", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +269,7 @@ func TestPurgeIdleOwnersKeepsOwnersWithResources(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := NewManager(schema.GetDB(), strings.Repeat("ab", 32))
+	manager, err := NewManager(schema.GetAppDatabase(), strings.Repeat("ab", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,11 +290,11 @@ func TestPurgeIdleOwnersKeepsOwnersWithResources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := schema.GetDB().Exec(`INSERT INTO favorites (owner_id, visitor_id, url, title) VALUES (?, ?, ?, ?)`, resourceOwner.OwnerID, "test-visitor", "https://example.test/video", "saved"); err != nil {
+	if err := storeExec(ctx, schema.GetAppDatabase(), `INSERT INTO favorites (owner_id, visitor_id, url, title) VALUES (?, ?, ?, ?)`, resourceOwner.OwnerID, "test-visitor", "https://example.test/video", "saved"); err != nil {
 		t.Fatal(err)
 	}
 	old := time.Now().Add(-60 * 24 * time.Hour).Unix()
-	if _, err := schema.GetDB().Exec(`UPDATE owners SET last_seen_at = ? WHERE id IN (?, ?, 'system')`, old, resourceOwner.OwnerID, idleOwner.OwnerID); err != nil {
+	if err := storeExec(ctx, schema.GetAppDatabase(), `UPDATE owners SET last_seen_at = ? WHERE id IN (?, ?, 'system')`, old, resourceOwner.OwnerID, idleOwner.OwnerID); err != nil {
 		t.Fatal(err)
 	}
 	if removed, err := manager.PurgeIdleOwners(ctx, 30); err != nil || removed != 1 {
@@ -235,10 +310,78 @@ func TestPurgeIdleOwnersKeepsOwnersWithResources(t *testing.T) {
 		t.Fatalf("idle linked authentication error = %v, want invalid token", err)
 	}
 	var systemOwnerCount int
-	if err := schema.GetDB().QueryRowContext(ctx, `SELECT COUNT(*) FROM owners WHERE id = 'system'`).Scan(&systemOwnerCount); err != nil {
+	if err := storeQueryRow(ctx, schema.GetAppDatabase(), `SELECT COUNT(*) FROM owners WHERE id = 'system'`, nil, &systemOwnerCount); err != nil {
 		t.Fatal(err)
 	}
 	if systemOwnerCount != 1 {
 		t.Fatalf("reserved system owner count = %d, want 1 after idle purge", systemOwnerCount)
+	}
+}
+
+func TestRevokePrimaryConfirmsAndDeletesOwnerResourcesAndTokens(t *testing.T) {
+	schema, err := database.NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = schema.Close() }()
+	if err := schema.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewManager(schema.GetAppDatabase(), strings.Repeat("ef", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	issued, err := manager.IssuePrimary(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	primary, err := manager.Authenticate(ctx, issued.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linked, err := manager.CreateLinked(ctx, primary, "automation", nil, 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := storeExec(ctx, schema.GetAppDatabase(), `INSERT INTO favorites (owner_id, visitor_id, url, title) VALUES (?, ?, ?, ?)`, issued.OwnerID, "owner-test", "https://example.test/video", "saved"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := manager.RevokePrimary(ctx, primary, "wrong"); err != ErrInvalidConfirmation {
+		t.Fatalf("wrong confirmation error = %v, want ErrInvalidConfirmation", err)
+	}
+	var tokens, resources int
+	if err := storeQueryRow(ctx, schema.GetAppDatabase(), `SELECT COUNT(*) FROM api_tokens WHERE owner_id = ?`, []any{issued.OwnerID}, &tokens); err != nil {
+		t.Fatal(err)
+	}
+	if err := storeQueryRow(ctx, schema.GetAppDatabase(), `SELECT COUNT(*) FROM favorites WHERE owner_id = ?`, []any{issued.OwnerID}, &resources); err != nil {
+		t.Fatal(err)
+	}
+	if tokens != 2 || resources != 1 {
+		t.Fatalf("failed confirmation changed owner data: tokens=%d resources=%d", tokens, resources)
+	}
+
+	counts, err := manager.RevokePrimary(ctx, primary, issued.Token[len(issued.Token)-4:])
+	if err != nil {
+		t.Fatalf("RevokePrimary: %v", err)
+	}
+	if counts.Tokens != 2 || counts.Resources != 1 || counts.Prefix != primary.Prefix {
+		t.Fatalf("deletion counts = %+v, want two tokens and one resource", counts)
+	}
+	if err := storeQueryRow(ctx, schema.GetAppDatabase(), `SELECT COUNT(*) FROM api_tokens WHERE owner_id = ?`, []any{issued.OwnerID}, &tokens); err != nil {
+		t.Fatal(err)
+	}
+	if err := storeQueryRow(ctx, schema.GetAppDatabase(), `SELECT COUNT(*) FROM favorites WHERE owner_id = ?`, []any{issued.OwnerID}, &resources); err != nil {
+		t.Fatal(err)
+	}
+	if tokens != 0 || resources != 0 {
+		t.Fatalf("owner data remains after revocation: tokens=%d resources=%d", tokens, resources)
+	}
+	if _, err := manager.Authenticate(ctx, issued.Token); err != ErrInvalidToken {
+		t.Fatalf("deleted primary authentication error = %v, want ErrInvalidToken", err)
+	}
+	if _, err := manager.Authenticate(ctx, linked.Token); err != ErrInvalidToken {
+		t.Fatalf("deleted linked-token authentication error = %v, want ErrInvalidToken", err)
 	}
 }

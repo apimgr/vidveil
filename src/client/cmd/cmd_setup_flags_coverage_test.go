@@ -6,8 +6,11 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	paths "github.com/apimgr/vidveil/src/client/paths"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -31,19 +34,82 @@ func TestHandleEnterKey_ServerURL_ValidURL_ChangesState(t *testing.T) {
 	m.serverURL = "http://localhost:8080"
 	newM, _ := m.handleEnterKey()
 	wm := newM.(SetupWizardModel)
-	if wm.state != SetupStateTestConnection {
-		t.Errorf("handleEnterKey valid URL: state = %v, want SetupStateTestConnection", wm.state)
+	if wm.state != SetupStateToken {
+		t.Errorf("handleEnterKey valid URL: state = %v, want SetupStateToken", wm.state)
 	}
 }
 
-func TestHandleEnterKey_Token_AdvancesToSaveConfig(t *testing.T) {
+func TestHandleEnterKey_TokenStartsConnectionTest(t *testing.T) {
 	m := CreateSetupWizardModel()
 	m.state = SetupStateToken
 	m.serverURL = "http://localhost:8080"
 	newM, _ := m.handleEnterKey()
 	wm := newM.(SetupWizardModel)
-	if wm.state != SetupStateSaveConfig {
-		t.Errorf("handleEnterKey token: state = %v, want SetupStateSaveConfig", wm.state)
+	if wm.state != SetupStateTestConnection {
+		t.Errorf("handleEnterKey token: state = %v, want SetupStateTestConnection", wm.state)
+	}
+}
+
+func TestSaveSetupWizardConfig_SavesNamedAndDefaultProfiles(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+	originalPath := cliConfigFilePath
+	originalConfig := cliConfig
+	originalSaved := cliConfigHasSavedServerAddress
+	t.Cleanup(func() {
+		cliConfigFilePath = originalPath
+		cliConfig = originalConfig
+		cliConfigHasSavedServerAddress = originalSaved
+	})
+	cliConfigFilePath = filepath.Join(tmp, "profiles", "staging.yml")
+	cliConfig = &CLIConfig{}
+	if err := SaveSetupWizardConfig("https://setup.example", "secret-token", true, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{cliConfigFilePath, paths.ResolveConfigFilePath("")} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read saved config %s: %v", path, err)
+		}
+		if !strings.Contains(string(data), "https://setup.example") || !strings.Contains(string(data), "secret-token") {
+			t.Errorf("saved config %s is missing setup values: %s", path, data)
+		}
+	}
+}
+
+func TestSetupConfirmationIsYes_UsesLocalizedAffirmatives(t *testing.T) {
+	for _, test := range []struct {
+		locale string
+		answer string
+		want   bool
+	}{
+		{locale: "en", answer: "yes", want: true},
+		{locale: "de", answer: "ja", want: true},
+		{locale: "es", answer: "sí", want: true},
+		{locale: "fr", answer: "oui", want: true},
+		{locale: "it", answer: "sì", want: true},
+		{locale: "ja", answer: "はい", want: true},
+		{locale: "zh", answer: "是", want: true},
+		{locale: "ar", answer: "نعم", want: true},
+		{locale: "en", answer: "no", want: false},
+	} {
+		if got := setupConfirmationIsYes(test.answer, test.locale); got != test.want {
+			t.Errorf("setupConfirmationIsYes(%q, %q) = %t, want %t", test.answer, test.locale, got, test.want)
+		}
+	}
+}
+
+func TestSetupWizardInputHandlesUnicodeRunes(t *testing.T) {
+	model := CreateSetupWizardModel()
+	model.state = SetupStateServerURL
+	model.serverURL = "https://例え.テスト"
+	updated, _ := model.handleBackspace()
+	if got := updated.(SetupWizardModel).serverURL; got != "https://例え.テス" {
+		t.Fatalf("server URL after backspace = %q, want final rune removed", got)
+	}
+	withRune, _ := updated.(SetupWizardModel).handleInput("例")
+	if got := withRune.(SetupWizardModel).serverURL; !strings.HasSuffix(got, "例") {
+		t.Fatalf("server URL after Unicode input = %q, want it to end in the entered rune", got)
 	}
 }
 
@@ -194,29 +260,30 @@ func TestUpdate_EnterKey_CallsHandleEnterKey(t *testing.T) {
 	m.state = SetupStateToken
 	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	wm := newM.(SetupWizardModel)
-	if wm.state != SetupStateSaveConfig {
-		t.Errorf("Update enter: state = %v, want SetupStateSaveConfig", wm.state)
+	if wm.state != SetupStateTestConnection {
+		t.Errorf("Update enter: state = %v, want SetupStateTestConnection", wm.state)
 	}
 }
 
-func TestUpdate_TabKey_TokenState_TogglesFocus(t *testing.T) {
+func TestUpdate_TabKey_SaveConfigState_TogglesOptionFocus(t *testing.T) {
 	m := CreateSetupWizardModel()
-	m.state = SetupStateToken
-	m.inputFocused = 0
+	m.state = SetupStateSaveConfig
+	m.setupOptionFocus = 0
 	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	wm := newM.(SetupWizardModel)
-	if wm.inputFocused != 1 {
-		t.Errorf("Update tab (token state): inputFocused = %d, want 1", wm.inputFocused)
+	if wm.setupOptionFocus != 1 {
+		t.Errorf("Update tab (save config state): setupOptionFocus = %d, want 1", wm.setupOptionFocus)
 	}
 }
 
-func TestUpdate_TabKey_NonTokenState_Noop(t *testing.T) {
+func TestUpdate_TabKey_ServerURLState_Noop(t *testing.T) {
 	m := CreateSetupWizardModel()
 	m.state = SetupStateServerURL
-	m.inputFocused = 0
 	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	wm := newM.(SetupWizardModel)
-	_ = wm
+	if wm.setupOptionFocus != 0 {
+		t.Errorf("Update tab (server URL state): setupOptionFocus = %d, want 0", wm.setupOptionFocus)
+	}
 }
 
 func TestUpdate_SpaceKey_SaveConfigState_Toggles(t *testing.T) {
@@ -258,11 +325,11 @@ func TestUpdate_ConnectionTestMsg_Success(t *testing.T) {
 	msg := SetupConnectionTestMsg{success: true, version: "1.2.3"}
 	newM, _ := m.Update(msg)
 	wm := newM.(SetupWizardModel)
-	if wm.state != SetupStateToken {
-		t.Errorf("Update connection success: state = %v, want SetupStateToken", wm.state)
+	if wm.state != SetupStateSaveConfig {
+		t.Errorf("Update connection success: state = %v, want SetupStateSaveConfig", wm.state)
 	}
-	if !wm.connectionSuccess {
-		t.Error("Update connection success: connectionSuccess should be true")
+	if !strings.Contains(wm.statusMessage, "1.2.3") {
+		t.Errorf("Update connection success: statusMessage = %q, want version", wm.statusMessage)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -131,7 +132,7 @@ func TestLoadOrGenerateKeys_InvalidFormatReturnsError(t *testing.T) {
 
 // TestRunVanityGeneration_EmptyPrefix_MatchesImmediately verifies that an
 // empty prefix causes runVanityGeneration to match on the first attempt and
-// write key files into the vanity_pending directory.
+// atomically publish a per-address candidate directory.
 func TestRunVanityGeneration_EmptyPrefix_MatchesImmediately(t *testing.T) {
 	s := newTestService(t)
 	if err := os.MkdirAll(s.dataDir, 0700); err != nil {
@@ -146,12 +147,13 @@ func TestRunVanityGeneration_EmptyPrefix_MatchesImmediately(t *testing.T) {
 	if s.vanityStatus.Active {
 		t.Error("vanityStatus.Active should be false after match found")
 	}
-	pendingDir := filepath.Join(s.dataDir, "vanity_pending")
-	if _, err := os.Stat(pendingDir); err != nil {
-		t.Errorf("vanity_pending directory not created: %v", err)
+	candidates := s.GetVanityCandidates()
+	if len(candidates) != 1 {
+		t.Fatalf("candidate count = %d, want 1", len(candidates))
 	}
-	if _, err := os.Stat(filepath.Join(pendingDir, "hostname")); err != nil {
-		t.Errorf("hostname file not written in vanity_pending: %v", err)
+	candidateDir := filepath.Join(s.dataDir, "vanity", candidates[0])
+	if _, err := os.Stat(filepath.Join(candidateDir, "hostname")); err != nil {
+		t.Errorf("hostname file not written in candidate directory: %v", err)
 	}
 }
 
@@ -279,48 +281,47 @@ func TestApplyVanityAddress_NoPendingReturnsError(t *testing.T) {
 	}
 }
 
-// TestApplyVanityAddress_AppliesPendingKeys verifies the success path: pending
-// keys are moved to siteDir, backup is created, and keys reload.
-func TestApplyVanityAddress_AppliesPendingKeys(t *testing.T) {
+// TestApplyVanityAddress_AppliesCandidate verifies atomic candidate activation,
+// backup creation, and key reload.
+func TestApplyVanityAddress_AppliesCandidate(t *testing.T) {
 	s := newTestService(t)
 	siteDir := filepath.Join(s.dataDir, "site")
-	pendingDir := filepath.Join(s.dataDir, "vanity_pending")
+	candidateDir := filepath.Join(s.dataDir, "vanity", "test.onion")
 	if err := os.MkdirAll(siteDir, 0700); err != nil {
 		t.Fatalf("MkdirAll siteDir: %v", err)
 	}
-	if err := os.MkdirAll(pendingDir, 0700); err != nil {
-		t.Fatalf("MkdirAll pendingDir: %v", err)
+	if err := os.MkdirAll(candidateDir, 0700); err != nil {
+		t.Fatalf("MkdirAll candidateDir: %v", err)
 	}
 
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	// Write pending keys in 64-byte format
+	// Write candidate keys in 64-byte format
 	secretData := make([]byte, 64)
 	copy(secretData[:32], priv.Seed())
 	copy(secretData[32:], pub)
-	if err := os.WriteFile(filepath.Join(pendingDir, "hs_ed25519_secret_key"), secretData, 0600); err != nil {
-		t.Fatalf("write pending secret key: %v", err)
+	if err := os.WriteFile(filepath.Join(candidateDir, "hs_ed25519_secret_key"), secretData, 0600); err != nil {
+		t.Fatalf("write candidate secret key: %v", err)
 	}
 	pubData := make([]byte, 32)
 	copy(pubData, pub)
-	if err := os.WriteFile(filepath.Join(pendingDir, "hs_ed25519_public_key"), pubData, 0600); err != nil {
-		t.Fatalf("write pending public key: %v", err)
+	if err := os.WriteFile(filepath.Join(candidateDir, "hs_ed25519_public_key"), pubData, 0600); err != nil {
+		t.Fatalf("write candidate public key: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(pendingDir, "hostname"), []byte("test.onion\n"), 0600); err != nil {
-		t.Fatalf("write pending hostname: %v", err)
+	if err := os.WriteFile(filepath.Join(candidateDir, "hostname"), []byte("test.onion\n"), 0600); err != nil {
+		t.Fatalf("write candidate hostname: %v", err)
 	}
 
-	if err := s.ApplyVanityAddress(); err != nil {
+	if err := s.ApplyVanityAddress("test"); err != nil {
 		t.Fatalf("ApplyVanityAddress: %v", err)
 	}
 	if len(s.privateKey) == 0 {
 		t.Error("privateKey should be set after ApplyVanityAddress")
 	}
-	// pending dir should be removed
-	if _, err := os.Stat(pendingDir); !os.IsNotExist(err) {
-		t.Error("vanity_pending should be removed after ApplyVanityAddress")
+	if _, err := os.Stat(candidateDir); !os.IsNotExist(err) {
+		t.Error("candidate directory should be moved after ApplyVanityAddress")
 	}
 }
 
@@ -409,9 +410,9 @@ func TestGetInfo_VanityGenerationActive(t *testing.T) {
 	}
 }
 
-// TestGenerateVanityAddress_CancelsExistingGeneration covers the branch where
-// vanityCancel is non-nil (an existing generation is in progress).
-func TestGenerateVanityAddress_CancelsExistingGeneration(t *testing.T) {
+// TestGenerateVanityAddress_RejectsConcurrentGeneration enforces one active
+// vanity search and preserves the existing search when another is requested.
+func TestGenerateVanityAddress_RejectsConcurrentGeneration(t *testing.T) {
 	s := newTestService(t)
 	if err := os.MkdirAll(s.dataDir, 0700); err != nil {
 		t.Fatalf("MkdirAll dataDir: %v", err)
@@ -423,15 +424,11 @@ func TestGenerateVanityAddress_CancelsExistingGeneration(t *testing.T) {
 		t.Fatalf("GenerateVanityAddress first call: %v", err)
 	}
 
-	// Second call: must cancel the first and start a new generation.
-	if err := s.GenerateVanityAddress("yyyyy"); err != nil {
-		t.Fatalf("GenerateVanityAddress second call: %v", err)
+	// Second call: must preserve the first search and report its prefix.
+	if err := s.GenerateVanityAddress("yyyyy"); err == nil || !strings.Contains(err.Error(), "zzzzz") {
+		t.Fatalf("GenerateVanityAddress second call error = %v, want running-prefix conflict", err)
 	}
 
-	// Clean up: cancel the background goroutine started by the second call.
-	s.mu.Lock()
-	if s.vanityCancel != nil {
-		s.vanityCancel()
-	}
-	s.mu.Unlock()
+	// Clean up the first background goroutine.
+	s.CancelVanityGeneration()
 }

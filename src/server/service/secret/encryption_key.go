@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/server/service/secreport"
 )
 
@@ -56,22 +57,19 @@ func SetCurrentEncryptionKeyMarker(ctx context.Context, tx *sql.Tx, key string) 
 
 // EnsureCurrentEncryptionKeyMarker initializes the fingerprint on first
 // startup and rejects a config key that does not match the committed DB key.
-func EnsureCurrentEncryptionKeyMarker(ctx context.Context, db *sql.DB, key string) error {
+func readKeyRow(ctx context.Context, db Store, query string, args []any, dest ...any) error {
+	return db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+		return readDB.QueryRowContext(readCtx, query, args...).Scan(dest...)
+	})
+}
+
+// EnsureCurrentEncryptionKeyMarker initializes the fingerprint on first
+// startup and rejects a config key that does not match the committed DB key.
+func EnsureCurrentEncryptionKeyMarker(ctx context.Context, db Store, key string) error {
 	var current string
-	err := db.QueryRowContext(ctx, `SELECT value FROM app_secrets WHERE key = ?`, EncryptionKeyCurrentFingerprint).Scan(&current)
+	err := readKeyRow(ctx, db, `SELECT value FROM app_secrets WHERE key = ?`, []any{EncryptionKeyCurrentFingerprint}, &current)
 	if err == sql.ErrNoRows {
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = tx.Rollback() }()
-		if err := SetCurrentEncryptionKeyMarker(ctx, tx, key); err != nil {
-			return err
-		}
-		if err := tx.Commit(); err != nil {
-			return err
-		}
-		return nil
+		return db.Write(ctx, func(tx *sql.Tx) error { return SetCurrentEncryptionKeyMarker(ctx, tx, key) })
 	}
 	if err != nil {
 		return fmt.Errorf("read current encryption-key marker: %w", err)
@@ -84,58 +82,48 @@ func EnsureCurrentEncryptionKeyMarker(ctx context.Context, db *sql.DB, key strin
 
 // ImportLegacyPreviousEncryptionKey wraps and removes the plaintext key row
 // written by the earlier VidVeil rotation implementation.
-func ImportLegacyPreviousEncryptionKey(ctx context.Context, db *sql.DB, currentKey string) error {
-	exists, err := PreviousEncryptionKeyExists(ctx, db)
-	if err != nil {
-		return err
-	}
-	if exists {
-		if _, err := db.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, "security.previous_encryption_key"); err != nil {
+func ImportLegacyPreviousEncryptionKey(ctx context.Context, db Store, currentKey string) error {
+	return db.Write(ctx, func(tx *sql.Tx) error {
+		var exists int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM app_secrets WHERE key IN (?,?)`, EncryptionKeyPrevious, EncryptionKeyPreviousUntil).Scan(&exists); err != nil {
+			return fmt.Errorf("inspect previous encryption-key state: %w", err)
+		}
+		if exists > 0 {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, "security.previous_encryption_key"); err != nil {
+				return fmt.Errorf("remove plaintext previous encryption key: %w", err)
+			}
+			return nil
+		}
+		var previous string
+		var updatedAt time.Time
+		err := tx.QueryRowContext(ctx, `SELECT value, updated_at FROM settings WHERE key = ?`, "security.previous_encryption_key").Scan(&previous, &updatedAt)
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("read legacy previous encryption key: %w", err)
+		}
+		wrapped, err := secreport.EncryptAESGCM(currentKey, []byte(previous))
+		if err != nil {
+			return fmt.Errorf("wrap legacy previous encryption key: %w", err)
+		}
+		for name, value := range map[string]string{EncryptionKeyPrevious: base64.StdEncoding.EncodeToString(wrapped), EncryptionKeyPreviousUntil: updatedAt.UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339Nano)} {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO app_secrets (key,value,created_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,created_at=excluded.created_at`, name, value, time.Now().UTC()); err != nil {
+				return fmt.Errorf("store imported %s: %w", name, err)
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, "security.previous_encryption_key"); err != nil {
 			return fmt.Errorf("remove plaintext previous encryption key: %w", err)
 		}
 		return nil
-	}
-	var previous string
-	var updatedAt time.Time
-	err = db.QueryRowContext(ctx, `SELECT value, updated_at FROM settings WHERE key = ?`, "security.previous_encryption_key").Scan(&previous, &updatedAt)
-	if err == sql.ErrNoRows {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("read legacy previous encryption key: %w", err)
-	}
-	until := updatedAt.UTC().Add(30 * 24 * time.Hour)
-	wrapped, err := secreport.EncryptAESGCM(currentKey, []byte(previous))
-	if err != nil {
-		return fmt.Errorf("wrap legacy previous encryption key: %w", err)
-	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-	for name, value := range map[string]string{
-		EncryptionKeyPrevious:      base64.StdEncoding.EncodeToString(wrapped),
-		EncryptionKeyPreviousUntil: until.Format(time.RFC3339Nano),
-	} {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO app_secrets (key,value,created_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,created_at=excluded.created_at`, name, value, time.Now().UTC()); err != nil {
-			return fmt.Errorf("store imported %s: %w", name, err)
-		}
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, "security.previous_encryption_key"); err != nil {
-		return fmt.Errorf("remove plaintext previous encryption key: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit imported encryption-key state: %w", err)
-	}
-	return nil
+	})
 }
 
 // LoadPendingEncryptionKey recovers the new key if the process stopped after
 // persisting rotation state but before atomically switching secrets.yml.
-func LoadPendingEncryptionKey(ctx context.Context, db *sql.DB, configuredKey string, now time.Time) (string, bool, error) {
+func LoadPendingEncryptionKey(ctx context.Context, db Store, configuredKey string, now time.Time) (string, bool, error) {
 	var encoded string
-	err := db.QueryRowContext(ctx, `SELECT value FROM app_secrets WHERE key = ?`, EncryptionKeyRotationPending).Scan(&encoded)
+	err := readKeyRow(ctx, db, `SELECT value FROM app_secrets WHERE key = ?`, []any{EncryptionKeyRotationPending}, &encoded)
 	if err == sql.ErrNoRows {
 		return "", false, nil
 	}
@@ -165,12 +153,12 @@ func LoadPendingEncryptionKey(ctx context.Context, db *sql.DB, configuredKey str
 
 // LoadPreviousEncryptionKey returns the grace-period key only while it is
 // valid. A partial or malformed pair is an error so callers fail closed.
-func LoadPreviousEncryptionKey(ctx context.Context, db *sql.DB, currentKey string, now time.Time) (string, bool, error) {
+func LoadPreviousEncryptionKey(ctx context.Context, db Store, currentKey string, now time.Time) (string, bool, error) {
 	var wrapped, untilText string
-	err := db.QueryRowContext(ctx, `SELECT value FROM app_secrets WHERE key = ?`, EncryptionKeyPrevious).Scan(&wrapped)
+	err := readKeyRow(ctx, db, `SELECT value FROM app_secrets WHERE key = ?`, []any{EncryptionKeyPrevious}, &wrapped)
 	if err == sql.ErrNoRows {
 		var expiryCount int
-		if checkErr := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM app_secrets WHERE key = ?`, EncryptionKeyPreviousUntil).Scan(&expiryCount); checkErr != nil {
+		if checkErr := readKeyRow(ctx, db, `SELECT COUNT(*) FROM app_secrets WHERE key = ?`, []any{EncryptionKeyPreviousUntil}, &expiryCount); checkErr != nil {
 			return "", false, checkErr
 		}
 		if expiryCount != 0 {
@@ -181,7 +169,7 @@ func LoadPreviousEncryptionKey(ctx context.Context, db *sql.DB, currentKey strin
 	if err != nil {
 		return "", false, fmt.Errorf("read previous encryption key: %w", err)
 	}
-	if err := db.QueryRowContext(ctx, `SELECT value FROM app_secrets WHERE key = ?`, EncryptionKeyPreviousUntil).Scan(&untilText); err != nil {
+	if err := readKeyRow(ctx, db, `SELECT value FROM app_secrets WHERE key = ?`, []any{EncryptionKeyPreviousUntil}, &untilText); err != nil {
 		return "", false, fmt.Errorf("read previous encryption-key expiry: %w", err)
 	}
 	until, err := time.Parse(time.RFC3339Nano, untilText)
@@ -226,45 +214,41 @@ func DeletePendingEncryptionKey(ctx context.Context, tx *sql.Tx) error {
 
 // PreviousEncryptionKeyExists reports whether either grace-period marker is
 // present, including incomplete/corrupt state that must block a new rotation.
-func PreviousEncryptionKeyExists(ctx context.Context, db *sql.DB) (bool, error) {
+func PreviousEncryptionKeyExists(ctx context.Context, db Store) (bool, error) {
 	var count int
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM app_secrets WHERE key IN (?,?)`, EncryptionKeyPrevious, EncryptionKeyPreviousUntil).Scan(&count); err != nil {
+	if err := readKeyRow(ctx, db, `SELECT COUNT(*) FROM app_secrets WHERE key IN (?,?)`, []any{EncryptionKeyPrevious, EncryptionKeyPreviousUntil}, &count); err != nil {
 		return false, fmt.Errorf("inspect previous encryption-key state: %w", err)
 	}
 	return count > 0, nil
 }
 
 // RetirePreviousEncryptionKey removes an expired previous key and its expiry.
-func RetirePreviousEncryptionKey(ctx context.Context, db *sql.DB, now time.Time) (bool, error) {
-	var previousCount int
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM app_secrets WHERE key = ?`, EncryptionKeyPrevious).Scan(&previousCount); err != nil {
-		return false, fmt.Errorf("inspect previous encryption key before retirement: %w", err)
-	}
-	if previousCount == 0 {
-		return false, nil
-	}
-	var untilText string
-	err := db.QueryRowContext(ctx, `SELECT value FROM app_secrets WHERE key = ?`, EncryptionKeyPreviousUntil).Scan(&untilText)
-	if err != nil {
-		return false, fmt.Errorf("read previous encryption-key expiry: %w", err)
-	}
-	until, err := time.Parse(time.RFC3339Nano, untilText)
-	if err != nil {
-		return false, fmt.Errorf("parse previous encryption-key expiry: %w", err)
-	}
-	if now.UTC().Before(until.UTC()) {
-		return false, nil
-	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = tx.Rollback() }()
-	if err := DeletePreviousEncryptionKey(ctx, tx); err != nil {
-		return false, err
-	}
-	if err := tx.Commit(); err != nil {
-		return false, err
-	}
-	return true, nil
+func RetirePreviousEncryptionKey(ctx context.Context, db Store, now time.Time) (bool, error) {
+	retired := false
+	err := db.Write(ctx, func(tx *sql.Tx) error {
+		var previousCount int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM app_secrets WHERE key = ?`, EncryptionKeyPrevious).Scan(&previousCount); err != nil {
+			return fmt.Errorf("inspect previous encryption key before retirement: %w", err)
+		}
+		if previousCount == 0 {
+			return nil
+		}
+		var untilText string
+		if err := tx.QueryRowContext(ctx, `SELECT value FROM app_secrets WHERE key = ?`, EncryptionKeyPreviousUntil).Scan(&untilText); err != nil {
+			return fmt.Errorf("read previous encryption-key expiry: %w", err)
+		}
+		until, err := time.Parse(time.RFC3339Nano, untilText)
+		if err != nil {
+			return fmt.Errorf("parse previous encryption-key expiry: %w", err)
+		}
+		if now.UTC().Before(until.UTC()) {
+			return nil
+		}
+		if err := DeletePreviousEncryptionKey(ctx, tx); err != nil {
+			return err
+		}
+		retired = true
+		return nil
+	})
+	return retired, err
 }

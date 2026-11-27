@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"os"
 	"path/filepath"
 	"testing"
@@ -71,6 +72,38 @@ func setupTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
+type rawReportTestStore struct{ db *sql.DB }
+
+type reportTestReader struct{ db *sql.DB }
+type reportTestRow struct{ row *sql.Row }
+
+func (r reportTestReader) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return r.db.QueryContext(ctx, query, args...)
+}
+func (r reportTestReader) QueryRowContext(ctx context.Context, query string, args ...any) dbstore.RowScanner {
+	return reportTestRow{row: r.db.QueryRowContext(ctx, query, args...)}
+}
+func (r reportTestReader) PingContext(ctx context.Context) error { return r.db.PingContext(ctx) }
+func (r reportTestRow) Scan(dest ...any) error                   { return r.row.Scan(dest...) }
+
+func (s rawReportTestStore) Read(ctx context.Context, fn func(context.Context, dbstore.Reader) error) error {
+	return fn(ctx, reportTestReader(s))
+}
+
+func (s rawReportTestStore) Write(ctx context.Context, fn func(*sql.Tx) error) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+func reportTestStore(db *sql.DB) Store { return rawReportTestStore{db: db} }
+
 func testEncryptionKeyHex(t *testing.T) string {
 	t.Helper()
 	key := make([]byte, 32)
@@ -87,7 +120,7 @@ func TestCreateReport_And_GetReportStatus(t *testing.T) {
 	keyHex := testEncryptionKeyHex(t)
 	idWindow := windowIndex(time.Now())
 
-	sub, err := CreateReport(ctx, db, configDir, keyHex, Input{
+	sub, err := CreateReport(ctx, reportTestStore(db), configDir, keyHex, Input{
 		Severity:         "high",
 		IDWindow:         idWindow,
 		Component:        "auth",
@@ -105,7 +138,7 @@ func TestCreateReport_And_GetReportStatus(t *testing.T) {
 		t.Fatalf("CreateReport: expected a non-empty report token")
 	}
 
-	status, err := GetReportStatus(ctx, db, sub.TrackingID, sub.ReportToken)
+	status, err := GetReportStatus(ctx, reportTestStore(db), sub.TrackingID, sub.ReportToken)
 	if err != nil {
 		t.Fatalf("GetReportStatus: %v", err)
 	}
@@ -115,7 +148,7 @@ func TestCreateReport_And_GetReportStatus(t *testing.T) {
 	if status.TrackingID != sub.TrackingID {
 		t.Fatalf("GetReportStatus: want tracking id %q, got %q", sub.TrackingID, status.TrackingID)
 	}
-	if _, err := GetReportStatus(ctx, db, sub.TrackingID, sub.ReportToken); err == nil {
+	if _, err := GetReportStatus(ctx, reportTestStore(db), sub.TrackingID, sub.ReportToken); err == nil {
 		t.Fatal("GetReportStatus: expected same-day token reuse to be rejected")
 	}
 }
@@ -126,7 +159,7 @@ func TestGetReportStatus_WrongTokenRejected(t *testing.T) {
 	configDir := t.TempDir()
 	keyHex := testEncryptionKeyHex(t)
 
-	sub, err := CreateReport(ctx, db, configDir, keyHex, Input{
+	sub, err := CreateReport(ctx, reportTestStore(db), configDir, keyHex, Input{
 		Severity:         "medium",
 		IDWindow:         windowIndex(time.Now()),
 		Component:        "billing",
@@ -137,7 +170,7 @@ func TestGetReportStatus_WrongTokenRejected(t *testing.T) {
 		t.Fatalf("CreateReport: %v", err)
 	}
 
-	if _, err := GetReportStatus(ctx, db, sub.TrackingID, "wrong-token"); err == nil {
+	if _, err := GetReportStatus(ctx, reportTestStore(db), sub.TrackingID, "wrong-token"); err == nil {
 		t.Fatalf("GetReportStatus: expected error for wrong token")
 	}
 }
@@ -146,7 +179,7 @@ func TestGetReportStatus_UnknownTrackingIDRejected(t *testing.T) {
 	db := setupTestDB(t)
 	ctx := context.Background()
 
-	if _, err := GetReportStatus(ctx, db, "sec_doesnotexist", "any-token"); err == nil {
+	if _, err := GetReportStatus(ctx, reportTestStore(db), "sec_doesnotexist", "any-token"); err == nil {
 		t.Fatalf("GetReportStatus: expected error for unknown tracking id")
 	}
 }
@@ -157,7 +190,7 @@ func TestGetReportStatus_ExpiredTokenRejected(t *testing.T) {
 	configDir := t.TempDir()
 	keyHex := testEncryptionKeyHex(t)
 
-	sub, err := CreateReport(ctx, db, configDir, keyHex, Input{
+	sub, err := CreateReport(ctx, reportTestStore(db), configDir, keyHex, Input{
 		Severity:         "low",
 		IDWindow:         windowIndex(time.Now()),
 		Component:        "docs",
@@ -177,7 +210,7 @@ func TestGetReportStatus_ExpiredTokenRejected(t *testing.T) {
 		t.Fatalf("set closed_at: %v", err)
 	}
 
-	if _, err := GetReportStatus(ctx, db, sub.TrackingID, sub.ReportToken); err == nil {
+	if _, err := GetReportStatus(ctx, reportTestStore(db), sub.TrackingID, sub.ReportToken); err == nil {
 		t.Fatalf("GetReportStatus: expected error for expired token")
 	}
 }
@@ -186,7 +219,7 @@ func TestDisclosureCreatesPersistentThanksAndForwardOnlyLifecycle(t *testing.T) 
 	db := setupTestDB(t)
 	ctx := context.Background()
 	now := time.Date(2026, 11, 24, 3, 0, 0, 0, time.UTC)
-	sub, err := CreateReport(ctx, db, t.TempDir(), testEncryptionKeyHex(t), Input{
+	sub, err := CreateReport(ctx, reportTestStore(db), t.TempDir(), testEncryptionKeyHex(t), Input{
 		IDWindow: windowIndex(now), Severity: "high", Component: "parser",
 		Body: []byte("private vulnerability details"), CreditPreference: "anon",
 	})
@@ -194,24 +227,24 @@ func TestDisclosureCreatesPersistentThanksAndForwardOnlyLifecycle(t *testing.T) 
 		t.Fatalf("CreateReport: %v", err)
 	}
 	for _, status := range []string{StatusTriaged, StatusConfirmed, StatusPatching, StatusDisclosed} {
-		if _, err := UpdateReport(ctx, db, sub.TrackingID, UpdateInput{Status: &status}, now); err != nil {
+		if _, err := UpdateReport(ctx, reportTestStore(db), sub.TrackingID, UpdateInput{Status: &status}, now); err != nil {
 			t.Fatalf("advance report to %s: %v", status, err)
 		}
 	}
-	if _, err := UpdateReport(ctx, db, sub.TrackingID, UpdateInput{Status: ptrStatus(StatusPatching)}, now); err == nil {
+	if _, err := UpdateReport(ctx, reportTestStore(db), sub.TrackingID, UpdateInput{Status: ptrStatus(StatusPatching)}, now); err == nil {
 		t.Fatal("expected disclosed report to reject backward transition")
 	}
-	entries, err := ListThanks(ctx, db)
+	entries, err := ListThanks(ctx, reportTestStore(db))
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("ListThanks = %#v, %v; want one entry", entries, err)
 	}
 	if entries[0].Credit != "Anonymous Researcher #1" || entries[0].Severity != "high" || entries[0].DisclosedOn != "2026-11-24" {
 		t.Fatalf("unexpected thanks entry: %#v", entries[0])
 	}
-	if _, err := CleanupClosedReports(ctx, db, 365, now.AddDate(0, 0, 366)); err != nil {
+	if _, err := CleanupClosedReports(ctx, reportTestStore(db), 365, now.AddDate(0, 0, 366)); err != nil {
 		t.Fatalf("CleanupClosedReports: %v", err)
 	}
-	entries, err = ListThanks(ctx, db)
+	entries, err = ListThanks(ctx, reportTestStore(db))
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("thanks entry did not survive report retention: %#v, %v", entries, err)
 	}

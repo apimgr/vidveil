@@ -2,6 +2,10 @@
 package email
 
 import (
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/mail"
 	"strings"
 	"testing"
 
@@ -30,11 +34,112 @@ func TestBuildRawAttachmentMessageEncodesEncryptedPayloadSafely(t *testing.T) {
 			t.Fatalf("MIME message missing %q", want)
 		}
 	}
-	if _, err := BuildRawAttachmentMessage("", "", "", "subject", "body", "../private.txt", "application/octet-stream", []byte("ciphertext")); err != nil {
+	if _, err := BuildRawAttachmentMessage("", "server@example.com", "security@example.com", "subject", "body", "../private.txt", "application/octet-stream", []byte("ciphertext")); err != nil {
 		t.Fatalf("safe basename should be accepted: %v", err)
 	}
-	if _, err := BuildRawAttachmentMessage("", "", "", "subject", "body", "x\r\nBcc: bad", "application/octet-stream", []byte("ciphertext")); err == nil {
+	if _, err := BuildRawAttachmentMessage("Vidveil", "server@example.com", "security@example.net", "subject", "body", "x\r\nBcc: bad", "application/octet-stream", []byte("ciphertext")); err == nil {
 		t.Fatal("expected attachment header injection to be rejected")
+	}
+}
+
+func TestBuildEmailMessageUsesRFC5322AndAlternativeParts(t *testing.T) {
+	message, err := buildEmailMessage("Vidveil – service", "server@example.com", "security@example.net", "Résumé received", "Plain body", "researcher@example.net")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := mail.ReadMessage(strings.NewReader(string(message)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"From", "To", "Subject", "Date", "Message-Id", "Auto-Submitted", "MIME-Version", "Content-Type", "Reply-To"} {
+		if parsed.Header.Get(name) == "" {
+			t.Errorf("missing required %s header", name)
+		}
+	}
+	if got := parsed.Header.Get("Auto-Submitted"); got != "auto-generated" {
+		t.Errorf("Auto-Submitted = %q, want auto-generated", got)
+	}
+	decoded, err := new(mime.WordDecoder).DecodeHeader(parsed.Header.Get("Subject"))
+	if err != nil || decoded != "Résumé received" {
+		t.Errorf("decoded subject = %q, err=%v", decoded, err)
+	}
+	from, err := mail.ParseAddress(parsed.Header.Get("From"))
+	if err != nil || from.Name != "Vidveil – service" || from.Address != "server@example.com" {
+		t.Errorf("parsed From = %#v, err=%v", from, err)
+	}
+	mediaType, params, err := mime.ParseMediaType(parsed.Header.Get("Content-Type"))
+	if err != nil || mediaType != "multipart/alternative" {
+		t.Fatalf("Content-Type = %q, %v", mediaType, err)
+	}
+	reader := multipart.NewReader(parsed.Body, params["boundary"])
+	part, err := reader.NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := part.Header.Get("Content-Type"); !strings.HasPrefix(got, "text/plain;") {
+		t.Fatalf("first MIME part is %q, want text/plain", got)
+	}
+	plain, err := io.ReadAll(part)
+	if err != nil || len(strings.TrimSpace(string(plain))) == 0 {
+		t.Fatalf("plain-text body is empty: %q, %v", plain, err)
+	}
+	part, err = reader.NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := part.Header.Get("Content-Type"); !strings.HasPrefix(got, "text/html;") {
+		t.Fatalf("second MIME part is %q, want text/html", got)
+	}
+}
+
+func TestBuildEmailMessageRejectsHeaderInjection(t *testing.T) {
+	for name, fields := range map[string][6]string{
+		"recipient":   {"Vidveil", "server@example.com", "person@example.net\r\nBcc: attacker@example.net", "subject", "body", ""},
+		"subject":     {"Vidveil", "server@example.com", "person@example.net", "subject\nBcc: attacker@example.net", "body", ""},
+		"sender name": {"Vidveil\r\nBcc: attacker@example.net", "server@example.com", "person@example.net", "subject", "body", ""},
+		"reply-to":    {"Vidveil", "server@example.com", "person@example.net", "subject", "body", "person@example.net\r\nBcc: attacker@example.net"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := buildEmailMessage(fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]); err == nil {
+				t.Fatal("expected header injection to be rejected")
+			}
+		})
+	}
+}
+
+func TestApplyVarsPreservesNewlinesForHeaderValidation(t *testing.T) {
+	svc := newTestEmailService(t)
+	value := "safe\r\nBcc: attacker@example.net"
+	if got := svc.applyVars("Subject: {value}", map[string]string{"value": value}); got != "Subject: "+value {
+		t.Fatalf("applyVars = %q, want original value retained for rejection", got)
+	}
+	if _, err := buildEmailMessage("Vidveil", "server@example.com", "person@example.net", value, "body", ""); err == nil {
+		t.Fatal("message builder accepted injected subject")
+	}
+}
+
+func TestSMTPTLSVerificationSkipsOnlyPrivateIPLiterals(t *testing.T) {
+	for _, test := range []struct {
+		host  string
+		skips bool
+	}{
+		{host: "10.1.2.3", skips: true},
+		{host: "172.20.1.2", skips: true},
+		{host: "192.168.1.2", skips: true},
+		{host: "100.64.1.2", skips: true},
+		{host: "127.0.0.1", skips: true},
+		{host: "169.254.1.2", skips: true},
+		{host: "[::1]", skips: true},
+		{host: "fc00::1", skips: true},
+		{host: "fe80::1", skips: true},
+		{host: "203.0.113.1", skips: false},
+		{host: "smtp.example.com", skips: false},
+	} {
+		t.Run(test.host, func(t *testing.T) {
+			if got := smtpTLSConfig(test.host).InsecureSkipVerify; got != test.skips {
+				t.Errorf("InsecureSkipVerify = %t, want %t", got, test.skips)
+			}
+		})
 	}
 }
 
@@ -274,7 +379,7 @@ func TestGetTemplateList_ContainsKnownTemplates(t *testing.T) {
 		found[name] = true
 	}
 
-	// These keys exist in defaultTemplates
+	// These defaults are embedded at src/server/template/email.
 	for _, name := range []string{
 		"security_alert",
 		"backup_complete",
@@ -287,6 +392,36 @@ func TestGetTemplateList_ContainsKnownTemplates(t *testing.T) {
 		if !found[name] {
 			t.Errorf("GetTemplateList() missing expected template %q", name)
 		}
+	}
+}
+
+func TestEmbeddedEmailTemplatesValidate(t *testing.T) {
+	svc := newTestEmailService(t)
+	for _, name := range svc.GetTemplateList() {
+		t.Run(name, func(t *testing.T) {
+			content, err := svc.GetTemplate(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := ValidateTemplate(content); err != nil {
+				t.Errorf("embedded template is invalid: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateTemplateRejectsUnknownVariablesAndEmptyContent(t *testing.T) {
+	for name, content := range map[string]string{
+		"unknown variable":  "Subject: Test\n---\nHello {unknown}",
+		"empty subject":     "Subject: \n---\nHello",
+		"empty body":        "Subject: Test\n---\n  ",
+		"missing separator": "Subject: Test\nHello",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := ValidateTemplate(content); err == nil {
+				t.Fatal("expected invalid template to be rejected")
+			}
+		})
 	}
 }
 
@@ -361,7 +496,7 @@ func TestIsCustomTemplate_FalseForDefaultOnly(t *testing.T) {
 
 func TestResetTemplate_RemovesCustomFile(t *testing.T) {
 	svc := newTestEmailService(t)
-	if err := svc.SaveTemplate("reset_me", "content"); err != nil {
+	if err := svc.SaveTemplate("reset_me", "Subject: Reset\n---\nReset body"); err != nil {
 		t.Fatalf("SaveTemplate error = %v", err)
 	}
 	if err := svc.ResetTemplate("reset_me"); err != nil {
@@ -381,7 +516,7 @@ func TestResetTemplate_NonexistentIsNoOp(t *testing.T) {
 
 func TestResetTemplate_IdempotentDoubleReset(t *testing.T) {
 	svc := newTestEmailService(t)
-	if err := svc.SaveTemplate("double", "body"); err != nil {
+	if err := svc.SaveTemplate("double", "Subject: Double reset\n---\nBody"); err != nil {
 		t.Fatalf("SaveTemplate error = %v", err)
 	}
 	if err := svc.ResetTemplate("double"); err != nil {
@@ -402,8 +537,8 @@ func TestSaveTemplate_CustomOverridesDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTemplate after save error = %v", err)
 	}
-	if got != customContent {
-		t.Errorf("GetTemplate returned %q, want custom content %q", got, customContent)
+	if got != customContent+"\n" {
+		t.Errorf("GetTemplate returned %q, want custom content %q with a final newline", got, customContent)
 	}
 }
 

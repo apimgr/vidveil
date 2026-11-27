@@ -35,7 +35,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 DOCKER_TEST_SUFFIX="$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
 DOCKER_TEST_CONTAINER="${DOCKER_PROJECT_NAME}-${DOCKER_TEST_SUFFIX}"
-DOCKER_BIN_DIR="${BINDIR:-binaries}"
+DOCKER_BIN_DIR="${BINDIR:-}"
 DOCKER_CLEANUP_BINDIR=false
 DOCKER_MEM="${DOCKER_MEM:-4g}"
 DOCKER_CPUS="${DOCKER_CPUS:-2}"
@@ -57,6 +57,9 @@ DOCKER_TESTS_FAILED=0
 # NEVER use project directory or bare /tmp
 mkdir -p "${TMPDIR:-/tmp}/${DOCKER_PROJECT_ORG}"
 DOCKER_TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/${DOCKER_PROJECT_ORG}/${DOCKER_INTERNAL_NAME}-XXXXXX")
+if [ -z "${DOCKER_BIN_DIR}" ]; then
+    DOCKER_BIN_DIR="${DOCKER_TEMP_DIR}/binaries"
+fi
 DOCKER_CONTAINER_REGISTRY="${DOCKER_TEMP_DIR}/containers"
 touch "${DOCKER_CONTAINER_REGISTRY}"
 mkdir -p "${DOCKER_TEMP_DIR}/config" "${DOCKER_TEMP_DIR}/data"
@@ -279,8 +282,8 @@ __test_endpoint() {
     fi
 }
 
-__info "Building server and CLI binaries with make build..."
-make -C "${DOCKER_PROJECT_ROOT}" build \
+__info "Building host-platform server and CLI binaries with make local..."
+make -C "${DOCKER_PROJECT_ROOT}" local \
     BINDIR="${DOCKER_BIN_DIR}" RELDIR="${DOCKER_TEMP_DIR}/releases" \
     GO_CACHE="${DOCKER_GO_CACHE}" GO_BUILD="${DOCKER_GO_BUILD}" \
     DOCKER_MEM="${DOCKER_MEM}" DOCKER_CPUS="${DOCKER_CPUS}" DOCKER_CPU_SHARES="${DOCKER_CPU_SHARES}" DOCKER_TIMEOUT="${DOCKER_TIMEOUT}"

@@ -3,14 +3,19 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/apimgr/vidveil/src/client/api"
 	paths "github.com/apimgr/vidveil/src/client/paths"
+	"github.com/apimgr/vidveil/src/common/i18n"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
@@ -20,8 +25,6 @@ const (
 	SetupTestConnectionTimeoutSecs = 10
 	SetupPasswordMaskChar          = '*'
 	SetupDefaultServerURLPrefix    = "https://"
-	SetupInputFocusServerURL       = 0
-	SetupInputFocusToken           = 1
 )
 
 // SetupWizardState represents the current state of the setup wizard
@@ -40,17 +43,15 @@ const (
 // SetupWizardModel represents the setup wizard TUI model
 // Per AI.md PART 1: Type names MUST be specific - "model" is ambiguous
 type SetupWizardModel struct {
-	state             SetupWizardState
-	serverURL         string
-	apiToken          string
-	errorMessage      string
-	statusMessage     string
-	connectionSuccess bool
-	serverVersion     string
-	saveToConfig      bool
-	isQuitting        bool
-	// inputFocused: 0 = server URL, 1 = token
-	inputFocused int
+	state            SetupWizardState
+	serverURL        string
+	apiToken         string
+	errorMessage     string
+	statusMessage    string
+	saveToConfig     bool
+	setAsDefault     bool
+	setupOptionFocus int
+	isQuitting       bool
 }
 
 // SetupConnectionTestMsg is sent when connection test completes
@@ -68,7 +69,6 @@ func CreateSetupWizardModel() SetupWizardModel {
 		state:        SetupStateServerURL,
 		serverURL:    SetupDefaultServerURLPrefix,
 		saveToConfig: true,
-		inputFocused: SetupInputFocusServerURL,
 	}
 }
 
@@ -89,10 +89,9 @@ func (m SetupWizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			return m.handleEnterKey()
 
-		case "tab":
-			// Toggle between fields
-			if m.state == SetupStateToken {
-				m.inputFocused = (m.inputFocused + 1) % 2
+		case "tab", "shift+tab":
+			if m.state == SetupStateSaveConfig {
+				m.setupOptionFocus = (m.setupOptionFocus + 1) % 2
 			}
 			return m, nil
 
@@ -100,30 +99,34 @@ func (m SetupWizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleBackspace()
 
 		case " ":
-			// Toggle save to config checkbox
+			// Toggle the focused setup persistence option.
 			if m.state == SetupStateSaveConfig {
-				m.saveToConfig = !m.saveToConfig
+				if m.setupOptionFocus == 0 {
+					m.saveToConfig = !m.saveToConfig
+				} else {
+					m.setAsDefault = !m.setAsDefault
+				}
 				return m, nil
 			}
 			// Otherwise add space to input
 			return m.handleInput(" ")
 
 		default:
-			if len(msg.String()) == 1 {
-				return m.handleInput(msg.String())
+			if len(msg.Runes) > 0 {
+				return m.handleInput(string(msg.Runes))
+			}
+			if input := msg.String(); len(input) == 1 {
+				return m.handleInput(input)
 			}
 		}
 
 	case SetupConnectionTestMsg:
-		m.state = SetupStateToken
 		if msg.success {
-			m.connectionSuccess = true
-			m.serverVersion = msg.version
-			m.statusMessage = fmt.Sprintf("Connected! Server version: %s", msg.version)
+			m.statusMessage = i18n.TranslateFormat(resolveCLILanguage(), "cli.setup.connected", "version", msg.version)
 			m.errorMessage = ""
+			m.state = SetupStateSaveConfig
 		} else {
-			m.connectionSuccess = false
-			m.errorMessage = fmt.Sprintf("Connection failed: %v", msg.err)
+			m.errorMessage = i18n.TranslateFormat(resolveCLILanguage(), "cli.setup.connection_failed", "error", msg.err)
 			m.state = SetupStateServerURL
 		}
 		return m, nil
@@ -137,23 +140,24 @@ func (m SetupWizardModel) handleEnterKey() (tea.Model, tea.Cmd) {
 	switch m.state {
 	case SetupStateServerURL:
 		if err := validateCLIServerURL(m.serverURL); err != nil {
-			m.errorMessage = fmt.Sprintf("Invalid server URL: %v", err)
+			m.errorMessage = i18n.TranslateFormat(resolveCLILanguage(), "cli.setup.invalid_server_url", "error", err)
 			return m, nil
 		}
 		m.errorMessage = ""
-		m.state = SetupStateTestConnection
-		m.statusMessage = "Testing connection..."
-		return m, testServerConnection(m.serverURL)
+		m.state = SetupStateToken
+		m.statusMessage = ""
+		return m, nil
 
 	case SetupStateToken:
-		// Token is optional, proceed to save
-		m.state = SetupStateSaveConfig
-		return m, nil
+		m.errorMessage = ""
+		m.state = SetupStateTestConnection
+		m.statusMessage = i18n.Translate(resolveCLILanguage(), "cli.setup.testing_connection")
+		return m, testServerConnection(m.serverURL, m.apiToken)
 
 	case SetupStateSaveConfig:
 		// Save configuration
-		if err := SaveSetupWizardConfig(m.serverURL, m.apiToken, m.saveToConfig); err != nil {
-			m.errorMessage = fmt.Sprintf("Failed to save config: %v", err)
+		if err := SaveSetupWizardConfig(m.serverURL, m.apiToken, m.saveToConfig, m.setAsDefault); err != nil {
+			m.errorMessage = i18n.TranslateFormat(resolveCLILanguage(), "cli.setup.save_failed", "error", err)
 			m.state = SetupStateFailed
 			return m, nil
 		}
@@ -169,11 +173,13 @@ func (m SetupWizardModel) handleBackspace() (tea.Model, tea.Cmd) {
 	switch m.state {
 	case SetupStateServerURL:
 		if len(m.serverURL) > 0 {
-			m.serverURL = m.serverURL[:len(m.serverURL)-1]
+			_, size := utf8.DecodeLastRuneInString(m.serverURL)
+			m.serverURL = m.serverURL[:len(m.serverURL)-size]
 		}
 	case SetupStateToken:
 		if len(m.apiToken) > 0 {
-			m.apiToken = m.apiToken[:len(m.apiToken)-1]
+			_, size := utf8.DecodeLastRuneInString(m.apiToken)
+			m.apiToken = m.apiToken[:len(m.apiToken)-size]
 		}
 	}
 	return m, nil
@@ -193,7 +199,7 @@ func (m SetupWizardModel) handleInput(char string) (tea.Model, tea.Cmd) {
 // View implements tea.Model
 func (m SetupWizardModel) View() string {
 	if m.isQuitting {
-		return "Setup cancelled.\n"
+		return i18n.Translate(resolveCLILanguage(), "cli.setup.cancelled") + "\n"
 	}
 
 	// Styles
@@ -208,63 +214,65 @@ func (m SetupWizardModel) View() string {
 
 	// Header
 	viewBuilder.WriteString("\n")
-	viewBuilder.WriteString(titleStyle.Render("  VidVeil CLI Setup Wizard"))
+	viewBuilder.WriteString(titleStyle.Render("  " + i18n.Translate(resolveCLILanguage(), "cli.setup.title")))
 	viewBuilder.WriteString("\n\n")
 
 	// Current state content
 	switch m.state {
 	case SetupStateServerURL:
-		viewBuilder.WriteString(labelStyle.Render("  No server configured. Let's set one up!\n\n"))
-		viewBuilder.WriteString(labelStyle.Render("  Server URL:\n"))
+		viewBuilder.WriteString(labelStyle.Render("  " + i18n.Translate(resolveCLILanguage(), "cli.setup.no_server") + "\n\n"))
+		viewBuilder.WriteString(labelStyle.Render("  " + i18n.Translate(resolveCLILanguage(), "cli.setup.server_url") + ":\n"))
 		viewBuilder.WriteString(inputStyle.Render(fmt.Sprintf("  [%s_]\n", m.serverURL)))
 
 	case SetupStateTestConnection:
-		viewBuilder.WriteString(labelStyle.Render("  Testing connection...\n"))
+		viewBuilder.WriteString(labelStyle.Render("  " + i18n.Translate(resolveCLILanguage(), "cli.setup.testing_connection") + "\n"))
 
 	case SetupStateToken:
-		if m.connectionSuccess {
-			viewBuilder.WriteString(successStyle.Render(fmt.Sprintf("  Connected to server (v%s)\n\n", m.serverVersion)))
-		}
-		viewBuilder.WriteString(labelStyle.Render("  API Token (optional, press Enter to skip):\n"))
-		displayToken := strings.Repeat(string(SetupPasswordMaskChar), len(m.apiToken))
+		viewBuilder.WriteString(labelStyle.Render("  " + i18n.Translate(resolveCLILanguage(), "cli.setup.api_token_optional") + "\n"))
+		displayToken := strings.Repeat(string(SetupPasswordMaskChar), utf8.RuneCountInString(m.apiToken))
 		if m.apiToken == "" {
 			displayToken = ""
 		}
 		viewBuilder.WriteString(inputStyle.Render(fmt.Sprintf("  [%s_]\n", displayToken)))
 
 	case SetupStateSaveConfig:
-		viewBuilder.WriteString(labelStyle.Render("  Configuration:\n\n"))
-		fmt.Fprintf(&viewBuilder, "    Server: %s\n", m.serverURL)
+		viewBuilder.WriteString(labelStyle.Render("  " + i18n.Translate(resolveCLILanguage(), "cli.setup.configuration") + ":\n\n"))
+		fmt.Fprintf(&viewBuilder, "    %s: %s\n", i18n.Translate(resolveCLILanguage(), "cli.setup.server"), m.serverURL)
 		if m.apiToken != "" {
-			viewBuilder.WriteString("    Token:  ********\n")
+			fmt.Fprintf(&viewBuilder, "    %s:  ********\n", i18n.Translate(resolveCLILanguage(), "cli.setup.token"))
 		} else {
-			viewBuilder.WriteString("    Token:  (none)\n")
+			fmt.Fprintf(&viewBuilder, "    %s:  %s\n", i18n.Translate(resolveCLILanguage(), "cli.setup.token"), i18n.Translate(resolveCLILanguage(), "cli.setup.none"))
 		}
 		viewBuilder.WriteString("\n")
 		checkbox := "[ ]"
 		if m.saveToConfig {
 			checkbox = "[x]"
 		}
-		fmt.Fprintf(&viewBuilder, "  %s Save to configuration file\n", checkbox)
+		fmt.Fprintf(&viewBuilder, "  %s %s\n", checkbox, i18n.Translate(resolveCLILanguage(), "gui.save_configuration"))
+		defaultCheckbox := "[ ]"
+		if m.setAsDefault {
+			defaultCheckbox = "[x]"
+		}
+		fmt.Fprintf(&viewBuilder, "  %s %s\n", defaultCheckbox, i18n.Translate(resolveCLILanguage(), "gui.set_default_server"))
 		viewBuilder.WriteString("\n")
-		viewBuilder.WriteString(labelStyle.Render("  Press Enter to save, Esc to cancel\n"))
+		viewBuilder.WriteString(labelStyle.Render("  " + i18n.Translate(resolveCLILanguage(), "cli.setup.option_instructions") + "\n"))
 
 	case SetupStateComplete:
-		viewBuilder.WriteString(successStyle.Render("  Setup complete!\n\n"))
-		fmt.Fprintf(&viewBuilder, "    Server: %s\n", m.serverURL)
-		fmt.Fprintf(&viewBuilder, "    Config: %s\n", getCLIConfigFilePath())
+		viewBuilder.WriteString(successStyle.Render("  " + i18n.Translate(resolveCLILanguage(), "cli.setup.complete") + "\n\n"))
+		fmt.Fprintf(&viewBuilder, "    %s: %s\n", i18n.Translate(resolveCLILanguage(), "cli.setup.server"), m.serverURL)
+		fmt.Fprintf(&viewBuilder, "    %s: %s\n", i18n.Translate(resolveCLILanguage(), "cli.setup.config"), getCLIConfigFilePath())
 		if m.apiToken != "" {
-			fmt.Fprintf(&viewBuilder, "    Token:  %s\n", paths.TokenFile())
+			fmt.Fprintf(&viewBuilder, "    %s:  %s\n", i18n.Translate(resolveCLILanguage(), "cli.setup.token_file"), paths.TokenFile())
 		}
 
 	case SetupStateFailed:
-		viewBuilder.WriteString(errorStyle.Render("  Setup failed!\n"))
+		viewBuilder.WriteString(errorStyle.Render("  " + i18n.Translate(resolveCLILanguage(), "cli.setup.failed") + "\n"))
 	}
 
 	// Error message
 	if m.errorMessage != "" {
 		viewBuilder.WriteString("\n")
-		viewBuilder.WriteString(errorStyle.Render(fmt.Sprintf("  Error: %s\n", m.errorMessage)))
+		viewBuilder.WriteString(errorStyle.Render(fmt.Sprintf("  %s: %s\n", i18n.Translate(resolveCLILanguage(), "common.error"), m.errorMessage)))
 	}
 
 	// Status message
@@ -275,7 +283,7 @@ func (m SetupWizardModel) View() string {
 
 	// Help text
 	viewBuilder.WriteString("\n")
-	viewBuilder.WriteString(helpStyle.Render("  Esc: cancel | Enter: continue"))
+	viewBuilder.WriteString(helpStyle.Render("  " + i18n.Translate(resolveCLILanguage(), "cli.setup.navigation_help")))
 	viewBuilder.WriteString("\n")
 
 	return viewBuilder.String()
@@ -283,74 +291,176 @@ func (m SetupWizardModel) View() string {
 
 // testServerConnection tests connection to the server
 // Per AI.md PART 1: Function names MUST reveal intent
-func testServerConnection(serverURL string) tea.Cmd {
+func testServerConnection(serverURL, token string) tea.Cmd {
 	return func() tea.Msg {
-		// Create temporary client for testing
-		testClient := api.NewAPIClient(serverURL, "", SetupTestConnectionTimeoutSecs, "v1")
+		version, err := validateSetupServerConnection(serverURL, token)
+		return SetupConnectionTestMsg{success: err == nil, version: version, err: err}
+	}
+}
 
-		// Check health endpoint
-		healthy, err := testClient.Health()
-		if err != nil {
-			return SetupConnectionTestMsg{success: false, err: err}
+func validateSetupServerConnection(serverURL, token string) (string, error) {
+	testClient := api.NewAPIClient(serverURL, token, SetupTestConnectionTimeoutSecs, "v1")
+	testClient.SetLanguage(resolveCLILanguage())
+	healthy, err := testClient.Health()
+	if err != nil {
+		return "", err
+	}
+	if !healthy {
+		return "", fmt.Errorf("%s", i18n.Translate(resolveCLILanguage(), "cli.setup.server_unhealthy"))
+	}
+	if token != "" {
+		if _, err := testClient.CheckAuth(); err != nil {
+			return "", fmt.Errorf("%s", i18n.TranslateFormat(resolveCLILanguage(), "cli.setup.authentication_failed", "error", err))
 		}
-		if !healthy {
-			return SetupConnectionTestMsg{success: false, err: fmt.Errorf("server returned unhealthy status")}
-		}
+	}
+	versionResp, err := testClient.GetVersion()
+	if err != nil {
+		return "", err
+	}
+	if versionResp == nil || versionResp.Version == "" {
+		return "unknown", nil
+	}
+	return versionResp.Version, nil
+}
 
-		// Get version
-		versionResp, err := testClient.GetVersion()
-		version := "unknown"
-		if err == nil && versionResp != nil {
-			version = versionResp.Version
-		}
+// RunInlineSetupWizard handles first-run setup when a full-screen TUI cannot fit.
+func RunInlineSetupWizard() error {
+	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
+		return NewExitError(ExitConfig, fmt.Errorf("%s", i18n.Translate(resolveCLILanguage(), "cli.setup.noninteractive_error")))
+	}
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print(i18n.Translate(resolveCLILanguage(), "cli.setup.server_url") + ": ")
+	serverURLLine, err := reader.ReadString('\n')
+	if err != nil && serverURLLine == "" {
+		return fmt.Errorf("%s: %w", i18n.Translate(resolveCLILanguage(), "cli.setup.read_server_url_failed"), err)
+	}
+	serverURL := strings.TrimSpace(serverURLLine)
+	if err := validateCLIServerURL(serverURL); err != nil {
+		return NewExitError(ExitConfig, fmt.Errorf("%s: %w", i18n.Translate(resolveCLILanguage(), "cli.setup.invalid_server_url_prefix"), err))
+	}
+	fmt.Print(i18n.Translate(resolveCLILanguage(), "cli.setup.api_token_optional") + ": ")
+	tokenBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
+	if err != nil {
+		return fmt.Errorf("%s: %w", i18n.Translate(resolveCLILanguage(), "cli.setup.read_token_failed"), err)
+	}
+	token := strings.TrimSpace(string(tokenBytes))
+	saveConfig, err := readSetupConfirmation(reader, i18n.Translate(resolveCLILanguage(), "gui.save_configuration"), true)
+	if err != nil {
+		return err
+	}
+	setDefault, err := readSetupConfirmation(reader, i18n.Translate(resolveCLILanguage(), "gui.set_default_server"), false)
+	if err != nil {
+		return err
+	}
+	version, err := validateSetupServerConnection(serverURL, token)
+	if err != nil {
+		return fmt.Errorf("%s: %w", i18n.Translate(resolveCLILanguage(), "cli.setup.connection_failed"), err)
+	}
+	fmt.Println(i18n.TranslateFormat(resolveCLILanguage(), "cli.setup.connected_version", "version", version))
+	if err := SaveSetupWizardConfig(serverURL, token, saveConfig, setDefault); err != nil {
+		return err
+	}
+	return nil
+}
 
-		return SetupConnectionTestMsg{success: true, version: version}
+func readSetupConfirmation(reader *bufio.Reader, prompt string, defaultYes bool) (bool, error) {
+	choice := i18n.Translate(resolveCLILanguage(), "cli.setup.no_default")
+	if defaultYes {
+		choice = i18n.Translate(resolveCLILanguage(), "cli.setup.yes_default")
+	}
+	fmt.Printf("%s [%s]: ", prompt, choice)
+	answer, err := reader.ReadString('\n')
+	if err != nil && answer == "" {
+		return false, fmt.Errorf("%s: %w", i18n.Translate(resolveCLILanguage(), "cli.setup.read_choice_failed"), err)
+	}
+	answer = strings.ToLower(strings.TrimSpace(answer))
+	if answer == "" {
+		return defaultYes, nil
+	}
+	return setupConfirmationIsYes(answer, resolveCLILanguage()), nil
+}
+
+func setupConfirmationIsYes(answer, locale string) bool {
+	if answer == "y" || answer == "yes" {
+		return true
+	}
+	switch strings.ToLower(locale) {
+	case "de":
+		return answer == "j" || answer == "ja"
+	case "es":
+		return answer == "s" || answer == "si" || answer == "sí"
+	case "fr":
+		return answer == "o" || answer == "oui"
+	case "it":
+		return answer == "s" || answer == "si" || answer == "sì"
+	case "ja":
+		return answer == "はい"
+	case "zh":
+		return answer == "是"
+	case "ar":
+		return answer == "نعم" || answer == "ن"
+	default:
+		return false
 	}
 }
 
 // SaveSetupWizardConfig saves the setup wizard configuration
 // Per AI.md PART 1: Function names MUST reveal intent
-func SaveSetupWizardConfig(serverURL, token string, saveToFile bool) error {
+func SaveSetupWizardConfig(serverURL, token string, saveToFile bool, setAsDefault ...bool) error {
+	if err := validateCLIServerURL(serverURL); err != nil {
+		return fmt.Errorf("%s: %w", i18n.Translate(resolveCLILanguage(), "cli.setup.invalid_server_url_prefix"), err)
+	}
+	if cliConfig != nil {
+		cliConfig.Server.Address = serverURL
+		cliConfig.Server.Token = token
+		cliConfig.Auth.Token = token
+	}
 	if !saveToFile {
 		return nil
 	}
 
 	// Ensure directories exist
 	if err := paths.EnsureClientDirs(); err != nil {
-		return fmt.Errorf("creating directories: %w", err)
+		return fmt.Errorf("%s: %w", i18n.Translate(resolveCLILanguage(), "cli.setup.create_config_dirs_failed"), err)
 	}
 
 	// Save config file
 	configFilePath := getCLIConfigFilePath()
-	var fileCLIConfig CLIConfig
-	if data, err := os.ReadFile(configFilePath); err == nil {
-		// Ignore unmarshal errors - start fresh if config is invalid
-		_ = yaml.Unmarshal(data, &fileCLIConfig)
+	writeConfig := func(path string) error {
+		var fileCLIConfig CLIConfig
+		if data, err := os.ReadFile(path); err == nil {
+			if err := yaml.Unmarshal(data, &fileCLIConfig); err != nil {
+				return fmt.Errorf("%s %s: %w", i18n.Translate(resolveCLILanguage(), "cli.setup.parse_config_failed"), path, err)
+			}
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("%s %s: %w", i18n.Translate(resolveCLILanguage(), "cli.setup.read_config_failed"), path, err)
+		}
+		fileCLIConfig.Server.Address = serverURL
+		fileCLIConfig.Auth.Token = token
+		if fileCLIConfig.Server.Timeout == 0 {
+			fileCLIConfig.Server.Timeout = 30
+		}
+		if fileCLIConfig.Output.Format == "" {
+			fileCLIConfig.Output.Format = "table"
+		}
+		if fileCLIConfig.Output.Color == "" {
+			fileCLIConfig.Output.Color = "auto"
+		}
+		return writeCLIConfigFile(fileCLIConfig, path)
 	}
-
-	// Update server address
-	fileCLIConfig.Server.Address = serverURL
-	if fileCLIConfig.Server.Timeout == 0 {
-		fileCLIConfig.Server.Timeout = 30
-	}
-	if fileCLIConfig.Output.Format == "" {
-		fileCLIConfig.Output.Format = "table"
-	}
-	if fileCLIConfig.Output.Color == "" {
-		fileCLIConfig.Output.Color = "auto"
-	}
-
-	if err := writeCLIConfigFile(fileCLIConfig, configFilePath); err != nil {
+	if err := writeConfig(configFilePath); err != nil {
 		return err
 	}
-
-	// Save token to separate file if provided
-	if token != "" {
-		if err := writeCLIDefaultTokenFile(token); err != nil {
-			return err
+	if len(setAsDefault) > 0 && setAsDefault[0] {
+		defaultConfigPath := paths.ResolveConfigFilePath("")
+		if filepath.Clean(defaultConfigPath) != filepath.Clean(configFilePath) {
+			if err := writeConfig(defaultConfigPath); err != nil {
+				return fmt.Errorf("%s: %w", i18n.Translate(resolveCLILanguage(), "cli.setup.save_default_config_failed"), err)
+			}
 		}
 	}
-
+	cliConfigHasSavedServerAddress = true
 	return nil
 }
 
@@ -366,7 +476,7 @@ func runSetupWizard() error {
 
 	model := finalModel.(SetupWizardModel)
 	if model.isQuitting && model.state != SetupStateComplete {
-		return fmt.Errorf("setup cancelled")
+		return fmt.Errorf("%s", i18n.Translate(resolveCLILanguage(), "cli.setup.cancelled"))
 	}
 
 	return nil

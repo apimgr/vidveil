@@ -2,14 +2,17 @@
 package handler
 
 import (
+	"context"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	// Register promauto metrics with the default Prometheus registry.
-	_ "github.com/apimgr/vidveil/src/server/service/metric"
+	prommetric "github.com/apimgr/vidveil/src/server/service/metric"
 )
 
 // slidingWindowCounter tracks counts in a 24-hour sliding window using hourly buckets.
@@ -17,7 +20,8 @@ import (
 type slidingWindowCounter struct {
 	mu sync.RWMutex
 	// 24 hourly buckets
-	buckets [24]uint64
+	buckets     [24]uint64
+	bucketHours [24]int64
 	// Current bucket index (0-23)
 	currentHour int
 	// Last rotation timestamp
@@ -26,8 +30,12 @@ type slidingWindowCounter struct {
 
 // newSlidingWindowCounter creates a new 24h sliding window counter
 func newSlidingWindowCounter() *slidingWindowCounter {
+	now := time.Now().UTC().Truncate(time.Hour)
+	hour := now.Unix() / 3600
 	return &slidingWindowCounter{
-		lastRotate: time.Now().Truncate(time.Hour),
+		lastRotate:  now,
+		currentHour: int(hour % 24),
+		bucketHours: [24]int64{hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour, hour},
 	}
 }
 
@@ -36,12 +44,17 @@ func (s *slidingWindowCounter) increment() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.rotateLocked()
+	hour := s.lastRotate.Unix() / 3600
+	if s.bucketHours[s.currentHour] != hour {
+		s.buckets[s.currentHour] = 0
+		s.bucketHours[s.currentHour] = hour
+	}
 	s.buckets[s.currentHour]++
 }
 
 // rotateLocked rotates buckets if an hour has passed. Must be called with lock held.
 func (s *slidingWindowCounter) rotateLocked() {
-	now := time.Now().Truncate(time.Hour)
+	now := time.Now().UTC().Truncate(time.Hour)
 	hoursPassed := int(now.Sub(s.lastRotate).Hours())
 
 	if hoursPassed <= 0 {
@@ -55,14 +68,53 @@ func (s *slidingWindowCounter) rotateLocked() {
 			s.buckets[i] = 0
 		}
 		s.currentHour = int(now.Hour()) % 24
+		hour := now.Unix() / 3600
+		for i := range s.bucketHours {
+			s.bucketHours[i] = hour
+		}
 	} else {
 		// Rotate through the buckets, clearing expired ones
+		previousHour := s.lastRotate.Unix() / 3600
 		for i := 0; i < hoursPassed; i++ {
 			s.currentHour = (s.currentHour + 1) % 24
 			s.buckets[s.currentHour] = 0
+			s.bucketHours[s.currentHour] = previousHour + int64(i+1)
 		}
 	}
 	s.lastRotate = now
+}
+
+func (s *slidingWindowCounter) snapshot() map[int64]uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rotateLocked()
+	current := s.lastRotate.Unix() / 3600
+	result := make(map[int64]uint64, 24)
+	for index, count := range s.buckets {
+		hour := s.bucketHours[index]
+		if count > 0 && hour <= current && current-hour < 24 {
+			result[hour] = count
+		}
+	}
+	return result
+}
+
+func (s *slidingWindowCounter) restore(hourly map[int64]uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC().Truncate(time.Hour)
+	current := now.Unix() / 3600
+	s.lastRotate = now
+	s.currentHour = int(current % 24)
+	for i := range s.buckets {
+		s.buckets[i], s.bucketHours[i] = 0, current-int64((s.currentHour-i+24)%24)
+	}
+	for hour, count := range hourly {
+		if hour <= current && current-hour < 24 {
+			index := int(hour % 24)
+			s.bucketHours[index], s.buckets[index] = hour, count
+		}
+	}
 }
 
 // count returns the total count across all 24 buckets
@@ -74,8 +126,12 @@ func (s *slidingWindowCounter) count() uint64 {
 	s.rotateLocked()
 
 	var total uint64
-	for _, b := range s.buckets {
-		total += b
+	current := s.lastRotate.Unix() / 3600
+	for index, b := range s.buckets {
+		hour := s.bucketHours[index]
+		if hour <= current && current-hour < 24 {
+			total += b
+		}
 	}
 	return total
 }
@@ -100,6 +156,72 @@ type ServerMetrics struct {
 	requests24h *slidingWindowCounter
 	// searches24h tracks searches in the last 24 hours
 	searches24h *slidingWindowCounter
+	persistDB   *database.AppDatabase
+	persistStop chan struct{}
+	persistDone chan struct{}
+	persistOnce sync.Once
+}
+
+// SetPersistence restores durable request aggregates and flushes them every
+// 30 seconds while the server is running.
+func (m *ServerMetrics) SetPersistence(db *database.AppDatabase) error {
+	if db == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	snapshot, err := db.LoadRequestStats(ctx)
+	cancel()
+	if err != nil {
+		return err
+	}
+	m.persistDB = db
+	atomic.StoreUint64(&m.requestsTotal, snapshot.Total)
+	if m.requests24h != nil {
+		m.requests24h.restore(snapshot.Hourly)
+	}
+	m.persistStop = make(chan struct{})
+	m.persistDone = make(chan struct{})
+	go m.persistLoop()
+	return nil
+}
+
+func (m *ServerMetrics) persistLoop() {
+	defer close(m.persistDone)
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-m.persistStop:
+			return
+		case <-ticker.C:
+			if err := m.flushRequestStats(); err != nil {
+				log.Printf("health: failed to persist request statistics: %v", err)
+			}
+		}
+	}
+}
+
+func (m *ServerMetrics) flushRequestStats() error {
+	if m == nil || m.persistDB == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	hourly := make(map[int64]uint64)
+	if m.requests24h != nil {
+		hourly = m.requests24h.snapshot()
+	}
+	return m.persistDB.SaveRequestStats(ctx, database.RequestStatsSnapshot{Total: atomic.LoadUint64(&m.requestsTotal), Hourly: hourly})
+}
+
+// Close stops periodic persistence and performs a final bounded flush.
+func (m *ServerMetrics) Close() error {
+	if m == nil || m.persistDB == nil {
+		return nil
+	}
+	m.persistOnce.Do(func() { close(m.persistStop) })
+	<-m.persistDone
+	return m.flushRequestStats()
 }
 
 // NewMetrics creates a new metrics collector
@@ -124,6 +246,7 @@ func (m *ServerMetrics) IncrementRequests() {
 // IncrementSearches increments the search counter
 func (m *ServerMetrics) IncrementSearches() {
 	atomic.AddUint64(&m.searchesTotal, 1)
+	prommetric.SearchQueriesTotal.Inc()
 	if m.searches24h != nil {
 		m.searches24h.increment()
 	}
@@ -132,6 +255,12 @@ func (m *ServerMetrics) IncrementSearches() {
 // IncrementCacheHits increments the cache hit counter
 func (m *ServerMetrics) IncrementCacheHits() {
 	atomic.AddUint64(&m.cacheHitsTotal, 1)
+}
+
+// RecordSearchResult updates the project-specific duration and result metrics.
+func (m *ServerMetrics) RecordSearchResult(duration time.Duration, results int) {
+	prommetric.SearchDuration.Observe(duration.Seconds())
+	prommetric.SearchResultsTotal.Observe(float64(results))
 }
 
 // IncrementSearchErrors increments the search error counter

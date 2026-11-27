@@ -108,7 +108,7 @@ func (m *SSLManager) requestDNS01(domain string) error {
 	}
 
 	// Write certificate and key to {config_dir}/ssl/letsencrypt/{domain}/ per AI.md PART 15.
-	// This is the app-managed path; the scheduler auto-renews it 7 days before expiry.
+	// This is the app-managed path; the scheduler renews it when 30 days or fewer remain.
 	leDir := filepath.Join(m.configDir, "ssl", "letsencrypt", domain)
 	if err := os.MkdirAll(leDir, 0o700); err != nil {
 		return fmt.Errorf("DNS-01: failed to create cert dir: %w", err)
@@ -142,7 +142,7 @@ func (m *SSLManager) requestDNS01(domain string) error {
 		return fmt.Errorf("certificate issued but DNS validation state could not be stored: %w", err)
 	}
 
-	fmt.Printf("DNS-01: certificate obtained for %s (expires %s)\n",
+	log.Printf("INFO: DNS-01 certificate obtained for %s (expires %s)",
 		domain, leaf.NotAfter.Format(time.RFC1123))
 
 	return nil

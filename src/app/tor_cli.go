@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,11 +31,20 @@ import (
 const errNoRunningServer = "Error: no running server detected — start the server first"
 
 // handleTorCommand dispatches the `tor` CLI subcommands per AI.md PART 31:
-// status | validate | restart | regenerate | vanity start | vanity apply | import-keys <path>
+// --maintenance tor status | validate | restart | regenerate | vanity start | vanity stop | vanity apply | import-keys <path>
 func handleTorCommand(args []string, configDir, dataDir string) int {
 	if len(args) == 0 {
 		printTorHelp()
 		return 1
+	}
+	yes := false
+	if args[len(args)-1] == "--yes" {
+		yes = true
+		args = args[:len(args)-1]
+		if len(args) == 0 {
+			printTorHelp()
+			return 2
+		}
 	}
 
 	switch args[0] {
@@ -45,7 +55,7 @@ func handleTorCommand(args []string, configDir, dataDir string) int {
 	case "restart":
 		return torRestart(configDir, dataDir)
 	case "regenerate":
-		return torRegenerate(configDir, dataDir)
+		return torRegenerate(configDir, dataDir, yes)
 	case "vanity":
 		if len(args) < 2 {
 			fmt.Fprintln(os.Stderr, "Usage: tor vanity {start <prefix>|apply}")
@@ -54,12 +64,37 @@ func handleTorCommand(args []string, configDir, dataDir string) int {
 		switch args[1] {
 		case "start":
 			if len(args) < 3 {
-				fmt.Fprintln(os.Stderr, "Usage: tor vanity start <prefix>")
+				fmt.Fprintln(os.Stderr, "Usage: tor vanity start <prefix> [--workers N]")
 				return 1
 			}
-			return torVanityStart(configDir, dataDir, args[2])
+			workers := 0
+			for index := 3; index < len(args); index++ {
+				value := ""
+				if strings.HasPrefix(args[index], "--workers=") {
+					value = strings.TrimPrefix(args[index], "--workers=")
+				} else if args[index] == "--workers" && index+1 < len(args) {
+					index++
+					value = args[index]
+				} else {
+					fmt.Fprintf(os.Stderr, "Unknown vanity start option: %s\n", args[index])
+					return 2
+				}
+				parsed, err := strconv.Atoi(value)
+				if err != nil || parsed < 1 {
+					fmt.Fprintln(os.Stderr, "workers must be a positive integer")
+					return 2
+				}
+				workers = parsed
+			}
+			return torVanityStart(configDir, dataDir, args[2], workers)
 		case "apply":
-			return torVanityApply(configDir, dataDir)
+			address := ""
+			if len(args) > 2 {
+				address = args[2]
+			}
+			return torVanityApply(configDir, dataDir, yes, address)
+		case "stop":
+			return torVanityStop(configDir, dataDir)
 		default:
 			fmt.Fprintf(os.Stderr, "Unknown vanity command: %s\nUsage: tor vanity {start <prefix>|apply}\n", args[1])
 			return 1
@@ -69,7 +104,7 @@ func handleTorCommand(args []string, configDir, dataDir string) int {
 			fmt.Fprintln(os.Stderr, "Usage: tor import-keys <path>")
 			return 1
 		}
-		return torImportKeys(configDir, dataDir, args[1])
+		return torImportKeys(configDir, dataDir, args[1], yes)
 	case "help", "--help", "-h":
 		printTorHelp()
 		return 0
@@ -84,16 +119,17 @@ func handleTorCommand(args []string, configDir, dataDir string) int {
 func printTorHelp() {
 	binaryName := filepath.Base(os.Args[0])
 	fmt.Printf(`Tor Hidden Service Commands:
-  %s tor status              - View Tor hidden service status
-  %s tor validate            - Validate Tor configuration
-  %s tor restart             - Restart the Tor process
-  %s tor regenerate          - Regenerate the .onion address (new keys)
-  %s tor vanity start <pfx>  - Start vanity address search (prefix a-z, 2-7, max 6 chars)
-  %s tor vanity apply        - Apply the pending vanity address
-  %s tor import-keys <path>  - Import an existing hs_ed25519_secret_key
+  %s --maintenance tor status              - View Tor hidden service status
+  %s --maintenance tor validate            - Validate Tor configuration
+  %s --maintenance tor restart             - Restart the Tor process
+  %s --maintenance tor regenerate          - Regenerate the .onion address (new keys)
+  %s --maintenance tor vanity start <pfx> [--workers N] - Start vanity address search
+  %s --maintenance tor vanity stop         - Stop vanity search and keep found candidates
+  %s --maintenance tor vanity apply [address] - Apply a pending vanity address
+  %s --maintenance tor import-keys <path>  - Import an existing key directory
 
 Tor is configured via server.yml and CLI only.
-`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
+`, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName)
 }
 
 // torDirs resolves the tor data directory paths used by the CLI
@@ -284,26 +320,28 @@ func torStatus(configDir, dataDir string) int {
 		data, err := torControlRequest(http.MethodGet, addr, "/server/tor/status", nil)
 		if err == nil {
 			running, _ := data["running"].(bool)
-			starting, _ := data["starting"].(bool)
-			enabled, _ := data["enabled"].(bool)
-			statusStr, _ := data["status_string"].(string)
+			bootstrap, _ := data["bootstrap_percent"].(float64)
+			version, _ := data["version"].(string)
 			onion, _ := data["onion_address"].(string)
 
 			state := "Disabled"
 			switch {
 			case running:
 				state = "Connected"
-			case starting:
+			case bootstrap > 0 && bootstrap < 100:
 				state = "Starting"
-			case enabled:
+			case onion != "":
 				state = "Disconnected"
 			}
 			fmt.Printf("Tor Hidden Service: %s\n", state)
 			if onion != "" {
 				fmt.Printf("  Address: %s\n", onion)
 			}
-			if statusStr != "" {
-				fmt.Printf("  Status: %s\n", statusStr)
+			if version != "" {
+				fmt.Printf("  Version: %s\n", version)
+			}
+			if bootstrap > 0 && bootstrap < 100 {
+				fmt.Printf("  Bootstrap: %.0f%%\n", bootstrap)
 			}
 			return 0
 		}
@@ -411,13 +449,16 @@ func torRestart(configDir, dataDir string) int {
 // torRegenerate implements `tor regenerate` per AI.md PART 31: old keys
 // deleted, new .onion generated by the running server process. Requires a
 // live server per PART 31.
-func torRegenerate(configDir, dataDir string) int {
+func torRegenerate(configDir, dataDir string, yes bool) int {
+	if !confirmTorAction(configDir, dataDir, "cli.tor.confirm_regenerate", yes) {
+		return 1
+	}
 	addr, ok := requireRunningServer(configDir, dataDir)
 	if !ok {
 		return 1
 	}
 
-	data, err := torControlRequest(http.MethodPost, addr, "/server/tor/regenerate", nil)
+	data, err := torControlRequest(http.MethodPost, addr, "/server/tor/regenerate", map[string]bool{"confirm": true})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to regenerate address: %v\n", err)
 		return 1
@@ -431,20 +472,26 @@ func torRegenerate(configDir, dataDir string) int {
 // torVanityStart implements `tor vanity start` per AI.md PART 31: starts the
 // search on the running server process and polls status until it finishes.
 // Requires a live server per PART 31.
-func torVanityStart(configDir, dataDir, prefix string) int {
+func torVanityStart(configDir, dataDir, prefix string, requestedWorkers ...int) int {
 	addr, ok := requireRunningServer(configDir, dataDir)
 	if !ok {
 		return 1
 	}
 
-	if _, err := torControlRequest(http.MethodPost, addr, "/server/tor/vanity/start", map[string]string{
-		"prefix": prefix,
+	workers := 0
+	if len(requestedWorkers) > 0 {
+		workers = requestedWorkers[0]
+	}
+	if _, err := torControlRequest(http.MethodPost, addr, "/server/tor/vanity/start", map[string]interface{}{
+		"prefix":  prefix,
+		"workers": workers,
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 		return 1
 	}
 
 	fmt.Printf("Searching for .onion address with prefix %q (Ctrl+C to cancel)...\n", prefix)
+	pendingAddress := ""
 	for {
 		time.Sleep(2 * time.Second)
 
@@ -454,10 +501,19 @@ func torVanityStart(configDir, dataDir, prefix string) int {
 			return 1
 		}
 
-		info, _ := data["info"].(map[string]interface{})
-		vanity, _ := info["vanity"].(map[string]interface{})
+		vanity, _ := data["vanity"].(map[string]interface{})
+		if vanity == nil {
+			info, _ := data["info"].(map[string]interface{})
+			vanity, _ = info["vanity"].(map[string]interface{})
+		}
 		active, _ := vanity["active"].(bool)
+		if state, _ := vanity["state"].(string); state != "" {
+			active = state == "running"
+		}
 		attempts, _ := vanity["attempts"].(float64)
+		if candidates, ok := vanity["candidates"].([]interface{}); ok && len(candidates) > 0 {
+			pendingAddress, _ = candidates[0].(string)
+		}
 		if !active {
 			break
 		}
@@ -465,26 +521,36 @@ func torVanityStart(configDir, dataDir, prefix string) int {
 	}
 
 	torDir, _ := torDirs(configDir, dataDir)
-	pending := readHostnameFile(filepath.Join(torDir, "vanity_pending"))
+	pending := pendingAddress
+	if pending == "" {
+		pending = readHostnameFile(filepath.Join(torDir, "vanity_pending"))
+	}
 	if pending == "" {
 		fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Vanity generation finished without a pending address")
 		return 1
 	}
 
 	fmt.Printf(terminal.StatusIcon(true)+" Found vanity address: %s\n", pending)
-	fmt.Printf("Run '%s tor vanity apply' to activate it\n", filepath.Base(os.Args[0]))
+	fmt.Printf("Run '%s --maintenance tor vanity apply' to activate it\n", filepath.Base(os.Args[0]))
 	return 0
 }
 
 // torVanityApply implements `tor vanity apply` per AI.md PART 31. Requires a
 // live server per PART 31.
-func torVanityApply(configDir, dataDir string) int {
+func torVanityApply(configDir, dataDir string, yes bool, address ...string) int {
+	if !confirmTorAction(configDir, dataDir, "cli.tor.confirm_vanity_apply", yes) {
+		return 1
+	}
 	addr, ok := requireRunningServer(configDir, dataDir)
 	if !ok {
 		return 1
 	}
 
-	data, err := torControlRequest(http.MethodPost, addr, "/server/tor/vanity/apply", nil)
+	wanted := ""
+	if len(address) > 0 {
+		wanted = address[0]
+	}
+	data, err := torControlRequest(http.MethodPost, addr, "/server/tor/vanity/apply", map[string]interface{}{"address": wanted, "confirm": true})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
 		return 1
@@ -495,23 +561,49 @@ func torVanityApply(configDir, dataDir string) int {
 	return 0
 }
 
+func torVanityStop(configDir, dataDir string) int {
+	addr, ok := requireRunningServer(configDir, dataDir)
+	if !ok {
+		return 1
+	}
+	data, err := torControlRequest(http.MethodPost, addr, "/server/tor/vanity/stop", nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" %v\n", err)
+		return 1
+	}
+	stopped, _ := data["stopped"].(bool)
+	if !stopped {
+		fmt.Println("No vanity search was running")
+		return 0
+	}
+	fmt.Println(terminal.StatusIcon(true) + " Vanity search stopped")
+	return 0
+}
+
 // torImportKeys implements `tor import-keys <path>` per AI.md PART 31: keys
 // replaced on the running server process, which restarts Tor with the new
 // address. Requires a live server per PART 31.
-func torImportKeys(configDir, dataDir, keyPath string) int {
+func torImportKeys(configDir, dataDir, keyPath string, yes bool) int {
+	if !filepath.IsAbs(keyPath) {
+		fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Key directory path must be absolute")
+		return 1
+	}
+	info, err := os.Stat(keyPath)
+	if err != nil || !info.IsDir() {
+		fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" Key directory is unavailable")
+		return 1
+	}
+	if !confirmTorAction(configDir, dataDir, "cli.tor.confirm_import", yes) {
+		return 1
+	}
 	addr, ok := requireRunningServer(configDir, dataDir)
 	if !ok {
 		return 1
 	}
 
-	secretKey, err := os.ReadFile(keyPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to read key file: %v\n", err)
-		return 1
-	}
-
 	data, err := torControlRequest(http.MethodPost, addr, "/server/tor/import-keys", map[string]interface{}{
-		"secret_key": secretKey,
+		"path":    keyPath,
+		"confirm": true,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to import keys: %v\n", err)
@@ -521,4 +613,16 @@ func torImportKeys(configDir, dataDir, keyPath string) int {
 	onion, _ := data["onion_address"].(string)
 	fmt.Printf(terminal.StatusIcon(true)+" Keys imported - new address: %s\n", onion)
 	return 0
+}
+
+func confirmTorAction(configDir, dataDir, key string, yes bool) bool {
+	if yes {
+		return true
+	}
+	locale := cliOutputLocale("", configDir, dataDir)
+	if !promptYesNo(serviceText(locale, key)) {
+		fmt.Fprintln(os.Stderr, serviceText(locale, "cli.tor.confirmation_cancelled"))
+		return false
+	}
+	return true
 }

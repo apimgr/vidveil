@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -70,10 +71,13 @@ func (h *ServerHandler) newSimpleCaptcha(r *http.Request) (string, string) {
 	answer := sha256.Sum256([]byte(strconv.Itoa(answerValue)))
 	now := time.Now()
 	if h.db != nil {
-		if _, err := h.db.ExecContext(r.Context(), `DELETE FROM captcha_challenges WHERE expires_at <= ?`, now); err != nil {
-			return "", ""
-		}
-		if _, err := h.db.ExecContext(r.Context(), `INSERT INTO captcha_challenges (id, answer_hash, expires_at) VALUES (?, ?, ?)`, id, hex.EncodeToString(answer[:]), now.Add(10*time.Minute)); err != nil {
+		if err := h.db.Write(r.Context(), func(tx *sql.Tx) error {
+			if _, err := tx.ExecContext(r.Context(), `DELETE FROM captcha_challenges WHERE expires_at <= ?`, now); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(r.Context(), `INSERT INTO captcha_challenges (id, answer_hash, expires_at) VALUES (?, ?, ?)`, id, hex.EncodeToString(answer[:]), now.Add(10*time.Minute))
+			return err
+		}); err != nil {
 			return "", ""
 		}
 		return id, strconv.Itoa(left) + " " + operator + " " + strconv.Itoa(right) + " = ?"
@@ -160,25 +164,24 @@ func (h *ServerHandler) verifySimpleCaptcha(r *http.Request) bool {
 	if h.db != nil {
 		var hash string
 		var expires time.Time
-		tx, err := h.db.BeginTx(r.Context(), nil)
+		err := h.db.Write(r.Context(), func(tx *sql.Tx) error {
+			if err := tx.QueryRowContext(r.Context(), `SELECT answer_hash, expires_at FROM captcha_challenges WHERE id = ?`, id).Scan(&hash, &expires); err != nil {
+				return err
+			}
+			result, err := tx.ExecContext(r.Context(), `DELETE FROM captcha_challenges WHERE id = ?`, id)
+			if err != nil {
+				return err
+			}
+			rows, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if rows != 1 {
+				return sql.ErrNoRows
+			}
+			return nil
+		})
 		if err != nil {
-			return false
-		}
-		if err := tx.QueryRowContext(r.Context(), `SELECT answer_hash, expires_at FROM captcha_challenges WHERE id = ?`, id).Scan(&hash, &expires); err != nil {
-			_ = tx.Rollback()
-			return false
-		}
-		result, err := tx.ExecContext(r.Context(), `DELETE FROM captcha_challenges WHERE id = ?`, id)
-		if err != nil {
-			_ = tx.Rollback()
-			return false
-		}
-		rows, err := result.RowsAffected()
-		if err != nil || rows != 1 {
-			_ = tx.Rollback()
-			return false
-		}
-		if err := tx.Commit(); err != nil {
 			return false
 		}
 		if time.Now().After(expires) {

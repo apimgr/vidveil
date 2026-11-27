@@ -145,7 +145,7 @@ func TestSendTLS_ConnRefused(t *testing.T) {
 	appCfg := config.DefaultAppConfig()
 	s := NewEmailService(appCfg)
 
-	err := s.sendTLS("127.0.0.1:1", "127.0.0.1", nil, "from@example.com", "to@example.com", []byte("msg"))
+	err := s.deliverSMTP("127.0.0.1", 1, "", "", "from@example.com", "to@example.com", "tls", []byte("msg"))
 	if err == nil {
 		t.Error("sendTLS conn-refused: expected error, got nil")
 	}

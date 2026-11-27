@@ -48,7 +48,7 @@ func TestInsertAuditMirrorStoresAuditIDAndQueryableFields(t *testing.T) {
 	}
 	var action, category, actorIP, details string
 	var success int
-	if err := sm.GetDB().QueryRow(`SELECT action, category, actor_ip, details, success FROM audit_log ORDER BY id DESC LIMIT 1`).Scan(&action, &category, &actorIP, &details, &success); err != nil {
+	if err := sm.db.QueryRow(`SELECT action, category, actor_ip, details, success FROM audit_log ORDER BY id DESC LIMIT 1`).Scan(&action, &category, &actorIP, &details, &success); err != nil {
 		t.Fatal(err)
 	}
 	var detailFields map[string]interface{}
@@ -71,7 +71,7 @@ func TestEnsureSchemaCreatesAuditQueryIndexes(t *testing.T) {
 	}
 	for _, name := range []string{"idx_audit_timestamp", "idx_audit_category", "idx_audit_actor_ip", "idx_audit_target"} {
 		var count int
-		if err := sm.GetDB().QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?`, name).Scan(&count); err != nil {
+		if err := sm.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?`, name).Scan(&count); err != nil {
 			t.Fatal(err)
 		}
 		if count != 1 {
@@ -134,7 +134,7 @@ func TestAppDatabase_Driver(t *testing.T) {
 // TestAppDatabase_DB_NotNil verifies DB() returns non-nil *sql.DB.
 func TestAppDatabase_DB_NotNil(t *testing.T) {
 	db := newSQLiteDB(t)
-	if db.DB() == nil {
+	if db.db == nil {
 		t.Error("DB() returned nil")
 	}
 }
@@ -255,24 +255,12 @@ func TestAppDatabase_QueryRow_NoRows(t *testing.T) {
 	}
 }
 
-// TestAppDatabase_Begin verifies Begin returns a transaction.
-func TestAppDatabase_Begin(t *testing.T) {
+// TestAppDatabase_Write verifies transactions run only through the store API.
+func TestAppDatabase_Write(t *testing.T) {
 	db := newSQLiteDB(t)
-	tx, err := db.Begin()
-	if err != nil {
-		t.Fatalf("Begin() = %v, want nil", err)
+	if err := db.Write(context.Background(), func(*sql.Tx) error { return nil }); err != nil {
+		t.Fatalf("Write() = %v, want nil", err)
 	}
-	_ = tx.Rollback()
-}
-
-// TestAppDatabase_BeginTx verifies BeginTx with background context.
-func TestAppDatabase_BeginTx(t *testing.T) {
-	db := newSQLiteDB(t)
-	tx, err := db.BeginTx(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("BeginTx() = %v, want nil", err)
-	}
-	_ = tx.Rollback()
 }
 
 // TestAppDatabase_TableExists_Missing verifies TableExists returns false for absent table.
@@ -390,8 +378,8 @@ func TestNewSchemaManager_InMemory(t *testing.T) {
 		t.Fatalf("NewSchemaManager(:memory:) = %v, want nil", err)
 	}
 	defer func() { _ = sm.Close() }()
-	if sm.GetDB() == nil {
-		t.Error("SchemaManager.GetDB() returned nil")
+	if sm.db == nil {
+		t.Error("SchemaManager.db returned nil")
 	}
 }
 
@@ -419,8 +407,8 @@ func TestSchemaManager_ReadHandleIsSeparateAndReadOnly(t *testing.T) {
 	if err := sm.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	readDB := sm.GetReadDB()
-	if readDB == nil || readDB == sm.GetDB() {
+	readDB := sm.readDB
+	if readDB == nil || readDB == sm.db {
 		t.Fatal("read database handle is missing or aliases the write handle")
 	}
 	var owners int
@@ -445,7 +433,7 @@ func TestSchemaManager_EnsureSchemaCreatesReservedSystemOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err := sm.GetDB().QueryRow(`SELECT COUNT(*) FROM owners WHERE id = 'system'`).Scan(&count); err != nil {
+	if err := sm.db.QueryRow(`SELECT COUNT(*) FROM owners WHERE id = 'system'`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {

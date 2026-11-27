@@ -164,8 +164,8 @@ func TestRegistryMountUsesBoundHandler(t *testing.T) {
 func TestRegistrySeparatesDebugMountingFromInternalVisibility(t *testing.T) {
 	registry := NewRegistry()
 	for _, route := range []Route{
-		{Definition: Definition{Method: http.MethodGet, Path: "/api/{api_version}/metrics", OperationID: "metrics", Internal: true, Condition: "metrics"}, Handler: http.NotFound},
-		{Definition: Definition{Method: http.MethodGet, Path: "/api/{api_version}/debug", OperationID: "debug", Internal: true, DebugOnly: true}, Handler: http.NotFound},
+		{Definition: Definition{Method: http.MethodGet, Path: "/api/{api_version}/server/metrics", OperationID: "metrics", Internal: true, Condition: "metrics"}, Handler: http.NotFound},
+		{Definition: Definition{Method: http.MethodGet, Path: "/debug/test", OperationID: "debug", Internal: true, DebugOnly: true}, Handler: http.NotFound},
 	} {
 		if err := registry.Add(route); err != nil {
 			t.Fatal(err)
@@ -175,7 +175,7 @@ func TestRegistrySeparatesDebugMountingFromInternalVisibility(t *testing.T) {
 	if err := registry.Mount(mounter, "/api/v1", func(condition string) bool { return condition == "metrics" }, nil); err != nil {
 		t.Fatal(err)
 	}
-	if len(mounter.paths) != 1 || mounter.paths[0] != "GET /api/v1/metrics" {
+	if len(mounter.paths) != 1 || mounter.paths[0] != "GET /api/v1/server/metrics" {
 		t.Fatalf("internal/debug route mounts = %v, want only always-mounted metrics route", mounter.paths)
 	}
 	if err := registry.Mount(mounter, "/api/v1", func(condition string) bool { return condition == "debug" || condition == "metrics" }, nil); err != nil {
@@ -183,7 +183,7 @@ func TestRegistrySeparatesDebugMountingFromInternalVisibility(t *testing.T) {
 	}
 	debugMounted := false
 	for _, path := range mounter.paths {
-		debugMounted = debugMounted || path == "GET /api/v1/debug"
+		debugMounted = debugMounted || path == "GET /debug/test"
 	}
 	if !debugMounted {
 		t.Fatalf("debug-only route did not mount when enabled: %v", mounter.paths)

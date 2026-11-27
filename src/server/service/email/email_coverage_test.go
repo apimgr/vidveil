@@ -146,14 +146,14 @@ func TestEffectiveEmailConfig_EnvVarOverridesPassword(t *testing.T) {
 }
 
 func TestEffectiveEmailConfig_EnvVarOverridesTLS(t *testing.T) {
-	t.Setenv("SMTP_TLS", "ssl")
+	t.Setenv("SMTP_TLS", "tls")
 	cfg := config.DefaultAppConfig()
 	cfg.Server.Notifications.Email.SMTP.TLS = "none"
 	svc := &EmailService{appConfig: cfg, templateDir: t.TempDir()}
 
 	_, _, _, _, _, _, tlsMode := svc.effectiveEmailConfig()
-	if tlsMode != "ssl" {
-		t.Errorf("SMTP_TLS env override: tlsMode = %q, want ssl", tlsMode)
+	if tlsMode != "tls" {
+		t.Errorf("SMTP_TLS env override: tlsMode = %q, want tls", tlsMode)
 	}
 }
 

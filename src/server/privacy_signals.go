@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"net"
 	"net/http"
 
 	"github.com/apimgr/vidveil/src/server/handler"
@@ -48,10 +49,12 @@ func (s *Server) privacySignalsMiddleware(next http.Handler) http.Handler {
 				clientIP := extractClientIP(r)
 				if urlvar.IsTorRequest(r) {
 					clientIP = urlvar.TorClientLabel(r)
+				} else {
+					clientIP = anonymizeAuditIP(clientIP)
 				}
 				s.logger.Audit(
 					"compliance.gpc_honored",
-					"anonymous", "visitor", clientIP, "honored",
+					"", "anonymous", clientIP, "success",
 					map[string]interface{}{
 						"signal": reason,
 						"path":   r.URL.Path,
@@ -63,4 +66,22 @@ func (s *Server) privacySignalsMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func anonymizeAuditIP(value string) string {
+	ip := net.ParseIP(value)
+	if ip == nil {
+		return ""
+	}
+	if ipv4 := ip.To4(); ipv4 != nil {
+		return net.IPv4(ipv4[0], ipv4[1], ipv4[2], 0).String()
+	}
+	ipv6 := ip.To16()
+	if ipv6 == nil {
+		return ""
+	}
+	for i := 6; i < len(ipv6); i++ {
+		ipv6[i] = 0
+	}
+	return ipv6.String()
 }

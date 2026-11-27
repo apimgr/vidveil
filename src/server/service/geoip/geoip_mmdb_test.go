@@ -6,19 +6,33 @@ import (
 	"testing"
 )
 
-func TestCountryRecordUsesIPLocationDBField(t *testing.T) {
-	field, ok := reflect.TypeOf(countryRecord{}).FieldByName("CountryCode")
+func TestCountryRecordUsesIPLocationDBFields(t *testing.T) {
+	field, ok := reflect.TypeOf(countryRecord{}).FieldByName("Country")
+	if !ok || field.Tag.Get("maxminddb") != "country" {
+		t.Fatalf("countryRecord.Country field missing correct tag")
+	}
+	isoCode, ok := field.Type.FieldByName("ISOCode")
+	if !ok || isoCode.Tag.Get("maxminddb") != "iso_code" {
+		t.Fatalf("countryRecord.Country.ISOCode field missing correct tag")
+	}
+	field, ok = reflect.TypeOf(countryRecord{}).FieldByName("CountryCode")
 	if !ok {
-		t.Fatal("countryRecord is missing CountryCode")
+		t.Fatal("countryRecord is missing legacy CountryCode fallback")
 	}
 	if got := field.Tag.Get("maxminddb"); got != "country_code" {
 		t.Errorf("countryRecord.CountryCode tag = %q, want %q", got, "country_code")
 	}
 
 	result := &GeoIPResult{}
-	applyCountryRecord(result, countryRecord{CountryCode: "GB"})
+	applyCountryRecord(result, countryRecord{Country: struct {
+		ISOCode string `maxminddb:"iso_code"`
+	}{ISOCode: "GB"}})
 	if result.CountryCode != "GB" {
 		t.Errorf("CountryCode = %q, want GB", result.CountryCode)
+	}
+	applyCountryRecord(result, countryRecord{CountryCode: "US"})
+	if result.CountryCode != "US" {
+		t.Errorf("legacy CountryCode fallback = %q, want US", result.CountryCode)
 	}
 }
 

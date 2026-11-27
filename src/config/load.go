@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -33,7 +34,7 @@ func Load(args []string) (ServerConfig, error) {
 	fs.BoolVar(showVersion, "v", false, "Show version and exit (alias)")
 	fs.BoolVar(showHelp, "h", false, "Show help and exit (alias)")
 	if err := fs.Parse(globalArgs); err != nil && !errors.Is(err, flag.ErrHelp) {
-		return ServerConfig{}, err
+		return ServerConfig{}, FlagError{Err: err}
 	}
 	parsedFlags := make(map[string]bool)
 	fs.Visit(func(parsed *flag.Flag) { parsedFlags[parsed.Name] = true })
@@ -134,6 +135,16 @@ func Load(args []string) (ServerConfig, error) {
 	return *cfg, nil
 }
 
+// FlagError distinguishes command-line usage errors from configuration and
+// runtime failures so the server can return the required usage exit code.
+type FlagError struct {
+	Err error
+}
+
+func (err FlagError) Error() string { return fmt.Sprintf("%v", err.Err) }
+
+func (err FlagError) Unwrap() error { return err.Err }
+
 func truthyRuntimeEnv(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "1", "true", "yes", "on":
@@ -168,7 +179,7 @@ func splitRuntimeCommand(args []string) ([]string, []string) {
 			}
 		}
 		switch arg {
-		case "tor", "--status", "--shell", "--service", "--update", "--maintenance":
+		case "--status", "--shell", "--service", "--update", "--maintenance":
 			return args[:index], args[index:]
 		}
 	}

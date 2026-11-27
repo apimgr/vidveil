@@ -13,6 +13,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"time"
+
+	"github.com/apimgr/vidveil/src/common/dbstore"
 )
 
 // SecretKey identifies a secret in the app_secrets table
@@ -33,11 +35,17 @@ const (
 
 // Manager handles app secrets lifecycle
 type Manager struct {
-	db *sql.DB
+	db Store
+}
+
+// Store is the only database capability used by the secret service.
+type Store interface {
+	Read(context.Context, func(context.Context, dbstore.Reader) error) error
+	Write(context.Context, func(*sql.Tx) error) error
 }
 
 // NewManager creates a new secrets manager
-func NewManager(db *sql.DB) *Manager {
+func NewManager(db Store) *Manager {
 	return &Manager{db: db}
 }
 
@@ -64,8 +72,9 @@ func (m *Manager) Get(ctx context.Context, key SecretKey) ([]byte, error) {
 		return nil, fmt.Errorf("secret %s unavailable: database is not initialized", key)
 	}
 	var value string
-	err := m.db.QueryRowContext(ctx,
-		"SELECT value FROM app_secrets WHERE key = ?", string(key)).Scan(&value)
+	err := m.db.Read(ctx, func(readCtx context.Context, db dbstore.Reader) error {
+		return db.QueryRowContext(readCtx, "SELECT value FROM app_secrets WHERE key = ?", string(key)).Scan(&value)
+	})
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("secret %s not found", key)
@@ -102,12 +111,6 @@ func (m *Manager) RotateImmediately(ctx context.Context, key SecretKey) error {
 func (m *Manager) rotate(ctx context.Context, key SecretKey, grace time.Duration) error {
 	// Get current value
 	var currentValue string
-	err := m.db.QueryRowContext(ctx,
-		"SELECT value FROM app_secrets WHERE key = ?", string(key)).Scan(&currentValue)
-	if err != nil {
-		return fmt.Errorf("get current secret: %w", err)
-	}
-
 	// Generate new value
 	newValue, err := generateSecretBytes()
 	if err != nil {
@@ -118,18 +121,16 @@ func (m *Manager) rotate(ctx context.Context, key SecretKey, grace time.Duration
 	now := time.Now()
 	expiresAt := now.Add(grace)
 
-	_, err = m.db.ExecContext(ctx, `
-		UPDATE app_secrets
-		SET value = ?,
-		    rotated_at = ?,
-		    previous_value = ?,
-		    expires_at = ?
-		WHERE key = ?`,
-		base64.StdEncoding.EncodeToString(newValue),
-		now,
-		currentValue,
-		expiresAt,
-		string(key))
+	err = m.db.Write(ctx, func(tx *sql.Tx) error {
+		if err := tx.QueryRowContext(ctx, "SELECT value FROM app_secrets WHERE key = ?", string(key)).Scan(&currentValue); err != nil {
+			return fmt.Errorf("get current secret: %w", err)
+		}
+		_, err := tx.ExecContext(ctx, `
+			UPDATE app_secrets
+			SET value = ?, rotated_at = ?, previous_value = ?, expires_at = ?
+			WHERE key = ?`, base64.StdEncoding.EncodeToString(newValue), now, currentValue, expiresAt, string(key))
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("rotate secret: %w", err)
 	}
@@ -144,9 +145,9 @@ func (m *Manager) RotateIfDue(ctx context.Context, key SecretKey, maxAge time.Du
 		return false, fmt.Errorf("secret rotation age must be positive")
 	}
 	var rotatedAt, createdAt sql.NullTime
-	if err := m.db.QueryRowContext(ctx, `
-		SELECT rotated_at, created_at FROM app_secrets WHERE key = ?`,
-		string(key)).Scan(&rotatedAt, &createdAt); err != nil {
+	if err := m.db.Read(ctx, func(readCtx context.Context, db dbstore.Reader) error {
+		return db.QueryRowContext(readCtx, `SELECT rotated_at, created_at FROM app_secrets WHERE key = ?`, string(key)).Scan(&rotatedAt, &createdAt)
+	}); err != nil {
 		return false, fmt.Errorf("get secret rotation time: %w", err)
 	}
 	lastChanged := createdAt
@@ -168,9 +169,9 @@ func (m *Manager) ValidateWithPrevious(ctx context.Context, key SecretKey, value
 	var current, previous sql.NullString
 	var expiresAt sql.NullTime
 
-	err := m.db.QueryRowContext(ctx,
-		"SELECT value, previous_value, expires_at FROM app_secrets WHERE key = ?",
-		string(key)).Scan(&current, &previous, &expiresAt)
+	err := m.db.Read(ctx, func(readCtx context.Context, db dbstore.Reader) error {
+		return db.QueryRowContext(readCtx, "SELECT value, previous_value, expires_at FROM app_secrets WHERE key = ?", string(key)).Scan(&current, &previous, &expiresAt)
+	})
 	if err != nil {
 		return false, fmt.Errorf("get secret for validation: %w", err)
 	}
@@ -209,9 +210,9 @@ func (m *Manager) ValidateDerivedWithPrevious(ctx context.Context, key SecretKey
 	}
 	var current, previous sql.NullString
 	var expiresAt sql.NullTime
-	if err := m.db.QueryRowContext(ctx,
-		"SELECT value, previous_value, expires_at FROM app_secrets WHERE key = ?",
-		string(key)).Scan(&current, &previous, &expiresAt); err != nil {
+	if err := m.db.Read(ctx, func(readCtx context.Context, db dbstore.Reader) error {
+		return db.QueryRowContext(readCtx, "SELECT value, previous_value, expires_at FROM app_secrets WHERE key = ?", string(key)).Scan(&current, &previous, &expiresAt)
+	}); err != nil {
 		return false, fmt.Errorf("get secret for validation: %w", err)
 	}
 
@@ -233,8 +234,9 @@ func (m *Manager) ValidateDerivedWithPrevious(ctx context.Context, key SecretKey
 // exists checks if a secret key exists in the database
 func (m *Manager) exists(ctx context.Context, key SecretKey) (bool, error) {
 	var count int
-	err := m.db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM app_secrets WHERE key = ?", string(key)).Scan(&count)
+	err := m.db.Read(ctx, func(readCtx context.Context, db dbstore.Reader) error {
+		return db.QueryRowContext(readCtx, "SELECT COUNT(*) FROM app_secrets WHERE key = ?", string(key)).Scan(&count)
+	})
 	if err != nil {
 		return false, err
 	}
@@ -248,12 +250,10 @@ func (m *Manager) generate(ctx context.Context, key SecretKey) error {
 		return err
 	}
 
-	_, err = m.db.ExecContext(ctx, `
-		INSERT INTO app_secrets (key, value, created_at)
-		VALUES (?, ?, ?)`,
-		string(key),
-		base64.StdEncoding.EncodeToString(secretBytes),
-		time.Now())
+	err = m.db.Write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO app_secrets (key, value, created_at) VALUES (?, ?, ?)`, string(key), base64.StdEncoding.EncodeToString(secretBytes), time.Now())
+		return err
+	})
 	return err
 }
 

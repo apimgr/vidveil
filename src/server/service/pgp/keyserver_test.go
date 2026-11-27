@@ -2,7 +2,6 @@ package pgp
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/apimgr/vidveil/src/server/service/database"
 )
 
 // rewriteTransport routes every request to the test server regardless of the
@@ -268,7 +267,7 @@ func TestWriteKeyserverStateMkdirFails(t *testing.T) {
 func TestUpdateKeyserversPublished(t *testing.T) {
 	db := newTestDB(t)
 	created := time.Now().UTC().Truncate(time.Second)
-	if _, err := db.Exec(
+	if _, err := pgpTestExec(db,
 		`INSERT INTO pgp_keypair (fingerprint, created_at, expires_at) VALUES (?, ?, ?)`,
 		"FFFF", created, created.Add(DefaultValidity),
 	); err != nil {
@@ -279,7 +278,7 @@ func TestUpdateKeyserversPublished(t *testing.T) {
 		t.Fatalf("UpdateKeyserversPublished: %v", err)
 	}
 	var raw string
-	if err := db.QueryRow(`SELECT keyservers_published FROM pgp_keypair WHERE fingerprint = 'FFFF'`).Scan(&raw); err != nil {
+	if err := pgpTestQueryRow(db, `SELECT keyservers_published FROM pgp_keypair WHERE fingerprint = 'FFFF'`).Scan(&raw); err != nil {
 		t.Fatalf("scan: %v", err)
 	}
 	var got []KeyserverState
@@ -293,7 +292,7 @@ func TestUpdateKeyserversPublished(t *testing.T) {
 
 // TestUpdateKeyserversPublishedNoTable verifies DB errors are surfaced.
 func TestUpdateKeyserversPublishedNoTable(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := database.NewAppDatabase(database.DatabaseConfig{Driver: database.DriverSQLite, Path: filepath.Join(t.TempDir(), "missing.db")})
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

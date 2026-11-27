@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/health"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 )
@@ -58,7 +59,7 @@ func TestCheckDatabase_NilHandle_OK(t *testing.T) {
 
 // checkCache always reports "ok": the search cache is process-local with no
 // external backend, so it cannot report unhealthy.
-func TestCheckCache_AlwaysOK(t *testing.T) {
+func TestCheckCache_ReportsFallbackAsDegraded(t *testing.T) {
 	h := &SearchHandler{}
 	if got := h.checkCache(); got != "ok" {
 		t.Errorf("checkCache(nil) = %q, want ok", got)
@@ -66,6 +67,10 @@ func TestCheckCache_AlwaysOK(t *testing.T) {
 	h2 := NewSearchHandler(nil, nil)
 	if got := h2.checkCache(); got != "ok" {
 		t.Errorf("checkCache(initialized) = %q, want ok", got)
+	}
+	h2.cacheDegraded = true
+	if got := h2.checkCache(); got != "degraded" {
+		t.Errorf("checkCache(external backend fallback) = %q, want degraded", got)
 	}
 }
 
@@ -154,6 +159,50 @@ func TestHealthEndpoints_ReportMaintenanceStatus(t *testing.T) {
 				t.Error("public health response leaked the operator diagnostic")
 			}
 		})
+	}
+}
+
+func TestHealthJSONIncludesRegisteredStatsAfterCoreStats(t *testing.T) {
+	h := NewSearchHandler(nil, nil)
+	metrics := NewMetrics(config.DefaultAppConfig(), nil)
+	metrics.IncrementSearches()
+	h.SetMetrics(metrics)
+	registry := health.NewRegistry()
+	if err := registry.RegisterStat("engines_healthy", func() uint64 { return 2 }); err != nil {
+		t.Fatal(err)
+	}
+	h.SetHealthRegistry(registry)
+	req := httptest.NewRequest(http.MethodGet, "/server/healthz", nil)
+	req.Header.Set("Accept", "application/json")
+	recorder := httptest.NewRecorder()
+	h.HealthCheck(recorder, req)
+	body := recorder.Body.String()
+	for _, key := range []string{`"requests_total"`, `"requests_24h"`, `"active_connections"`, `"engines_healthy"`, `"searches_total"`} {
+		if !strings.Contains(body, key) {
+			t.Errorf("health JSON missing registered/core stat %s", key)
+		}
+	}
+	if strings.Index(body, `"engines_healthy"`) > strings.Index(body, `"searches_total"`) {
+		t.Error("registered stats are not emitted in registration order")
+	}
+	if !strings.Contains(body, `"searches_total": 1`) || !strings.Contains(body, `"engines_healthy": 2`) {
+		t.Errorf("health JSON stat values are missing: %s", body)
+	}
+}
+
+func TestAPIHealthTextIncludesRegisteredStats(t *testing.T) {
+	h := NewSearchHandler(nil, nil)
+	registry := health.NewRegistry()
+	if err := registry.RegisterStat("engines_healthy", func() uint64 { return 2 }); err != nil {
+		t.Fatal(err)
+	}
+	h.SetHealthRegistry(registry)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/healthz.txt", nil)
+	req.Header.Set("Accept", "text/plain")
+	recorder := httptest.NewRecorder()
+	h.APIHealthCheck(recorder, req)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "stats.engines_healthy: 2") {
+		t.Fatalf("API health text = %d %q; want registered stat", recorder.Code, recorder.Body.String())
 	}
 }
 

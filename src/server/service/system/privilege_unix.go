@@ -39,11 +39,14 @@ func DropPrivileges(username string, configDirs ...string) error {
 	u, err := user.Lookup(username)
 	if err != nil {
 		// User doesn't exist - create it
-		configDir := ""
+		configDir, dataDir := "", ""
 		if len(configDirs) > 0 {
 			configDir = configDirs[0]
 		}
-		if err := createSystemUser(username, configDir); err != nil {
+		if len(configDirs) > 1 {
+			dataDir = configDirs[1]
+		}
+		if err := createSystemUser(username, configDir, dataDir); err != nil {
 			return fmt.Errorf("failed to create user %s: %w", username, err)
 		}
 		u, err = user.Lookup(username)
@@ -154,7 +157,7 @@ func serviceAccountShell(username string) (string, error) {
 }
 
 // createSystemUser creates a system user for the service
-func createSystemUser(username, configDir string) error {
+func createSystemUser(username, configDir, dataDir string) error {
 	// Find available UID in 200-899 range per AI.md PART 23
 	uid, err := findAvailableSystemID()
 	if runtime.GOOS == "darwin" {
@@ -167,10 +170,10 @@ func createSystemUser(username, configDir string) error {
 		return fmt.Errorf("automatic service user creation is unsupported on %s", runtime.GOOS)
 	}
 
-	// Determine home directory
-	homeDir := fmt.Sprintf("/var/lib/apimgr/%s", username)
-	if runtime.GOOS == "darwin" {
-		homeDir = filepath.Join("/usr/local/var", "apimgr", username)
+	// The service account home is the resolved data directory on every platform.
+	homeDir := dataDir
+	if homeDir == "" {
+		homeDir = filepath.Join("/var/lib/apimgr", username)
 	}
 
 	// groupadd --system --gid {id} {name} per AI.md PART 23
@@ -229,6 +232,7 @@ func createSystemUser(username, configDir string) error {
 			"--uid", strconv.Itoa(uid),
 			"--gid", strconv.Itoa(uid),
 			"--home-dir", homeDir,
+			"--no-create-home",
 			"--shell", "/sbin/nologin",
 			"--comment", username+" service account",
 			username,
@@ -257,6 +261,7 @@ func createSystemUser(username, configDir string) error {
 		"-u", strconv.Itoa(uid),
 		"-G", username,
 		"-s", "/sbin/nologin",
+		"-g", username+" service account",
 		username,
 	).Run(); err != nil {
 		return err

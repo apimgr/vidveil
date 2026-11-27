@@ -1,22 +1,25 @@
 package pgp
 
 import (
+	"context"
 	"database/sql"
+	"github.com/apimgr/vidveil/src/common/dbstore"
+	"path/filepath"
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/apimgr/vidveil/src/server/service/database"
 )
 
 // newTestDB opens an in-memory SQLite database with the pgp_keypair schema.
-func newTestDB(t *testing.T) *sql.DB {
+func newTestDB(t *testing.T) *database.AppDatabase {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := database.NewAppDatabase(database.DatabaseConfig{Driver: database.DriverSQLite, Path: filepath.Join(t.TempDir(), "test.db")})
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	_, err = db.Exec(`CREATE TABLE pgp_keypair (
+	_, err = pgpTestExec(db, `CREATE TABLE pgp_keypair (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		fingerprint TEXT NOT NULL,
 		created_at DATETIME NOT NULL,
@@ -29,6 +32,36 @@ func newTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("create table: %v", err)
 	}
 	return db
+}
+
+func pgpTestExec(db *database.AppDatabase, query string, args ...any) (sql.Result, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var result sql.Result
+	err := db.Write(ctx, func(tx *sql.Tx) error {
+		var err error
+		result, err = tx.ExecContext(ctx, query, args...)
+		return err
+	})
+	return result, err
+}
+
+type pgpTestRow struct {
+	db    *database.AppDatabase
+	query string
+	args  []any
+}
+
+func (r pgpTestRow) Scan(dest ...any) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return r.db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+		return readDB.QueryRowContext(readCtx, r.query, r.args...).Scan(dest...)
+	})
+}
+
+func pgpTestQueryRow(db *database.AppDatabase, query string, args ...any) pgpTestRow {
+	return pgpTestRow{db: db, query: query, args: args}
 }
 
 // TestSaveAndGetKeypairMeta verifies metadata persists and reads back.
@@ -73,7 +106,7 @@ func TestSaveAndGetKeypairMeta(t *testing.T) {
 // TestSaveKeypairMetaNoTable verifies SaveKeypairMeta surfaces DB errors when
 // the schema is missing.
 func TestSaveKeypairMetaNoTable(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := database.NewAppDatabase(database.DatabaseConfig{Driver: database.DriverSQLite, Path: filepath.Join(t.TempDir(), "missing.db")})
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -93,7 +126,7 @@ func TestGetKeypairMetaRotatedAndPublished(t *testing.T) {
 	rotated := created.Add(time.Hour)
 	published := `[{"url":"https://keys.openpgp.org","published_at":"2026-07-25T00:00:00Z"}]`
 
-	_, err := db.Exec(
+	_, err := pgpTestExec(db,
 		`INSERT INTO pgp_keypair (fingerprint, created_at, expires_at, last_rotated_at, keyservers_published, revoked)
 		 VALUES (?, ?, ?, ?, ?, 1)`,
 		"CCCC", created, created.Add(DefaultValidity), rotated, published,
@@ -182,7 +215,7 @@ func TestMarkRevokedNoRow(t *testing.T) {
 // TestMarkRevokedNoTable verifies the underlying Exec error surfaces when the
 // pgp_keypair table is missing entirely.
 func TestMarkRevokedNoTable(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := database.NewAppDatabase(database.DatabaseConfig{Driver: database.DriverSQLite, Path: filepath.Join(t.TempDir(), "missing.db")})
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -208,7 +241,7 @@ func TestSaveKeypairMetaReplaces(t *testing.T) {
 	}
 
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM pgp_keypair`).Scan(&count); err != nil {
+	if err := pgpTestQueryRow(db, `SELECT COUNT(*) FROM pgp_keypair`).Scan(&count); err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	if count != 1 {

@@ -5,6 +5,7 @@
 package metric
 
 import (
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -99,6 +100,26 @@ func TestDBErrorsTotalNotNil(t *testing.T) {
 	}
 }
 
+func TestDBWriteContentionMetricsNotNil(t *testing.T) {
+	if DBBusyTotal == nil {
+		t.Error("DBBusyTotal is nil; promauto registration failed")
+	}
+	if DBWriteWaitSeconds == nil {
+		t.Error("DBWriteWaitSeconds is nil; promauto registration failed")
+	}
+}
+
+func TestValidateBucketsRejectsInvalidValues(t *testing.T) {
+	for _, buckets := range [][]float64{nil, {}, {0.1, 0.1}, {0.2, 0.1}, {1, math.Inf(1)}, {math.NaN()}} {
+		if err := validateBuckets(buckets); err == nil {
+			t.Errorf("validateBuckets(%v) succeeded; want error", buckets)
+		}
+	}
+	if err := validateBuckets([]float64{0.1, 1, 10}); err != nil {
+		t.Errorf("validateBuckets with increasing positive buckets: %v", err)
+	}
+}
+
 // ---- Authentication metrics ----
 
 func TestAuthAttemptsTotalNotNil(t *testing.T) {
@@ -107,9 +128,9 @@ func TestAuthAttemptsTotalNotNil(t *testing.T) {
 	}
 }
 
-func TestAuthSessionsActiveNotNil(t *testing.T) {
-	if AuthSessionsActive == nil {
-		t.Error("AuthSessionsActive is nil; promauto registration failed")
+func TestOwnerTokensActiveNotNil(t *testing.T) {
+	if OwnerTokensActive == nil {
+		t.Error("OwnerTokensActive is nil; promauto registration failed")
 	}
 }
 
@@ -231,8 +252,9 @@ func TestAuthAttemptsTotalCanInc(t *testing.T) {
 	AuthAttemptsTotal.WithLabelValues("password", "failure").Inc()
 }
 
-func TestAuthSessionsActiveCanSet(t *testing.T) {
-	AuthSessionsActive.Set(3)
+func TestOwnerTokensActiveCanSet(t *testing.T) {
+	OwnerTokensActive.WithLabelValues("primary").Set(3)
+	OwnerTokensActive.WithLabelValues("linked").Set(4)
 }
 
 func TestCacheHitsTotalCanInc(t *testing.T) {

@@ -21,6 +21,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 )
 
@@ -370,6 +371,45 @@ func TestServerMetrics_IncrementRequests(t *testing.T) {
 	m.IncrementRequests()
 	if m.GetRequestsTotal() != 1 {
 		t.Errorf("GetRequestsTotal after 1 increment = %d, want 1", m.GetRequestsTotal())
+	}
+}
+
+func TestServerMetricsRestoresAndFlushesRequestStats(t *testing.T) {
+	manager, err := database.NewSchemaManager(filepath.Join(t.TempDir(), "server.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := manager.Close(); err != nil {
+			t.Errorf("close schema manager: %v", err)
+		}
+	})
+	if err := manager.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	metrics := NewMetrics(config.DefaultAppConfig(), nil)
+	if err := metrics.SetPersistence(manager.GetAppDatabase()); err != nil {
+		t.Fatal(err)
+	}
+	metrics.IncrementRequests()
+	metrics.IncrementRequests()
+	if err := metrics.Close(); err != nil {
+		t.Fatal(err)
+	}
+	restarted := NewMetrics(config.DefaultAppConfig(), nil)
+	if err := restarted.SetPersistence(manager.GetAppDatabase()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := restarted.Close(); err != nil {
+			t.Errorf("close restarted metrics: %v", err)
+		}
+	})
+	if got := restarted.GetRequestsTotal(); got != 2 {
+		t.Fatalf("restored requests_total = %d, want 2", got)
+	}
+	if got := restarted.GetRequests24h(); got != 2 {
+		t.Fatalf("restored requests_24h = %d, want 2", got)
 	}
 }
 

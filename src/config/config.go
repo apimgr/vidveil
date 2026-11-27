@@ -42,6 +42,7 @@ var seoOpenGraphTypePattern = regexp.MustCompile(`^[a-z0-9_.-]{1,64}$`)
 type ServerConfig struct {
 	Server  ServerSettings `yaml:"server"`
 	CLI     CLIConfig      `yaml:"cli"`
+	Output  OutputConfig   `yaml:"output"`
 	Web     WebConfig      `yaml:"web"`
 	Search  SearchConfig   `yaml:"search"`
 	Engines EnginesConfig  `yaml:"engines"`
@@ -58,6 +59,13 @@ type ServerConfig struct {
 	CommitID             string            `yaml:"-" json:"-"`
 	BuildEpoch           string            `yaml:"-" json:"-"`
 	OfficialSite         string            `yaml:"-" json:"-"`
+}
+
+// OutputConfig controls server console color and emoji output. Pointers retain
+// whether each value was explicitly set so environment defaults remain usable.
+type OutputConfig struct {
+	Color *bool `yaml:"color"`
+	Emoji *bool `yaml:"emoji"`
 }
 
 type AppConfig = ServerConfig

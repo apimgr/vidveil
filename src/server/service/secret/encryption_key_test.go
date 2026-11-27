@@ -25,15 +25,15 @@ func TestWrappedPreviousEncryptionKeyAndPendingRecovery(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	previous, valid, err := LoadPreviousEncryptionKey(ctx, db, newKey, time.Now().UTC())
+	previous, valid, err := LoadPreviousEncryptionKey(ctx, testStore(db), newKey, time.Now().UTC())
 	if err != nil || !valid || previous != oldKey {
 		t.Fatalf("previous key = (%q, %v, %v)", previous, valid, err)
 	}
-	recovered, pending, err := LoadPendingEncryptionKey(ctx, db, oldKey, time.Now().UTC())
+	recovered, pending, err := LoadPendingEncryptionKey(ctx, testStore(db), oldKey, time.Now().UTC())
 	if err != nil || !pending || recovered != newKey {
 		t.Fatalf("pending key from old config = (%q, %v, %v)", recovered, pending, err)
 	}
-	recovered, pending, err = LoadPendingEncryptionKey(ctx, db, newKey, time.Now().UTC())
+	recovered, pending, err = LoadPendingEncryptionKey(ctx, testStore(db), newKey, time.Now().UTC())
 	if err != nil || !pending || recovered != newKey {
 		t.Fatalf("pending key from new config = (%q, %v, %v)", recovered, pending, err)
 	}

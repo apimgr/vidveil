@@ -7,7 +7,6 @@ package display
 
 import (
 	"os"
-	"os/exec"
 	"runtime"
 )
 
@@ -34,15 +33,10 @@ func (e *DisplayEnv) detectUnixDisplay() {
 	}
 
 	// Check X11
-	display := os.Getenv("DISPLAY")
-	if display != "" {
-		// Verify X server is actually accessible
-		cmd := exec.Command("xset", "q")
-		if err := cmd.Run(); err == nil {
-			e.DisplayType = "x11"
-			e.HasDisplay = true
-			return
-		}
+	if os.Getenv("DISPLAY") != "" {
+		e.DisplayType = "x11"
+		e.HasDisplay = true
+		return
 	}
 
 	e.DisplayType = "none"

@@ -4,11 +4,45 @@ package apitoken
 import (
 	"context"
 	"database/sql"
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"strings"
 	"testing"
 
+	"github.com/apimgr/vidveil/src/server/service/secret"
 	_ "modernc.org/sqlite"
 )
+
+type rawTokenTestStore struct{ db *sql.DB }
+
+type tokenTestReader struct{ db *sql.DB }
+type tokenTestRow struct{ row *sql.Row }
+
+func (r tokenTestReader) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return r.db.QueryContext(ctx, query, args...)
+}
+func (r tokenTestReader) QueryRowContext(ctx context.Context, query string, args ...any) dbstore.RowScanner {
+	return tokenTestRow{row: r.db.QueryRowContext(ctx, query, args...)}
+}
+func (r tokenTestReader) PingContext(ctx context.Context) error { return r.db.PingContext(ctx) }
+func (r tokenTestRow) Scan(dest ...any) error                   { return r.row.Scan(dest...) }
+
+func (s rawTokenTestStore) Read(ctx context.Context, fn func(context.Context, dbstore.Reader) error) error {
+	return fn(ctx, tokenTestReader(s))
+}
+
+func (s rawTokenTestStore) Write(ctx context.Context, fn func(*sql.Tx) error) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+var _ secret.Store = rawTokenTestStore{}
 
 func TestEncryptDecryptHash(t *testing.T) {
 	key := strings.Repeat("01", 32)
@@ -84,7 +118,7 @@ func TestNormalizeLegacyHashesAndRotation(t *testing.T) {
 	ctx := context.Background()
 	oldKey := strings.Repeat("02", 32)
 	newKey := strings.Repeat("03", 32)
-	if err := NormalizeLegacyHashes(ctx, db, strings.Repeat("01", 32)); err != nil {
+	if err := NormalizeLegacyHashes(ctx, rawTokenTestStore{db}, strings.Repeat("01", 32)); err != nil {
 		t.Fatal(err)
 	}
 	var first string
@@ -94,7 +128,7 @@ func TestNormalizeLegacyHashesAndRotation(t *testing.T) {
 	if first != hash {
 		t.Fatal("plaintext SHA-256 digest was changed")
 	}
-	if err := NormalizeLegacyHashes(ctx, db, strings.Repeat("01", 32)); err != nil {
+	if err := NormalizeLegacyHashes(ctx, rawTokenTestStore{db}, strings.Repeat("01", 32)); err != nil {
 		t.Fatalf("idempotent digest migration: %v", err)
 	}
 	var second string

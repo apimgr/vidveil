@@ -72,6 +72,7 @@ func guaranteedRecoverer(next http.Handler) http.Handler {
 // error-page shape without depending on any template rendering.
 func writeGuaranteedError(w http.ResponseWriter, r *http.Request, status int) {
 	const message = "Something went wrong on our end. Please try again later."
+	w.Header().Set("Cache-Control", "no-store")
 	accept := r.Header.Get("Accept")
 	wantsJSON := strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(accept, "application/json")
 	if wantsJSON {

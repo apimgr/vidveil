@@ -113,14 +113,14 @@ func TestColorEnabledAutoNonTTY(t *testing.T) {
 
 // --- SetEmojiMode / EmojiEnabled ---
 
-// ColorModeAlways forces EmojiEnabled to true even when NO_COLOR is set.
-func TestEmojiEnabledAlwaysOverridesNOCOLOR(t *testing.T) {
+// ColorModeAlways overrides NO_COLOR but never the TERM=dumb restriction.
+func TestEmojiEnabledAlwaysRespectsDumbTerm(t *testing.T) {
 	resetColorConfig(t)
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("TERM", "dumb")
 	SetEmojiMode(ColorModeAlways)
-	if !EmojiEnabled() {
-		t.Error("EmojiEnabled() = false after SetEmojiMode(Always) with NO_COLOR, want true")
+	if EmojiEnabled() {
+		t.Error("EmojiEnabled() = true after SetEmojiMode(Always) with TERM=dumb, want false")
 	}
 }
 

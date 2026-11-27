@@ -165,6 +165,12 @@ func EmojiEnabled() bool {
 	mode := colorConfig.emojiMode
 	colorConfig.mu.RUnlock()
 
+	// TERM=dumb is an unconditional capability limit; neither configuration nor
+	// NO_COLOR overrides it.
+	if os.Getenv("TERM") == "dumb" {
+		return false
+	}
+
 	// Config override (force emojis on)
 	if mode == ColorModeAlways {
 		return true
@@ -177,11 +183,6 @@ func EmojiEnabled() bool {
 
 	// Auto-detect: NO_COLOR disables emojis
 	if os.Getenv("NO_COLOR") != "" {
-		return false
-	}
-
-	// TERM=dumb disables emojis
-	if os.Getenv("TERM") == "dumb" {
 		return false
 	}
 

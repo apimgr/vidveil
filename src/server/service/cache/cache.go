@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/server/model"
+	"github.com/apimgr/vidveil/src/server/service/metric"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -34,6 +35,8 @@ type SearchResultCache interface {
 	Size() int
 	Stats() map[string]interface{}
 	Close() error
+	// Check reports whether the configured cache backend is reachable.
+	Check(context.Context) error
 }
 
 // CacheConfig holds cache configuration
@@ -81,6 +84,7 @@ type SearchCache struct {
 	mu      sync.RWMutex
 	ttl     time.Duration
 	maxSize int
+	bytes   int64
 	ctx     context.Context
 	cancel  context.CancelFunc
 }
@@ -88,6 +92,7 @@ type SearchCache struct {
 type cacheEntry struct {
 	response  *model.SearchResponse
 	createdAt time.Time
+	bytes     int64
 }
 
 // NewSearchCache creates a new search cache
@@ -120,6 +125,9 @@ func (c *SearchCache) Close() error {
 	return nil
 }
 
+// Check reports an in-process cache as healthy.
+func (c *SearchCache) Check(context.Context) error { return nil }
+
 // Get retrieves a cached search response
 func (c *SearchCache) Get(key string) (*model.SearchResponse, bool) {
 	c.mu.RLock()
@@ -127,19 +135,27 @@ func (c *SearchCache) Get(key string) (*model.SearchResponse, bool) {
 
 	entry, ok := c.entries[key]
 	if !ok {
+		metric.CacheMissesTotal.WithLabelValues("search").Inc()
 		return nil, false
 	}
 
 	// Check if expired
 	if time.Since(entry.createdAt) > c.ttl {
+		metric.CacheMissesTotal.WithLabelValues("search").Inc()
 		return nil, false
 	}
 
+	metric.CacheHitsTotal.WithLabelValues("search").Inc()
 	return entry.response, true
 }
 
 // Set stores a search response in cache
 func (c *SearchCache) Set(key string, response *model.SearchResponse) {
+	encoded, err := json.Marshal(response)
+	var entryBytes int64
+	if err == nil {
+		entryBytes = int64(len(encoded))
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -148,17 +164,29 @@ func (c *SearchCache) Set(key string, response *model.SearchResponse) {
 		c.evictOldest()
 	}
 
+	if prior, exists := c.entries[key]; exists {
+		c.bytes -= prior.bytes
+	}
 	c.entries[key] = &cacheEntry{
 		response:  response,
 		createdAt: time.Now(),
+		bytes:     entryBytes,
 	}
+	c.bytes += entryBytes
+	metric.CacheSize.WithLabelValues("search").Set(float64(len(c.entries)))
+	metric.CacheBytes.WithLabelValues("search").Set(float64(c.bytes))
 }
 
 // Delete removes a specific key from cache
 func (c *SearchCache) Delete(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if entry, exists := c.entries[key]; exists {
+		c.bytes -= entry.bytes
+	}
 	delete(c.entries, key)
+	metric.CacheSize.WithLabelValues("search").Set(float64(len(c.entries)))
+	metric.CacheBytes.WithLabelValues("search").Set(float64(c.bytes))
 }
 
 // Clear removes all entries from cache
@@ -166,6 +194,9 @@ func (c *SearchCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries = make(map[string]*cacheEntry)
+	c.bytes = 0
+	metric.CacheSize.WithLabelValues("search").Set(0)
+	metric.CacheBytes.WithLabelValues("search").Set(0)
 }
 
 // Size returns the current number of cached entries
@@ -216,7 +247,11 @@ func (c *SearchCache) evictOldest() {
 	}
 
 	for i := 0; i < toRemove && i < len(items); i++ {
-		delete(c.entries, items[i].key)
+		if entry := c.entries[items[i].key]; entry != nil {
+			c.bytes -= entry.bytes
+			delete(c.entries, items[i].key)
+		}
+		metric.CacheEvictions.WithLabelValues("search").Inc()
 	}
 }
 
@@ -234,9 +269,12 @@ func (c *SearchCache) cleanup() {
 			now := time.Now()
 			for key, entry := range c.entries {
 				if now.Sub(entry.createdAt) > c.ttl {
+					c.bytes -= entry.bytes
 					delete(c.entries, key)
 				}
 			}
+			metric.CacheSize.WithLabelValues("search").Set(float64(len(c.entries)))
+			metric.CacheBytes.WithLabelValues("search").Set(float64(c.bytes))
 			c.mu.Unlock()
 		}
 	}
@@ -333,19 +371,23 @@ func (v *ValkeyCache) Get(key string) (*model.SearchResponse, bool) {
 	closed := v.closed
 	v.mu.RUnlock()
 	if closed {
+		metric.CacheMissesTotal.WithLabelValues("search").Inc()
 		return nil, false
 	}
 
 	ctx := context.Background()
 	data, err := v.client.Get(ctx, v.prefix+key).Bytes()
 	if err != nil {
+		metric.CacheMissesTotal.WithLabelValues("search").Inc()
 		return nil, false
 	}
 
 	var response model.SearchResponse
 	if err := json.Unmarshal(data, &response); err != nil {
+		metric.CacheMissesTotal.WithLabelValues("search").Inc()
 		return nil, false
 	}
+	metric.CacheHitsTotal.WithLabelValues("search").Inc()
 	return &response, true
 }
 
@@ -464,6 +506,14 @@ func (v *ValkeyCache) Close() error {
 	v.closed = true
 	v.mu.Unlock()
 	return v.client.Close()
+}
+
+// Check verifies external cache reachability for health reporting.
+func (v *ValkeyCache) Check(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return v.client.Ping(ctx).Err()
 }
 
 // Compile-time interface check

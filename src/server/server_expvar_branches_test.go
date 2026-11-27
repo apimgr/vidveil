@@ -161,16 +161,15 @@ func TestMiddleware_CacheControl_StaticPathUnstamped(t *testing.T) {
 
 func TestMiddleware_CacheControl_APIPath(t *testing.T) {
 	s := newTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/status", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/healthz", nil)
 	rr := httptest.NewRecorder()
 	s.router.ServeHTTP(rr, req)
 	cc := rr.Header().Get("Cache-Control")
-	if !strings.Contains(cc, "no-cache") {
-		t.Errorf("Cache-Control for /api/ want no-cache, got %q", cc)
+	if rr.Code < http.StatusBadRequest && cc != "public, max-age=60" {
+		t.Errorf("Cache-Control for public API GET want public, max-age=60, got %q", cc)
 	}
-	pragma := rr.Header().Get("Pragma")
-	if pragma != "no-cache" {
-		t.Errorf("Pragma for /api/ want no-cache, got %q", pragma)
+	if rr.Code >= http.StatusBadRequest && cc != "no-store" {
+		t.Errorf("Cache-Control for API error want no-store, got %q", cc)
 	}
 }
 

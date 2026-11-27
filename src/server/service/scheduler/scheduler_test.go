@@ -3,10 +3,12 @@ package scheduler
 
 import (
 	"context"
-	"database/sql"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/apimgr/vidveil/src/server/service/database"
 )
 
 // --- NewScheduler ---
@@ -78,12 +80,9 @@ func TestSetDB_NilThenNonNil(t *testing.T) {
 		t.Error("db should still be nil after SetDB(nil)")
 	}
 
-	// Setting a non-nil *sql.DB must be reflected in the field.
-	// sql.Open is lazy; it does not connect, so no driver is needed.
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := database.NewAppDatabase(database.DatabaseConfig{Driver: database.DriverSQLite, Path: filepath.Join(t.TempDir(), "scheduler.db")})
 	if err != nil {
-		// Driver not available in this test environment — skip the non-nil case.
-		t.Skip("sqlite3 driver unavailable:", err)
+		t.Fatal("open database:", err)
 	}
 	defer func() { _ = db.Close() }()
 
@@ -654,6 +653,26 @@ func TestRunTaskNow_UnknownID(t *testing.T) {
 	err := s.RunTaskNow("no-such-task")
 	if err == nil {
 		t.Error("RunTaskNow with unknown ID should return an error")
+	}
+}
+
+func TestRunTaskNowAndWait_CompletesBeforeReturning(t *testing.T) {
+	s := NewScheduler()
+	called := false
+	if err := s.RegisterTask("sync-run", "Sync", "d", "hourly", func(context.Context) error {
+		called = true
+		return nil
+	}); err != nil {
+		t.Fatalf("RegisterTask error: %v", err)
+	}
+	if err := s.RunTaskNowAndWait("sync-run"); err != nil {
+		t.Fatalf("RunTaskNowAndWait error: %v", err)
+	}
+	if !called {
+		t.Fatal("RunTaskNowAndWait returned before the task ran")
+	}
+	if histories := s.GetHistory("sync-run", 1); len(histories) != 1 || histories[0].Result != "success" {
+		t.Fatalf("RunTaskNowAndWait history = %+v, want one successful run", histories)
 	}
 }
 

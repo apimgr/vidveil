@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/urlvar"
@@ -84,11 +85,32 @@ func (h *SearchHandler) ownerID(w http.ResponseWriter, r *http.Request, create b
 	if ownerID == "" {
 		return "", ""
 	}
-	if legacy != nil && legacy.Value != "" && h.healthDB != nil {
-		_, _ = h.healthDB.ExecContext(r.Context(), `UPDATE favorites SET owner_id = ? WHERE visitor_id = ? AND owner_id LIKE 'legacy-favorite-%'`, ownerID, legacy.Value)
+	if legacy != nil && legacy.Value != "" && h.store != nil {
+		_ = h.store.Write(r.Context(), func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(r.Context(), `UPDATE favorites SET owner_id = ? WHERE visitor_id = ? AND owner_id LIKE 'legacy-favorite-%'`, ownerID, legacy.Value)
+			return err
+		})
 		http.SetCookie(w, &http.Cookie{Name: "visitor_id", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
 	}
 	return ownerID, raw
+}
+
+func (h *SearchHandler) ownerWriteScopeAllowed(w http.ResponseWriter, r *http.Request) bool {
+	header := strings.TrimSpace(r.Header.Get("Authorization"))
+	if !strings.HasPrefix(header, "Bearer ") || h.tokenManager == nil {
+		return true
+	}
+	raw := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
+	if h.isOperatorToken(raw) {
+		return true
+	}
+	principal, err := h.tokenManager.Authenticate(r.Context(), raw)
+	if err != nil || principal.Scope != "read" {
+		return true
+	}
+	SetBearerChallenge(w, "insufficient_scope")
+	SendError(w, "FORBIDDEN", "Token scope does not allow resource changes")
+	return false
 }
 
 func (h *SearchHandler) isOperatorToken(raw string) bool {
@@ -139,7 +161,7 @@ func (h *SearchHandler) setOwnerCookie(w http.ResponseWriter, token string) {
 
 // listFavorites reads all favorites for a visitor, newest first.
 func (h *SearchHandler) listFavorites(ownerID string) ([]Favorite, error) {
-	if h.healthDB == nil || ownerID == "" {
+	if h.store == nil || ownerID == "" {
 		return nil, sql.ErrConnDone
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -151,31 +173,33 @@ func (h *SearchHandler) listFavorites(ownerID string) ([]Favorite, error) {
 		query = `SELECT id, url, title, thumbnail, source, created_at FROM favorites ORDER BY created_at DESC`
 		args = nil
 	}
-	rows, err := h.healthDB.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-
 	var out []Favorite
-	for rows.Next() {
-		var f Favorite
-		var thumb, source sql.NullString
-		if err := rows.Scan(&f.ID, &f.URL, &f.Title, &thumb, &source, &f.CreatedAt); err != nil {
-			return nil, err
+	err := h.store.Read(ctx, func(readCtx context.Context, db dbstore.Reader) error {
+		rows, err := db.QueryContext(readCtx, query, args...)
+		if err != nil {
+			return err
 		}
-		f.Thumbnail = thumb.String
-		f.Source = source.String
-		out = append(out, f)
-	}
-	return out, rows.Err()
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var f Favorite
+			var thumb, source sql.NullString
+			if err := rows.Scan(&f.ID, &f.URL, &f.Title, &thumb, &source, &f.CreatedAt); err != nil {
+				return err
+			}
+			f.Thumbnail = thumb.String
+			f.Source = source.String
+			out = append(out, f)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 // addFavorite inserts a favorite for an owner. Duplicate url (per the
 // UNIQUE(visitor_id, url) compatibility constraint) is treated as success — favoriting an
 // already-favorited video is idempotent, not an error.
 func (h *SearchHandler) addFavorite(ownerID, url, title, thumbnail, source string) error {
-	if h.healthDB == nil || ownerID == "" {
+	if h.store == nil || ownerID == "" {
 		return sql.ErrConnDone
 	}
 	if url == "" || title == "" {
@@ -184,15 +208,15 @@ func (h *SearchHandler) addFavorite(ownerID, url, title, thumbnail, source strin
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := h.healthDB.ExecContext(ctx,
-		`INSERT OR IGNORE INTO favorites (owner_id, visitor_id, url, title, thumbnail, source) VALUES (?, ?, ?, ?, ?, ?)`,
-		ownerID, ownerID, url, title, thumbnail, source)
-	return err
+	return h.store.Write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO favorites (owner_id, visitor_id, url, title, thumbnail, source) VALUES (?, ?, ?, ?, ?, ?)`, ownerID, ownerID, url, title, thumbnail, source)
+		return err
+	})
 }
 
 // removeFavorite deletes one favorite by id, scoped to its owner.
 func (h *SearchHandler) removeFavorite(ownerID string, id int64) error {
-	if h.healthDB == nil || ownerID == "" {
+	if h.store == nil || ownerID == "" {
 		return sql.ErrConnDone
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -204,15 +228,14 @@ func (h *SearchHandler) removeFavorite(ownerID string, id int64) error {
 		query = `DELETE FROM favorites WHERE id = ?`
 		args = []any{id}
 	}
-	_, err := h.healthDB.ExecContext(ctx, query, args...)
-	return err
+	return h.store.Write(ctx, func(tx *sql.Tx) error { _, err := tx.ExecContext(ctx, query, args...); return err })
 }
 
 // removeFavoriteByURL deletes one favorite by URL, scoped to the visitor —
 // used by the no-JS favorite-toggle form on the search results page, which
 // only knows the video URL, not the row id.
 func (h *SearchHandler) removeFavoriteByURL(ownerID, url string) error {
-	if h.healthDB == nil || ownerID == "" {
+	if h.store == nil || ownerID == "" {
 		return sql.ErrConnDone
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -224,13 +247,12 @@ func (h *SearchHandler) removeFavoriteByURL(ownerID, url string) error {
 		query = `DELETE FROM favorites WHERE url = ?`
 		args = []any{url}
 	}
-	_, err := h.healthDB.ExecContext(ctx, query, args...)
-	return err
+	return h.store.Write(ctx, func(tx *sql.Tx) error { _, err := tx.ExecContext(ctx, query, args...); return err })
 }
 
 // clearFavorites deletes every favorite belonging to an owner.
 func (h *SearchHandler) clearFavorites(ownerID string) error {
-	if h.healthDB == nil || ownerID == "" {
+	if h.store == nil || ownerID == "" {
 		return sql.ErrConnDone
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -242,8 +264,7 @@ func (h *SearchHandler) clearFavorites(ownerID string) error {
 		query = `DELETE FROM favorites`
 		args = nil
 	}
-	_, err := h.healthDB.ExecContext(ctx, query, args...)
-	return err
+	return h.store.Write(ctx, func(tx *sql.Tx) error { _, err := tx.ExecContext(ctx, query, args...); return err })
 }
 
 // FavoritesPage handles GET /favorites — the no-JS-first favorites list.
@@ -285,6 +306,9 @@ func (h *SearchHandler) FavoritesSave(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := r.ParseForm(); err != nil {
 		SendError(w, "BAD_REQUEST", "invalid form data")
+		return
+	}
+	if !h.ownerWriteScopeAllowed(w, r) {
 		return
 	}
 
@@ -387,6 +411,9 @@ func (h *SearchHandler) FavoritesImport(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, "/favorites", http.StatusFound)
 		return
 	}
+	if !h.ownerWriteScopeAllowed(w, r) {
+		return
+	}
 	var reader io.Reader = r.Body
 	var uploadedFile io.ReadCloser
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
@@ -421,27 +448,20 @@ func (h *SearchHandler) FavoritesImport(w http.ResponseWriter, r *http.Request) 
 		SendNegotiatedError(w, r, ownerIdentityFailureCode(r), "A valid owner token is required")
 		return
 	}
-	if h.healthDB == nil {
+	if h.store == nil {
 		SendNegotiatedError(w, r, "SERVER_ERROR", "failed to import favorites")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	tx, err := h.healthDB.BeginTx(ctx, nil)
-	if err != nil {
-		SendNegotiatedError(w, r, "SERVER_ERROR", "failed to import favorites")
-		return
-	}
-	defer func() { _ = tx.Rollback() }()
-	for _, entry := range entries {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO favorites (owner_id, visitor_id, url, title, thumbnail, source) VALUES (?, ?, ?, ?, ?, ?)`,
-			ownerID, ownerID, entry.URL, entry.Title, entry.Thumbnail, entry.Source); err != nil {
-			SendNegotiatedError(w, r, "SERVER_ERROR", "failed to import favorites")
-			return
+	if err := h.store.Write(ctx, func(tx *sql.Tx) error {
+		for _, entry := range entries {
+			if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO favorites (owner_id, visitor_id, url, title, thumbnail, source) VALUES (?, ?, ?, ?, ?, ?)`, ownerID, ownerID, entry.URL, entry.Title, entry.Thumbnail, entry.Source); err != nil {
+				return err
+			}
 		}
-	}
-	if err := tx.Commit(); err != nil {
+		return nil
+	}); err != nil {
 		SendNegotiatedError(w, r, "SERVER_ERROR", "failed to import favorites")
 		return
 	}
@@ -512,6 +532,9 @@ func (h *SearchHandler) FavoritesAPIList(w http.ResponseWriter, r *http.Request)
 
 // FavoritesAPIAdd handles POST /api/{api_version}/favorites.
 func (h *SearchHandler) FavoritesAPIAdd(w http.ResponseWriter, r *http.Request) {
+	if !h.ownerWriteScopeAllowed(w, r) {
+		return
+	}
 	var in importFavoriteEntry
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		SendError(w, "BAD_REQUEST", "invalid JSON body")
@@ -543,6 +566,9 @@ func (h *SearchHandler) FavoritesAPIAdd(w http.ResponseWriter, r *http.Request) 
 
 // FavoritesAPIRemove handles DELETE /api/{api_version}/favorites/{id}.
 func (h *SearchHandler) FavoritesAPIRemove(w http.ResponseWriter, r *http.Request) {
+	if !h.ownerWriteScopeAllowed(w, r) {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		SendError(w, "BAD_REQUEST", "invalid id")
@@ -562,6 +588,9 @@ func (h *SearchHandler) FavoritesAPIRemove(w http.ResponseWriter, r *http.Reques
 
 // FavoritesAPIClear handles DELETE /api/{api_version}/favorites.
 func (h *SearchHandler) FavoritesAPIClear(w http.ResponseWriter, r *http.Request) {
+	if !h.ownerWriteScopeAllowed(w, r) {
+		return
+	}
 	ownerID, _ := h.ownerID(w, r, false, true)
 	if ownerID == "" {
 		sendFavoriteBearerFailure(w, r)

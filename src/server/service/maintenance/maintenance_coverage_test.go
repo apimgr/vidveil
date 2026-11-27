@@ -29,6 +29,7 @@ func newManagerWithDirs(t *testing.T) (*MaintenanceManager, string, string) {
 	configDir := t.TempDir()
 	dataDir := t.TempDir()
 	m := NewMaintenanceManager(configDir, dataDir, "1.0.0")
+	setMaintenanceTestDiskSpace(m)
 	return m, configDir, dataDir
 }
 

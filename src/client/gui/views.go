@@ -23,7 +23,7 @@ import (
 	"github.com/gogpu/ui/widget"
 )
 
-var guiCommandScreens = []string{"search", "engines", "bangs", "probe", "login"}
+var guiCommandScreens = []string{"search", "engines", "bangs", "probe", "health", "favorites", "login", "update", "setup"}
 
 type guiSession struct {
 	cfg    *Config
@@ -104,6 +104,38 @@ func (session *guiSession) buildCommandScreen() *primitives.BoxWidget {
 		children = append(children, primitives.Text(session.translate("welcome")).FontSize(16))
 		addField("server", session.translate("server_url"), "https://", session.cfg.ServerURL, textfield.TypeText)
 		addField("token", session.translate("api_token"), session.translate("api_token_placeholder"), session.cfg.Token, textfield.TypePassword)
+		saveConfig := session.values["save_config"] != "false"
+		saveLabel := "[ ] " + session.translate("save_configuration")
+		if saveConfig {
+			saveLabel = "[x] " + session.translate("save_configuration")
+		}
+		addAction(saveLabel, func() {
+			session.values["save_config"] = strconv.FormatBool(!saveConfig)
+			session.app.SetRoot(session.buildCommandScreen())
+		})
+		setDefault := session.values["set_default"] == "true"
+		defaultLabel := "[ ] " + session.translate("set_default_server")
+		if setDefault {
+			defaultLabel = "[x] " + session.translate("set_default_server")
+		}
+		addAction(defaultLabel, func() {
+			session.values["set_default"] = strconv.FormatBool(!setDefault)
+			session.app.SetRoot(session.buildCommandScreen())
+		})
+		if session.cfg.AutostartEnabled != nil && session.cfg.SetAutostart != nil {
+			autostart := session.cfg.AutostartEnabled()
+			autostartLabel := "[ ] " + session.translate("start_automatically")
+			if autostart {
+				autostartLabel = "[x] " + session.translate("start_automatically")
+			}
+			addAction(autostartLabel, func() {
+				if err := session.cfg.SetAutostart(!autostart); err != nil {
+					session.showError(err.Error())
+					return
+				}
+				session.app.SetRoot(session.buildCommandScreen())
+			})
+		}
 		addAction(session.translate("test_connection"), func() {
 			_, serverVersion, err := session.validateServerConnection(fields["server"].Text(), fields["token"].Text())
 			if err != nil {
@@ -122,13 +154,23 @@ func (session *guiSession) buildCommandScreen() *primitives.BoxWidget {
 				session.showError(err.Error())
 				return
 			}
-			if session.cfg.SaveServer == nil {
-				session.showError(session.translate("error.setup_storage_unavailable"))
-				return
-			}
-			if err := session.cfg.SaveServer(serverURL, token); err != nil {
-				session.showError(err.Error())
-				return
+			saveConfig := session.values["save_config"] != "false"
+			setDefault := session.values["set_default"] == "true"
+			if saveConfig {
+				if session.cfg.SaveSetup != nil {
+					if err := session.cfg.SaveSetup(serverURL, token, true, setDefault); err != nil {
+						session.showError(err.Error())
+						return
+					}
+				} else if session.cfg.SaveServer != nil {
+					if err := session.cfg.SaveServer(serverURL, token); err != nil {
+						session.showError(err.Error())
+						return
+					}
+				} else {
+					session.showError(session.translate("error.setup_storage_unavailable"))
+					return
+				}
 			}
 			session.cfg.ServerURL = serverURL
 			session.cfg.Token = token
@@ -173,6 +215,23 @@ func (session *guiSession) buildCommandScreen() *primitives.BoxWidget {
 		addAction(session.translate("enabled_engines"), func() { session.loadEngineRows("enabled") })
 		addAction(session.translate("disabled_engines"), func() { session.loadEngineRows("disabled") })
 		addAction(session.translate("refresh"), func() { session.loadEngineRows("all") })
+	case "health":
+		addAction(session.translate("check_health"), func() {
+			if session.api == nil {
+				session.showError(session.translate("error.server_unconfigured"))
+				return
+			}
+			healthy, err := session.api.Health()
+			if err != nil {
+				session.showError(err.Error())
+				return
+			}
+			if !healthy {
+				session.showError(session.translate("error.health_failed"))
+				return
+			}
+			session.showResults([]string{session.translate("health_healthy")})
+		})
 	case "bangs":
 		addField("filter", session.translate("filter_shortcuts"), session.translate("filter_shortcuts_placeholder"), "", textfield.TypeSearch)
 		addAction(session.translate("load_shortcuts"), func() { session.loadBangRows(fields["filter"].Text()) })
@@ -219,6 +278,70 @@ func (session *guiSession) buildCommandScreen() *primitives.BoxWidget {
 			session.api.SetLanguage(session.cfg.Language)
 			session.showResults([]string{session.translate("login_saved")})
 		})
+	case "favorites":
+		addField("url", session.translate("favorite_url"), "https://", "", textfield.TypeText)
+		addField("title", session.translate("favorite_title"), "", "", textfield.TypeText)
+		addField("thumbnail", session.translate("favorite_thumbnail"), "https://", "", textfield.TypeText)
+		addField("source", session.translate("favorite_source"), "", "", textfield.TypeText)
+		addField("id", session.translate("favorite_id"), "1", "1", textfield.TypeNumber)
+		addAction(session.translate("favorites_list"), func() {
+			favorites, err := session.api.ListFavorites()
+			if err != nil {
+				session.showError(err.Error())
+				return
+			}
+			rows := make([]string, 0, len(favorites))
+			for _, favorite := range favorites {
+				rows = append(rows, i18n.TranslateFormat(session.cfg.Language, "gui.favorite_row", "id", favorite.ID, "title", favorite.Title, "url", favorite.URL))
+			}
+			session.showResults(rows)
+		})
+		addAction(session.translate("favorites_add"), func() {
+			if err := session.api.AddFavorite(api.Favorite{URL: strings.TrimSpace(fields["url"].Text()), Title: strings.TrimSpace(fields["title"].Text()), Thumbnail: strings.TrimSpace(fields["thumbnail"].Text()), Source: strings.TrimSpace(fields["source"].Text())}); err != nil {
+				session.showError(err.Error())
+				return
+			}
+			session.showResults([]string{session.translate("favorite_added")})
+		})
+		addAction(session.translate("favorites_remove"), func() {
+			id, err := strconv.ParseInt(strings.TrimSpace(fields["id"].Text()), 10, 64)
+			if err != nil || id <= 0 {
+				session.showError(session.translate("error.favorite_id_invalid"))
+				return
+			}
+			if err := session.api.RemoveFavorite(id); err != nil {
+				session.showError(err.Error())
+				return
+			}
+			session.showResults([]string{session.translate("favorite_removed")})
+		})
+		addAction(session.translate("favorites_clear"), func() {
+			session.confirmClearFavorites()
+		})
+	case "update":
+		addAction(session.translate("check_update"), func() {
+			if session.cfg.CheckUpdate == nil {
+				session.showError(session.translate("error.update_unavailable"))
+				return
+			}
+			status, err := session.cfg.CheckUpdate()
+			if err != nil {
+				session.showError(err.Error())
+				return
+			}
+			session.showResults([]string{status})
+		})
+		addAction(session.translate("apply_update"), func() {
+			if session.cfg.ApplyUpdate == nil {
+				session.showError(session.translate("error.update_unavailable"))
+				return
+			}
+			if err := session.cfg.ApplyUpdate(); err != nil {
+				session.showError(err.Error())
+				return
+			}
+			session.showResults([]string{session.translate("update_started")})
+		})
 	default:
 		session.error = session.translate("error.unknown_screen")
 	}
@@ -229,6 +352,25 @@ func (session *guiSession) buildCommandScreen() *primitives.BoxWidget {
 		children = append(children, primitives.Text(line).FontSize(13))
 	}
 	return primitives.Box(children...).Padding(24).Gap(10)
+}
+
+func (session *guiSession) confirmClearFavorites() {
+	confirmation := dialog.New(
+		dialog.Title(session.translate("favorites_clear")),
+		dialog.Content(primitives.Text(session.translate("favorites_clear_confirm"))),
+		dialog.Actions(
+			dialog.Action{Label: session.translate("cancel"), Variant: dialog.VariantTextOnly},
+			dialog.Action{Label: session.translate("favorites_clear"), Default: true, OnClick: func() {
+				if err := session.api.ClearFavorites(); err != nil {
+					session.showError(err.Error())
+					return
+				}
+				session.showResults([]string{session.translate("favorites_cleared")})
+			}},
+		),
+		dialog.PainterOpt(material3.DialogPainter{Theme: session.theme}),
+	)
+	confirmation.Show(session.app.Window().Context())
 }
 
 func (session *guiSession) newButton(label string, action func()) *button.Widget {

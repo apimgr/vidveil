@@ -13,7 +13,7 @@ import (
 )
 
 func TestGUIHasOneScreenForEveryServerFacingCLICommandInHelpOrder(t *testing.T) {
-	want := []string{"search", "engines", "bangs", "probe", "login"}
+	want := []string{"search", "engines", "bangs", "probe", "health", "favorites", "login", "update", "setup"}
 	if !reflect.DeepEqual(guiCommandScreens, want) {
 		t.Fatalf("GUI command screens = %v, want CLI help order %v", guiCommandScreens, want)
 	}

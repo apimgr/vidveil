@@ -7,7 +7,6 @@
 package server
 
 import (
-	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,6 +18,7 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/mode"
 	"github.com/apimgr/vidveil/src/server/handler"
+	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
@@ -26,16 +26,14 @@ import (
 
 // ── mock MigrationManager ─────────────────────────────────────────────────────
 
-type mockMigrationMgr struct {
-	db *sql.DB
-}
+type mockMigrationMgr struct{}
 
 func (m *mockMigrationMgr) GetMigrationStatus() ([]map[string]interface{}, error) {
 	return nil, nil
 }
-func (m *mockMigrationMgr) RunMigrations() error     { return nil }
-func (m *mockMigrationMgr) RollbackMigration() error { return nil }
-func (m *mockMigrationMgr) GetDB() *sql.DB           { return m.db }
+func (m *mockMigrationMgr) RunMigrations() error                  { return nil }
+func (m *mockMigrationMgr) RollbackMigration() error              { return nil }
+func (m *mockMigrationMgr) GetAppDatabase() *database.AppDatabase { return nil }
 
 // ── mock types for server setters ─────────────────────────────────────────────
 
@@ -290,7 +288,7 @@ func TestDebugLogCache_DebugDisabled_NoPanic(t *testing.T) {
 func TestHandleDebugDB_NilDB_ReturnsJSON(t *testing.T) {
 	s := &Server{
 		appConfig:    config.DefaultAppConfig(),
-		migrationMgr: &mockMigrationMgr{db: nil},
+		migrationMgr: &mockMigrationMgr{},
 	}
 	req := httptest.NewRequest(http.MethodGet, "/debug/db", nil)
 	rec := httptest.NewRecorder()

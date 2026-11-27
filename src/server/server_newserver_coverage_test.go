@@ -5,7 +5,6 @@ package server
 
 import (
 	"context"
-	"database/sql"
 	"image"
 	"image/color"
 	"image/png"
@@ -21,6 +20,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/branding"
+	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/scheduler"
@@ -32,15 +32,22 @@ type stubMigrationManager struct{}
 func (s *stubMigrationManager) GetMigrationStatus() ([]map[string]interface{}, error) {
 	return nil, nil
 }
-func (s *stubMigrationManager) RunMigrations() error     { return nil }
-func (s *stubMigrationManager) RollbackMigration() error { return nil }
-func (s *stubMigrationManager) GetDB() *sql.DB           { return nil }
+func (s *stubMigrationManager) RunMigrations() error                  { return nil }
+func (s *stubMigrationManager) RollbackMigration() error              { return nil }
+func (s *stubMigrationManager) GetAppDatabase() *database.AppDatabase { return nil }
 
 // newTestServer creates a Server using NewServer with minimal dependencies.
 func newTestServer(t *testing.T) *Server {
+	return newTestServerWithOptions(t, nil)
+}
+
+func newTestServerWithOptions(t *testing.T, configure func(*config.AppConfig)) *Server {
 	t.Helper()
 
 	cfg := config.DefaultAppConfig()
+	if configure != nil {
+		configure(cfg)
+	}
 
 	base := filepath.Join(os.TempDir(), "apimgr")
 	if err := os.MkdirAll(base, 0755); err != nil {
@@ -130,6 +137,27 @@ func TestNewServer_RateLimiterSet(t *testing.T) {
 	s := newTestServer(t)
 	if s.rateLimiter == nil {
 		t.Error("NewServer: rateLimiter is nil after construction")
+	}
+}
+
+func TestReportingHeadersUseSeparateDefaultAndNELGroups(t *testing.T) {
+	s := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/server/healthz", nil)
+	req.Host = "example.com"
+	rr := httptest.NewRecorder()
+	s.router.ServeHTTP(rr, req)
+
+	endpoints := rr.Header().Get("Reporting-Endpoints")
+	if !strings.Contains(endpoints, `default="http://example.com`+s.appConfig.APIBasePath()+`/server/reports/default"`) ||
+		!strings.Contains(endpoints, `nel="http://example.com`+s.appConfig.APIBasePath()+`/server/reports/nel"`) {
+		t.Fatalf("Reporting-Endpoints = %q, want separate absolute default and NEL URLs", endpoints)
+	}
+	reportTo := rr.Header().Get("Report-To")
+	if !strings.Contains(reportTo, `"group":"default"`) || !strings.Contains(reportTo, `"group":"nel"`) {
+		t.Fatalf("Report-To = %q, want default and NEL groups", reportTo)
+	}
+	if !strings.Contains(rr.Header().Get("NEL"), `"report_to":"nel"`) {
+		t.Fatalf("NEL = %q, want report_to nel", rr.Header().Get("NEL"))
 	}
 }
 

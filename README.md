@@ -160,9 +160,10 @@ operator-authored page content are configured in `yaml.d/branding.yml`.
 Search and browsing are public. Favorites are private to an anonymous owner; the
 first saved favorite creates an owner token. Save the primary token securely to
 restore access on another browser at `/server/preferences/tokens`. Create a
-separate linked token for each API or MCP client; do not use the primary or
-operator token for automation. API clients send owner tokens as Bearer
-credentials. The token page can issue a new primary token when no primary
+separate linked token for each API or MCP client, choosing `read` or
+`read-write` access and an expiry; read-only tokens cannot change favorites.
+Do not use the primary or operator token for automation. API clients send owner
+tokens as Bearer credentials. The token page can issue a new primary token when no primary
 cookie exists, restore an existing token, reveal or rotate tokens, and create
 and manage linked tokens. It works without JavaScript. See the
 [authentication guide](docs/api/authentication.md) and

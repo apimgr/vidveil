@@ -1,0 +1,17 @@
+Subject: SSL Renewal Failed - {app_name}
+---
+SSL CERTIFICATE RENEWAL FAILED
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+Automatic SSL certificate renewal failed for domain: {fqdn}
+
+Error: {error}
+
+Current certificate expires in {expires_in} days ({expiry_date}).
+The system will retry automatically: {next_retry}
+
+--
+{app_name}
+{app_url}

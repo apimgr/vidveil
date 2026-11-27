@@ -467,6 +467,7 @@ func SendOK(w http.ResponseWriter, data any) {
 // SendError sends an error response per AI.md PART 9
 func SendError(w http.ResponseWriter, code string, message string) {
 	status := ErrorCodeToHTTP(code)
+	w.Header().Set("Cache-Control", "no-store")
 	// Use MarshalIndent with 2-space indentation per PART 14
 	response := APIResponse{OK: false, Error: code, Message: message}
 	output, err := marshalPublicJSON(response)
@@ -492,6 +493,7 @@ func SendNegotiatedError(w http.ResponseWriter, r *http.Request, code string, me
 		SendError(w, code, message)
 		return
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	http.Error(w, message, ErrorCodeToHTTP(code))
 }
 
@@ -499,6 +501,7 @@ func SendNegotiatedError(w http.ResponseWriter, r *http.Request, code string, me
 // object per AI.md PART 14 (e.g. {"field":"email","rule":"format"}).
 func sendErrorWithDetails(w http.ResponseWriter, code string, message string, details any) {
 	status := ErrorCodeToHTTP(code)
+	w.Header().Set("Cache-Control", "no-store")
 	response := APIResponse{OK: false, Error: code, Message: message, Details: details}
 	output, err := marshalPublicJSON(response)
 	if err != nil {

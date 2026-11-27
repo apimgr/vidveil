@@ -1,0 +1,17 @@
+Subject: [Security Report] {severity} - {component} ({tracking_id})
+---
+A new coordinated-disclosure security report was submitted.
+
+Tracking ID: {tracking_id}
+Severity: {severity}
+Component: {component}
+Endpoint: {endpoint}
+Summary: {summary}
+
+Full details (steps to reproduce, impact, suggested fix) are stored
+encrypted at rest; consult the admin security queue to review the
+complete report body.
+
+────────────────────────────────────────────────────────────────────────
+{app_name}
+{app_url}

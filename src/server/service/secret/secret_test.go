@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"os"
 	"path/filepath"
 	"testing"
@@ -54,15 +55,47 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	return db, cleanup
 }
 
+type rawDBTestStore struct{ db *sql.DB }
+
+type secretTestReader struct{ db *sql.DB }
+type secretTestRow struct{ row *sql.Row }
+
+func (r secretTestReader) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return r.db.QueryContext(ctx, query, args...)
+}
+func (r secretTestReader) QueryRowContext(ctx context.Context, query string, args ...any) dbstore.RowScanner {
+	return secretTestRow{row: r.db.QueryRowContext(ctx, query, args...)}
+}
+func (r secretTestReader) PingContext(ctx context.Context) error { return r.db.PingContext(ctx) }
+func (r secretTestRow) Scan(dest ...any) error                   { return r.row.Scan(dest...) }
+
+func (s rawDBTestStore) Read(ctx context.Context, fn func(context.Context, dbstore.Reader) error) error {
+	return fn(ctx, secretTestReader(s))
+}
+
+func (s rawDBTestStore) Write(ctx context.Context, fn func(*sql.Tx) error) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+func testStore(db *sql.DB) Store { return rawDBTestStore{db: db} }
+
 func TestNewManager(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	m := NewManager(db)
+	m := NewManager(testStore(db))
 	if m == nil {
 		t.Fatal("NewManager returned nil")
 	}
-	if m.db != db {
+	if m.db != (rawDBTestStore{db: db}) {
 		t.Error("Manager db not set correctly")
 	}
 }
@@ -71,7 +104,7 @@ func TestEnsureSecrets_CreatesAll(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	m := NewManager(db)
+	m := NewManager(testStore(db))
 	ctx := context.Background()
 
 	if err := m.EnsureSecrets(ctx); err != nil {
@@ -94,7 +127,7 @@ func TestEnsureSecrets_Idempotent(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	m := NewManager(db)
+	m := NewManager(testStore(db))
 	ctx := context.Background()
 
 	// Run twice
@@ -127,7 +160,7 @@ func TestGetInstallationSecret(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	m := NewManager(db)
+	m := NewManager(testStore(db))
 	ctx := context.Background()
 
 	if err := m.EnsureSecrets(ctx); err != nil {
@@ -147,7 +180,7 @@ func TestGet_NotFound(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	m := NewManager(db)
+	m := NewManager(testStore(db))
 	ctx := context.Background()
 
 	_, err := m.Get(ctx, "nonexistent")
@@ -160,7 +193,7 @@ func TestRotate(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	m := NewManager(db)
+	m := NewManager(testStore(db))
 	ctx := context.Background()
 
 	if err := m.EnsureSecrets(ctx); err != nil {
@@ -193,7 +226,7 @@ func TestRotate(t *testing.T) {
 func TestRotateImmediatelyInvalidatesPrevious(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
-	m := NewManager(db)
+	m := NewManager(testStore(db))
 	ctx := context.Background()
 	if err := m.EnsureSecrets(ctx); err != nil {
 		t.Fatalf("EnsureSecrets: %v", err)
@@ -217,7 +250,7 @@ func TestRotateImmediatelyInvalidatesPrevious(t *testing.T) {
 func TestRotateIfDue(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
-	m := NewManager(db)
+	m := NewManager(testStore(db))
 	ctx := context.Background()
 	if err := m.EnsureSecrets(ctx); err != nil {
 		t.Fatalf("EnsureSecrets: %v", err)
@@ -239,7 +272,7 @@ func TestValidateWithPrevious_CurrentValue(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	m := NewManager(db)
+	m := NewManager(testStore(db))
 	ctx := context.Background()
 
 	if err := m.EnsureSecrets(ctx); err != nil {
@@ -264,7 +297,7 @@ func TestValidateWithPrevious_PreviousValue(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	m := NewManager(db)
+	m := NewManager(testStore(db))
 	ctx := context.Background()
 
 	if err := m.EnsureSecrets(ctx); err != nil {
@@ -296,7 +329,7 @@ func TestValidateWithPrevious_InvalidValue(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	m := NewManager(db)
+	m := NewManager(testStore(db))
 	ctx := context.Background()
 
 	if err := m.EnsureSecrets(ctx); err != nil {

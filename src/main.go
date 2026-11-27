@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/apimgr/vidveil/src/app"
 	"github.com/apimgr/vidveil/src/config"
@@ -14,8 +15,14 @@ import (
 func main() {
 	cfg, err := config.Load(os.Args[1:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Server configuration failed: %v\n", err)
-		os.Exit(1)
+		var flagErr config.FlagError
+		if errors.As(err, &flagErr) {
+			binaryName := filepath.Base(os.Args[0])
+			fmt.Fprintf(os.Stderr, "%s: %v\nRun '%s --help' for usage.\n", binaryName, err, binaryName)
+			os.Exit(2)
+		}
+		fmt.Fprintf(os.Stderr, "%s: configuration failed: %v\n", filepath.Base(os.Args[0]), err)
+		os.Exit(78)
 	}
 	cfg.Version = Version
 	cfg.CommitID = CommitID

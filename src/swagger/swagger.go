@@ -177,33 +177,6 @@ func generateSourceSpec(appConfig *config.AppConfig, r *http.Request) string {
 					},
 				},
 			},
-			"/server/healthz": map[string]interface{}{
-				"get": map[string]interface{}{
-					"summary":     "Health check (frontend)",
-					"description": "Frontend health endpoint with smart content negotiation (per AI.md PART 13)",
-					"responses": map[string]interface{}{
-						"200": map[string]interface{}{
-							"description": "OK",
-						},
-					},
-				},
-			},
-			"/.well-known/vidveil.json": map[string]interface{}{
-				"get": map[string]interface{}{
-					"summary":     "Well-known metadata",
-					"description": "Machine-readable server metadata and capability discovery",
-					"responses": map[string]interface{}{
-						"200": map[string]interface{}{
-							"description": "Server metadata",
-							"content": map[string]interface{}{
-								"application/json": map[string]interface{}{
-									"schema": map[string]string{"type": "object"},
-								},
-							},
-						},
-					},
-				},
-			},
 			"/search.rss": map[string]interface{}{
 				"get": map[string]interface{}{
 					"summary":     "RSS feed",
@@ -445,7 +418,12 @@ func generateSourceSpec(appConfig *config.AppConfig, r *http.Request) string {
 		}, nil, "application/json"))
 	addOperation("/server/preferences/tokens", "get", "listOwnerTokens", "List owner tokens", "Return masked primary and linked-token metadata.", nil, nil)
 	addOperation("/server/preferences/tokens", "post", "createLinkedToken", "Create linked token", "Create a linked owner token. The raw value is returned only in this response.", nil,
-		objectBody(map[string]interface{}{"name": stringProperty("Token name"), "expires": stringProperty("never, 7d, 30d, 90d, 1y, or YYYY-MM-DD")}, []string{"name"}, "application/json"))
+		objectBody(map[string]interface{}{
+			"name":       stringProperty("Token name"),
+			"scope":      map[string]interface{}{"type": "string", "enum": []string{"read", "read-write"}, "default": "read-write"},
+			"expires":    map[string]interface{}{"type": "string", "enum": []string{"never", "7d", "30d", "90d", "1y"}, "default": "never"},
+			"expires_on": map[string]interface{}{"type": "string", "format": "date", "description": "UTC date, today or later"},
+		}, []string{"name"}, "application/json"))
 	addOperation("/server/preferences/tokens/primary", "post", "issuePrimaryOwnerToken", "Issue primary owner token", "Create a new anonymous owner and return its primary token once. No bearer token is required; a valid existing token receives 409.", nil, nil)
 	issuePrimary := paths[apiBase+"/server/preferences/tokens/primary"].(map[string]interface{})["post"].(map[string]interface{})
 	issuePrimary["responses"] = map[string]interface{}{
@@ -463,7 +441,11 @@ func generateSourceSpec(appConfig *config.AppConfig, r *http.Request) string {
 	addOperation("/server/preferences/tokens/{id}/reveal", "post", "revealLinkedToken", "Reveal linked token", "Decrypt and return the linked token for this explicit reveal action.", []map[string]interface{}{pathParameter("id", "Linked token ID")}, nil)
 	addOperation("/server/preferences/tokens/{id}/rotate", "post", "rotateLinkedToken", "Rotate linked token", "Replace a linked token in place.", []map[string]interface{}{pathParameter("id", "Linked token ID")}, nil)
 	addOperation("/server/preferences/tokens/{id}", "patch", "updateLinkedToken", "Update linked token", "Change a linked token name or expiry.", []map[string]interface{}{pathParameter("id", "Linked token ID")},
-		objectBody(map[string]interface{}{"name": stringProperty("Token name"), "expires": stringProperty("never, 7d, 30d, 90d, 1y, or YYYY-MM-DD")}, []string{"name"}, "application/json"))
+		objectBody(map[string]interface{}{
+			"name":       stringProperty("Token name"),
+			"expires":    map[string]interface{}{"type": "string", "enum": []string{"never", "7d", "30d", "90d", "1y"}},
+			"expires_on": map[string]interface{}{"type": "string", "format": "date", "description": "UTC date, today or later"},
+		}, nil, "application/json"))
 	addOperation("/server/preferences/tokens/{id}", "delete", "revokeLinkedToken", "Revoke linked token", "Permanently revoke a linked token.", []map[string]interface{}{pathParameter("id", "Linked token ID")}, nil)
 	for _, route := range []struct{ path, method string }{
 		{"/server/preferences/tokens", "get"}, {"/server/preferences/tokens", "post"},
@@ -485,71 +467,6 @@ func generateSourceSpec(appConfig *config.AppConfig, r *http.Request) string {
 	}, nil)
 	addOperation("/proxy/thumbnails", "get", "proxyThumbnail", "Fetch a remote thumbnail", "Fetch a validated public HTTP or HTTPS thumbnail URL through the server.", []map[string]interface{}{queryParameter("url", "Remote thumbnail URL", "string", true)}, nil)
 	addOperation("/proxy/videos", "get", "proxyVideo", "Fetch a remote video", "Fetch a validated public HTTP or HTTPS video URL through the server.", []map[string]interface{}{queryParameter("url", "Remote video URL", "string", true)}, nil)
-	markCondition := func(path, method, condition string) {
-		if item, ok := paths[path].(map[string]interface{}); ok {
-			if operation, ok := item[method].(map[string]interface{}); ok {
-				operation["x-mounted-when"] = condition
-			}
-		}
-	}
-	for _, route := range []struct{ path, method, id, summary string }{
-		{apiBase + "/debug/engines", "get", "debugEngines", "List engine diagnostics"},
-		{apiBase + "/debug/engines/{name}", "get", "debugEngine", "Get engine diagnostics"},
-		{"/api/debug/engines", "get", "debugEnginesAlias", "List engine diagnostics"},
-		{"/api/debug/engines/{name}", "get", "debugEngineAlias", "Get engine diagnostics"},
-	} {
-		path := strings.TrimPrefix(route.path, apiBase)
-		parameters := []map[string]interface{}{}
-		if strings.Contains(path, "{name}") {
-			parameters = append(parameters, pathParameter("name", "Engine identifier"))
-		}
-		if strings.HasPrefix(route.path, "/api/debug/") {
-			item := map[string]interface{}{"operationId": route.id, "summary": route.summary, "parameters": parameters, "responses": map[string]interface{}{"200": map[string]interface{}{"description": "Engine diagnostics"}}, "security": []map[string]interface{}{{"BearerAuth": []string{}}}, "x-mounted-when": "debug"}
-			if paths[route.path] == nil {
-				paths[route.path] = map[string]interface{}{}
-			}
-			paths[route.path].(map[string]interface{})[route.method] = item
-		} else {
-			addOperation(path, route.method, route.id, route.summary, "Operator-only engine diagnostics.", parameters, nil)
-			item := paths[apiBase+path].(map[string]interface{})[route.method].(map[string]interface{})
-			item["security"] = []map[string]interface{}{{"BearerAuth": []string{}}}
-			markCondition(apiBase+path, route.method, "debug")
-		}
-	}
-	for _, servicePath := range []string{"/server/metrics", "/server/metrics/{service}"} {
-		parameters := []map[string]interface{}{}
-		if strings.Contains(servicePath, "{service}") {
-			parameters = append(parameters, pathParameter("service", "Metrics service"))
-		}
-		addOperation(servicePath, "get", "getMetrics", "Get service metrics", "Prometheus metrics endpoint.", parameters, nil)
-		item := paths[apiBase+servicePath].(map[string]interface{})["get"].(map[string]interface{})
-		item["security"] = []map[string]interface{}{{"BearerAuth": []string{}}}
-		markCondition(apiBase+servicePath, "get", "server.metrics.enabled")
-	}
-	for _, servicePath := range []string{"/metrics", "/metrics/{service}", "/api/metrics", "/api/metrics/{service}"} {
-		parameters := []map[string]interface{}{}
-		if strings.Contains(servicePath, "{service}") {
-			parameters = append(parameters, pathParameter("service", "Metrics service"))
-		}
-		item := map[string]interface{}{"operationId": "getMetricsAlias", "summary": "Get service metrics", "parameters": parameters, "responses": map[string]interface{}{"200": map[string]interface{}{"description": "Prometheus metrics"}}, "security": []map[string]interface{}{{"BearerAuth": []string{}}}, "x-mounted-when": "server.metrics.root.enabled"}
-		if strings.HasPrefix(servicePath, "/api/") {
-			item["x-mounted-when"] = "server.metrics.enabled"
-		}
-		if paths[servicePath] == nil {
-			paths[servicePath] = map[string]interface{}{}
-		}
-		paths[servicePath].(map[string]interface{})["get"] = item
-	}
-	for _, alias := range []struct{ path, method, operationID, summary string }{
-		{"/api/swagger", "get", "getOpenAPISpecAlias", "Get the OpenAPI specification"},
-		{"/api/graphql", "post", "executeGraphQLAlias", "Execute a GraphQL query"},
-		{"/api/healthz", "get", "getHealthAlias", "Get server health"},
-		{"/api/mcp", "post", "executeMCPAlias", "Call MCP tools"},
-		{"/mcp", "post", "executeMCPRootAlias", "Call MCP tools"},
-	} {
-		paths[alias.path] = map[string]interface{}{alias.method: map[string]interface{}{"operationId": alias.operationID, "summary": alias.summary, "responses": map[string]interface{}{"200": map[string]interface{}{"description": "Direct alias of the canonical endpoint"}}}}
-	}
-
 	synchronizeRouteDefinitions(paths, apiBase)
 	data, _ := json.MarshalIndent(spec, "", "  ")
 	return string(data)
@@ -941,7 +858,11 @@ func generateEmbeddedSpec(appConfig *config.AppConfig, r *http.Request, includeU
 		if !ok {
 			continue
 		}
-		if strings.HasPrefix(path, "/api/v1/") {
+		if path == "/api/v1" {
+			delete(paths, path)
+			path = apiBase
+			paths[path] = operations
+		} else if strings.HasPrefix(path, "/api/v1/") {
 			delete(paths, path)
 			path = apiBase + strings.TrimPrefix(path, "/api/v1")
 			paths[path] = operations

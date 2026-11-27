@@ -243,11 +243,11 @@ secret-scan:
   script:
     - |
       if [ "$CI_PIPELINE_SOURCE" = "push" ] && [ "$CI_COMMIT_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
-        trufflehog git file://. --since-commit="$CI_COMMIT_BEFORE_SHA" --branch="$CI_COMMIT_SHA" --results=verified,unknown --fail
+        trufflehog git file://. --since-commit="$CI_COMMIT_BEFORE_SHA" --branch="$CI_COMMIT_SHA" --results=verified,unknown --exclude-paths=.github/trufflehog-exclude.txt --fail
       elif [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ] && [ -n "$CI_MERGE_REQUEST_DIFF_BASE_SHA" ]; then
-        trufflehog git file://. --since-commit="$CI_MERGE_REQUEST_DIFF_BASE_SHA" --branch="$CI_COMMIT_SHA" --results=verified,unknown --fail
+        trufflehog git file://. --since-commit="$CI_MERGE_REQUEST_DIFF_BASE_SHA" --branch="$CI_COMMIT_SHA" --results=verified,unknown --exclude-paths=.github/trufflehog-exclude.txt --fail
       else
-        trufflehog git file://. --results=verified,unknown --fail
+        trufflehog git file://. --results=verified --exclude-paths=.github/trufflehog-exclude.txt --fail
       fi
 
 workflow-policy:
@@ -275,9 +275,9 @@ vuln-scan:
         - go.sum
 
 image-scan:
-  image: docker:latest
+  image: docker.io/library/docker@sha256:fbbc96e0af32cdc190aff92ba97a1281a115351a723afe21af78879cc55126b0
   services:
-    - docker:dind
+    - docker.io/library/docker@sha256:fbbc96e0af32cdc190aff92ba97a1281a115351a723afe21af78879cc55126b0
   stage: security
   variables:
     DOCKER_HOST: tcp://docker:2375
@@ -394,7 +394,7 @@ sbom:devel:
 
 release:
   stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  image: registry.gitlab.com/gitlab-org/release-cli@sha256:3f52d526f48e8d10625c722fa6d6423ee82aadeae1b1aa91f07b62551d96dacf
   needs:
     - job: build:linux-amd64
       artifacts: true
@@ -456,7 +456,7 @@ release:
 
 release:beta:
   stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  image: registry.gitlab.com/gitlab-org/release-cli@sha256:3f52d526f48e8d10625c722fa6d6423ee82aadeae1b1aa91f07b62551d96dacf
   needs:
     - job: build:beta
       artifacts: true
@@ -497,7 +497,7 @@ release:beta:
 
 release:devel:
   stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  image: registry.gitlab.com/gitlab-org/release-cli@sha256:3f52d526f48e8d10625c722fa6d6423ee82aadeae1b1aa91f07b62551d96dacf
   needs:
     - job: build:devel
       artifacts: true
@@ -546,9 +546,9 @@ release:devel:
 
 docker:build:
   stage: docker
-  image: docker:latest
+  image: docker.io/library/docker@sha256:fbbc96e0af32cdc190aff92ba97a1281a115351a723afe21af78879cc55126b0
   services:
-    - docker:dind
+    - docker.io/library/docker@sha256:fbbc96e0af32cdc190aff92ba97a1281a115351a723afe21af78879cc55126b0
   before_script:
     - docker login -u "${CI_REGISTRY_USER}" -p "${CI_REGISTRY_PASSWORD}" "${CI_REGISTRY}"
   script:
@@ -622,9 +622,9 @@ docker:build:
 
 docker:devel:
   stage: docker
-  image: docker:latest
+  image: docker.io/library/docker@sha256:fbbc96e0af32cdc190aff92ba97a1281a115351a723afe21af78879cc55126b0
   services:
-    - docker:dind
+    - docker.io/library/docker@sha256:fbbc96e0af32cdc190aff92ba97a1281a115351a723afe21af78879cc55126b0
   before_script:
     - docker login -u "${CI_REGISTRY_USER}" -p "${CI_REGISTRY_PASSWORD}" "${CI_REGISTRY}"
   script:

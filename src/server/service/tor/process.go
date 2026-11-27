@@ -180,9 +180,12 @@ func bootstrapTor(ctrl, eventCtrl *control.Conn) (<-chan control.Event, context.
 	return events, cancel, nil
 }
 
-func waitBootstrap(ctx context.Context, ctrl *control.Conn, events <-chan control.Event, onWarning func(string)) error {
+func waitBootstrapProgress(ctx context.Context, ctrl *control.Conn, events <-chan control.Event, onWarning func(string), onProgress func(int)) error {
 	if values, err := ctrl.GetInfo("status/bootstrap-phase"); err == nil {
 		for _, value := range values {
+			if progress, ok := parseBootstrapProgress(value.Val); ok && onProgress != nil {
+				onProgress(progress)
+			}
 			if strings.Contains(value.Val, "PROGRESS=100") {
 				return nil
 			}
@@ -203,11 +206,19 @@ func waitBootstrap(ctx context.Context, ctrl *control.Conn, events <-chan contro
 			if status.Action != "BOOTSTRAP" {
 				continue
 			}
+			if progress, ok := parseBootstrapProgress(status.Arguments["PROGRESS"]); ok && onProgress != nil {
+				onProgress(progress)
+			}
 			if status.Arguments["PROGRESS"] == "100" {
 				return nil
 			}
 		}
 	}
+}
+
+func parseBootstrapProgress(value string) (int, bool) {
+	progress, err := strconv.Atoi(value)
+	return progress, err == nil && progress >= 0 && progress <= 100
 }
 
 func waitDescriptorUpload(ctx context.Context, events <-chan control.Event, onionAddress string, onFailure func(string)) error {

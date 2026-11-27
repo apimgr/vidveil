@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 28: Coverage tests for handler API endpoints and utility functions.
-// Tests APISearch, APIAutocomplete, APIEngineDetails, DebugEngine, DebugEnginesList,
+// Tests APISearch, APIAutocomplete, APIEngineDetails,
 // SearchRSSFeed, SearchAtomFeed, BatchSearch, ContentRestrictedPage,
 // ContentRestrictedSubmit, BuildDateTime, RenderErrorPage, and MaintenanceModeMiddleware.
 package handler
@@ -355,38 +355,6 @@ func TestAPIEngineDetails_NotFound_Returns404(t *testing.T) {
 	}
 }
 
-// ── DebugEngine ───────────────────────────────────────────────────────────────
-
-// No chi route context → chi.URLParam returns "" → GetEngine("") → 404.
-func TestDebugEngine_NotFound_Returns404(t *testing.T) {
-	h := newAPITestHandler()
-	r := httptest.NewRequest(http.MethodGet, "/debug/engine/test?q=test", nil)
-	w := httptest.NewRecorder()
-	h.DebugEngine(w, r)
-	if w.Code != http.StatusNotFound {
-		t.Errorf("DebugEngine not found: status = %d, want 404", w.Code)
-	}
-}
-
-// ── DebugEnginesList ──────────────────────────────────────────────────────────
-
-func TestDebugEnginesList_EmptyManager_ReturnsJSON(t *testing.T) {
-	h := newAPITestHandler()
-	r := httptest.NewRequest(http.MethodGet, "/debug/engines", nil)
-	w := httptest.NewRecorder()
-	h.DebugEnginesList(w, r)
-	if w.Code != http.StatusOK {
-		t.Errorf("DebugEnginesList: status = %d, want 200", w.Code)
-	}
-	var resp map[string]interface{}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("DebugEnginesList: body not valid JSON: %v", err)
-	}
-	if _, ok := resp["engines"]; !ok {
-		t.Error("DebugEnginesList: missing 'engines' key")
-	}
-}
-
 // ── SearchRSSFeed / SearchAtomFeed ────────────────────────────────────────────
 
 func TestSearchRSSFeed_WithQuery_ReturnsRSS(t *testing.T) {
@@ -675,49 +643,6 @@ func TestAPIEngineDetails_Found_PlainText(t *testing.T) {
 
 	if rr.Code == http.StatusNotFound {
 		t.Skip("engine 'pornhub' not found")
-	}
-}
-
-func TestDebugEngine_Found_ReturnsResult(t *testing.T) {
-	h := newAPITestHandlerWithEngines()
-
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("name", "pornhub")
-	req := httptest.NewRequest(http.MethodGet, "/debug/engine/pornhub?q=test", nil)
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-	rr := httptest.NewRecorder()
-	h.DebugEngine(rr, req)
-
-	if rr.Code == http.StatusNotFound {
-		t.Skip("engine 'pornhub' not found")
-	}
-}
-
-// ── DebugEnginesList with initialized engines ─────────────────────────────────
-
-func TestDebugEnginesList_InitializedManager_ReturnsJSON(t *testing.T) {
-	h := newAPITestHandlerWithEngines()
-
-	req := httptest.NewRequest(http.MethodGet, "/debug/engines", nil)
-	rr := httptest.NewRecorder()
-	h.DebugEnginesList(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("DebugEnginesList(initialized): status = %d, want 200", rr.Code)
-	}
-}
-
-func TestDebugEnginesList_PlainTextFormat_ReturnsText(t *testing.T) {
-	h := newAPITestHandlerWithEngines()
-
-	req := httptest.NewRequest(http.MethodGet, "/debug/engines", nil)
-	req.Header.Set("User-Agent", "curl/7.68.0")
-	rr := httptest.NewRecorder()
-	h.DebugEnginesList(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("DebugEnginesList plain text: status = %d, want 200", rr.Code)
 	}
 }
 

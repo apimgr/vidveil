@@ -7,9 +7,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	// Database drivers - imported for side effects per AI.md PART 10.
@@ -21,6 +21,7 @@ import (
 	// SQLite (pure Go)
 	_ "modernc.org/sqlite"
 
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/server/service/metric"
 )
 
@@ -70,7 +71,16 @@ func queryLabels(query string) (operation, table string) {
 	fields := strings.Fields(trimmed)
 	operation = "OTHER"
 	if len(fields) > 0 {
-		operation = strings.ToUpper(fields[0])
+		operation = strings.ToLower(fields[0])
+		if operation == "with" {
+			for _, field := range fields[1:] {
+				candidate := strings.ToLower(strings.Trim(field, "(,;"))
+				if candidate == "select" || candidate == "insert" || candidate == "update" || candidate == "delete" {
+					operation = candidate
+					break
+				}
+			}
+		}
 	}
 	table = "unknown"
 	if m := queryTableRe.FindStringSubmatch(trimmed); len(m) == 2 {
@@ -100,6 +110,25 @@ type MetricsRow struct {
 	start     time.Time
 }
 
+type readPool struct{ db *sql.DB }
+
+func (r readPool) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	var rows *sql.Rows
+	err := instrumentQuery(query, func() error {
+		var queryErr error
+		rows, queryErr = r.db.QueryContext(ctx, query, args...)
+		return queryErr
+	})
+	return rows, err
+}
+
+func (r readPool) QueryRowContext(ctx context.Context, query string, args ...any) dbstore.RowScanner {
+	operation, table := queryLabels(query)
+	return &MetricsRow{row: r.db.QueryRowContext(ctx, query, args...), operation: operation, table: table, start: time.Now()}
+}
+
+func (r readPool) PingContext(ctx context.Context) error { return r.db.PingContext(ctx) }
+
 func (r *MetricsRow) Scan(dest ...any) error {
 	err := r.row.Scan(dest...)
 	operation, table := r.operation, r.table
@@ -113,13 +142,18 @@ func (r *MetricsRow) Scan(dest ...any) error {
 
 // classifyDBError maps a database error to a low-cardinality error_type label.
 func classifyDBError(err error) string {
+	message := strings.ToLower(err.Error())
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
 		return "timeout"
-	case errors.Is(err, context.Canceled):
-		return "canceled"
+	case strings.Contains(message, "connection") || strings.Contains(message, "closed database"):
+		return "connection"
+	case strings.Contains(message, "unique constraint") || strings.Contains(message, "duplicate key") || strings.Contains(message, "already exists"):
+		return "duplicate"
+	case strings.Contains(message, "constraint"):
+		return "constraint"
 	default:
-		return "query_error"
+		return "other"
 	}
 }
 
@@ -170,38 +204,71 @@ func normalizeDriver(driver Driver) Driver {
 // AppDatabase provides a unified interface for multiple database backends
 type AppDatabase struct {
 	db     *sql.DB
+	readDB *sql.DB
 	driver Driver
 	config DatabaseConfig
-	mu     sync.RWMutex
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
 // NewAppDatabase creates a new database connection based on the driver
 func NewAppDatabase(cfg DatabaseConfig) (*AppDatabase, error) {
-	var db *sql.DB
+	var db, readDB *sql.DB
 	var err error
 
 	driver := normalizeDriver(cfg.Driver)
 	switch driver {
 	case DriverSQLite:
 		db, err = openSQLite(cfg)
+		if err == nil {
+			if cfg.Path == ":memory:" {
+				readDB = db
+			} else {
+				readDB, err = openSQLiteRead(cfg)
+			}
+		}
 	case DriverLibSQL:
 		db, err = openLibSQL(cfg)
+		if err == nil {
+			readDB, err = openLibSQL(cfg)
+		}
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %s", cfg.Driver)
 	}
 
 	if err != nil {
+		if db != nil {
+			_ = db.Close()
+		}
+		if readDB != nil && readDB != db {
+			_ = readDB.Close()
+		}
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
 	// Configure connection pool per AI.md PART 10 (configurable via
 	// server.database.pool; zero values fall back to defaults).
-	db.SetMaxOpenConns(cfg.Pool.maxOpen())
-	db.SetMaxIdleConns(cfg.Pool.maxIdle())
-	db.SetConnMaxLifetime(cfg.Pool.maxLifetime())
-	db.SetConnMaxIdleTime(cfg.Pool.maxIdleTime())
+	if driver == DriverSQLite {
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
+		db.SetConnMaxLifetime(0)
+	} else {
+		db.SetMaxOpenConns(cfg.Pool.maxOpen())
+		db.SetMaxIdleConns(cfg.Pool.maxIdle())
+		db.SetConnMaxLifetime(cfg.Pool.maxLifetime())
+		db.SetConnMaxIdleTime(cfg.Pool.maxIdleTime())
+	}
+	if readDB != db && driver == DriverSQLite {
+		readDB.SetMaxOpenConns(cfg.Pool.maxOpen())
+		readDB.SetMaxIdleConns(cfg.Pool.maxIdle())
+		readDB.SetConnMaxLifetime(cfg.Pool.maxLifetime())
+		readDB.SetConnMaxIdleTime(cfg.Pool.maxIdleTime())
+	} else if readDB != db {
+		readDB.SetMaxOpenConns(cfg.Pool.maxOpen())
+		readDB.SetMaxIdleConns(cfg.Pool.maxIdle())
+		readDB.SetConnMaxLifetime(cfg.Pool.maxLifetime())
+		readDB.SetConnMaxIdleTime(cfg.Pool.maxIdleTime())
+	}
 
 	// Verify the connection per AI.md PART 10 (NewDB pattern: PingContext
 	// with a bounded timeout before the pool is handed to callers).
@@ -209,13 +276,24 @@ func NewAppDatabase(cfg DatabaseConfig) (*AppDatabase, error) {
 	defer pingCancel()
 	if err := db.PingContext(pingCtx); err != nil {
 		_ = db.Close()
+		if readDB != db {
+			_ = readDB.Close()
+		}
 		return nil, fmt.Errorf("failed to verify database connection: %w", err)
+	}
+	if readDB != db {
+		if err := readDB.PingContext(pingCtx); err != nil {
+			_ = db.Close()
+			_ = readDB.Close()
+			return nil, fmt.Errorf("failed to verify read database connection: %w", err)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	appDB := &AppDatabase{
 		db:     db,
+		readDB: readDB,
 		driver: driver,
 		config: cfg,
 		ctx:    ctx,
@@ -236,6 +314,11 @@ func (d *AppDatabase) pollConnectionMetrics() {
 	defer ticker.Stop()
 	for {
 		stats := d.db.Stats()
+		if d.readDB != d.db {
+			readStats := d.readDB.Stats()
+			stats.OpenConnections += readStats.OpenConnections
+			stats.InUse += readStats.InUse
+		}
 		metric.DBConnectionsOpen.Set(float64(stats.OpenConnections))
 		metric.DBConnectionsInUse.Set(float64(stats.InUse))
 		select {
@@ -247,7 +330,7 @@ func (d *AppDatabase) pollConnectionMetrics() {
 }
 
 // openSQLite opens a SQLite database connection
-func openSQLite(cfg DatabaseConfig) (*sql.DB, error) {
+func sqliteDSN(cfg DatabaseConfig, readOnly bool) string {
 	dsn := cfg.Path
 	if dsn == "" {
 		dsn = "vidveil.db"
@@ -258,13 +341,69 @@ func openSQLite(cfg DatabaseConfig) (*sql.DB, error) {
 		journalMode = "WAL"
 	}
 
-	busyTimeout := cfg.BusyTimeout
-	if busyTimeout == 0 {
-		busyTimeout = 5000
+	if dsn == ":memory:" {
+		return dsn
 	}
+	if strings.HasPrefix(dsn, "file:") {
+		dsn += "&"
+	} else {
+		dsn = "file:" + dsn + "?"
+	}
+	dsn += "_pragma=busy_timeout(10000)&_pragma=journal_mode(" + strings.ToLower(journalMode) + ")&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)"
+	if readOnly {
+		dsn += "&_pragma=query_only(1)"
+	} else {
+		dsn += "&_txlock=immediate"
+	}
+	return dsn
+}
 
-	dsn = fmt.Sprintf("%s?_journal_mode=%s&_busy_timeout=%d", dsn, journalMode, busyTimeout)
-	return sql.Open("sqlite", dsn)
+func openSQLite(cfg DatabaseConfig) (*sql.DB, error) {
+	db, err := sql.Open("sqlite", sqliteDSN(cfg, false))
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0)
+	var mode string
+	if err := db.QueryRow(`PRAGMA journal_mode`).Scan(&mode); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("read SQLite journal mode for %q: %w", cfg.Path, err)
+	}
+	if !strings.EqualFold(mode, "wal") && (cfg.Path != ":memory:" || !strings.EqualFold(mode, "memory")) {
+		_ = db.Close()
+		return nil, fmt.Errorf("SQLite database %q requires WAL mode; got %q", cfg.Path, mode)
+	}
+	return db, nil
+}
+
+func openSQLiteRead(cfg DatabaseConfig) (*sql.DB, error) {
+	return sql.Open("sqlite", sqliteDSN(cfg, true))
+}
+
+// OpenReadOnlySQLite opens a SQLite artifact for verification without a writer pool.
+func OpenReadOnlySQLite(path string) (*AppDatabase, error) {
+	dsn := path
+	if strings.HasPrefix(dsn, "file:") {
+		dsn += "&"
+	} else {
+		dsn = "file:" + dsn + "?"
+	}
+	dsn += "_pragma=busy_timeout(10000)&_pragma=query_only(1)&mode=ro"
+	readDB, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, err
+	}
+	readDB.SetMaxOpenConns(1)
+	readDB.SetMaxIdleConns(1)
+	ctx, cancel := context.WithTimeout(context.Background(), TimeoutSimpleSelect)
+	defer cancel()
+	if err := readDB.PingContext(ctx); err != nil {
+		_ = readDB.Close()
+		return nil, err
+	}
+	return &AppDatabase{readDB: readDB, driver: DriverSQLite}, nil
 }
 
 // openLibSQL opens a libsql/Turso remote database connection per AI.md PART 3.
@@ -286,13 +425,6 @@ func openLibSQL(cfg DatabaseConfig) (*sql.DB, error) {
 	return sql.Open("libsql", url)
 }
 
-// DB returns the underlying *sql.DB connection
-func (d *AppDatabase) DB() *sql.DB {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return d.db
-}
-
 // Driver returns the database driver type
 func (d *AppDatabase) Driver() Driver {
 	return d.driver
@@ -305,20 +437,26 @@ func (d *AppDatabase) Exec(query string, args ...interface{}) (sql.Result, error
 	defer cancel()
 	var result sql.Result
 	err := instrumentQuery(query, func() error {
-		var execErr error
-		result, execErr = d.db.ExecContext(ctx, query, args...)
-		return execErr
+		return d.Write(ctx, func(tx *sql.Tx) error {
+			var execErr error
+			result, execErr = tx.ExecContext(ctx, query, args...)
+			return execErr
+		})
 	})
 	return result, err
 }
 
 // ExecContext executes a query without returning rows with context
 func (d *AppDatabase) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	ctx, cancel := withDefaultTimeout(ctx, TimeoutWrite)
+	defer cancel()
 	var result sql.Result
 	err := instrumentQuery(query, func() error {
-		var execErr error
-		result, execErr = d.db.ExecContext(ctx, query, args...)
-		return execErr
+		return d.Write(ctx, func(tx *sql.Tx) error {
+			var execErr error
+			result, execErr = tx.ExecContext(ctx, query, args...)
+			return execErr
+		})
 	})
 	return result, err
 }
@@ -333,7 +471,7 @@ func (d *AppDatabase) Query(query string, args ...interface{}) (*sql.Rows, error
 	var rows *sql.Rows
 	err := instrumentQuery(query, func() error {
 		var queryErr error
-		rows, queryErr = d.db.QueryContext(ctx, query, args...)
+		rows, queryErr = d.readDB.QueryContext(ctx, query, args...)
 		return queryErr
 	})
 	if err != nil {
@@ -346,12 +484,18 @@ func (d *AppDatabase) Query(query string, args ...interface{}) (*sql.Rows, error
 
 // QueryContext executes a query that returns rows with context
 func (d *AppDatabase) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	ctx, cancel := withDefaultTimeout(ctx, TimeoutSimpleSelect)
 	var rows *sql.Rows
 	err := instrumentQuery(query, func() error {
 		var queryErr error
-		rows, queryErr = d.db.QueryContext(ctx, query, args...)
+		rows, queryErr = d.readDB.QueryContext(ctx, query, args...)
 		return queryErr
 	})
+	if err != nil {
+		cancel()
+	} else {
+		time.AfterFunc(TimeoutSimpleSelect, cancel)
+	}
 	return rows, err
 }
 
@@ -365,48 +509,77 @@ func (d *AppDatabase) QueryRow(query string, args ...interface{}) *MetricsRow {
 // QueryRowContext defers query metrics and errors until database/sql reports them from Scan.
 func (d *AppDatabase) QueryRowContext(ctx context.Context, query string, args ...interface{}) *MetricsRow {
 	operation, table := queryLabels(query)
-	return &MetricsRow{row: d.db.QueryRowContext(ctx, query, args...), operation: operation, table: table, start: time.Now()}
-}
-
-// Begin starts a new transaction.
-// Per AI.md PART 10: transactions have a 30s timeout. The returned *sql.Tx
-// outlives this function, so cancel is fired by the timeout timer rather than
-// deferred (a deferred cancel would cancel the tx before the caller uses it).
-func (d *AppDatabase) Begin() (*sql.Tx, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	tx, err := d.db.BeginTx(ctx, nil)
-	if err != nil {
-		cancel()
-		return nil, err
-	}
-	time.AfterFunc(30*time.Second, cancel)
-	return tx, nil
-}
-
-// BeginTx starts a new transaction with context and options
-func (d *AppDatabase) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
-	return d.db.BeginTx(ctx, opts)
+	queryCtx, cancel := withDefaultTimeout(ctx, TimeoutSimpleSelect)
+	time.AfterFunc(TimeoutSimpleSelect, cancel)
+	return &MetricsRow{row: d.readDB.QueryRowContext(queryCtx, query, args...), operation: operation, table: table, start: time.Now()}
 }
 
 // Ping verifies the database connection
 func (d *AppDatabase) Ping() error {
-	return d.db.Ping()
+	return d.PingContext(context.Background())
 }
 
 // PingContext verifies the database connection with context
 func (d *AppDatabase) PingContext(ctx context.Context) error {
-	return d.db.PingContext(ctx)
+	if d == nil {
+		return errors.New("database handle is unavailable")
+	}
+	if d.db != nil {
+		if err := d.db.PingContext(ctx); err != nil {
+			return err
+		}
+	}
+	if d.readDB != nil && d.readDB != d.db {
+		return d.readDB.PingContext(ctx)
+	}
+	if d.db == nil {
+		return errors.New("database handle is unavailable")
+	}
+	return nil
 }
 
 // Close closes the database connection
 func (d *AppDatabase) Close() error {
-	d.cancel()
-	return d.db.Close()
+	if d.cancel != nil {
+		d.cancel()
+	}
+	var err error
+	if d.db != nil {
+		err = d.db.Close()
+	}
+	if d.readDB != nil && d.readDB != d.db {
+		if readErr := d.readDB.Close(); err == nil {
+			err = readErr
+		}
+	}
+	return err
+}
+
+func withDefaultTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= timeout {
+		return context.WithCancel(ctx)
+	}
+	return context.WithTimeout(ctx, timeout)
 }
 
 // Stats returns database connection statistics
 func (d *AppDatabase) Stats() sql.DBStats {
-	return d.db.Stats()
+	stats := d.db.Stats()
+	if d.readDB != d.db {
+		readStats := d.readDB.Stats()
+		stats.OpenConnections += readStats.OpenConnections
+		stats.InUse += readStats.InUse
+		stats.Idle += readStats.Idle
+		stats.WaitCount += readStats.WaitCount
+		stats.WaitDuration += readStats.WaitDuration
+		stats.MaxIdleClosed += readStats.MaxIdleClosed
+		stats.MaxIdleTimeClosed += readStats.MaxIdleTimeClosed
+		stats.MaxLifetimeClosed += readStats.MaxLifetimeClosed
+	}
+	return stats
 }
 
 // TranslateQuery translates a query for the specific database driver.
@@ -461,21 +634,79 @@ func WithTimeout(ctx context.Context, timeout time.Duration) (context.Context, c
 // WithTransaction executes a function within a transaction
 // Per AI.md PART 10 transaction patterns
 func (d *AppDatabase) WithTransaction(ctx context.Context, fn func(*sql.Tx) error) error {
-	// Transaction timeout per PART 10
-	ctx, cancel := context.WithTimeout(ctx, TimeoutTransaction)
+	return d.Write(ctx, fn)
+}
+
+// Read runs read-only database work with the standard simple-query deadline.
+func (d *AppDatabase) Read(ctx context.Context, fn func(context.Context, dbstore.Reader) error) error {
+	if d == nil || d.readDB == nil {
+		return errors.New("database read handle is unavailable")
+	}
+	readCtx, cancel := withDefaultTimeout(ctx, TimeoutSimpleSelect)
 	defer cancel()
-
-	tx, err := d.db.BeginTx(ctx, nil)
-	if err != nil {
+	if err := readCtx.Err(); err != nil {
 		return err
 	}
+	return fn(readCtx, readPool{db: d.readDB})
+}
 
-	if err := fn(tx); err != nil {
-		_ = tx.Rollback()
-		return err
+// Write runs one bounded transaction on the writer handle and retries only
+// transient SQLite lock errors while the context deadline remains active.
+func (d *AppDatabase) Write(ctx context.Context, fn func(*sql.Tx) error) error {
+	if d == nil || d.db == nil {
+		return errors.New("database write handle is unavailable")
 	}
+	writeCtx, cancel := withDefaultTimeout(ctx, TimeoutWrite)
+	defer cancel()
+	var lastErr error
+	for attempt := range 5 {
+		attemptStart := time.Now()
+		tx, err := d.db.BeginTx(writeCtx, nil)
+		if d.driver == DriverSQLite {
+			metric.DBWriteWaitSeconds.Observe(time.Since(attemptStart).Seconds())
+		}
+		if err == nil {
+			err = fn(tx)
+			if err != nil {
+				_ = tx.Rollback()
+			} else {
+				err = tx.Commit()
+			}
+		}
+		if err == nil {
+			return nil
+		}
+		if !isSerializationError(err) || attempt == 4 {
+			return err
+		}
+		if d.driver == DriverSQLite && attempt < 4 {
+			metric.DBBusyTotal.Inc()
+		}
+		lastErr = err
+		base := 25 * time.Millisecond * time.Duration(1<<attempt)
+		jitter := time.Duration(rand.Intn(26)) * time.Millisecond
+		select {
+		case <-writeCtx.Done():
+			return errors.Join(lastErr, writeCtx.Err())
+		case <-time.After(base + jitter):
+		}
+	}
+	return lastErr
+}
 
-	return tx.Commit()
+// VacuumInto performs a SQLite online snapshot outside a transaction through
+// the store's writer handle, as required for backups.
+func (d *AppDatabase) VacuumInto(ctx context.Context, destination string) error {
+	if d == nil || d.db == nil || d.driver != DriverSQLite {
+		return errors.New("SQLite snapshot requires an available local writer handle")
+	}
+	ctx, cancel := withDefaultTimeout(ctx, TimeoutBulk)
+	defer cancel()
+	statement := "VACUUM INTO '" + strings.ReplaceAll(destination, "'", "''") + "'"
+	return instrumentQuery(statement, func() error {
+		_, err := d.db.ExecContext(ctx, statement)
+		return err
+	})
 }
 
 // WithSerializableRetry executes fn in a serializable-isolation transaction,
@@ -483,45 +714,7 @@ func (d *AppDatabase) WithTransaction(ctx context.Context, fn func(*sql.Tx) erro
 // (SQLITE_BUSY / "database is locked" via isSerializationError). Used for
 // correctness-critical multi-statement writes that need strict consistency.
 func (d *AppDatabase) WithSerializableRetry(ctx context.Context, fn func(*sql.Tx) error) error {
-	const maxAttempts = 3
-
-	var lastErr error
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		// Exponential backoff between attempts: 0ms, 100ms, 200ms
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(time.Duration(attempt) * 100 * time.Millisecond):
-			}
-		}
-
-		err := func() error {
-			txCtx, cancel := context.WithTimeout(ctx, TimeoutTransaction)
-			defer cancel()
-
-			tx, err := d.db.BeginTx(txCtx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-			if err != nil {
-				return err
-			}
-
-			if err := fn(tx); err != nil {
-				_ = tx.Rollback()
-				return err
-			}
-
-			return tx.Commit()
-		}()
-
-		if err == nil {
-			return nil
-		}
-		if !isSerializationError(err) {
-			return err
-		}
-		lastErr = err
-	}
-	return lastErr
+	return d.Write(ctx, fn)
 }
 
 // HandleQueryError translates database errors to appropriate error codes

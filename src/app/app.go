@@ -27,6 +27,7 @@ import (
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/common/version"
@@ -58,14 +59,16 @@ import (
 	signalpkg "github.com/apimgr/vidveil/src/server/signal"
 )
 
-func pingDatabaseForRecovery(db *sql.DB) error {
+func pingDatabaseForRecovery(db *database.AppDatabase) error {
 	if db == nil {
 		return fmt.Errorf("database handle is unavailable")
 	}
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		lastErr = db.PingContext(ctx)
+		lastErr = db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+			return readDB.PingContext(readCtx)
+		})
 		cancel()
 		if lastErr == nil {
 			return nil
@@ -175,6 +178,130 @@ func applySchedulerConfig(sched *scheduler.Scheduler, appConfig *config.AppConfi
 			logger.Warn("failed to apply configured scheduler task state", map[string]interface{}{"task_id": id, "enabled": enabled, "error": err.Error()})
 		}
 	}
+}
+
+func handleSchedulerCommand(sched *scheduler.Scheduler, args []string, appConfig *config.AppConfig, configPath string, logger *logging.AppLogger) int {
+	if len(args) == 0 || args[0] == "help" || args[0] == "--help" {
+		fmt.Println("Usage: vidveil --maintenance scheduler {list|show <id>|run <id>|enable <id>|disable <id>|history <id>}")
+		return 0
+	}
+	command := args[0]
+	if command == "list" {
+		fmt.Printf("%-24s %-24s %-10s %-24s %-24s\n", "TASK", "SCHEDULE", "STATUS", "LAST RUN", "NEXT RUN")
+		for _, task := range sched.ListTasks() {
+			status := task.LastResult
+			if task.Enabled && status == "" {
+				status = "pending"
+			} else if !task.Enabled {
+				status = "disabled"
+			}
+			lastRun, nextRun := "-", "-"
+			if !task.LastRun.IsZero() {
+				lastRun = task.LastRun.Local().Format("2006-01-02 15:04:05")
+			}
+			if !task.NextRun.IsZero() {
+				nextRun = task.NextRun.Local().Format("2006-01-02 15:04:05")
+			}
+			fmt.Printf("%-24s %-24s %-10s %-24s %-24s\n", task.ID, task.Schedule, status, lastRun, nextRun)
+		}
+		return 0
+	}
+	if len(args) < 2 || args[1] == "" {
+		fmt.Fprintln(os.Stderr, "scheduler command requires a task ID")
+		return 2
+	}
+	taskID := args[1]
+	task, err := sched.GetTask(taskID)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	switch command {
+	case "show":
+		fmt.Printf("Task: %s (%s)\nDescription: %s\nEnabled: %t\nSchedule: %s\nLast status: %s\nLast run: %s\nNext run: %s\nRuns: %d successful, %d failed\n",
+			task.Name, task.ID, task.Description, task.Enabled, task.Schedule, task.LastResult,
+			formatSchedulerTime(task.LastRun), formatSchedulerTime(task.NextRun), task.RunCount, task.FailCount)
+		if strings.HasPrefix(taskID, "backup_") {
+			retention := appConfig.Server.Backup.Retention
+			fmt.Printf("Retention: max %d backups, weekly %d, monthly %d, yearly %d\nEncryption: %t\n",
+				retention.MaxBackups, retention.KeepWeekly, retention.KeepMonthly, retention.KeepYearly,
+				appConfig.Server.Backup.EncryptionPassword != "")
+		}
+		return 0
+	case "history":
+		history := sched.GetHistory(taskID, 100)
+		fmt.Printf("%-24s %-20s %-10s %-12s %s\n", "STARTED", "DURATION", "STATUS", "FINISHED", "ERROR")
+		for _, item := range history {
+			fmt.Printf("%-24s %-20s %-10s %-12s %s\n", item.StartTime.Local().Format("2006-01-02 15:04:05"), item.Duration.String(), item.Result, item.EndTime.Local().Format("15:04:05"), item.Error)
+		}
+		return 0
+	case "run":
+		if err := sched.RunTaskNowAndWait(taskID); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		fmt.Printf("Task %s completed successfully.\n", taskID)
+		return 0
+	case "enable", "disable":
+		enabled := command == "enable"
+		oldEnabled := task.Enabled
+		if appConfig.Server.Schedule.Tasks == nil {
+			appConfig.Server.Schedule.Tasks = make(map[string]config.ScheduleTaskConfig)
+		}
+		oldConfig, hadConfig := appConfig.Server.Schedule.Tasks[taskID]
+		if !hadConfig {
+			oldConfig = config.ScheduleTaskConfig{Schedule: task.Schedule}
+		}
+		newConfig := oldConfig
+		newConfig.Enabled = enabled
+		newConfig.Schedule = task.Schedule
+		appConfig.Server.Schedule.Tasks[taskID] = newConfig
+		if err := config.SaveAppConfig(appConfig, configPath); err != nil {
+			if hadConfig {
+				appConfig.Server.Schedule.Tasks[taskID] = oldConfig
+			} else {
+				delete(appConfig.Server.Schedule.Tasks, taskID)
+			}
+			fmt.Fprintf(os.Stderr, "save scheduler configuration: %v\n", err)
+			return 1
+		}
+		if enabled {
+			err = sched.EnableTask(taskID)
+		} else {
+			err = sched.DisableTask(taskID)
+		}
+		if err != nil {
+			if hadConfig {
+				appConfig.Server.Schedule.Tasks[taskID] = oldConfig
+			} else {
+				delete(appConfig.Server.Schedule.Tasks, taskID)
+			}
+			if saveErr := config.SaveAppConfig(appConfig, configPath); saveErr != nil {
+				err = errors.Join(err, fmt.Errorf("restore scheduler configuration: %w", saveErr))
+			}
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		if logger != nil {
+			event := "scheduler.task_enabled"
+			if !enabled {
+				event = "scheduler.task_disabled"
+			}
+			logger.Audit(event, taskID, "cli", "", "success", map[string]interface{}{"task_id": taskID, "source": "cli", "old_enabled": oldEnabled, "new_enabled": enabled})
+		}
+		fmt.Printf("Task %s %s.\n", taskID, command+"d")
+		return 0
+	default:
+		fmt.Fprintf(os.Stderr, "unknown scheduler command %q\n", command)
+		return 2
+	}
+}
+
+func formatSchedulerTime(value time.Time) string {
+	if value.IsZero() {
+		return "-"
+	}
+	return value.Local().Format("2006-01-02 15:04:05")
 }
 
 func formatServerStartupTime(started time.Time) string {
@@ -335,7 +462,11 @@ func requestExit(code int) {
 	panic(exitRequest{code: code})
 }
 
+var startedElevated bool
+var errStagedUpdateRestart = errors.New("staged update applied; restart required")
+
 func Run(ctx context.Context, serverConfig config.ServerConfig) (runErr error) {
+	startedElevated = system.IsRunningElevated()
 	if serverConfig.Runtime.TestMode {
 		serverConfig.Server.Tor.UseNetwork = false
 		serverConfig.Server.Tor.Expose = false
@@ -368,15 +499,21 @@ func Run(ctx context.Context, serverConfig config.ServerConfig) (runErr error) {
 	if system.IsWindowsService() {
 		return system.RunAsWindowsService(run)
 	}
-	return run(ctx)
+	runErr = run(ctx)
+	if errors.Is(runErr, errStagedUpdateRestart) {
+		requestExit(75)
+	}
+	return runErr
 }
 
 func run(ctx context.Context) error {
 	signalpkg.ResetShutdown()
 	startTime := time.Now()
+	svcmetrics.InitMetricsAppInfo(version.GetVersion(), version.CommitID, version.BuildTime, runtime.Version())
 	if loadedServerConfig == nil {
 		return errors.New("app.Run requires a configuration returned by config.Load")
 	}
+	serverConfig := loadedServerConfig
 	runtimeConfig := loadedServerConfig.Runtime
 	sub := runtimeConfig.Command
 	configDir := runtimeConfig.ConfigDir
@@ -397,8 +534,23 @@ func run(ctx context.Context) error {
 
 	// Per AI.md PART 8: Initialize color mode early (before any output)
 	// Priority: CLI flag > config > NO_COLOR env > auto-detect
+	terminal.SetColorMode(terminal.ColorModeAuto)
+	terminal.SetEmojiMode(terminal.ColorModeAuto)
 	if colorFlag != "" {
 		terminal.SetColorMode(terminal.ParseColorFlag(colorFlag))
+	} else if serverConfig.Output.Color != nil {
+		if *serverConfig.Output.Color {
+			terminal.SetColorMode(terminal.ColorModeAlways)
+		} else {
+			terminal.SetColorMode(terminal.ColorModeNever)
+		}
+	}
+	if serverConfig.Output.Emoji != nil {
+		if *serverConfig.Output.Emoji {
+			terminal.SetEmojiMode(terminal.ColorModeAlways)
+		} else {
+			terminal.SetEmojiMode(terminal.ColorModeNever)
+		}
 	}
 
 	// Handle service command
@@ -510,10 +662,6 @@ func run(ctx context.Context) error {
 			handleShellCommand(rest[0], shell)
 			requestExit(0)
 
-		case "tor":
-			// Per AI.md PART 31: tor {status|validate|restart|regenerate|vanity|import-keys}.
-			requestExit(handleTorCommand(rest, configDir, dataDir))
-
 		case "--service":
 			if len(rest) == 0 {
 				fmt.Fprintln(os.Stderr, serviceText(cliOutputLocale(serviceLanguage, configDir, dataDir), "cli.service.dispatch_usage"))
@@ -532,6 +680,16 @@ func run(ctx context.Context) error {
 			// A bare --maintenance with no sub-command falls through to a normal
 			// server start (matches the prior parser).
 			if len(rest) > 0 {
+				if rest[0] == "tor" {
+					// AI.md PART 31: --maintenance tor commands control the
+					// process-owned Tor instance through the loopback channel.
+					requestExit(handleTorCommand(rest[1:], configDir, dataDir))
+				}
+				if rest[0] == "scheduler" {
+					// Dispatch after the normal service graph registers the exact same
+					// task callbacks used by the long-running server.
+					break
+				}
 				// Per AI.md PART 22: "--maintenance update [cmd]" is an alias for
 				// "--update [cmd]".
 				if rest[0] == "update" {
@@ -542,7 +700,7 @@ func run(ctx context.Context) error {
 				// Per AI.md PART 21: no --password flag; the password is prompted
 				// interactively, so only a non-flag operand is taken here.
 				maintArg := ""
-				if (rest[0] == "data" || rest[0] == "security" || (rest[0] == "backup" && len(rest) > 1 && rest[1] == "test")) && len(rest) > 1 {
+				if (rest[0] == "data" || rest[0] == "security" || rest[0] == "email" || (rest[0] == "backup" && len(rest) > 1 && rest[1] == "test")) && len(rest) > 1 {
 					maintArg = strings.Join(rest[1:], " ")
 				} else if len(rest) > 1 && !strings.HasPrefix(rest[1], "--") {
 					maintArg = rest[1]
@@ -550,6 +708,19 @@ func run(ctx context.Context) error {
 				handleMaintenanceCommand(rest[0], maintArg, configDir, dataDir)
 				return nil
 			}
+		}
+	}
+
+	var stagedUpdateErr error
+	if startedElevated && runtime.GOOS != "windows" {
+		paths := config.GetAppPaths(configDir, dataDir)
+		maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
+		maint.SetBuildEpoch(buildEpoch())
+		if err := maint.ApplyStagedUpdateContext(ctx); err != nil {
+			if cleanupErr := maint.FailStagedUpdate(err); cleanupErr != nil {
+				err = errors.Join(err, cleanupErr)
+			}
+			stagedUpdateErr = err
 		}
 	}
 
@@ -580,6 +751,11 @@ func run(ctx context.Context) error {
 	} else {
 		configPath = appConfig.Runtime.ConfigPath
 	}
+	if err := svcmetrics.ConfigureHTTPBuckets(appConfig.Server.Metrics.DurationBuckets, appConfig.Server.Metrics.SizeBuckets); err != nil {
+		return fmt.Errorf("configure Prometheus histogram buckets: %w", err)
+	}
+	svcmetrics.ConfigureSystemMetrics(appConfig.Server.Metrics.IncludeSystem, config.GetAppPaths(configDir, dataDir).Data)
+	svcmetrics.ConfigureRuntimeMetrics(appConfig.Server.Metrics.IncludeRuntime)
 	if runtimeConfig.I2PSet {
 		appConfig.Server.I2P.Enabled = runtimeConfig.I2P
 	}
@@ -607,6 +783,7 @@ func run(ctx context.Context) error {
 		paths.Cache,
 		paths.Log,
 		paths.Backup,
+		filepath.Join(paths.Data, "update"),
 		pathpkg.GetMaintenanceLockDir(paths.Data),
 		torDataDir,
 		torSiteDir,
@@ -699,14 +876,15 @@ func run(ctx context.Context) error {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to run migrations: %v\n", err)
 		requestExit(1)
 	}
-	if err := config.ImportLegacyAppSecrets(migrationMgr.GetDB(), configPath, appConfig); err != nil {
+	store := migrationMgr.GetAppDatabase()
+	if err := config.ImportLegacyAppSecrets(store, configPath, appConfig); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to import legacy application secrets: %v\n", err)
 		requestExit(1)
 	}
 
 	// Initialize app secrets per AI.md PART 11
 	// Generates installation_secret, cookie_signing_key, csrf_token_secret on first run
-	secretsMgr := secret.NewManager(migrationMgr.GetDB())
+	secretsMgr := secret.NewManager(store)
 	if err := secretsMgr.EnsureSecrets(context.Background()); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to initialize secrets: %v\n", err)
 		requestExit(1)
@@ -716,21 +894,21 @@ func run(ctx context.Context) error {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load installation secret for security-report migration: %v\n", err)
 		requestExit(1)
 	}
-	if err := secreport.MigrateLegacySchema(context.Background(), migrationMgr.GetDB(), paths.Config, appConfig.Server.Security.EncryptionKey, legacySecret); err != nil {
+	if err := secreport.MigrateLegacySchema(context.Background(), store, paths.Config, appConfig.Server.Security.EncryptionKey, legacySecret); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to migrate legacy security reports: %v\n", err)
 		requestExit(1)
 	}
-	if err := pgp.RecoverStagedRotation(paths.Config, migrationMgr.GetDB()); err != nil {
+	if err := pgp.RecoverStagedRotation(paths.Config, store); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to recover PGP key rotation: %v\n", err)
 		requestExit(1)
 	}
 	keyRecoveryCtx, cancelKeyRecovery := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelKeyRecovery()
-	if err := secret.ImportLegacyPreviousEncryptionKey(keyRecoveryCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey); err != nil {
+	if err := secret.ImportLegacyPreviousEncryptionKey(keyRecoveryCtx, store, appConfig.Server.Security.EncryptionKey); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to migrate legacy previous encryption key: %v\n", err)
 		requestExit(1)
 	}
-	pendingKey, pending, err := secret.LoadPendingEncryptionKey(keyRecoveryCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey, time.Now().UTC())
+	pendingKey, pending, err := secret.LoadPendingEncryptionKey(keyRecoveryCtx, store, appConfig.Server.Security.EncryptionKey, time.Now().UTC())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to recover staged encryption key: %v\n", err)
 		requestExit(1)
@@ -742,7 +920,7 @@ func run(ctx context.Context) error {
 			requestExit(1)
 		}
 	}
-	previousKey, hasPreviousKey, err := secret.LoadPreviousEncryptionKey(keyRecoveryCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey, time.Now().UTC())
+	previousKey, hasPreviousKey, err := secret.LoadPreviousEncryptionKey(keyRecoveryCtx, store, appConfig.Server.Security.EncryptionKey, time.Now().UTC())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to load previous encryption key: %v\n", err)
 		requestExit(1)
@@ -750,11 +928,11 @@ func run(ctx context.Context) error {
 	if !hasPreviousKey {
 		previousKey = ""
 	}
-	if err := secret.EnsureCurrentEncryptionKeyMarker(keyRecoveryCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey); err != nil {
+	if err := secret.EnsureCurrentEncryptionKeyMarker(keyRecoveryCtx, store, appConfig.Server.Security.EncryptionKey); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to verify current encryption key: %v\n", err)
 		requestExit(1)
 	}
-	if err := completeEncryptionKeyRotation(keyRecoveryCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey, previousKey); err != nil {
+	if err := completeEncryptionKeyRotation(keyRecoveryCtx, store, appConfig.Server.Security.EncryptionKey, previousKey); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to finish encryption-key rotation: %v\n", err)
 		requestExit(1)
 	}
@@ -763,15 +941,9 @@ func run(ctx context.Context) error {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to audit recovered encryption-key rotation: %v\n", err)
 			requestExit(1)
 		}
-		cleanupTx, err := migrationMgr.GetDB().BeginTx(keyRecoveryCtx, nil)
-		if err == nil {
-			err = secret.DeletePendingEncryptionKey(keyRecoveryCtx, cleanupTx)
-		}
-		if err == nil {
-			err = cleanupTx.Commit()
-		} else if cleanupTx != nil {
-			_ = cleanupTx.Rollback()
-		}
+		err := store.Write(keyRecoveryCtx, func(tx *sql.Tx) error {
+			return secret.DeletePendingEncryptionKey(keyRecoveryCtx, tx)
+		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to clear encryption-key recovery marker: %v\n", err)
 			requestExit(1)
@@ -779,7 +951,7 @@ func run(ctx context.Context) error {
 	}
 	tokenHashCtx, cancelTokenHashMigration := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelTokenHashMigration()
-	if err := apitoken.NormalizeLegacyHashes(tokenHashCtx, migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey); err != nil {
+	if err := apitoken.NormalizeLegacyHashes(tokenHashCtx, store, appConfig.Server.Security.EncryptionKey); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to migrate stored API-token digests: %v\n", err)
 		requestExit(1)
 	}
@@ -796,7 +968,7 @@ func run(ctx context.Context) error {
 	// Initialize services per AI.md specifications
 	// SSL service (PART 15)
 	sslSvc := ssl.NewSSLManager(appConfig, paths.Config)
-	sslSvc.SetDatabase(migrationMgr.GetDB())
+	sslSvc.SetDatabase(store)
 	if err := sslSvc.Initialize(); err != nil {
 		fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" SSL service initialization failed: %v\n", err)
 	}
@@ -817,6 +989,9 @@ func run(ctx context.Context) error {
 	logger.SetAuditMirror(func(entry logging.AuditEntry) error {
 		return migrationMgr.InsertAuditMirror(context.Background(), entry)
 	})
+	if stagedUpdateErr != nil {
+		logger.Error("staged update could not be installed; continuing with current binary", map[string]interface{}{"error": stagedUpdateErr.Error()})
+	}
 	logger.ReportAuditChainIssue()
 	defer logger.Close()
 	for _, key := range appConfig.GeneratedSecretKeys {
@@ -865,7 +1040,7 @@ func run(ctx context.Context) error {
 
 	// Initialize scheduler with database persistence per AI.md PART 18
 	// Task state (run_count, fail_count, last_run) survives restarts
-	sched := scheduler.NewSchedulerWithDB(migrationMgr.GetDB())
+	sched := scheduler.NewSchedulerWithDB(migrationMgr.GetAppDatabase())
 	sched.SetLogger(logger)
 	var i2pHealthTask scheduler.TaskFunc
 	if appConfig.Server.I2P.Enabled {
@@ -916,31 +1091,36 @@ func run(ctx context.Context) error {
 		},
 		DatasetHealthRefresh: func(context.Context) error {
 			healthRegistry.Refresh()
-			return nil
+			return svcmetrics.RefreshOwnerTokenMetrics(store)
 		},
 		TokenCleanup: func(ctx context.Context) error {
 			cleanupCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
-			result, err := migrationMgr.GetDB().ExecContext(cleanupCtx,
-				`DELETE FROM api_tokens WHERE expires_at IS NOT NULL AND expires_at <= ?`, time.Now().Unix())
+			var removed, removedChallenges int64
+			err := store.Write(cleanupCtx, func(tx *sql.Tx) error {
+				result, err := tx.ExecContext(cleanupCtx, `DELETE FROM api_tokens WHERE expires_at IS NOT NULL AND expires_at <= ?`, time.Now().Unix())
+				if err != nil {
+					return fmt.Errorf("remove expired API tokens: %w", err)
+				}
+				removed, err = result.RowsAffected()
+				if err != nil {
+					return fmt.Errorf("count removed API tokens: %w", err)
+				}
+				captchaCleanup, err := tx.ExecContext(cleanupCtx, `DELETE FROM captcha_challenges WHERE expires_at <= ?`, time.Now())
+				if err != nil {
+					return fmt.Errorf("remove expired CAPTCHA challenges: %w", err)
+				}
+				removedChallenges, err = captchaCleanup.RowsAffected()
+				if err != nil {
+					return fmt.Errorf("count removed CAPTCHA challenges: %w", err)
+				}
+				return nil
+			})
 			if err != nil {
-				return fmt.Errorf("remove expired API tokens: %w", err)
-			}
-			removed, err := result.RowsAffected()
-			if err != nil {
-				return fmt.Errorf("count removed API tokens: %w", err)
+				return err
 			}
 			if removed > 0 {
 				logger.Info("expired API tokens removed", map[string]interface{}{"count": removed})
-			}
-			captchaCleanup, err := migrationMgr.GetDB().ExecContext(cleanupCtx,
-				`DELETE FROM captcha_challenges WHERE expires_at <= ?`, time.Now())
-			if err != nil {
-				return fmt.Errorf("remove expired CAPTCHA challenges: %w", err)
-			}
-			removedChallenges, err := captchaCleanup.RowsAffected()
-			if err != nil {
-				return fmt.Errorf("count removed CAPTCHA challenges: %w", err)
 			}
 			if removedChallenges > 0 {
 				logger.Info("expired CAPTCHA challenges removed", map[string]interface{}{"count": removedChallenges})
@@ -959,6 +1139,8 @@ func run(ctx context.Context) error {
 				return errors.New("backup.password_unreadable")
 			}
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
+			maint.SetDiskThreshold(appConfig.Server.Maintenance.Cleanup.DiskThreshold)
+			maint.SetLogger(logger)
 			maint.SetLogger(logger)
 			retention := appConfig.Server.Backup.Retention
 			return maint.BackupDailyFull(maintenance.BackupOptions{
@@ -978,12 +1160,13 @@ func run(ctx context.Context) error {
 				return errors.New("backup.password_unreadable")
 			}
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
+			maint.SetDiskThreshold(appConfig.Server.Maintenance.Cleanup.DiskThreshold)
 			maint.SetLogger(logger)
 			return maint.BackupIncrementalWithPassword("", appConfig.Server.Backup.EncryptionPassword)
 		},
 		HealthcheckSelf: func(ctx context.Context) error {
 			// Self health check per PART 13
-			if err := migrationMgr.GetDB().PingContext(ctx); err != nil {
+			if err := store.Read(ctx, func(readCtx context.Context, db dbstore.Reader) error { return db.PingContext(readCtx) }); err != nil {
 				return fmt.Errorf("database health check failed: %w", err)
 			}
 			if !sched.IsRunning() {
@@ -1040,7 +1223,16 @@ func run(ctx context.Context) error {
 			})
 			// Auto-install only when explicitly configured
 			if appConfig.Server.Update.AutoInstall {
-				return maint.ApplyUpdateContext(ctx, info.DownloadURL)
+				if !startedElevated || runtime.GOOS == "windows" {
+					maint.RecordUpdateSkipped(info.LatestVersion, "not_elevated")
+					logger.Info("update install skipped; run vidveil --update yes with elevated privileges", map[string]interface{}{"version": info.LatestVersion})
+					return nil
+				}
+				if err := maint.StageUpdateContext(ctx, info.LatestVersion, info.DownloadURL); err != nil {
+					return err
+				}
+				logger.Info("update staged; requesting supervised restart", map[string]interface{}{"version": info.LatestVersion})
+				signalpkg.RequestUpdateRestart()
 			}
 			return nil
 		},
@@ -1065,6 +1257,9 @@ func run(ctx context.Context) error {
 	// Create server with migration manager, scheduler, and logger per AI.md PART 11
 	srv := server.NewServer(appConfig, configDir, dataDir, engineMgr, migrationMgr, sched, logger)
 	applySchedulerConfig(sched, appConfig, logger)
+	if len(sub) >= 2 && sub[0] == "--maintenance" && sub[1] == "scheduler" {
+		requestExit(handleSchedulerCommand(sched, sub[2:], appConfig, configPath, logger))
+	}
 	serveTorProxy := func(listener net.Listener) {
 		if listener == nil {
 			return
@@ -1110,12 +1305,44 @@ func run(ctx context.Context) error {
 	configWatcher := config.NewWatcher(configPath, appConfig)
 	var torConfigMu sync.Mutex
 	var torRestartMu sync.Mutex
+	var smtpConfigMu sync.Mutex
+	lastSMTPHost, lastSMTPPort, lastSMTPMode, _ := email.ResolveSMTPSettings(appConfig.Server.Notifications.Email.SMTP.Host, appConfig.Server.Notifications.Email.SMTP.Port, appConfig.Server.Notifications.Email.SMTP.TLS)
 	lastTorConfig := appConfig.Server.Tor
 	lastOperatorToken := appConfig.Server.Token
 	torStartupComplete := make(chan struct{})
 	torStartAttempted := false
 	configWatcher.OnReload(func(newCfg *config.AppConfig) {
 		applySchedulerConfig(sched, newCfg, logger)
+		smtpConfigMu.Lock()
+		reloadedSMTPHost, reloadedSMTPPort, reloadedSMTPMode, smtpWarnings := email.ResolveSMTPSettings(newCfg.Server.Notifications.Email.SMTP.Host, newCfg.Server.Notifications.Email.SMTP.Port, newCfg.Server.Notifications.Email.SMTP.TLS)
+		for _, warning := range smtpWarnings {
+			logger.Warn(warning, nil)
+		}
+		if reloadedSMTPHost == "" {
+			reloadedSMTPHost, reloadedSMTPPort = email.AutodetectSMTP(email.SMTPAutodetectHosts(newCfg.Server.FQDN), nil)
+			if reloadedSMTPHost != "" {
+				newCfg.Server.Notifications.Email.SMTP.Host = reloadedSMTPHost
+				newCfg.Server.Notifications.Email.SMTP.Port = reloadedSMTPPort
+				if err := config.SaveAppConfig(newCfg, configPath); err != nil {
+					logger.Warn("could not save detected smtp settings after configuration reload", map[string]interface{}{"error": err.Error()})
+				}
+			}
+		}
+		smtpConfigChanged := reloadedSMTPHost != lastSMTPHost || reloadedSMTPPort != lastSMTPPort || reloadedSMTPMode != lastSMTPMode
+		lastSMTPHost, lastSMTPPort, lastSMTPMode = reloadedSMTPHost, reloadedSMTPPort, reloadedSMTPMode
+		if reloadedSMTPHost == "" {
+			newCfg.Server.Notifications.Email.Enabled = false
+			logger.Warn("email.configured=false; no SMTP server is available", nil)
+		} else if err := email.TestSMTPConfigMode(reloadedSMTPHost, reloadedSMTPPort, reloadedSMTPMode); err != nil {
+			newCfg.Server.Notifications.Email.Enabled = false
+			logger.Warn("smtp connection test failed after configuration reload; email features disabled", map[string]interface{}{"host": reloadedSMTPHost, "port": reloadedSMTPPort, "error": err.Error()})
+		} else {
+			newCfg.Server.Notifications.Email.Enabled = true
+		}
+		if smtpConfigChanged && email.SMTPTLSVerificationSkipped(reloadedSMTPHost) && reloadedSMTPMode != "none" {
+			logger.Info("SMTP host "+reloadedSMTPHost+" is a private address: TLS certificate verification skipped", nil)
+		}
+		smtpConfigMu.Unlock()
 		torConfigMu.Lock()
 		operatorTokenChanged := lastOperatorToken != newCfg.Server.Token
 		lastOperatorToken = newCfg.Server.Token
@@ -1208,7 +1435,7 @@ func run(ctx context.Context) error {
 	// Drop privileges to the vidveil system user after port is bound per AI.md PART 23.
 	// ShouldDropPrivileges() returns true only on Unix when current uid == 0.
 	if !testMode && system.ShouldDropPrivileges() {
-		if err := system.DropPrivileges(appName, paths.Config); err != nil {
+		if err := system.DropPrivileges(appName, paths.Config, paths.Data); err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to drop privileges: %v\n", err)
 			requestExit(1)
 		}
@@ -1302,16 +1529,20 @@ func run(ctx context.Context) error {
 
 		// Console output per AI.md PART 7
 		// First run = settings table is empty (no config rows exist yet)
-		isFirstRun := isDBFirstRun(migrationMgr.GetDB())
+		isFirstRun := isDBFirstRun(store)
 
 		// Check SMTP status per AI.md PART 17
 		// enabled is determined by SMTP connectivity, not a manual toggle
 		smtpInfo := ""
 		smtpHost := appConfig.Server.Notifications.Email.SMTP.Host
 		smtpPort := appConfig.Server.Notifications.Email.SMTP.Port
+		smtpHost, smtpPort, smtpTLSMode, smtpWarnings := email.ResolveSMTPSettings(smtpHost, smtpPort, appConfig.Server.Notifications.Email.SMTP.TLS)
+		for _, warning := range smtpWarnings {
+			logger.Warn(warning, nil)
+		}
 		if smtpHost != "" && smtpPort > 0 {
 			// Per PART 17: Test configured SMTP on every startup
-			if err := email.TestSMTPConfig(smtpHost, smtpPort); err == nil {
+			if err := email.TestSMTPConfigMode(smtpHost, smtpPort, smtpTLSMode); err == nil {
 				smtpInfo = fmt.Sprintf("%s:%d", smtpHost, smtpPort)
 				appConfig.Server.Notifications.Email.Enabled = true
 			} else {
@@ -1325,7 +1556,7 @@ func run(ctx context.Context) error {
 			}
 		} else {
 			// Per PART 17: Auto-detect on first run if no host configured
-			detectedHost, detectedPort := email.AutodetectSMTP(nil, nil)
+			detectedHost, detectedPort := email.AutodetectSMTP(email.SMTPAutodetectHosts(appConfig.Server.FQDN), nil)
 			if detectedHost != "" && detectedPort > 0 {
 				smtpInfo = fmt.Sprintf("%s:%d (auto)", detectedHost, detectedPort)
 				appConfig.Server.Notifications.Email.SMTP.Host = detectedHost
@@ -1340,6 +1571,13 @@ func run(ctx context.Context) error {
 					})
 				}
 			}
+		}
+		if smtpHost == "" {
+			appConfig.Server.Notifications.Email.Enabled = false
+			logger.Warn("email.configured=false; no SMTP server is available", nil)
+		}
+		if smtpHost != "" && email.SMTPTLSVerificationSkipped(smtpHost) && smtpTLSMode != "none" {
+			logger.Info("SMTP host "+smtpHost+" is a private address: TLS certificate verification skipped", nil)
 		}
 
 		// Build URL per AI.md PART 8 / PART 15:
@@ -1444,7 +1682,7 @@ func run(ctx context.Context) error {
 				}
 				// Probe database access with the PART 13 retry schedule and verify
 				// that the data directory can durably create and remove a file.
-				dbErr := pingDatabaseForRecovery(migrationMgr.GetDB())
+				dbErr := pingDatabaseForRecovery(store)
 				writeErr := probeDataDirectoryWrite(paths.Data)
 				unhealthy := dbErr != nil || writeErr != nil
 
@@ -1563,6 +1801,9 @@ func run(ctx context.Context) error {
 	if err := srv.Shutdown(ctx); err != nil {
 		return fmt.Errorf("server shutdown: %w", err)
 	}
+	if signalpkg.IsUpdateRestart(sig) {
+		return errStagedUpdateRestart
+	}
 
 	fmt.Printf("%s Server stopped\n", terminal.StatusIcon(true))
 	return nil
@@ -1606,6 +1847,7 @@ Server Configuration:
 Service Management:
 --service CMD                          - Service management (run --service help for details)
 --maintenance CMD                      - Maintenance operations (run --maintenance help for details)
+--maintenance scheduler CMD            - Scheduler: list, show, run, enable, disable, history
 --update [CMD]                         - Check/perform updates (run --update help for details)
 
 Tor Hidden Service:
@@ -2017,6 +2259,39 @@ func handleServiceCommand(cmd, configDir, dataDir, language string) {
 			fmt.Println(serviceText(locale, item.key, "{binary}", binaryName, "{command}", item.command))
 		}
 		fmt.Println()
+		serviceStatus, err := svc.GetServiceStatusDetails()
+		if err != nil {
+			serviceStatus.State = "unknown"
+			serviceStatus.Autostart = "unknown"
+		}
+		installedText := "cli.service.value_not_installed"
+		if serviceStatus.Installed {
+			installedText = "cli.service.value_installed"
+		}
+		stateText := "cli.service.value_unknown"
+		switch serviceStatus.State {
+		case "running":
+			stateText = "cli.service.value_running"
+		case "stopped":
+			stateText = "cli.service.value_stopped"
+		}
+		autostartText := "cli.service.value_unknown"
+		switch serviceStatus.Autostart {
+		case "enabled":
+			autostartText = "cli.service.value_enabled"
+		case "disabled":
+			autostartText = "cli.service.value_disabled"
+		}
+		pid := serviceStatus.PID
+		if pid == "" {
+			pid = serviceText(locale, "cli.service.value_unknown")
+		}
+		fmt.Println(serviceText(locale, "cli.service.help_current_status",
+			"{installed}", serviceText(locale, installedText),
+			"{state}", serviceText(locale, stateText),
+			"{autostart}", serviceText(locale, autostartText),
+			"{pid}", pid))
+		fmt.Println()
 		fmt.Println(serviceText(locale, "cli.service.help_managers"))
 		for _, key := range []string{
 			"cli.service.manager_systemd", "cli.service.manager_openrc", "cli.service.manager_sysvinit",
@@ -2093,7 +2368,12 @@ func serviceText(locale, key string, replacements ...string) string {
 // handleUpdateCommand implements AI.md PART 22 --update command
 func handleUpdateCommand(cmd, arg string) {
 	binaryName := filepath.Base(os.Args[0])
-	maint := maintenance.NewMaintenanceManager("", "", version.GetVersion())
+	configDir, dataDir := "", ""
+	if loadedServerConfig != nil {
+		configDir = loadedServerConfig.Runtime.ConfigDir
+		dataDir = loadedServerConfig.Runtime.DataDir
+	}
+	maint := maintenance.NewMaintenanceManager(configDir, dataDir, version.GetVersion())
 	maint.SetBuildEpoch(buildEpoch())
 
 	switch cmd {
@@ -2146,12 +2426,21 @@ func handleUpdateCommand(cmd, arg string) {
 			fmt.Printf("   Release: %s\n", info.ReleaseURL)
 
 			if info.DownloadURL != "" {
-				fmt.Println("\nApplying update...")
-				if err := maint.ApplyUpdate(info.DownloadURL); err != nil {
+				if !startedElevated || runtime.GOOS == "windows" {
+					fmt.Fprintf(os.Stderr, "\nUpdate installation requires an elevated Unix process; run 'sudo %s --update yes'.\n", binaryName)
+					requestExit(1)
+				}
+				fmt.Println("\nStaging and verifying update...")
+				if err := maint.StageUpdateContext(context.Background(), info.LatestVersion, info.DownloadURL); err != nil {
 					fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Update failed: %v\n", err)
 					requestExit(1)
 				}
-				fmt.Println(terminal.StatusIcon(true) + " Update successful! Please restart the application.")
+				fmt.Println("Applying verified update and restarting...")
+				if err := maint.ApplyStagedUpdateContext(context.Background()); err != nil {
+					cleanupErr := maint.FailStagedUpdate(err)
+					fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Update failed: %v\n", errors.Join(err, cleanupErr))
+					requestExit(1)
+				}
 			}
 		} else {
 			fmt.Println(terminal.StatusIcon(true) + " Already up to date")
@@ -2234,6 +2523,9 @@ func promptLine(prompt string) string {
 func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 	binaryName := filepath.Base(os.Args[0])
 	maint := maintenance.NewMaintenanceManager(configDir, dataDir, version.GetVersion())
+	if loadedServerConfig != nil {
+		maint.SetDiskThreshold(loadedServerConfig.Server.Maintenance.Cleanup.DiskThreshold)
+	}
 
 	switch cmd {
 	case "backup":
@@ -2459,6 +2751,12 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 			requestExit(1)
 		}
 
+	case "email":
+		if err := handleMaintenanceEmail(arg, configDir, dataDir); err != nil {
+			fmt.Fprintln(os.Stderr, terminal.StatusIcon(false)+" "+err.Error())
+			requestExit(emailExitCode(err))
+		}
+
 	case "--help", "help", "-h":
 		// Per AI.md PART 8: --maintenance --help prints help and exits 0
 		fmt.Printf(`Maintenance Commands:
@@ -2472,6 +2770,8 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
   %s --maintenance secret rotate <n>  Rotate installation_secret or encryption_key
   %s --maintenance token list         List active API tokens (prefix + resource)
   %s --maintenance security <action>  Manage coordinated-disclosure reports
+  %s --maintenance email test         Send a test email (requires working SMTP)
+  %s --maintenance email test --dry-run  Validate and preview all templates
   %s --maintenance token revoke <pfx> Revoke a specific API token by prefix
   %s --maintenance data export --owner <prefix> [--output FILE]
                                       Export one owner's data (GDPR)
@@ -2516,7 +2816,7 @@ Examples:
 `, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
 			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
 			binaryName, binaryName, binaryName, binaryName, binaryName, binaryName, binaryName,
-			binaryName, binaryName)
+			binaryName, binaryName, binaryName, binaryName)
 		requestExit(0)
 
 	default:
@@ -2679,7 +2979,7 @@ func pgpGenerateCore(configDir, dataDir string) (kp *pgp.Keypair, identityName, 
 	if err := dbMgr.RunMigrations(); err != nil {
 		return nil, "", "", "", fmt.Errorf("failed to run migrations: %w", err)
 	}
-	if err := pgp.SaveKeypairMeta(dbMgr.GetDB(), kp); err != nil {
+	if err := pgp.SaveKeypairMeta(dbMgr.GetAppDatabase(), kp); err != nil {
 		return nil, "", "", "", fmt.Errorf("failed to record keypair metadata: %w", err)
 	}
 
@@ -2775,7 +3075,7 @@ func pgpRotateCore(configDir, dataDir string) (*pgpRotateResult, error) {
 	if err := dbMgr.RunMigrations(); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
-	oldMeta, err := pgp.GetKeypairMeta(dbMgr.GetDB())
+	oldMeta, err := pgp.GetKeypairMeta(dbMgr.GetAppDatabase())
 	if err != nil {
 		return nil, fmt.Errorf("failed to read current keypair metadata: %w", err)
 	}
@@ -2806,31 +3106,24 @@ func pgpRotateCore(configDir, dataDir string) (*pgpRotateResult, error) {
 	if err := pgp.WriteStagedKeypair(paths.Config, newKP, secret); err != nil {
 		return nil, fmt.Errorf("failed to stage rotated keypair: %w", err)
 	}
-	tx, err := dbMgr.GetDB().BeginTx(context.Background(), nil)
-	if err != nil {
-		_ = pgp.RemoveStagedKeypair(paths.Config)
-		return nil, fmt.Errorf("begin PGP rotation transaction: %w", err)
-	}
-	rollback := func(cause error) (*pgpRotateResult, error) {
-		_ = tx.Rollback()
-		_ = pgp.RemoveStagedKeypair(paths.Config)
-		return nil, cause
-	}
 	rotationCtx, cancelRotation := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancelRotation()
-	if _, err := tx.ExecContext(rotationCtx, `UPDATE security_reports SET updated_at = updated_at WHERE tracking_id = ''`); err != nil {
-		return rollback(fmt.Errorf("lock security report key rotation: %w", err))
-	}
-	if err := secreport.ReencryptPGPBodies(rotationCtx, tx, oldPriv, newKP.PublicArmored); err != nil {
-		return rollback(err)
-	}
-	if _, err := tx.ExecContext(rotationCtx, `DELETE FROM pgp_keypair`); err != nil {
-		return rollback(fmt.Errorf("update PGP rotation marker: %w", err))
-	}
-	if _, err := tx.ExecContext(rotationCtx, `INSERT INTO pgp_keypair (fingerprint,created_at,expires_at,last_rotated_at,keyservers_published,revoked) VALUES (?,?,?,?,?,0)`, newKP.Fingerprint, newKP.CreatedAt.UTC(), newKP.ExpiresAt.UTC(), rotatedAt, "[]"); err != nil {
-		return rollback(fmt.Errorf("write PGP rotation fingerprint marker: %w", err))
-	}
-	if err := tx.Commit(); err != nil {
+	err = dbMgr.GetAppDatabase().Write(rotationCtx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(rotationCtx, `UPDATE security_reports SET updated_at = updated_at WHERE tracking_id = ''`); err != nil {
+			return fmt.Errorf("lock security report key rotation: %w", err)
+		}
+		if err := secreport.ReencryptPGPBodies(rotationCtx, tx, oldPriv, newKP.PublicArmored); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(rotationCtx, `DELETE FROM pgp_keypair`); err != nil {
+			return fmt.Errorf("update PGP rotation marker: %w", err)
+		}
+		if _, err := tx.ExecContext(rotationCtx, `INSERT INTO pgp_keypair (fingerprint,created_at,expires_at,last_rotated_at,keyservers_published,revoked) VALUES (?,?,?,?,?,0)`, newKP.Fingerprint, newKP.CreatedAt.UTC(), newKP.ExpiresAt.UTC(), rotatedAt, "[]"); err != nil {
+			return fmt.Errorf("write PGP rotation fingerprint marker: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, fmt.Errorf("PGP rotation transaction outcome is uncertain; staged recovery will reconcile it: %w", err)
 	}
 	if err := pgp.InstallStagedKeypair(paths.Config); err != nil {
@@ -2930,7 +3223,7 @@ func pgpPublishCoreWithPublisherContext(ctx context.Context, configDir, dataDir 
 	if err := dbMgr.RunMigrations(); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
-	meta, err := pgp.GetKeypairMeta(dbMgr.GetDB())
+	meta, err := pgp.GetKeypairMeta(dbMgr.GetAppDatabase())
 	if err != nil {
 		return nil, fmt.Errorf("failed to read keypair metadata: %w", err)
 	}
@@ -2968,7 +3261,7 @@ func pgpPublishCoreWithPublisherContext(ctx context.Context, configDir, dataDir 
 				allPublished = append(allPublished, state)
 			}
 		}
-		if err := pgp.UpdateKeyserversPublished(dbMgr.GetDB(), allPublished); err != nil {
+		if err := pgp.UpdateKeyserversPublished(dbMgr.GetAppDatabase(), allPublished); err != nil {
 			return res, fmt.Errorf("published but failed to record keyserver state: %w", err)
 		}
 	}
@@ -3253,7 +3546,7 @@ func pgpImportCore(configDir, dataDir, inPath string, confirmMismatch func(expec
 	if err := dbMgr.RunMigrations(); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
-	if err := pgp.SaveKeypairMeta(dbMgr.GetDB(), kp); err != nil {
+	if err := pgp.SaveKeypairMeta(dbMgr.GetAppDatabase(), kp); err != nil {
 		return nil, fmt.Errorf("failed to record keypair metadata: %w", err)
 	}
 
@@ -3344,7 +3637,7 @@ func pgpDeleteCore(configDir, dataDir string, confirm func() bool) (bool, error)
 	if err := dbMgr.RunMigrations(); err != nil {
 		return false, fmt.Errorf("failed to run migrations: %w", err)
 	}
-	meta, err := pgp.GetKeypairMeta(dbMgr.GetDB())
+	meta, err := pgp.GetKeypairMeta(dbMgr.GetAppDatabase())
 	if err != nil {
 		return false, fmt.Errorf("failed to read keypair metadata: %w", err)
 	}
@@ -3359,7 +3652,7 @@ func pgpDeleteCore(configDir, dataDir string, confirm func() bool) (bool, error)
 	fingerprint := ""
 	if meta != nil {
 		fingerprint = meta.Fingerprint
-		if err := pgp.MarkRevoked(dbMgr.GetDB()); err != nil {
+		if err := pgp.MarkRevoked(dbMgr.GetAppDatabase()); err != nil {
 			return false, fmt.Errorf("key files deleted but failed to mark revoked: %w", err)
 		}
 	}
@@ -3420,7 +3713,7 @@ func loadInstallationSecret(dataDir string) ([]byte, error) {
 	if err := dbMgr.RunMigrations(); err != nil {
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
-	secretsMgr := secret.NewManager(dbMgr.GetDB())
+	secretsMgr := secret.NewManager(dbMgr.GetAppDatabase())
 	if err := secretsMgr.EnsureSecrets(context.Background()); err != nil {
 		return nil, fmt.Errorf("ensure secrets: %w", err)
 	}
@@ -3489,17 +3782,17 @@ func printComplianceDataSummary(dataDir string, appConfig *config.AppConfig) {
 		dbName = "server.db"
 	}
 	dbPath := filepath.Join(dbDir, dbName)
-	var db *sql.DB
+	var db *database.AppDatabase
 	var closeDB func()
 	if remote {
 		if manager, err := openAuditMirrorDatabase(appConfig, "", dataDir); err == nil {
-			db = manager.GetDB()
+			db = manager.GetAppDatabase()
 			closeDB = func() { _ = manager.Close() }
 		}
 	} else if _, err := os.Stat(dbPath); err == nil {
-		if opened, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro"); err == nil {
-			db = opened
-			closeDB = func() { _ = opened.Close() }
+		if manager, err := database.NewSchemaManager(dbPath); err == nil {
+			db = manager.GetAppDatabase()
+			closeDB = func() { _ = manager.Close() }
 		}
 	}
 	if db != nil {
@@ -3515,12 +3808,15 @@ func printComplianceDataSummary(dataDir string, appConfig *config.AppConfig) {
 			"open security reports":       "SELECT COUNT(*) FROM " + tablePrefix + "security_reports WHERE status NOT IN ('closed','resolved','disclosed')",
 			"compliance events (30 days)": "SELECT COUNT(*) FROM " + tablePrefix + "audit_log WHERE action LIKE 'compliance.%' AND timestamp >= CAST(strftime('%s','now','-30 days') AS INTEGER)",
 		}
-		for label, query := range queries {
-			var count int64
-			if err := db.QueryRowContext(ctx, query).Scan(&count); err == nil {
-				counts[label] = strconv.FormatInt(count, 10)
+		_ = db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+			for label, query := range queries {
+				var count int64
+				if err := readDB.QueryRowContext(readCtx, query).Scan(&count); err == nil {
+					counts[label] = strconv.FormatInt(count, 10)
+				}
 			}
-		}
+			return nil
+		})
 		cancel()
 		closeDB()
 	}
@@ -3571,12 +3867,14 @@ func printComplianceDataSummary(dataDir string, appConfig *config.AppConfig) {
 // all queries MUST have timeouts (5s for reads), so the query runs under an
 // explicit context rather than the bare *sql.DB, which would block startup
 // indefinitely if the database is unreachable or blocked.
-func isDBFirstRun(db *sql.DB) bool {
+func isDBFirstRun(db *database.AppDatabase) bool {
 	var count int
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM settings").Scan(&count)
+	err := db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+		return readDB.QueryRowContext(readCtx, "SELECT COUNT(*) FROM settings").Scan(&count)
+	})
 	if err != nil {
 		return true
 	}
@@ -3659,7 +3957,7 @@ func isDatabaseEmpty(configDir, dataDir string) bool {
 		return true
 	}
 	defer func() { _ = migrationMgr.Close() }()
-	return isDBFirstRun(migrationMgr.GetDB())
+	return isDBFirstRun(migrationMgr.GetAppDatabase())
 }
 
 func getDisplayAddress(serverConfig *config.AppConfig) string {

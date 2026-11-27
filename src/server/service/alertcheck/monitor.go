@@ -3,7 +3,6 @@ package alertcheck
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/server/service/maintenance"
 )
 
@@ -111,7 +111,7 @@ func (m *DiskMonitor) Observe(volumeID, path string, used float64, free uint64, 
 }
 
 // ProbeDatabase runs a bounded availability probe against the configured DB handle.
-func ProbeDatabase(ctx context.Context, db *sql.DB) error {
+func ProbeDatabase(ctx context.Context, db dbstore.Reader) error {
 	if db == nil {
 		return fmt.Errorf("database handle is unavailable")
 	}

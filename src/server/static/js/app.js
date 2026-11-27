@@ -3088,34 +3088,49 @@ document.addEventListener('click', function(e) {
         if (prev) { text = prev.textContent; }
     }
     if (!text) { return; }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function() {
-            var icon = btn.querySelector('.copy-icon');
-            if (icon) {
-                var orig = icon.textContent;
-                icon.textContent = '✓';
-                btn.classList.add('copied');
-                setTimeout(function() {
-                    icon.textContent = orig;
-                    btn.classList.remove('copied');
-                }, 2000);
-            } else {
-                btn.classList.add('copied');
-                setTimeout(function() { btn.classList.remove('copied'); }, 2000);
-            }
-        }).catch(function() {});
-    } else {
+    var i18n = getAppI18n();
+    var label = btn.querySelector('.copy-text, [aria-live="polite"]');
+    var icon = btn.querySelector('.copy-icon');
+    var originalLabel = label ? label.textContent : '';
+    var originalIcon = icon ? icon.textContent : '';
+    var originalButtonText = btn.textContent;
+    var copiedLabel = btn.dataset.copySuccess || i18n.copySuccess || 'Copied!';
+    var failedLabel = btn.dataset.copyFailed || i18n.copyFailed || 'Copy failed';
+
+    function finishCopy(success) {
+        if (label) { label.textContent = success ? copiedLabel : failedLabel; }
+        else { btn.textContent = success ? copiedLabel : failedLabel; }
+        if (icon) { icon.textContent = success ? '✓' : originalIcon; }
+        btn.classList.toggle('copied', success);
+        btn.classList.toggle('copy-failed', !success);
+        window.setTimeout(function() {
+            if (label) { label.textContent = originalLabel; }
+            else { btn.textContent = originalButtonText; }
+            if (icon) { icon.textContent = originalIcon; }
+            btn.classList.remove('copied', 'copy-failed');
+        }, 2000);
+    }
+
+    function fallbackCopy() {
         var ta = document.createElement('textarea');
+        ta.className = 'copy-helper-input';
         ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
         document.body.appendChild(ta);
         ta.select();
-        try { document.execCommand('copy'); } catch(ex) {}
+        var copied = false;
+        try { copied = document.execCommand('copy'); } catch (error) { copied = false; }
         document.body.removeChild(ta);
-        btn.classList.add('copied');
-        setTimeout(function() { btn.classList.remove('copied'); }, 2000);
+        return copied ? Promise.resolve() : Promise.reject(new Error('copy failed'));
     }
+
+    var write = navigator.clipboard && navigator.clipboard.writeText
+        ? navigator.clipboard.writeText(text)
+        : fallbackCopy();
+    Promise.resolve(write).then(function() {
+        finishCopy(true);
+    }).catch(function() {
+        finishCopy(false);
+    });
 });
 
 // PWA install prompt (AI.md PART 16)

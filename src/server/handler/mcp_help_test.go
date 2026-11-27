@@ -10,10 +10,10 @@ import (
 )
 
 func TestHelpMCPPageRendersResolvedConnectionGuide(t *testing.T) {
-	t.Setenv("DOMAIN", "vidveil.example")
+	t.Setenv("DOMAIN", "vidveil.dev")
 	setRealTemplatesFS(t)
 	h := newServerHandler(t)
-	req := httptest.NewRequest(http.MethodGet, "https://vidveil.example/server/help/mcp", nil)
+	req := httptest.NewRequest(http.MethodGet, "https://vidveil.dev/server/help/mcp", nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	rr := httptest.NewRecorder()
 	h.HelpMCPPage(rr, req)
@@ -23,11 +23,11 @@ func TestHelpMCPPageRendersResolvedConnectionGuide(t *testing.T) {
 	for _, want := range []string{
 		`id="overview"`, `id="endpoint"`, `id="authentication"`, `id="connect"`,
 		`id="tools"`, `id="limits"`, `id="troubleshooting"`, `id="project"`,
-		`data-copy="https://vidveil.example/api/v1/server/mcp"`,
-		`https://vidveil.example/api/v1/server/mcp`,
-		`https://vidveil.example/api/mcp`, `https://vidveil.example/mcp`,
+		`data-copy="https://vidveil.dev/api/v1/server/mcp"`,
+		`https://vidveil.dev/api/v1/server/mcp`,
+		`https://vidveil.dev/api/mcp`, `https://vidveil.dev/mcp`,
 		`searchVideos`, `claude mcp add --transport http vidveil`, "$MCP_TOKEN",
-		`MCP-Protocol-Version: 2026-07-28`, `Mcp-Method: initialize`,
+		`MCP-Protocol-Version: 2026-07-28`, `Mcp-Method: tools/list`,
 		`io.modelcontextprotocol/protocolVersion`, `2026-07-28`,
 	} {
 		if !strings.Contains(rr.Body.String(), want) {
@@ -67,9 +67,9 @@ func TestHelpMCPPageAndAPIAlwaysAvailable(t *testing.T) {
 }
 
 func TestAPIHelpMCPReturnsFixedEnvelopeAndPublicOperations(t *testing.T) {
-	t.Setenv("DOMAIN", "vidveil.example")
+	t.Setenv("DOMAIN", "vidveil.dev")
 	h := newServerHandler(t)
-	req := httptest.NewRequest(http.MethodGet, "https://vidveil.example/api/v1/server/help/mcp", nil)
+	req := httptest.NewRequest(http.MethodGet, "https://vidveil.dev/api/v1/server/help/mcp", nil)
 	rr := httptest.NewRecorder()
 	h.APIHelpMCP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -94,10 +94,10 @@ func TestAPIHelpMCPReturnsFixedEnvelopeAndPublicOperations(t *testing.T) {
 	if !response.OK || !response.Data.Enabled {
 		t.Errorf("response status fields = ok:%t enabled:%t, want both true", response.OK, response.Data.Enabled)
 	}
-	if response.Data.URL != "https://vidveil.example/api/v1/server/mcp" {
+	if response.Data.URL != "https://vidveil.dev/api/v1/server/mcp" {
 		t.Errorf("url = %q", response.Data.URL)
 	}
-	if len(response.Data.Aliases) != 2 || response.Data.Aliases[0] != "https://vidveil.example/api/mcp" || response.Data.Aliases[1] != "https://vidveil.example/mcp" {
+	if len(response.Data.Aliases) != 2 || response.Data.Aliases[0] != "https://vidveil.dev/api/mcp" || response.Data.Aliases[1] != "https://vidveil.dev/mcp" {
 		t.Errorf("aliases = %#v", response.Data.Aliases)
 	}
 	if response.Data.Auth.Scheme != "Bearer" {

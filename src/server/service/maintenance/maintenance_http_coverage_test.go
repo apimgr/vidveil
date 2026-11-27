@@ -443,7 +443,7 @@ func TestApplyUpdate_EmptyURL_NetworkError_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestApplyUpdate_DirectURL_NotFound_ReturnsError(t *testing.T) {
+func TestApplyUpdate_DirectURL_GitHub404MeansNoUpdate(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
@@ -452,8 +452,8 @@ func TestApplyUpdate_DirectURL_NotFound_ReturnsError(t *testing.T) {
 
 	m := newMaintManagerTmp(t, "1.0.0")
 	err := m.ApplyUpdate(srv.URL + "/download/vidveil")
-	if err == nil {
-		t.Error("ApplyUpdate(404): expected error, got nil")
+	if err != nil {
+		t.Errorf("ApplyUpdate after GitHub API 404: expected no-update success, got %v", err)
 	}
 }
 

@@ -23,12 +23,11 @@ import (
 // Uses CREATE TABLE IF NOT EXISTS - no migrations tracking table
 // Supports SQLite (local) and libsql/Turso (remote) backends per AI.md PART 3
 type SchemaManager struct {
-	db        *sql.DB
-	readDB    *sql.DB
-	appDB     *AppDatabase
-	readAppDB *AppDatabase
-	dbPath    string
-	driver    Driver
+	db     *sql.DB
+	readDB *sql.DB
+	appDB  *AppDatabase
+	dbPath string
+	driver Driver
 }
 
 // NewSchemaManager creates a new schema manager for SQLite (backward compatibility)
@@ -39,22 +38,11 @@ func NewSchemaManager(dbPath string) (*SchemaManager, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
+	appDB, err := NewAppDatabase(DatabaseConfig{Driver: DriverSQLite, Path: dbPath})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
-
-	var readDB *sql.DB
-	if dbPath == ":memory:" {
-		readDB = db
-	} else {
-		readDB, err = sql.Open("sqlite", readOnlySQLiteDSN(dbPath))
-		if err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("failed to open read-only database handle: %w", err)
-		}
-	}
-	return &SchemaManager{db: db, readDB: readDB, dbPath: dbPath, driver: DriverSQLite}, nil
+	return &SchemaManager{db: appDB.db, readDB: appDB.readDB, appDB: appDB, dbPath: dbPath, driver: DriverSQLite}, nil
 }
 
 // NewSchemaManagerWithConfig creates a schema manager using DatabaseConfig
@@ -65,32 +53,12 @@ func NewSchemaManagerWithConfig(cfg DatabaseConfig) (*SchemaManager, error) {
 		return nil, err
 	}
 
-	var readDB *sql.DB
-	var readAppDB *AppDatabase
-	if normalizeDriver(cfg.Driver) == DriverSQLite {
-		if cfg.Path == ":memory:" {
-			readDB = appDB.DB()
-		} else {
-			readDB, err = sql.Open("sqlite", readOnlySQLiteDSN(cfg.Path))
-		}
-	} else {
-		readAppDB, err = NewAppDatabase(cfg)
-		if err == nil {
-			readDB = readAppDB.DB()
-		}
-	}
-	if err != nil {
+	readDB := appDB.readDB
+	if readDB == nil {
 		_ = appDB.Close()
-		return nil, fmt.Errorf("failed to open read database handle: %w", err)
+		return nil, fmt.Errorf("database read handle is unavailable")
 	}
-	return &SchemaManager{db: appDB.DB(), readDB: readDB, appDB: appDB, readAppDB: readAppDB, dbPath: cfg.Path, driver: appDB.Driver()}, nil
-}
-
-func readOnlySQLiteDSN(path string) string {
-	if strings.HasPrefix(path, "file:") {
-		return path + "?mode=ro&_busy_timeout=5000"
-	}
-	return "file:" + path + "?mode=ro&_busy_timeout=5000"
+	return &SchemaManager{db: appDB.db, readDB: readDB, appDB: appDB, dbPath: cfg.Path, driver: appDB.Driver()}, nil
 }
 
 // EnsureSchema creates all required tables if they don't exist
@@ -147,17 +115,8 @@ func (sm *SchemaManager) ensureFavoriteOwnerColumn(ctx context.Context) error {
 			return fmt.Errorf("add favorites owner_id column: %w", err)
 		}
 	}
-	if _, err := sm.db.ExecContext(ctx, `INSERT OR IGNORE INTO owners(id) SELECT DISTINCT 'legacy-favorite-' || visitor_id FROM favorites WHERE owner_id IS NULL`); err != nil {
-		return fmt.Errorf("preserve legacy favorite owners: %w", err)
-	}
-	if _, err := sm.db.ExecContext(ctx, `UPDATE favorites SET owner_id = 'legacy-favorite-' || visitor_id WHERE owner_id IS NULL`); err != nil {
-		return fmt.Errorf("assign legacy favorite owners: %w", err)
-	}
-	if _, err := sm.db.ExecContext(ctx, `DELETE FROM favorites WHERE id NOT IN (SELECT MIN(id) FROM favorites GROUP BY owner_id, url)`); err != nil {
-		return fmt.Errorf("deduplicate favorites per owner: %w", err)
-	}
-	if _, err := sm.db.ExecContext(ctx, `UPDATE favorites SET visitor_id = owner_id WHERE visitor_id != owner_id`); err != nil {
-		return fmt.Errorf("normalize favorite owner keys: %w", err)
+	if _, err := sm.db.ExecContext(ctx, `UPDATE favorites SET owner_id = 'system' WHERE owner_id IS NULL`); err != nil {
+		return fmt.Errorf("assign legacy favorites to system owner: %w", err)
 	}
 	if _, err := sm.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_favorites_owner_id ON favorites(owner_id)`); err != nil {
 		return fmt.Errorf("index favorite owners: %w", err)
@@ -260,27 +219,113 @@ func (sm *SchemaManager) ensureOwnerTokenColumns(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	required := []string{"id", "owner_id", "kind", "name", "token_hash", "token_prefix", "token_last4", "token_enc", "created_at", "rotated_at", "expires_at", "last_used_at", "revoked_at", "revoked_reason"}
-	needsRebuild := !strings.EqualFold(idType, "TEXT") || len(columns) != len(required)
-	for _, name := range required {
-		if !columns[name] {
-			needsRebuild = true
-		}
+	if !columns["id"] {
+		return fmt.Errorf("api_tokens is missing its existing id column")
 	}
-	if needsRebuild {
-		if err := sm.rebuildOwnerTokenTable(ctx, columns); err != nil {
+	legacyID := !strings.EqualFold(idType, "TEXT")
+	definitions := map[string]string{
+		"owner_id":       `TEXT REFERENCES owners(id)`,
+		"kind":           `TEXT NOT NULL DEFAULT 'linked'`,
+		"name":           `TEXT`,
+		"scope":          `TEXT NOT NULL DEFAULT 'read-write' CHECK (scope IN ('read', 'read-write', 'global'))`,
+		"token_hash":     `TEXT NOT NULL DEFAULT ''`,
+		"token_prefix":   `TEXT NOT NULL DEFAULT ''`,
+		"token_last4":    `TEXT NOT NULL DEFAULT ''`,
+		"token_enc":      `TEXT NOT NULL DEFAULT ''`,
+		"created_at":     `INTEGER NOT NULL DEFAULT 0`,
+		"rotated_at":     `INTEGER`,
+		"expires_at":     `INTEGER`,
+		"last_used_at":   `INTEGER`,
+		"revoked_at":     `INTEGER`,
+		"revoked_reason": `TEXT`,
+	}
+	if legacyID {
+		definitions["public_id"] = `TEXT`
+	}
+	for name, definition := range definitions {
+		if columns[name] {
+			continue
+		}
+		if _, err := sm.db.ExecContext(ctx, `ALTER TABLE api_tokens ADD COLUMN "`+name+`" `+definition); err != nil {
+			return fmt.Errorf("add API-token column %s: %w", name, err)
+		}
+		columns[name] = true
+	}
+	if legacyID {
+		if err := sm.populateLegacyTokenColumns(ctx, columns); err != nil {
 			return err
 		}
 	}
-	for _, ddl := range []string{
+	if _, err := sm.db.ExecContext(ctx, `UPDATE api_tokens SET scope = 'global' WHERE kind = 'primary' AND scope <> 'global'`); err != nil {
+		return fmt.Errorf("set primary API-token scope: %w", err)
+	}
+	indexes := []string{
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_primary ON api_tokens(owner_id) WHERE kind = 'primary' AND revoked_at IS NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash)`,
 		`CREATE INDEX IF NOT EXISTS idx_api_tokens_prefix ON api_tokens(token_prefix)`,
 		`CREATE INDEX IF NOT EXISTS idx_api_tokens_owner ON api_tokens(owner_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_api_tokens_active ON api_tokens(revoked_at) WHERE revoked_at IS NULL`,
-	} {
+	}
+	if legacyID {
+		indexes = append(indexes, `CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_public_id ON api_tokens(public_id) WHERE public_id IS NOT NULL`)
+	}
+	for _, ddl := range indexes {
 		if _, err := sm.db.ExecContext(ctx, ddl); err != nil {
 			return fmt.Errorf("create owner-token index: %w", err)
+		}
+	}
+	return nil
+}
+
+func (sm *SchemaManager) populateLegacyTokenColumns(ctx context.Context, columns map[string]bool) error {
+	last4Expr := `''`
+	if columns["token_suffix"] {
+		last4Expr = `COALESCE(token_suffix, '')`
+	}
+	query := `SELECT CAST(id AS TEXT), COALESCE(owner_id, ''), COALESCE(public_id, ''), ` + last4Expr + ` FROM api_tokens ORDER BY id`
+	rows, err := sm.db.QueryContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("read legacy API-token identifiers: %w", err)
+	}
+	type legacyIdentity struct{ id, ownerID, publicID, last4 string }
+	var identities []legacyIdentity
+	for rows.Next() {
+		var item legacyIdentity
+		if err := rows.Scan(&item.id, &item.ownerID, &item.publicID, &item.last4); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan legacy API-token identifiers: %w", err)
+		}
+		identities = append(identities, item)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("read legacy API-token identifiers: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close legacy API-token identifiers: %w", err)
+	}
+	for _, item := range identities {
+		publicID := item.publicID
+		if publicID == "" {
+			id, err := uuid.NewV7()
+			if err != nil {
+				return fmt.Errorf("generate public id for legacy API token %q: %w", item.id, err)
+			}
+			publicID = id.String()
+		}
+		ownerID := item.ownerID
+		if ownerID == "" {
+			id, err := uuid.NewV7()
+			if err != nil {
+				return fmt.Errorf("generate owner for legacy API token %q: %w", item.id, err)
+			}
+			ownerID = id.String()
+		}
+		if _, err := sm.db.ExecContext(ctx, `INSERT OR IGNORE INTO owners(id) VALUES (?)`, ownerID); err != nil {
+			return fmt.Errorf("preserve owner for legacy API token %q: %w", item.id, err)
+		}
+		if _, err := sm.db.ExecContext(ctx, `UPDATE api_tokens SET public_id = ?, owner_id = ?, token_last4 = COALESCE(NULLIF(token_last4, ''), ?) WHERE id = ?`, publicID, ownerID, item.last4, item.id); err != nil {
+			return fmt.Errorf("preserve legacy API token %q: %w", item.id, err)
 		}
 	}
 	return nil
@@ -310,149 +355,6 @@ func apiTokenColumns(ctx context.Context, db *sql.DB) (map[string]bool, string, 
 		return nil, "", fmt.Errorf("read API-token schema: %w", err)
 	}
 	return columns, idType, nil
-}
-
-func (sm *SchemaManager) rebuildOwnerTokenTable(ctx context.Context, columns map[string]bool) error {
-	tx, err := sm.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin API-token schema migration: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	selectColumn := func(name, fallback string) string {
-		if columns[name] {
-			return `"` + name + `"`
-		}
-		return fallback
-	}
-	last4Column := "''"
-	if columns["token_last4"] {
-		last4Column = `COALESCE(token_last4, '')`
-	} else if columns["token_suffix"] {
-		last4Column = `COALESCE(token_suffix, '')`
-	}
-	createdColumn := `CAST(strftime('%s', 'now') AS INTEGER)`
-	if columns["created_at"] {
-		createdColumn = `COALESCE(created_at, CAST(strftime('%s', 'now') AS INTEGER))`
-	}
-	query := `SELECT ` + strings.Join([]string{
-		selectColumn("id", `CAST(rowid AS TEXT)`),
-		selectColumn("owner_id", `NULL`),
-		selectColumn("kind", `'linked'`),
-		selectColumn("name", `NULL`),
-		selectColumn("token_hash", `''`),
-		selectColumn("token_prefix", `''`),
-		last4Column,
-		selectColumn("token_enc", `''`),
-		createdColumn,
-		selectColumn("rotated_at", `NULL`),
-		selectColumn("expires_at", `NULL`),
-		selectColumn("last_used_at", `NULL`),
-		selectColumn("revoked_at", `NULL`),
-		selectColumn("revoked_reason", `NULL`),
-	}, ",") + ` FROM api_tokens ORDER BY rowid`
-	rows, err := tx.QueryContext(ctx, query)
-	if err != nil {
-		return fmt.Errorf("read existing API tokens: %w", err)
-	}
-	type legacyToken struct {
-		id, owner, kind, name, hash, prefix, last4, encrypted, revokedReason sql.NullString
-		created, rotated, expires, lastUsed, revoked                         sql.NullInt64
-	}
-	var legacyTokens []legacyToken
-	for rows.Next() {
-		var item legacyToken
-		if err := rows.Scan(&item.id, &item.owner, &item.kind, &item.name, &item.hash, &item.prefix, &item.last4, &item.encrypted, &item.created, &item.rotated, &item.expires, &item.lastUsed, &item.revoked, &item.revokedReason); err != nil {
-			_ = rows.Close()
-			return fmt.Errorf("scan existing API token: %w", err)
-		}
-		legacyTokens = append(legacyTokens, item)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return fmt.Errorf("read existing API tokens: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return fmt.Errorf("close existing API-token rows: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `DROP TABLE IF EXISTS api_tokens_migrating`); err != nil {
-		return fmt.Errorf("remove stale API-token migration table: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, ownerTokenTableDDL("api_tokens_migrating")); err != nil {
-		return fmt.Errorf("create API-token migration table: %w", err)
-	}
-	for _, old := range legacyTokens {
-		if !old.hash.Valid || old.hash.String == "" {
-			return fmt.Errorf("migrate API token %q: missing token hash", old.id.String)
-		}
-		id, parseErr := uuid.Parse(old.id.String)
-		if parseErr != nil || id.Version() != 7 {
-			id, err = uuid.NewV7()
-			if err != nil {
-				return fmt.Errorf("generate migrated API-token id: %w", err)
-			}
-		}
-		owner := old.owner.String
-		if !old.owner.Valid || owner == "" {
-			ownerUUID, ownerErr := uuid.NewV7()
-			if ownerErr != nil {
-				return fmt.Errorf("generate legacy API-token owner id: %w", ownerErr)
-			}
-			owner = ownerUUID.String()
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO owners(id) VALUES (?)`, owner); err != nil {
-			return fmt.Errorf("preserve API-token owner %q: %w", owner, err)
-		}
-		tokenKind := old.kind.String
-		if !old.kind.Valid || (tokenKind != "primary" && tokenKind != "linked") {
-			tokenKind = "linked"
-		}
-		if old.prefix.String == "" {
-			old.prefix.String = "legacy"
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO api_tokens_migrating
-			(id, owner_id, kind, name, token_hash, token_prefix, token_last4, token_enc, created_at, rotated_at, expires_at, last_used_at, revoked_at, revoked_reason)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id.String(), owner, tokenKind,
-			old.name, old.hash.String, old.prefix.String, old.last4, old.encrypted,
-			old.created.Int64, nullInt64Value(old.rotated), nullInt64Value(old.expires), nullInt64Value(old.lastUsed), nullInt64Value(old.revoked), old.revokedReason); err != nil {
-			return fmt.Errorf("copy API token %q: %w", old.id.String, err)
-		}
-	}
-	if _, err := tx.ExecContext(ctx, `DROP TABLE api_tokens`); err != nil {
-		return fmt.Errorf("replace existing API-token table: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `ALTER TABLE api_tokens_migrating RENAME TO api_tokens`); err != nil {
-		return fmt.Errorf("install migrated API-token table: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit API-token schema migration: %w", err)
-	}
-	return nil
-}
-
-func ownerTokenTableDDL(table string) string {
-	return `CREATE TABLE IF NOT EXISTS ` + table + ` (
-		id TEXT PRIMARY KEY,
-		owner_id TEXT NOT NULL REFERENCES owners(id) ON DELETE CASCADE,
-		kind TEXT NOT NULL CHECK (kind IN ('primary', 'linked')),
-		name TEXT,
-		token_hash TEXT NOT NULL UNIQUE,
-		token_prefix TEXT NOT NULL,
-		token_last4 TEXT NOT NULL,
-		token_enc TEXT NOT NULL,
-		created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-		rotated_at INTEGER,
-		expires_at INTEGER,
-		last_used_at INTEGER,
-		revoked_at INTEGER,
-		revoked_reason TEXT
-	)`
-}
-
-func nullInt64Value(value sql.NullInt64) any {
-	if !value.Valid {
-		return nil
-	}
-	return value.Int64
 }
 
 // getTablesDDL returns CREATE TABLE statements.
@@ -632,25 +534,26 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
 			last_seen_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 		)`,
+		`CREATE TABLE IF NOT EXISTS health_stats (
+			name TEXT PRIMARY KEY,
+			value INTEGER NOT NULL DEFAULT 0,
+			updated_at INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE TABLE IF NOT EXISTS health_request_buckets (
+			bucket_hour INTEGER PRIMARY KEY,
+			request_count INTEGER NOT NULL DEFAULT 0
+		)`,
 	}
 }
 
-// GetDB returns the database connection
-func (sm *SchemaManager) GetDB() *sql.DB {
-	return sm.db
-}
-
-// GetReadDB returns the separate read handle used for health probes and read-only work.
-func (sm *SchemaManager) GetReadDB() *sql.DB {
-	return sm.readDB
-}
+// GetAppDatabase returns the transaction-aware database store for service
+// layers that need the standard read/write pools.
+func (sm *SchemaManager) GetAppDatabase() *AppDatabase { return sm.appDB }
 
 // Close closes the database connection
 func (sm *SchemaManager) Close() error {
 	var readErr error
-	if sm.readAppDB != nil {
-		readErr = sm.readAppDB.Close()
-	} else if sm.readDB != nil && sm.readDB != sm.db {
+	if sm.appDB == nil && sm.readDB != nil && sm.readDB != sm.db {
 		readErr = sm.readDB.Close()
 	}
 	writeErr := error(nil)
@@ -889,14 +792,6 @@ func (sm *SchemaManager) copyLegacySchedulerTables(ctx context.Context) error {
 			`+errorText+`, `+duration+` FROM task_history`); err != nil {
 			return fmt.Errorf("copy legacy scheduler history: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx, `DROP TABLE task_history`); err != nil {
-			return fmt.Errorf("remove legacy scheduler history table: %w", err)
-		}
-	}
-	if legacyTasks {
-		if _, err := tx.ExecContext(ctx, `DROP TABLE scheduled_tasks`); err != nil {
-			return fmt.Errorf("remove legacy scheduler task table: %w", err)
-		}
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit scheduler schema migration: %w", err)
@@ -909,6 +804,26 @@ func legacyColumn(columns map[string]bool, name, fallback string) string {
 		return `"` + name + `"`
 	}
 	return fallback
+}
+
+func ownerTokenTableDDL(table string) string {
+	return `CREATE TABLE IF NOT EXISTS ` + table + ` (
+		id TEXT PRIMARY KEY,
+		owner_id TEXT NOT NULL REFERENCES owners(id) ON DELETE CASCADE,
+		kind TEXT NOT NULL CHECK (kind IN ('primary', 'linked')),
+		name TEXT,
+		scope TEXT NOT NULL DEFAULT 'read-write' CHECK (scope IN ('read', 'read-write', 'global')),
+		token_hash TEXT NOT NULL UNIQUE,
+		token_prefix TEXT NOT NULL,
+		token_last4 TEXT NOT NULL,
+		token_enc TEXT NOT NULL,
+		created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+		rotated_at INTEGER,
+		expires_at INTEGER,
+		last_used_at INTEGER,
+		revoked_at INTEGER,
+		revoked_reason TEXT
+	)`
 }
 
 func legacyUnixColumn(columns map[string]bool, name string) string {

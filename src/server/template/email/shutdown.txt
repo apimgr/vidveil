@@ -1,0 +1,14 @@
+Subject: Server Stopped - {app_name}
+---
+SERVER STOPPED
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+The server stopped after {reason}.
+Version: {version}
+Mode: {mode}
+Host: {hostname}
+
+{app_name}
+{app_url}

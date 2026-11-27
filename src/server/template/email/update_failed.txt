@@ -1,0 +1,13 @@
+Subject: Update Failed - {app_name}
+---
+UPDATE FAILED
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+The staged update to version {version} could not be installed. The current binary remains running.
+
+Reason: {error}
+
+{app_name}
+{app_url}

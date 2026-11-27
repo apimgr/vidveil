@@ -254,7 +254,7 @@ func TestStartSAMUsesSeparateForwardSocketAndPersistsPrivateKey(t *testing.T) {
 		}
 		commands <- strings.TrimSpace(line)
 		storedKey, keyErr := os.ReadFile(filepath.Join(root, "data/i2p/site/site-keys.dat"))
-		if keyErr != nil || strings.TrimSpace(string(storedKey)) != privateKey {
+		if keyErr != nil || string(storedKey) != privateKey {
 			serverErr <- errors.New("private key was not persisted before SESSION CREATE")
 			return
 		}

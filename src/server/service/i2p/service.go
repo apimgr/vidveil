@@ -473,7 +473,7 @@ func (s *Service) loadOrCreateSAMKeys(conn net.Conn, reader *bufio.Reader, keyPa
 		_ = tmp.Close()
 		return "", nil, err
 	}
-	_, writeErr := fmt.Fprintln(tmp, private)
+	_, writeErr := io.WriteString(tmp, private)
 	syncErr := tmp.Sync()
 	closeErr := tmp.Close()
 	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {

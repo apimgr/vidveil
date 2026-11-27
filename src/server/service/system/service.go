@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	appPath "github.com/apimgr/vidveil/src/paths"
 )
@@ -19,6 +20,8 @@ import (
 // frozenInternalName is {internal_name} per AI.md PART 2 — frozen forever and
 // used for every on-disk service identity, never the renamed binary name.
 const frozenInternalName = "vidveil"
+
+var legacyServiceAccountWarning sync.Once
 
 // ServiceUserName returns the frozen system-account identity used by the server.
 func ServiceUserName() string {
@@ -456,6 +459,19 @@ func (sm *ServiceManager) Disable() error {
 			}
 			return os.Remove(fmt.Sprintf("/var/service/%s", sm.internalName))
 		}
+		if sm.hasS6() {
+			servicePath, scanDir, err := sm.s6ServicePath()
+			if err != nil {
+				return err
+			}
+			if err := exec.Command("s6-svc", "-d", servicePath).Run(); err != nil {
+				return fmt.Errorf("stop s6 service: %w", err)
+			}
+			if err := os.Remove(servicePath); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("disable s6 service: %w", err)
+			}
+			return exec.Command("s6-svscanctl", "-a", scanDir).Run()
+		}
 		return fmt.Errorf("no supported init system found")
 	case "darwin":
 		// macOS: unload the plist (stops and prevents autostart)
@@ -482,12 +498,172 @@ func (sm *ServiceManager) Disable() error {
 	}
 }
 
+// ServiceStatusDetails contains the installed state and runtime details shown
+// by the service-management help output.
+type ServiceStatusDetails struct {
+	Installed bool
+	State     string
+	Autostart string
+	PID       string
+}
+
+// GetServiceStatusDetails reports whether the service is installed, its state,
+// whether it starts automatically, and the application PID when available.
+func (sm *ServiceManager) GetServiceStatusDetails() (ServiceStatusDetails, error) {
+	details := ServiceStatusDetails{State: "unknown", Autostart: "unknown"}
+	state, err := sm.GetServiceStatus()
+	if err != nil {
+		return details, err
+	}
+	details.State = state
+	appPaths := appPath.GetAppPaths(sm.configDir, sm.dataDir)
+	if appPaths.PIDFile != "" {
+		if pidData, readErr := os.ReadFile(appPaths.PIDFile); readErr == nil {
+			if pid := strings.TrimSpace(string(pidData)); pid != "" {
+				details.PID = pid
+			}
+		}
+	}
+	switch runtime.GOOS {
+	case "linux":
+		switch {
+		case sm.hasSystemd():
+			unitPath := filepath.Join("/etc/systemd/system", sm.internalName+".service")
+			userService := false
+			if !IsRunningAsRoot() {
+				if homeDir, homeErr := os.UserHomeDir(); homeErr == nil {
+					userUnitPath := filepath.Join(homeDir, ".config", "systemd", "user", sm.internalName+".service")
+					if pathExists(userUnitPath) {
+						unitPath = userUnitPath
+						userService = true
+					}
+				}
+			}
+			details.Installed = pathExists(unitPath)
+			if details.Installed {
+				out, enableErr := exec.Command("systemctl", systemdCommandArgs(userService, "is-enabled", sm.internalName)...).CombinedOutput()
+				details.Autostart = enabledState(string(out), enableErr)
+			} else {
+				details.Autostart = "disabled"
+			}
+		case sm.hasOpenRC():
+			details.Installed = pathExists(filepath.Join("/etc/init.d", sm.internalName))
+			details.Autostart = enabledByPath(filepath.Join("/etc/runlevels/default", sm.internalName), details.Installed)
+		case sm.hasRunit():
+			details.Installed = pathExists(filepath.Join("/etc/sv", sm.internalName))
+			details.Autostart = enabledByPath(filepath.Join("/var/service", sm.internalName), details.Installed)
+		case sm.hasS6():
+			details.Installed = pathExists(filepath.Join("/etc/s6/sv", sm.internalName))
+			servicePath, _, pathErr := sm.s6ServicePath()
+			details.Autostart = enabledByPath(servicePath, details.Installed && pathErr == nil)
+		case sm.hasSysVInit():
+			details.Installed = pathExists(filepath.Join("/etc/init.d", sm.internalName))
+			details.Autostart = enabledByGlob(filepath.Join("/etc/rc[2345].d", "S*"+sm.internalName), details.Installed)
+		}
+	case "darwin":
+		if plistPath, pathErr := sm.launchdPlistPath(); pathErr == nil {
+			details.Installed = pathExists(plistPath)
+			details.Autostart = enabledByPath(plistPath, details.Installed)
+			if details.Installed {
+				domain := "system"
+				if !IsRunningAsRoot() {
+					if currentUser, userErr := user.Current(); userErr == nil {
+						domain = "gui/" + currentUser.Uid
+					}
+				}
+				out, disabledErr := exec.Command("launchctl", "print-disabled", domain).CombinedOutput()
+				if disabledErr != nil {
+					details.Autostart = "unknown"
+				} else if strings.Contains(string(out), "\""+sm.plistName+"\" => disabled") {
+					details.Autostart = "disabled"
+				} else {
+					details.Autostart = "enabled"
+				}
+			}
+		}
+	case "freebsd", "openbsd", "netbsd":
+		details.Installed = pathExists(filepath.Join("/usr/local/etc/rc.d", sm.internalName))
+		if details.Installed {
+			out, sysrcErr := exec.Command("sysrc", "-n", sm.internalName+"_enable").CombinedOutput()
+			if sysrcErr == nil && strings.EqualFold(strings.TrimSpace(string(out)), "YES") {
+				details.Autostart = "enabled"
+			} else {
+				details.Autostart = "disabled"
+			}
+		} else {
+			details.Autostart = "disabled"
+		}
+	case "windows":
+		_, queryErr := exec.Command("sc", "query", sm.internalName).CombinedOutput()
+		details.Installed = queryErr == nil
+		if details.Installed {
+			configOut, configErr := exec.Command("sc", "qc", sm.internalName).CombinedOutput()
+			if configErr == nil && strings.Contains(string(configOut), "AUTO_START") {
+				details.Autostart = "enabled"
+			} else {
+				details.Autostart = "disabled"
+			}
+		} else {
+			details.Autostart = "disabled"
+		}
+	}
+	if details.PID != "" && details.State != "running" {
+		details.PID = ""
+	}
+	return details, nil
+}
+
+func pathExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func enabledByPath(path string, installed bool) string {
+	if !installed {
+		return "disabled"
+	}
+	if pathExists(path) {
+		return "enabled"
+	}
+	return "disabled"
+}
+
+func enabledByGlob(pattern string, installed bool) string {
+	if !installed {
+		return "disabled"
+	}
+	matches, err := filepath.Glob(pattern)
+	if err == nil && len(matches) > 0 {
+		return "enabled"
+	}
+	return "disabled"
+}
+
+func enabledState(output string, err error) string {
+	if err == nil && (strings.TrimSpace(output) == "enabled" || strings.TrimSpace(output) == "enabled-runtime") {
+		return "enabled"
+	}
+	if strings.TrimSpace(output) != "" {
+		return "disabled"
+	}
+	return "unknown"
+}
+
 // GetServiceStatus returns the service status
 func (sm *ServiceManager) GetServiceStatus() (string, error) {
 	switch runtime.GOOS {
 	case "linux":
 		if sm.hasSystemd() {
-			out, err := exec.Command("systemctl", systemdCommandArgs(!IsRunningAsRoot(), "status", sm.internalName)...).CombinedOutput()
+			userService := false
+			if !IsRunningAsRoot() {
+				if homeDir, homeErr := os.UserHomeDir(); homeErr == nil {
+					userService = pathExists(filepath.Join(homeDir, ".config", "systemd", "user", sm.internalName+".service"))
+				}
+			}
+			out, err := exec.Command("systemctl", systemdCommandArgs(userService, "status", sm.internalName)...).CombinedOutput()
 			if err != nil {
 				if strings.Contains(string(out), "inactive") {
 					return "stopped", nil
@@ -502,6 +678,50 @@ func (sm *ServiceManager) GetServiceStatus() (string, error) {
 			}
 			return "stopped", nil
 		}
+		if sm.hasOpenRC() {
+			out, err := exec.Command("rc-service", sm.internalName, "status").CombinedOutput()
+			if err == nil {
+				return "running", nil
+			}
+			if strings.Contains(strings.ToLower(string(out)), "stopped") || strings.Contains(strings.ToLower(string(out)), "crashed") {
+				return "stopped", nil
+			}
+			return "unknown", err
+		}
+		if sm.hasRunit() {
+			out, err := exec.Command("sv", "status", sm.internalName).CombinedOutput()
+			if err != nil && !strings.Contains(string(out), "down") {
+				return "unknown", err
+			}
+			if strings.Contains(string(out), "run:") {
+				return "running", nil
+			}
+			return "stopped", nil
+		}
+		if sm.hasS6() {
+			servicePath, _, err := sm.s6ServicePath()
+			if err != nil {
+				return "unknown", err
+			}
+			out, err := exec.Command("s6-svstat", servicePath).CombinedOutput()
+			if err != nil {
+				return "unknown", err
+			}
+			if strings.HasPrefix(string(out), "up ") {
+				return "running", nil
+			}
+			return "stopped", nil
+		}
+		if sm.hasSysVInit() {
+			_, err := exec.Command(fmt.Sprintf("/etc/init.d/%s", sm.internalName), "status").CombinedOutput()
+			if err == nil {
+				return "running", nil
+			}
+			if errExit, ok := err.(*exec.ExitError); ok && errExit.ExitCode() == 3 {
+				return "stopped", nil
+			}
+			return "unknown", err
+		}
 	case "darwin":
 		// Per AI.md PART 24: list using {plist_name}
 		out, err := exec.Command("launchctl", "list", sm.plistName).CombinedOutput()
@@ -511,6 +731,27 @@ func (sm *ServiceManager) GetServiceStatus() (string, error) {
 		if len(out) > 0 {
 			return "running", nil
 		}
+	case "freebsd", "openbsd", "netbsd":
+		out, err := exec.Command("service", sm.internalName, "status").CombinedOutput()
+		if err == nil {
+			return "running", nil
+		}
+		if strings.Contains(strings.ToLower(string(out)), "not running") || strings.Contains(strings.ToLower(string(out)), "is stopped") {
+			return "stopped", nil
+		}
+		return "unknown", err
+	case "windows":
+		out, err := exec.Command("sc", "query", sm.internalName).CombinedOutput()
+		if err != nil {
+			return "unknown", nil
+		}
+		if strings.Contains(string(out), "RUNNING") {
+			return "running", nil
+		}
+		if strings.Contains(string(out), "STOPPED") {
+			return "stopped", nil
+		}
+		return "unknown", nil
 	}
 	return "unknown", nil
 }
@@ -528,7 +769,28 @@ func (sm *ServiceManager) runServiceCommand(action string) error {
 		if sm.hasRunit() {
 			return exec.Command("sv", action, sm.internalName).Run()
 		}
-		return exec.Command("service", sm.internalName, action).Run()
+		if sm.hasS6() {
+			servicePath, _, err := sm.s6ServicePath()
+			if err != nil {
+				return err
+			}
+			var command string
+			switch action {
+			case "start":
+				command = "-u"
+			case "stop":
+				command = "-d"
+			case "restart":
+				command = "-r"
+			default:
+				return fmt.Errorf("unsupported s6 action: %s", action)
+			}
+			return exec.Command("s6-svc", command, servicePath).Run()
+		}
+		if sm.hasSysVInit() {
+			return exec.Command(fmt.Sprintf("/etc/init.d/%s", sm.internalName), action).Run()
+		}
+		return fmt.Errorf("no supported init system found")
 	case "darwin":
 		// Per AI.md PART 24: plist path uses {plist_name}
 		plistPath, err := sm.launchdPlistPath()
@@ -600,8 +862,62 @@ func (sm *ServiceManager) hasSystemd() bool {
 
 // hasRunit checks if runit is available
 func (sm *ServiceManager) hasRunit() bool {
+	if _, err := os.Stat("/etc/runit"); err == nil {
+		return true
+	}
 	_, err := exec.LookPath("sv")
 	return err == nil
+}
+
+// hasS6 reports whether s6-svscan is running and s6-svc is available.
+func (sm *ServiceManager) hasS6() bool {
+	if _, err := exec.LookPath("s6-svc"); err != nil {
+		return false
+	}
+	_, running := s6ScanDirectory()
+	return running
+}
+
+// s6ServicePath returns the service definition path and active scan directory.
+func (sm *ServiceManager) s6ServicePath() (string, string, error) {
+	scanDir, running := s6ScanDirectory()
+	if !running {
+		return "", "", fmt.Errorf("s6-svscan is not running")
+	}
+	return filepath.Join(scanDir, sm.internalName), scanDir, nil
+}
+
+// s6ScanDirectory finds the active s6-svscan directory from /proc and uses
+// /run/service only when process arguments cannot be read.
+func s6ScanDirectory() (string, bool) {
+	processes, err := os.ReadDir("/proc")
+	if err != nil {
+		return "", false
+	}
+	for _, process := range processes {
+		if _, err := strconv.Atoi(process.Name()); err != nil {
+			continue
+		}
+		procDir := filepath.Join("/proc", process.Name())
+		data, readErr := os.ReadFile(filepath.Join(procDir, "cmdline"))
+		if readErr == nil {
+			args := strings.Split(strings.TrimRight(string(data), "\x00"), "\x00")
+			if len(args) == 0 || filepath.Base(args[0]) != "s6-svscan" {
+				continue
+			}
+			for index := len(args) - 1; index > 0; index-- {
+				if args[index] != "" && !strings.HasPrefix(args[index], "-") {
+					return args[index], true
+				}
+			}
+			return "/run/service", true
+		}
+		comm, commErr := os.ReadFile(filepath.Join(procDir, "comm"))
+		if commErr == nil && strings.TrimSpace(string(comm)) == "s6-svscan" {
+			return "/run/service", true
+		}
+	}
+	return "", false
 }
 
 // hasOpenRC reports whether OpenRC is the active init system per AI.md PART 24.
@@ -609,13 +925,14 @@ func (sm *ServiceManager) hasRunit() bool {
 // Alpine, Gentoo, and Devuan. The presence of openrc-run is the canonical
 // detection signal — /etc/init.d alone matches both OpenRC and SysVinit.
 func (sm *ServiceManager) hasOpenRC() bool {
+	if _, err := os.Stat("/run/openrc"); err != nil {
+		return false
+	}
 	if _, err := exec.LookPath("openrc-run"); err == nil {
 		return true
 	}
-	if _, err := os.Stat("/sbin/openrc-run"); err == nil {
-		return true
-	}
-	return false
+	_, err := os.Stat("/sbin/openrc-run")
+	return err == nil
 }
 
 // hasSysVInit reports whether the host is using SysVinit-style init.d scripts
@@ -623,7 +940,7 @@ func (sm *ServiceManager) hasOpenRC() bool {
 // absent, OpenRC is absent, and /etc/init.d exists with a working
 // update-rc.d or chkconfig.
 func (sm *ServiceManager) hasSysVInit() bool {
-	if sm.hasSystemd() || sm.hasOpenRC() {
+	if sm.hasSystemd() || sm.hasOpenRC() || sm.hasRunit() || sm.hasS6() {
 		return false
 	}
 	if _, err := os.Stat("/etc/init.d"); err != nil {
@@ -639,7 +956,7 @@ func (sm *ServiceManager) hasSysVInit() bool {
 }
 
 // installLinux installs service on Linux per AI.md PART 24.
-// Detection order matches the spec: systemd → OpenRC → SysVinit → runit.
+// Detection order matches the spec: systemd → OpenRC → runit → s6 → SysVinit.
 func (sm *ServiceManager) installLinux() error {
 
 	// Create system user per AI.md PART 23
@@ -654,24 +971,24 @@ func (sm *ServiceManager) installLinux() error {
 	if sm.hasOpenRC() {
 		return sm.installOpenRC()
 	}
-	if sm.hasSysVInit() {
-		return sm.installSysVInit()
-	}
 	if sm.hasRunit() {
 		return sm.installRunit()
+	}
+	if sm.hasS6() {
+		return sm.installS6()
+	}
+	if sm.hasSysVInit() {
+		return sm.installSysVInit()
 	}
 	return fmt.Errorf("no supported init system found (systemd, OpenRC, SysVinit, or runit)")
 }
 
 // createLinuxUser creates system user per AI.md PART 23
 func (sm *ServiceManager) createLinuxUser() error {
-	existingUser, lookupErr := user.Lookup(sm.user)
-	if lookupErr != nil {
-		if _, unknown := lookupErr.(user.UnknownUserError); !unknown {
-			return fmt.Errorf("look up service user %q: %w", sm.user, lookupErr)
-		}
-	}
+	return sm.ensureServiceAccountAndDirectories()
+}
 
+func (sm *ServiceManager) ensureServiceAccountAndDirectories() error {
 	paths := appPath.GetAppPaths(sm.configDir, sm.dataDir)
 	dirs := []string{
 		paths.Config,
@@ -679,55 +996,17 @@ func (sm *ServiceManager) createLinuxUser() error {
 		paths.Cache,
 		paths.Log,
 		paths.Backup,
+		filepath.Join(paths.Data, "update"),
 		appPath.GetMaintenanceLockDir(paths.Data),
+		filepath.Join(paths.Data, "tor"),
+		filepath.Join(paths.Data, "tor", "site"),
 	}
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("create service directory %q: %w", dir, err)
-		}
+	if runtime.GOOS == "linux" && paths.PIDFile != "" {
+		dirs = append(dirs, filepath.Dir(paths.PIDFile))
 	}
-	if existingUser != nil {
-		return nil
+	if _, _, err := EnsureSystemUser(sm.internalName, dirs); err != nil {
+		return fmt.Errorf("prepare service account and directories: %w", err)
 	}
-
-	uid, err := findAvailableSystemID()
-	if err != nil {
-		return err
-	}
-	if _, err := exec.LookPath("groupadd"); err == nil {
-		if err := exec.Command("groupadd", "--system", "--gid", strconv.Itoa(uid), sm.group).Run(); err != nil {
-			return fmt.Errorf("failed to create group: %w", err)
-		}
-		cmd := exec.Command("useradd", "--system", "--uid", strconv.Itoa(uid), "--gid", strconv.Itoa(uid), "--home-dir", sm.dataDir, "--shell", "/sbin/nologin", "--comment", sm.description, sm.user)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to create user: %w", err)
-		}
-	} else {
-		if _, err := exec.LookPath("addgroup"); err != nil {
-			return fmt.Errorf("no supported Linux group creation command found: %w", err)
-		}
-		if _, err := exec.LookPath("adduser"); err != nil {
-			return fmt.Errorf("no supported Linux user creation command found: %w", err)
-		}
-		if err := exec.Command("addgroup", "-g", strconv.Itoa(uid), "-S", sm.group).Run(); err != nil {
-			return fmt.Errorf("failed to create group: %w", err)
-		}
-		cmd := exec.Command("adduser", "-D", "-S", "-H", "-u", strconv.Itoa(uid), "-G", sm.group, "-h", sm.dataDir, "-s", "/sbin/nologin", "-g", sm.description, sm.user)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to create user: %w", err)
-		}
-	}
-
-	// Set directory ownership per PART 23 after creating the service account.
-	for _, dir := range dirs {
-		if err := chownServiceTree(dir, uid, uid); err != nil {
-			return err
-		}
-	}
-	if err := markServiceUserCreated(sm.configDir, sm.user); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -804,10 +1083,11 @@ StandardError=journal
 ExecStartPre=+/usr/bin/install -d -m 0755 /etc/%s/%s /var/lib/%s/%s /var/cache/%s/%s /var/log/%s/%s /var/run/%s/%s
 
 # Security hardening (binary drops privileges after port binding)
-ProtectSystem=strict
+ProtectSystem=true
 ProtectHome=yes
 PrivateTmp=yes
 %s
+ReadWritePaths=-/usr/local/bin
 
 [Install]
 WantedBy=multi-user.target
@@ -890,10 +1170,45 @@ exec svlogd -tt /var/log/%s/%s
 	return nil
 }
 
+// installS6 installs and enables an s6 service per AI.md PART 24.
+func (sm *ServiceManager) installS6() error {
+	scanDir, running := s6ScanDirectory()
+	if !running {
+		return fmt.Errorf("s6-svscan is not running")
+	}
+	serviceDir := filepath.Join("/etc/s6/sv", sm.internalName)
+	logDir := filepath.Join(serviceDir, "log")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("create s6 service directory: %w", err)
+	}
+	runScript := fmt.Sprintf("#!/bin/sh\nexec %s 2>&1\n", sm.binaryPath)
+	if err := os.WriteFile(filepath.Join(serviceDir, "run"), []byte(runScript), 0755); err != nil {
+		return fmt.Errorf("write s6 run script: %w", err)
+	}
+	logScript := fmt.Sprintf("#!/bin/sh\nexec s6-log n10 s1000000 /var/log/%s/%s\n", sm.projectOrg, sm.internalName)
+	if err := os.WriteFile(filepath.Join(logDir, "run"), []byte(logScript), 0755); err != nil {
+		return fmt.Errorf("write s6 log script: %w", err)
+	}
+	servicePath := filepath.Join(scanDir, sm.internalName)
+	if err := os.Remove(servicePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("replace existing s6 service link: %w", err)
+	}
+	if err := os.Symlink(serviceDir, servicePath); err != nil {
+		return fmt.Errorf("enable s6 service: %w", err)
+	}
+	if err := exec.Command("s6-svscanctl", "-a", scanDir).Run(); err != nil {
+		return fmt.Errorf("reload s6 service scan directory: %w", err)
+	}
+	if err := exec.Command("s6-svc", "-u", servicePath).Run(); err != nil {
+		return fmt.Errorf("start s6 service: %w", err)
+	}
+	return nil
+}
+
 // installOpenRC installs an OpenRC service script per AI.md PART 24.
-// The script lives at /etc/init.d/{internal_name} (executable). The binary
-// drops privileges itself after binding privileged ports, so command_user
-// is set to the dedicated service user.
+// The script lives at /etc/init.d/{internal_name} (executable). The service
+// starts as root so the binary can bind privileged ports before dropping
+// privileges itself.
 func (sm *ServiceManager) installOpenRC() error {
 	// Per PART 24: service name uses {internal_name}
 	scriptPath := fmt.Sprintf("/etc/init.d/%s", sm.internalName)
@@ -908,8 +1223,7 @@ name="%s"
 description="%s"
 command="%s"
 command_args=""
-command_user="%s:%s"
-pidfile="/var/run/%s/%s/%s.pid"
+pidfile="/var/run/%s-%s.pid"
 command_background=true
 output_log="/var/log/%s/%s/server.log"
 error_log="/var/log/%s/%s/error.log"
@@ -921,6 +1235,8 @@ depend() {
 }
 
 start_pre() {
+    checkpath -d -m 0755 /var/run/%s
+    checkpath -d -m 0755 /var/log/%s
     checkpath -d -m 0755 -o %s:%s /var/run/%s/%s
     checkpath -d -m 0755 -o %s:%s /var/log/%s/%s
 }
@@ -929,9 +1245,10 @@ start_pre() {
 		sm.internalName,
 		sm.description,
 		sm.binaryPath,
-		sm.user, sm.group,
-		sm.projectOrg, sm.internalName, sm.internalName,
+		sm.projectOrg, sm.internalName,
 		sm.projectOrg, sm.internalName, sm.projectOrg, sm.internalName,
+		sm.projectOrg,
+		sm.projectOrg,
 		sm.user, sm.group, sm.projectOrg, sm.internalName,
 		sm.user, sm.group, sm.projectOrg, sm.internalName,
 	)
@@ -976,17 +1293,16 @@ func (sm *ServiceManager) installSysVInit() error {
 
 NAME=%s
 DAEMON=%s
-DAEMON_USER=%s
-PIDFILE=/var/run/%s/%s/%s.pid
+PIDFILE=/var/run/%s-%s.pid
 LOGFILE=/var/log/%s/%s/server.log
 
 case "$1" in
     start)
         echo "Starting $NAME..."
-        mkdir -p $(dirname $PIDFILE) $(dirname $LOGFILE)
-        chown -R $DAEMON_USER:$DAEMON_USER $(dirname $PIDFILE) $(dirname $LOGFILE)
+        mkdir -p $(dirname $LOGFILE)
+        chown -R %s:%s $(dirname $LOGFILE)
         start-stop-daemon --start --quiet --background --make-pidfile \
-            --pidfile $PIDFILE --chuid $DAEMON_USER --exec $DAEMON \
+            --pidfile $PIDFILE --exec $DAEMON \
             --no-close >> $LOGFILE 2>&1
         ;;
     stop)
@@ -1020,9 +1336,9 @@ exit 0
 		sm.description,
 		sm.internalName,
 		sm.binaryPath,
-		sm.user,
-		sm.projectOrg, sm.internalName, sm.internalName,
 		sm.projectOrg, sm.internalName,
+		sm.projectOrg, sm.internalName,
+		sm.user, sm.group,
 	)
 
 	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
@@ -1057,6 +1373,9 @@ exit 0
 // installDarwin installs launchd service on macOS per AI.md PART 24
 // Binary drops privileges after port binding - no UserName/GroupName needed
 func (sm *ServiceManager) installDarwin() error {
+	if err := sm.createDarwinUser(); err != nil {
+		return fmt.Errorf("prepare macOS service account: %w", err)
+	}
 	// Per PART 24: Path is /Library/LaunchDaemons/{plist_name}.plist
 	// plist_name = io.github.{project_org}.{internal_name}
 	plistPath := fmt.Sprintf("/Library/LaunchDaemons/%s.plist", sm.plistName)
@@ -1100,23 +1419,7 @@ func (sm *ServiceManager) installDarwin() error {
 // createDarwinUser creates the hidden system user/group on macOS using dscl
 // per AI.md PART 23. The ID comes from the macOS safe range (200-399).
 func (sm *ServiceManager) createDarwinUser() error {
-	// Check if user exists
-	_, err := exec.Command("dscl", ".", "-read", fmt.Sprintf("/Users/%s", sm.user)).CombinedOutput()
-	// User already exists
-	if err == nil {
-		return nil
-	}
-
-	// Per AI.md PART 23: macOS uses its own 200-399 safe range, not the Linux range
-	id, err := findAvailableMacOSSystemID()
-	if err != nil {
-		return err
-	}
-
-	if err := createMacOSServiceUser(sm.user, id, sm.dataDir); err != nil {
-		return err
-	}
-	return markServiceUserCreated(sm.configDir, sm.user)
+	return sm.ensureServiceAccountAndDirectories()
 }
 
 // findAvailableMacOSSystemID returns a free UID/GID from the macOS safe range
@@ -1130,10 +1433,14 @@ func findAvailableMacOSSystemID() (int, error) {
 
 		if _, err := user.LookupId(strconv.Itoa(id)); err == nil {
 			continue
+		} else if _, unknown := err.(user.UnknownUserIdError); !unknown {
+			return 0, fmt.Errorf("check macOS UID %d availability: %w", id, err)
 		}
 
 		if _, err := user.LookupGroupId(strconv.Itoa(id)); err == nil {
 			continue
+		} else if _, unknown := err.(user.UnknownGroupIdError); !unknown {
+			return 0, fmt.Errorf("check macOS GID %d availability: %w", id, err)
 		}
 
 		return id, nil
@@ -1174,6 +1481,9 @@ func createMacOSServiceUser(name string, id int, homeDir string) error {
 // installBSD installs rc.d service on BSD per AI.md PART 24
 // Binary drops privileges after port binding
 func (sm *ServiceManager) installBSD() error {
+	if err := sm.createBSDUser(); err != nil {
+		return fmt.Errorf("prepare BSD service account: %w", err)
+	}
 	// Per PART 24: service name uses {internal_name}
 	rcPath := fmt.Sprintf("/usr/local/etc/rc.d/%s", sm.internalName)
 
@@ -1188,11 +1498,21 @@ func (sm *ServiceManager) installBSD() error {
 
 name="%s"
 rcvar="${name}_enable"
-command="%s"
+pidfile="/var/run/%s-%s.pid"
+command="/usr/sbin/daemon"
+command_args="-P ${pidfile} -r -f %s"
+start_precmd="%s_prestart"
+
+%s_prestart()
+{
+    install -d -m 0755 /var/run/%s /var/log/%s/%s
+}
 
 load_rc_config $name
 run_rc_command "$1"
-`, sm.internalName, sm.internalName, sm.binaryPath)
+`, sm.internalName, sm.internalName,
+		sm.projectOrg, sm.internalName, sm.binaryPath, sm.internalName,
+		sm.internalName, sm.projectOrg, sm.projectOrg, sm.internalName)
 
 	if err := os.WriteFile(rcPath, []byte(rcScript), 0755); err != nil {
 		return fmt.Errorf("failed to write rc script: %w", err)
@@ -1212,50 +1532,7 @@ run_rc_command "$1"
 
 // createBSDUser creates system user on BSD using pw per AI.md PART 23
 func (sm *ServiceManager) createBSDUser() error {
-	// Check if user exists
-	if _, err := user.Lookup(sm.user); err == nil {
-		return nil
-	} else if _, unknown := err.(user.UnknownUserError); !unknown {
-		return fmt.Errorf("look up service user %q: %w", sm.user, err)
-	}
-
-	// Find available UID in 200-899 range per AI.md PART 23
-	uid, err := findAvailableSystemID()
-	if err != nil {
-		return err
-	}
-	paths := appPath.GetAppPaths(sm.configDir, sm.dataDir)
-	dirs := []string{paths.Config, paths.Data, paths.Cache, paths.Log}
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("create service directory %q: %w", dir, err)
-		}
-	}
-
-	// Create group per AI.md PART 23
-	if err := exec.Command("pw", "groupadd", sm.group, "-g", strconv.Itoa(uid)).Run(); err != nil {
-		return fmt.Errorf("failed to create BSD service group: %w", err)
-	}
-
-	// Create user using pw per AI.md PART 23
-	if err := exec.Command("pw", "useradd", sm.user,
-		"-u", strconv.Itoa(uid),
-		"-g", sm.group,
-		"-d", sm.dataDir,
-		"-s", "/usr/sbin/nologin",
-		"-c", sm.description,
-	).Run(); err != nil {
-		return fmt.Errorf("failed to create BSD service user: %w", err)
-	}
-	for _, dir := range dirs {
-		if err := chownServiceTree(dir, uid, uid); err != nil {
-			return err
-		}
-	}
-	if err := markServiceUserCreated(sm.configDir, sm.user); err != nil {
-		return err
-	}
-	return nil
+	return sm.ensureServiceAccountAndDirectories()
 }
 
 // installWindows installs Windows service per AI.md PART 23
@@ -1273,6 +1550,16 @@ func (sm *ServiceManager) installWindows() error {
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create Windows service: %w", err)
+	}
+	appPaths := appPath.GetAppPaths(sm.configDir, sm.dataDir)
+	for _, dir := range []string{appPaths.Config, appPaths.Data, appPaths.Cache, appPaths.Log, appPaths.Backup} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("create Windows service directory %q: %w", dir, err)
+		}
+		grant := account + ":(OI)(CI)F"
+		if err := exec.Command("icacls", dir, "/grant", grant, "/T", "/C").Run(); err != nil {
+			return fmt.Errorf("grant Windows service directory access to %q: %w", account, err)
+		}
 	}
 
 	// Set description
@@ -1343,6 +1630,29 @@ func (sm *ServiceManager) uninstallLinux(confirmed bool) error {
 			return err
 		}
 	}
+	if sm.hasRunit() {
+		if err := removeIfExists(fmt.Sprintf("/var/service/%s", sm.internalName)); err != nil {
+			return err
+		}
+		if err := removeIfExists(fmt.Sprintf("/etc/sv/%s", sm.internalName)); err != nil {
+			return err
+		}
+	}
+	if sm.hasS6() {
+		servicePath, scanDir, err := sm.s6ServicePath()
+		if err != nil {
+			return err
+		}
+		if err := removeIfExists(servicePath); err != nil {
+			return err
+		}
+		if err := exec.Command("s6-svscanctl", "-a", scanDir).Run(); err != nil {
+			return fmt.Errorf("reload s6 after uninstall: %w", err)
+		}
+		if err := removeIfExists(filepath.Join("/etc/s6/sv", sm.internalName)); err != nil {
+			return err
+		}
+	}
 	if sm.hasSysVInit() {
 		if _, err := exec.LookPath("update-rc.d"); err == nil {
 			if err := exec.Command("update-rc.d", "-f", sm.internalName, "remove").Run(); err != nil {
@@ -1356,14 +1666,6 @@ func (sm *ServiceManager) uninstallLinux(confirmed bool) error {
 			return fmt.Errorf("no supported SysVinit disable command found")
 		}
 		if err := removeIfExists(fmt.Sprintf("/etc/init.d/%s", sm.internalName)); err != nil {
-			return err
-		}
-	}
-	if sm.hasRunit() {
-		if err := removeIfExists(fmt.Sprintf("/var/service/%s", sm.internalName)); err != nil {
-			return err
-		}
-		if err := removeIfExists(fmt.Sprintf("/etc/sv/%s", sm.internalName)); err != nil {
 			return err
 		}
 	}
@@ -1660,8 +1962,8 @@ func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {
 		if err != nil {
 			return 0, 0, fmt.Errorf("invalid GID for service user %q: %w", appName, err)
 		}
-		if uid != gid {
-			return 0, 0, fmt.Errorf("service user %q has mismatched UID/GID %d/%d", appName, uid, gid)
+		if err := validateExistingServiceAccount(account, uid, gid); err != nil {
+			return 0, 0, fmt.Errorf("service account %q conflict: %w", appName, err)
 		}
 	} else {
 		if _, ok := lookupErr.(user.UnknownUserError); !ok {
@@ -1684,6 +1986,15 @@ func EnsureSystemUser(appName string, dirs []string) (uid, gid int, err error) {
 		}
 		if err := chownServiceTree(dir, uid, gid); err != nil {
 			return 0, 0, err
+		}
+	}
+	if runtime.GOOS == "darwin" {
+		if _, err := user.Lookup("_" + appName); err == nil {
+			legacyServiceAccountWarning.Do(func() {
+				fmt.Fprintf(os.Stderr, "WARN: legacy service account _%s remains; application directories now belong to %s, remove the legacy account manually when it is no longer needed\n", appName, appName)
+			})
+		} else if _, unknown := err.(user.UnknownUserError); !unknown {
+			return 0, 0, fmt.Errorf("look up legacy service account %q: %w", "_"+appName, err)
 		}
 	}
 	if createdAccount && len(dirs) > 0 {
@@ -1723,7 +2034,7 @@ func createStartupSystemUser(appName string, dirs []string) (int, error) {
 			if err := exec.Command("groupadd", "--system", "--gid", strconv.Itoa(id), appName).Run(); err != nil {
 				return 0, fmt.Errorf("create service group %q: %w", appName, err)
 			}
-			cmd := exec.Command("useradd", "--system", "--uid", strconv.Itoa(id), "--gid", strconv.Itoa(id), "--home-dir", homeDir, "--shell", "/sbin/nologin", "--comment", appName+" service account", appName)
+			cmd := exec.Command("useradd", "--system", "--uid", strconv.Itoa(id), "--gid", strconv.Itoa(id), "--home-dir", homeDir, "--no-create-home", "--shell", "/sbin/nologin", "--comment", appName+" service account", appName)
 			if err := cmd.Run(); err != nil {
 				return 0, fmt.Errorf("create service user %q: %w", appName, err)
 			}

@@ -7,21 +7,23 @@ package scheduler
 import (
 	"context"
 	"database/sql"
+	"github.com/apimgr/vidveil/src/common/dbstore"
+	"path/filepath"
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/apimgr/vidveil/src/server/service/database"
 )
 
 // openTestDB opens an in-memory SQLite database and creates the tables
 // that the scheduler needs.
-func openTestDB(t *testing.T) *sql.DB {
+func openTestDB(t *testing.T) *database.AppDatabase {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := database.NewAppDatabase(database.DatabaseConfig{Driver: database.DriverSQLite, Path: filepath.Join(t.TempDir(), "scheduler.db")})
 	if err != nil {
 		t.Skip("sqlite driver unavailable:", err)
 	}
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS scheduler_tasks (
+	if _, err := schedulerTestExec(db, `CREATE TABLE IF NOT EXISTS scheduler_tasks (
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL,
 		schedule TEXT NOT NULL,
@@ -35,7 +37,7 @@ func openTestDB(t *testing.T) *sql.DB {
 	)`); err != nil {
 		t.Fatalf("create scheduler_tasks: %v", err)
 	}
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS scheduler_history (
+	if _, err := schedulerTestExec(db, `CREATE TABLE IF NOT EXISTS scheduler_history (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		task_id TEXT NOT NULL,
 		started_at INTEGER NOT NULL,
@@ -53,6 +55,36 @@ func openTestDB(t *testing.T) *sql.DB {
 		}
 	})
 	return db
+}
+
+func schedulerTestExec(db *database.AppDatabase, query string, args ...any) (sql.Result, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var result sql.Result
+	err := db.Write(ctx, func(tx *sql.Tx) error {
+		var err error
+		result, err = tx.ExecContext(ctx, query, args...)
+		return err
+	})
+	return result, err
+}
+
+type schedulerTestRow struct {
+	db    *database.AppDatabase
+	query string
+	args  []any
+}
+
+func (r schedulerTestRow) Scan(dest ...any) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return r.db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+		return readDB.QueryRowContext(readCtx, r.query, r.args...).Scan(dest...)
+	})
+}
+
+func schedulerTestQueryRow(db *database.AppDatabase, query string, args ...any) schedulerTestRow {
+	return schedulerTestRow{db: db, query: query, args: args}
 }
 
 // --- Start / Stop lifecycle ---
@@ -308,7 +340,7 @@ func TestRegisterBuiltinTasks_Idempotent(t *testing.T) {
 
 func TestRegisterTaskReturnsPersistenceFailure(t *testing.T) {
 	db := openTestDB(t)
-	if _, err := db.Exec(`CREATE TRIGGER reject_scheduled_task_insert
+	if _, err := schedulerTestExec(db, `CREATE TRIGGER reject_scheduled_task_insert
 		BEFORE INSERT ON scheduler_tasks
 		BEGIN SELECT RAISE(FAIL, 'registration blocked'); END`); err != nil {
 		t.Fatalf("create rejecting trigger: %v", err)
@@ -323,7 +355,7 @@ func TestRegisterTaskReturnsPersistenceFailure(t *testing.T) {
 }
 
 func TestRegisterBuiltinTasksReturnsMigrationFailure(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := database.NewAppDatabase(database.DatabaseConfig{Driver: database.DriverSQLite, Path: filepath.Join(t.TempDir(), "missing.db")})
 	if err != nil {
 		t.Fatalf("open sqlite database: %v", err)
 	}
@@ -381,7 +413,7 @@ func TestMigrateLegacyTaskIDs_WithDB_RenamesLegacyIDs(t *testing.T) {
 	s := NewSchedulerWithDB(db)
 
 	// Insert a legacy row into scheduler_tasks.
-	_, err := db.Exec(`INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
+	_, err := schedulerTestExec(db, `INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
 		"ssl.renewal", "SSL", "daily", 1)
 	if err != nil {
 		t.Fatalf("insert legacy row: %v", err)
@@ -393,13 +425,13 @@ func TestMigrateLegacyTaskIDs_WithDB_RenamesLegacyIDs(t *testing.T) {
 
 	// The old ID must be gone and the new ID must exist.
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduler_tasks WHERE id = ?`, "ssl.renewal").Scan(&count); err != nil {
+	if err := schedulerTestQueryRow(db, `SELECT COUNT(*) FROM scheduler_tasks WHERE id = ?`, "ssl.renewal").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
 		t.Error("legacy ID ssl.renewal still present after migration")
 	}
-	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduler_tasks WHERE id = ?`, "ssl_renewal").Scan(&count); err != nil {
+	if err := schedulerTestQueryRow(db, `SELECT COUNT(*) FROM scheduler_tasks WHERE id = ?`, "ssl_renewal").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
@@ -411,7 +443,7 @@ func TestMigrateLegacyTaskIDs_WithDB_Idempotent(t *testing.T) {
 	db := openTestDB(t)
 	s := NewSchedulerWithDB(db)
 
-	_, _ = db.Exec(`INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
+	_, _ = schedulerTestExec(db, `INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
 		"geoip.update", "GeoIP", "daily", 1)
 
 	if err := s.migrateLegacyTaskIDs(); err != nil {
@@ -423,7 +455,7 @@ func TestMigrateLegacyTaskIDs_WithDB_Idempotent(t *testing.T) {
 	}
 
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduler_tasks WHERE id = ?`, "geoip_update").Scan(&count); err != nil {
+	if err := schedulerTestQueryRow(db, `SELECT COUNT(*) FROM scheduler_tasks WHERE id = ?`, "geoip_update").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
@@ -472,7 +504,7 @@ func TestLoadTaskStateFromDB_KnownIDReturnsTask(t *testing.T) {
 	db := openTestDB(t)
 	s := NewSchedulerWithDB(db)
 
-	_, _ = db.Exec(`INSERT INTO scheduler_tasks (id, name, schedule, enabled, run_count, fail_count) VALUES (?, ?, ?, ?, ?, ?)`,
+	_, _ = schedulerTestExec(db, `INSERT INTO scheduler_tasks (id, name, schedule, enabled, run_count, fail_count) VALUES (?, ?, ?, ?, ?, ?)`,
 		"known", "Known", "hourly", 1, 5, 2)
 
 	task, err := s.loadTaskStateFromDB("known")
@@ -519,7 +551,7 @@ func TestSaveTaskStateToDB_PersistsTask(t *testing.T) {
 
 	var name string
 	var runCount int
-	if err := db.QueryRow(`SELECT name, run_count FROM scheduler_tasks WHERE id = ?`, "persist").Scan(&name, &runCount); err != nil {
+	if err := schedulerTestQueryRow(db, `SELECT name, run_count FROM scheduler_tasks WHERE id = ?`, "persist").Scan(&name, &runCount); err != nil {
 		t.Fatal(err)
 	}
 	if name != "Persist" {
@@ -544,7 +576,7 @@ func TestSaveHistoryToDB_PersistsEntry(t *testing.T) {
 	s := NewSchedulerWithDB(db)
 
 	// Need the task row to satisfy the foreign key.
-	_, _ = db.Exec(`INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
+	_, _ = schedulerTestExec(db, `INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
 		"htask", "HTask", "hourly", 1)
 
 	h := TaskHistory{
@@ -559,7 +591,7 @@ func TestSaveHistoryToDB_PersistsEntry(t *testing.T) {
 	}
 
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduler_history WHERE task_id = ?`, "htask").Scan(&count); err != nil {
+	if err := schedulerTestQueryRow(db, `SELECT COUNT(*) FROM scheduler_history WHERE task_id = ?`, "htask").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
@@ -577,12 +609,12 @@ func TestLoadHistoryFromDB_LoadsEntries(t *testing.T) {
 	db := openTestDB(t)
 	s := NewSchedulerWithDB(db)
 
-	_, _ = db.Exec(`INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
+	_, _ = schedulerTestExec(db, `INSERT INTO scheduler_tasks (id, name, schedule, enabled) VALUES (?, ?, ?, ?)`,
 		"lhtask", "LH", "hourly", 1)
 	now := time.Now()
-	_, _ = db.Exec(`INSERT INTO scheduler_history (task_id, started_at, finished_at, duration_ms, status) VALUES (?, ?, ?, ?, ?)`,
+	_, _ = schedulerTestExec(db, `INSERT INTO scheduler_history (task_id, started_at, finished_at, duration_ms, status) VALUES (?, ?, ?, ?, ?)`,
 		"lhtask", now.Add(-10*time.Second).Unix(), now.Unix(), 10000, "success")
-	_, _ = db.Exec(`INSERT INTO scheduler_history (task_id, started_at, finished_at, duration_ms, status) VALUES (?, ?, ?, ?, ?)`,
+	_, _ = schedulerTestExec(db, `INSERT INTO scheduler_history (task_id, started_at, finished_at, duration_ms, status) VALUES (?, ?, ?, ?, ?)`,
 		"lhtask", now.Add(-20*time.Second).Unix(), now.Add(-10*time.Second).Unix(), 10000, "failed")
 
 	if err := s.LoadHistoryFromDB(100); err != nil {
@@ -604,7 +636,7 @@ func TestRegisterTask_PersistsToDBAndLoadsState(t *testing.T) {
 	_ = s.RegisterTask("dbr1", "DB Task", "desc", "hourly", noop)
 
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM scheduler_tasks WHERE id = ?`, "dbr1").Scan(&count); err != nil {
+	if err := schedulerTestQueryRow(db, `SELECT COUNT(*) FROM scheduler_tasks WHERE id = ?`, "dbr1").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
@@ -617,7 +649,7 @@ func TestRegisterTask_MergesPersistedState(t *testing.T) {
 	s := NewSchedulerWithDB(db)
 
 	// Pre-populate DB with existing run state.
-	_, _ = db.Exec(`INSERT INTO scheduler_tasks (id, name, schedule, enabled, run_count, fail_count) VALUES (?, ?, ?, ?, ?, ?)`,
+	_, _ = schedulerTestExec(db, `INSERT INTO scheduler_tasks (id, name, schedule, enabled, run_count, fail_count) VALUES (?, ?, ?, ?, ?, ?)`,
 		"existing", "Existing", "hourly", 1, 10, 3)
 
 	_ = s.RegisterTask("existing", "Existing", "desc", "hourly", noop)

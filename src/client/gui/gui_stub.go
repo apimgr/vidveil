@@ -14,16 +14,21 @@ var errGUIUnsupported = errors.New("GUI not available: binary was not built with
 // Config holds the configuration passed to the GUI launcher.
 // Defined here (not in gui.go) so both stub and real builds share the same type.
 type Config struct {
-	ServerURL  string
-	Token      string
-	APIVersion string
-	Timeout    int
-	Version    string
-	BinaryName string
-	Language   string
-	FirstRun   bool
-	SaveLogin  func(serverURL, token string) error
-	SaveServer func(serverURL, token string) error
+	ServerURL        string
+	Token            string
+	APIVersion       string
+	Timeout          int
+	Version          string
+	BinaryName       string
+	Language         string
+	FirstRun         bool
+	SaveLogin        func(serverURL, token string) error
+	SaveServer       func(serverURL, token string) error
+	SaveSetup        func(serverURL, token string, save, setAsDefault bool) error
+	AutostartEnabled func() bool
+	SetAutostart     func(bool) error
+	CheckUpdate      func() (string, error)
+	ApplyUpdate      func() error
 }
 
 // IsAvailable returns false in standard (non-GUI) builds.

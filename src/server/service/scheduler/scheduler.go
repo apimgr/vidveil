@@ -15,6 +15,8 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	"github.com/apimgr/vidveil/src/common/dbstore"
+	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/metric"
 )
@@ -107,7 +109,7 @@ type Scheduler struct {
 	stopping   bool
 	maxHist    int
 	// Optional database for persistence per AI.md PART 18
-	db              *sql.DB
+	db              *database.AppDatabase
 	logger          *logging.AppLogger
 	failureNotifier TaskFailureNotifier
 	// Catch-up window per AI.md PART 18: run missed tasks if within this duration
@@ -203,7 +205,7 @@ func NewScheduler() *Scheduler {
 
 // NewSchedulerWithDB creates a new scheduler with database persistence per AI.md PART 18
 // Task state survives restarts when db is provided
-func NewSchedulerWithDB(db *sql.DB) *Scheduler {
+func NewSchedulerWithDB(db *database.AppDatabase) *Scheduler {
 	return &Scheduler{
 		tasks:   make(map[string]*ScheduledTask),
 		history: make([]TaskHistory, 0),
@@ -215,7 +217,7 @@ func NewSchedulerWithDB(db *sql.DB) *Scheduler {
 
 // SetDB sets the database connection for persistence
 // Can be called after NewScheduler() to enable persistence
-func (s *Scheduler) SetDB(db *sql.DB) {
+func (s *Scheduler) SetDB(db *database.AppDatabase) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db = db
@@ -284,7 +286,13 @@ func (s *Scheduler) SetRetryPolicy(taskID string, enabled bool, delay string) er
 func (s *Scheduler) execCtx(query string, args ...interface{}) (sql.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return s.db.ExecContext(ctx, query, args...)
+	var result sql.Result
+	err := s.db.Write(ctx, func(tx *sql.Tx) error {
+		var err error
+		result, err = tx.ExecContext(ctx, query, args...)
+		return err
+	})
+	return result, err
 }
 
 // loadTaskStateFromDB loads persisted task state from database
@@ -297,20 +305,20 @@ func (s *Scheduler) loadTaskStateFromDB(taskID string) (*ScheduledTask, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	row := s.db.QueryRowContext(ctx, `
-		SELECT id, name, schedule, enabled, last_run, next_run,
-		       last_status, last_error, run_count, fail_count
-		FROM scheduler_tasks WHERE id = ?`, taskID)
-
 	var task ScheduledTask
 	var lastRun, nextRun sql.NullInt64
 	var lastResult, lastError sql.NullString
 
-	err := row.Scan(
-		&task.ID, &task.Name, &task.Schedule, &task.Enabled,
-		&lastRun, &nextRun, &lastResult, &lastError,
-		&task.RunCount, &task.FailCount,
-	)
+	err := s.db.Read(ctx, func(readCtx context.Context, db dbstore.Reader) error {
+		return db.QueryRowContext(readCtx, `
+			SELECT id, name, schedule, enabled, last_run, next_run,
+			       last_status, last_error, run_count, fail_count
+			FROM scheduler_tasks WHERE id = ?`, taskID).Scan(
+			&task.ID, &task.Name, &task.Schedule, &task.Enabled,
+			&lastRun, &nextRun, &lastResult, &lastError,
+			&task.RunCount, &task.FailCount,
+		)
+	})
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -395,38 +403,41 @@ func (s *Scheduler) LoadHistoryFromDB(limit int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT task_id, started_at, finished_at, duration_ms, status, error
-		FROM scheduler_history
-		ORDER BY started_at DESC
-		LIMIT ?`, limit)
+	var history []TaskHistory
+	err := s.db.Read(ctx, func(readCtx context.Context, db dbstore.Reader) error {
+		rows, err := db.QueryContext(readCtx, `
+			SELECT task_id, started_at, finished_at, duration_ms, status, error
+			FROM scheduler_history
+			ORDER BY started_at DESC
+			LIMIT ?`, limit)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var h TaskHistory
+			var durationMs int64
+			var startedAt, finishedAt sql.NullInt64
+			var errStr sql.NullString
+			if err := rows.Scan(&h.TaskID, &startedAt, &finishedAt, &durationMs, &h.Result, &errStr); err != nil {
+				return fmt.Errorf("failed to scan history row: %w", err)
+			}
+			if startedAt.Valid {
+				h.StartTime = time.Unix(startedAt.Int64, 0)
+			}
+			if finishedAt.Valid {
+				h.EndTime = time.Unix(finishedAt.Int64, 0)
+			}
+			h.Duration = time.Duration(durationMs) * time.Millisecond
+			if errStr.Valid {
+				h.Error = errStr.String
+			}
+			history = append(history, h)
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		return fmt.Errorf("failed to load history: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var history []TaskHistory
-	for rows.Next() {
-		var h TaskHistory
-		var durationMs int64
-		var startedAt, finishedAt sql.NullInt64
-		var errStr sql.NullString
-
-		if err := rows.Scan(&h.TaskID, &startedAt, &finishedAt, &durationMs, &h.Result, &errStr); err != nil {
-			return fmt.Errorf("failed to scan history row: %w", err)
-		}
-		if startedAt.Valid {
-			h.StartTime = time.Unix(startedAt.Int64, 0)
-		}
-		if finishedAt.Valid {
-			h.EndTime = time.Unix(finishedAt.Int64, 0)
-		}
-
-		h.Duration = time.Duration(durationMs) * time.Millisecond
-		if errStr.Valid {
-			h.Error = errStr.String
-		}
-		history = append(history, h)
 	}
 
 	// Reverse to get chronological order (oldest first)
@@ -810,7 +821,7 @@ func (s *Scheduler) Stop() {
 
 // run is the main scheduler loop
 func (s *Scheduler) run() {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -829,7 +840,7 @@ func (s *Scheduler) checkAndRunTasks() {
 	s.mu.RLock()
 	due := make([]*ScheduledTask, 0, len(s.tasks))
 	for _, task := range s.tasks {
-		if task.Enabled && now.After(task.NextRun) {
+		if task.Enabled && !now.Before(task.NextRun) {
 			due = append(due, task)
 		}
 	}
@@ -1053,6 +1064,29 @@ func (s *Scheduler) RunTaskNow(taskID string) error {
 	}
 
 	go s.runTask(task)
+	return nil
+}
+
+// RunTaskNowAndWait runs a registered task synchronously and returns after its
+// normal execution, persistence, audit logging, and failure notification path.
+func (s *Scheduler) RunTaskNowAndWait(taskID string) error {
+	s.mu.RLock()
+	task, ok := s.tasks[taskID]
+	s.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	s.runTask(task)
+	s.mu.RLock()
+	result := task.LastResult
+	lastErr := task.LastError
+	s.mu.RUnlock()
+	if result == "failed" {
+		return fmt.Errorf("task %s failed: %s", taskID, lastErr)
+	}
+	if result == "interrupted" {
+		return fmt.Errorf("task %s was interrupted", taskID)
+	}
 	return nil
 }
 

@@ -4,10 +4,10 @@ Hello,
 
 Your SSL certificate for {domain} is expiring soon.
 
-Expiry Date: {expiry_date}
-Days Remaining: {days_remaining}
+Expires in: {expires_in} days
+Expiry date: {expiry_date}
 
-Please renew your certificate to avoid service interruption.
+Please renew your certificate.
 
 --
 {app_name}

@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -31,11 +35,13 @@ type TorControl interface {
 	GetUptime() string
 	GetOnionAddress() string
 	GetInfo() map[string]interface{}
+	GetControlStatus() map[string]interface{}
 	RegenerateAddress() error
-	GenerateVanityAddress(prefix string) error
+	GenerateVanityAddress(prefix string, workers ...int) error
 	GetVanityStatus() *tor.VanityStatus
+	GetVanityCandidates() []string
 	CancelVanityGeneration()
-	ApplyVanityAddress() error
+	ApplyVanityAddress(address ...string) error
 	ImportKeys(secretKey []byte) error
 	Restart(ctx context.Context) error
 	TestConnection() *tor.TestConnectionResult
@@ -91,6 +97,7 @@ func (s *Server) registerTorControlRoutes(r chi.Router) {
 		r.Post("/restart", requireLoopback(s.handleTorControlRestart))
 		r.Post("/regenerate", requireLoopback(s.handleTorControlRegenerate))
 		r.Post("/vanity/start", requireLoopback(s.handleTorControlVanityStart))
+		r.Post("/vanity/stop", requireLoopback(s.handleTorControlVanityStop))
 		r.Post("/vanity/apply", requireLoopback(s.handleTorControlVanityApply))
 		r.Post("/import-keys", requireLoopback(s.handleTorControlImportKeys))
 	})
@@ -111,16 +118,7 @@ func (s *Server) handleTorControlStatus(w http.ResponseWriter, r *http.Request) 
 		handler.SendError(w, "NOT_FOUND", "tor control not available")
 		return
 	}
-	handler.SendOK(w, map[string]interface{}{
-		"enabled":       s.torControl.IsEnabled(),
-		"running":       s.torControl.IsRunning(),
-		"starting":      s.torControl.IsStarting(),
-		"status":        string(s.torControl.GetStatus()),
-		"status_string": s.torControl.GetStatusString(),
-		"uptime":        s.torControl.GetUptime(),
-		"onion_address": s.torControl.GetOnionAddress(),
-		"info":          s.torControl.GetInfo(),
-	})
+	handler.SendOK(w, s.torControl.GetControlStatus())
 }
 
 func (s *Server) handleTorControlValidate(w http.ResponseWriter, r *http.Request) {
@@ -149,6 +147,13 @@ func (s *Server) handleTorControlRegenerate(w http.ResponseWriter, r *http.Reque
 		handler.SendError(w, "NOT_FOUND", "tor control not available")
 		return
 	}
+	var req struct {
+		Confirm bool `json:"confirm"`
+	}
+	if err := decodeTorControlRequest(w, r, &req); err != nil || !req.Confirm {
+		handler.SendError(w, "VALIDATION_FAILED", "confirm=true is required")
+		return
+	}
 	if err := s.torControl.RegenerateAddress(); err != nil {
 		s.sendTorControlError(w, "regenerate", err)
 		return
@@ -159,7 +164,8 @@ func (s *Server) handleTorControlRegenerate(w http.ResponseWriter, r *http.Reque
 }
 
 type torVanityStartRequest struct {
-	Prefix string `json:"prefix"`
+	Prefix  string `json:"prefix"`
+	Workers int    `json:"workers,omitempty"`
 }
 
 func (s *Server) handleTorControlVanityStart(w http.ResponseWriter, r *http.Request) {
@@ -168,15 +174,35 @@ func (s *Server) handleTorControlVanityStart(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var req torVanityStartRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Prefix == "" {
-		handler.SendError(w, "VALIDATION_FAILED", "prefix is required")
+	if err := decodeTorControlRequest(w, r, &req); err != nil || req.Prefix == "" || len(req.Prefix) > 6 {
+		handler.SendError(w, "VALIDATION_FAILED", "prefix must contain 1 to 6 base32 characters")
 		return
 	}
-	if err := s.torControl.GenerateVanityAddress(req.Prefix); err != nil {
+	for _, char := range strings.ToLower(req.Prefix) {
+		if !strings.ContainsRune("abcdefghijklmnopqrstuvwxyz234567", char) {
+			handler.SendError(w, "VALIDATION_FAILED", "prefix must contain 1 to 6 base32 characters")
+			return
+		}
+	}
+	if req.Workers < 0 || req.Workers > runtime.NumCPU() {
+		handler.SendError(w, "VALIDATION_FAILED", "workers must be between 1 and the logical CPU count")
+		return
+	}
+	if err := s.torControl.GenerateVanityAddress(req.Prefix, req.Workers); err != nil {
+		if strings.Contains(err.Error(), "already running") {
+			handler.SendError(w, "CONFLICT", err.Error())
+			return
+		}
 		s.sendTorControlError(w, "vanity_start", err)
 		return
 	}
-	handler.SendOK(w, map[string]interface{}{"message": "vanity generation started"})
+	status := s.torControl.GetVanityStatus()
+	workers := 1
+	if status != nil && status.Workers > 0 {
+		workers = status.Workers
+	}
+	w.WriteHeader(http.StatusAccepted)
+	handler.SendOK(w, map[string]interface{}{"state": "running", "prefix": strings.ToLower(req.Prefix), "workers": workers})
 }
 
 func (s *Server) handleTorControlVanityApply(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +210,23 @@ func (s *Server) handleTorControlVanityApply(w http.ResponseWriter, r *http.Requ
 		handler.SendError(w, "NOT_FOUND", "tor control not available")
 		return
 	}
-	if err := s.torControl.ApplyVanityAddress(); err != nil {
+	var req struct {
+		Address string `json:"address"`
+		Confirm bool   `json:"confirm"`
+	}
+	if err := decodeTorControlRequest(w, r, &req); err != nil || !req.Confirm {
+		handler.SendError(w, "VALIDATION_FAILED", "confirm=true is required")
+		return
+	}
+	if err := s.torControl.ApplyVanityAddress(req.Address); err != nil {
+		if strings.Contains(err.Error(), "ambiguous") {
+			handler.SendError(w, "CONFLICT", err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "no matching vanity candidate") {
+			handler.SendError(w, "NOT_FOUND", err.Error())
+			return
+		}
 		s.sendTorControlError(w, "vanity_apply", err)
 		return
 	}
@@ -193,8 +235,27 @@ func (s *Server) handleTorControlVanityApply(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+func (s *Server) handleTorControlVanityStop(w http.ResponseWriter, r *http.Request) {
+	if s.torControl == nil {
+		handler.SendError(w, "NOT_FOUND", "tor control not available")
+		return
+	}
+	status := s.torControl.GetVanityStatus()
+	stopped := status != nil && status.Active
+	s.torControl.CancelVanityGeneration()
+	candidates := s.torControl.GetVanityCandidates()
+	handler.SendOK(w, map[string]interface{}{"stopped": stopped, "candidates": candidates})
+}
+
 type torImportKeysRequest struct {
-	SecretKey []byte `json:"secret_key"`
+	Path    string `json:"path"`
+	Confirm bool   `json:"confirm"`
+}
+
+func decodeTorControlRequest(w http.ResponseWriter, r *http.Request, target interface{}) error {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16*1024))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(target)
 }
 
 func (s *Server) handleTorControlImportKeys(w http.ResponseWriter, r *http.Request) {
@@ -203,11 +264,27 @@ func (s *Server) handleTorControlImportKeys(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var req torImportKeysRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.SecretKey) == 0 {
-		handler.SendError(w, "VALIDATION_FAILED", "secret_key is required")
+	if err := decodeTorControlRequest(w, r, &req); err != nil {
+		handler.SendError(w, "VALIDATION_FAILED", "absolute key directory path and confirm=true are required")
 		return
 	}
-	if err := s.torControl.ImportKeys(req.SecretKey); err != nil {
+	req.Path = strings.TrimSpace(req.Path)
+	if !req.Confirm || !filepath.IsAbs(req.Path) {
+		handler.SendError(w, "VALIDATION_FAILED", "absolute key directory path and confirm=true are required")
+		return
+	}
+	keyDir := filepath.Clean(req.Path)
+	info, err := os.Stat(keyDir)
+	if err != nil || !info.IsDir() {
+		handler.SendError(w, "VALIDATION_FAILED", "key directory is unavailable")
+		return
+	}
+	secretKey, err := os.ReadFile(filepath.Join(keyDir, "hs_ed25519_secret_key"))
+	if err != nil || len(secretKey) < 64 {
+		handler.SendError(w, "VALIDATION_FAILED", "key directory has no valid secret key")
+		return
+	}
+	if err := s.torControl.ImportKeys(secretKey); err != nil {
 		s.sendTorControlError(w, "import_keys", err)
 		return
 	}

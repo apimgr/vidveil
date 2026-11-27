@@ -2,6 +2,7 @@
 package config
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
@@ -168,22 +169,23 @@ func readLegacySecretsFromBackup(configPath string) map[string]string {
 	return nil
 }
 
-func ImportLegacyAppSecrets(db *sql.DB, configPath string, cfg *AppConfig) error {
+type secretImportStore interface {
+	Write(context.Context, func(*sql.Tx) error) error
+}
+
+func ImportLegacyAppSecrets(db secretImportStore, configPath string, cfg *AppConfig) error {
 	if db == nil || cfg == nil || len(cfg.LegacyAppSecrets) == 0 {
 		return nil
 	}
-	tx, err := db.Begin()
-	if err != nil {
-		return fmt.Errorf("begin legacy secret import: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	for key, value := range cfg.LegacyAppSecrets {
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO app_secrets (key, value, created_at) VALUES (?, ?, ?)`, key, base64.StdEncoding.EncodeToString([]byte(value)), time.Now()); err != nil {
-			return fmt.Errorf("import legacy app secret %s: %w", key, err)
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		for key, value := range cfg.LegacyAppSecrets {
+			if _, err := tx.Exec(`INSERT OR IGNORE INTO app_secrets (key, value, created_at) VALUES (?, ?, ?)`, key, base64.StdEncoding.EncodeToString([]byte(value)), time.Now()); err != nil {
+				return fmt.Errorf("import legacy app secret %s: %w", key, err)
+			}
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit legacy secret import: %w", err)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("import legacy app secrets: %w", err)
 	}
 	if err := removeLegacySecretsFromFiles(configPath); err != nil {
 		log.Printf("config: imported legacy app secrets but could not remove old config values: %v", err)

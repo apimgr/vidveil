@@ -1,0 +1,11 @@
+Subject: SSL Certificate Renewed - {app_name}
+---
+Hello,
+
+Your SSL certificate for {domain} has been renewed.
+
+Valid until: {valid_until}
+
+--
+{app_name}
+{app_url}

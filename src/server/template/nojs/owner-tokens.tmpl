@@ -55,6 +55,12 @@
                                 <label>{{ t "owner_tokens.name" }} <input class="form-input" name="name" required minlength="1" maxlength="64" aria-describedby="owner-token-name-help"></label>
                                 <small id="owner-token-name-help">{{ t "owner_tokens.create_name_help" }}</small>
                             </div>
+                            <label>{{ t "owner_tokens.scope" }}
+                                <select class="form-input" name="scope">
+                                    <option value="read-write" selected>{{ t "owner_tokens.scope_read_write" }}</option>
+                                    <option value="read">{{ t "owner_tokens.scope_read" }}</option>
+                                </select>
+                            </label>
                             <label>{{ t "owner_tokens.expiry" }}
                                 <select class="form-input" name="expires_preset">
                                     <option value="never">{{ t "owner_tokens.never" }}</option>
@@ -85,6 +91,20 @@
                         </form>
                     </details>
                 </section>
+                <section class="section-card" aria-labelledby="revoke-owner-heading">
+                    <h2 id="revoke-owner-heading">{{ t "owner_tokens.revoke_primary_title" }}</h2>
+                    <p>{{tf "owner_tokens.revoke_primary_summary" "tokens" .LinkedTokenCount "resources" .ResourceCount}}</p>
+                    <details>
+                        <summary class="btn btn-danger">{{ t "owner_tokens.revoke_primary" }}</summary>
+                        <form method="post" action="{{$.PathPrefix}}/server/preferences/token/revoke">
+                            {{if .CSRFToken}}<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">{{end}}
+                            <p>{{ t "owner_tokens.revoke_primary_warning" }}</p>
+                            <label for="revoke-primary-confirm">{{tf "owner_tokens.revoke_primary_confirm" "last4" .PrimaryToken.Suffix}}</label>
+                            <input class="form-input" id="revoke-primary-confirm" name="confirm" required minlength="4" maxlength="4" pattern="[A-Za-z0-9]{4}" autocomplete="off" autocapitalize="none" spellcheck="false">
+                            <button type="submit" class="btn btn-danger">{{ t "owner_tokens.revoke_primary_submit" }}</button>
+                        </form>
+                    </details>
+                </section>
             <section class="section-card" aria-labelledby="linked-token-heading">
                 <h2 id="linked-token-heading">{{ t "owner_tokens.linked_tokens" }} ({{len .LinkedTokens}})</h2>
                 {{if .LinkedTokens}}
@@ -99,6 +119,7 @@
                         {{end}}
                         <dl>
                             <dt>{{ t "owner_tokens.created_at" }}</dt><dd><time>{{.Created}}</time></dd>
+                            <dt>{{ t "owner_tokens.scope" }}</dt><dd>{{if eq .Scope "read"}}{{ t "owner_tokens.scope_read" }}{{else}}{{ t "owner_tokens.scope_read_write" }}{{end}}</dd>
                             <dt>{{ t "owner_tokens.last_used" }}</dt><dd>{{if .LastUsed}}<time>{{.LastUsed}}</time>{{else}}{{ t "owner_tokens.never_used" }}{{end}}</dd>
                             <dt>{{ t "owner_tokens.expires" }}</dt><dd>{{if eq .Expires "never"}}{{ t "owner_tokens.never" }}{{else}}{{.Expires}}{{end}}</dd>
                         </dl>

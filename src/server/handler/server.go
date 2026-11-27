@@ -4,7 +4,6 @@ package handler
 
 import (
 	"bytes"
-	"database/sql"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -28,6 +27,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/notify"
+	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/pgp"
 	"github.com/apimgr/vidveil/src/server/service/secreport"
@@ -40,7 +40,7 @@ type ServerHandler struct {
 	appConfig  *config.AppConfig
 	torSvc     TorStatusChecker
 	i2pSvc     I2PStatusChecker
-	db         *sql.DB
+	db         *database.AppDatabase
 	secretsMgr *secret.Manager
 	configDir  string
 	logger     *logging.AppLogger
@@ -92,9 +92,9 @@ func (h *ServerHandler) SetI2PService(service I2PStatusChecker) {
 	h.i2pSvc = service
 }
 
-// SetDB wires the database connection used by the coordinated-disclosure
+// SetDatabase wires the shared database store used by the coordinated-disclosure
 // pipeline (AI.md PART 11 "Security Reports") to store/read security_reports rows.
-func (h *ServerHandler) SetDB(db *sql.DB) {
+func (h *ServerHandler) SetDatabase(db *database.AppDatabase) {
 	h.db = db
 }
 

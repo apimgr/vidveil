@@ -14,7 +14,7 @@ func TestEnsureSchemaPreservesLegacyTokensAsOwners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := legacy.GetDB().Exec(`CREATE TABLE api_tokens (
+	if _, err := legacy.db.Exec(`CREATE TABLE api_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token_hash TEXT NOT NULL UNIQUE,
 		token_prefix TEXT NOT NULL,
@@ -29,7 +29,7 @@ func TestEnsureSchemaPreservesLegacyTokensAsOwners(t *testing.T) {
 		_ = legacy.Close()
 		t.Fatal(err)
 	}
-	if _, err := legacy.GetDB().Exec(`INSERT INTO api_tokens (token_hash, token_prefix, resource_type, resource_id) VALUES ('hash', 'tok_legacy', 'favorite', 'old-resource')`); err != nil {
+	if _, err := legacy.db.Exec(`INSERT INTO api_tokens (token_hash, token_prefix, resource_type, resource_id) VALUES ('hash', 'tok_legacy', 'favorite', 'old-resource')`); err != nil {
 		_ = legacy.Close()
 		t.Fatal(err)
 	}
@@ -45,29 +45,32 @@ func TestEnsureSchemaPreservesLegacyTokensAsOwners(t *testing.T) {
 	if err := migrated.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	var id, ownerID, kind, name, encrypted string
-	if err := migrated.GetDB().QueryRow(`SELECT id, owner_id, kind, COALESCE(name, ''), token_enc FROM api_tokens WHERE token_prefix = 'tok_legacy'`).Scan(&id, &ownerID, &kind, &name, &encrypted); err != nil {
+	var id, publicID, ownerID, kind, name, encrypted string
+	if err := migrated.db.QueryRow(`SELECT CAST(id AS TEXT), public_id, owner_id, kind, COALESCE(name, ''), token_enc FROM api_tokens WHERE token_prefix = 'tok_legacy'`).Scan(&id, &publicID, &ownerID, &kind, &name, &encrypted); err != nil {
 		t.Fatal(err)
 	}
-	parsedID, err := uuid.Parse(id)
+	parsedID, err := uuid.Parse(publicID)
 	if err != nil || parsedID.Version() != 7 {
-		t.Fatalf("migrated token ID = %q, want UUIDv7", id)
+		t.Fatalf("migrated token public_id = %q, want UUIDv7", publicID)
+	}
+	if id != "1" {
+		t.Fatalf("legacy integer token ID = %q, want preserved value 1", id)
 	}
 	if ownerID == "" || kind != "linked" || name != "" || encrypted != "" {
 		t.Fatalf("migrated token = owner %q, kind %q, name %q, encrypted %q", ownerID, kind, name, encrypted)
 	}
 	var owners int
-	if err := migrated.GetDB().QueryRow(`SELECT COUNT(*) FROM owners WHERE id = ?`, ownerID).Scan(&owners); err != nil {
+	if err := migrated.db.QueryRow(`SELECT COUNT(*) FROM owners WHERE id = ?`, ownerID).Scan(&owners); err != nil {
 		t.Fatal(err)
 	}
 	if owners != 1 {
 		t.Fatalf("legacy owner count = %d, want 1", owners)
 	}
-	columns, idType, err := apiTokenColumns(t.Context(), migrated.GetDB())
+	columns, idType, err := apiTokenColumns(t.Context(), migrated.db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if idType != "TEXT" || !columns["token_last4"] || columns["token_suffix"] || columns["resource_type"] || columns["resource_id"] {
+	if idType != "INTEGER" || !columns["public_id"] || !columns["token_last4"] || !columns["resource_type"] || !columns["resource_id"] {
 		t.Fatalf("migrated API-token schema: id type %q, columns %#v", idType, columns)
 	}
 }
@@ -78,7 +81,7 @@ func TestEnsureSchemaPreservesLegacyFavoritesAsOwnedResources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := legacy.GetDB().Exec(`CREATE TABLE favorites (
+	if _, err := legacy.db.Exec(`CREATE TABLE favorites (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		visitor_id TEXT NOT NULL,
 		url TEXT NOT NULL,
@@ -91,7 +94,7 @@ func TestEnsureSchemaPreservesLegacyFavoritesAsOwnedResources(t *testing.T) {
 		_ = legacy.Close()
 		t.Fatal(err)
 	}
-	if _, err := legacy.GetDB().Exec(`INSERT INTO favorites (visitor_id, url, title) VALUES ('old-visitor', 'https://example.test/video', 'Saved video')`); err != nil {
+	if _, err := legacy.db.Exec(`INSERT INTO favorites (visitor_id, url, title) VALUES ('old-visitor', 'https://example.test/video', 'Saved video')`); err != nil {
 		_ = legacy.Close()
 		t.Fatal(err)
 	}
@@ -108,14 +111,14 @@ func TestEnsureSchemaPreservesLegacyFavoritesAsOwnedResources(t *testing.T) {
 		t.Fatal(err)
 	}
 	var ownerID, visitorID, url, title string
-	if err := migrated.GetDB().QueryRow(`SELECT owner_id, visitor_id, url, title FROM favorites WHERE url = 'https://example.test/video'`).Scan(&ownerID, &visitorID, &url, &title); err != nil {
+	if err := migrated.db.QueryRow(`SELECT owner_id, visitor_id, url, title FROM favorites WHERE url = 'https://example.test/video'`).Scan(&ownerID, &visitorID, &url, &title); err != nil {
 		t.Fatal(err)
 	}
-	if ownerID != "legacy-favorite-old-visitor" || visitorID != ownerID || url != "https://example.test/video" || title != "Saved video" {
+	if ownerID != "system" || visitorID != "old-visitor" || url != "https://example.test/video" || title != "Saved video" {
 		t.Fatalf("migrated favorite = owner %q, visitor %q, url %q, title %q", ownerID, visitorID, url, title)
 	}
 	var owners int
-	if err := migrated.GetDB().QueryRow(`SELECT COUNT(*) FROM owners WHERE id = ?`, ownerID).Scan(&owners); err != nil {
+	if err := migrated.db.QueryRow(`SELECT COUNT(*) FROM owners WHERE id = ?`, ownerID).Scan(&owners); err != nil {
 		t.Fatal(err)
 	}
 	if owners != 1 {
@@ -123,21 +126,21 @@ func TestEnsureSchemaPreservesLegacyFavoritesAsOwnedResources(t *testing.T) {
 	}
 }
 
-func TestEnsureSchemaDeduplicatesFavoritesPerOwner(t *testing.T) {
+func TestEnsureSchemaPreservesFavoritesWithSameOwnerAndURL(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "server.db")
 	schema, err := NewSchemaManager(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := schema.GetDB().Exec(`CREATE TABLE owners (id TEXT PRIMARY KEY)`); err != nil {
+	if _, err := schema.db.Exec(`CREATE TABLE owners (id TEXT PRIMARY KEY)`); err != nil {
 		_ = schema.Close()
 		t.Fatal(err)
 	}
-	if _, err := schema.GetDB().Exec(`INSERT INTO owners (id) VALUES ('owner-a')`); err != nil {
+	if _, err := schema.db.Exec(`INSERT INTO owners (id) VALUES ('owner-a')`); err != nil {
 		_ = schema.Close()
 		t.Fatal(err)
 	}
-	if _, err := schema.GetDB().Exec(`CREATE TABLE favorites (
+	if _, err := schema.db.Exec(`CREATE TABLE favorites (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		owner_id TEXT NOT NULL,
 		visitor_id TEXT NOT NULL,
@@ -151,7 +154,7 @@ func TestEnsureSchemaDeduplicatesFavoritesPerOwner(t *testing.T) {
 		_ = schema.Close()
 		t.Fatal(err)
 	}
-	if _, err := schema.GetDB().Exec(`INSERT INTO favorites (owner_id, visitor_id, url, title) VALUES
+	if _, err := schema.db.Exec(`INSERT INTO favorites (owner_id, visitor_id, url, title) VALUES
 		('owner-a', 'legacy-visitor', 'https://example.test/video', 'First'),
 		('owner-a', 'owner-a', 'https://example.test/video', 'Duplicate')`); err != nil {
 		_ = schema.Close()
@@ -170,17 +173,17 @@ func TestEnsureSchemaDeduplicatesFavoritesPerOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err := migrated.GetDB().QueryRow(`SELECT COUNT(*) FROM favorites WHERE owner_id = 'owner-a' AND url = 'https://example.test/video'`).Scan(&count); err != nil {
+	if err := migrated.db.QueryRow(`SELECT COUNT(*) FROM favorites WHERE owner_id = 'owner-a' AND url = 'https://example.test/video'`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 1 {
-		t.Fatalf("favorite count = %d, want one per owner and URL", count)
+	if count != 2 {
+		t.Fatalf("favorite count = %d, want both legacy rows preserved", count)
 	}
-	var visitorID string
-	if err := migrated.GetDB().QueryRow(`SELECT visitor_id FROM favorites WHERE owner_id = 'owner-a' AND url = 'https://example.test/video'`).Scan(&visitorID); err != nil {
+	var legacyVisitorCount int
+	if err := migrated.db.QueryRow(`SELECT COUNT(*) FROM favorites WHERE owner_id = 'owner-a' AND url = 'https://example.test/video' AND visitor_id IN ('legacy-visitor', 'owner-a')`).Scan(&legacyVisitorCount); err != nil {
 		t.Fatal(err)
 	}
-	if visitorID != "owner-a" {
-		t.Fatalf("canonical favorite visitor ID = %q, want owner-a", visitorID)
+	if legacyVisitorCount != 2 {
+		t.Fatalf("preserved legacy visitor identifiers = %d, want 2", legacyVisitorCount)
 	}
 }

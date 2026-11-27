@@ -285,8 +285,7 @@ func TestResolveFQDNHeaderBeatsDomainEnv(t *testing.T) {
 	}
 }
 
-// When no proxy headers and no DOMAIN env var are set the result must be
-// non-empty (hostname, public IP, or localhost).
+// A valid request Host is preferred when no proxy headers or DOMAIN are set.
 func TestResolveFQDNFallbackNonEmpty(t *testing.T) {
 	t.Setenv("DOMAIN", "")
 
@@ -294,8 +293,8 @@ func TestResolveFQDNFallbackNonEmpty(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 
 	_, fqdn, _ := r.GetURLVars(req)
-	if fqdn == "" {
-		t.Error("fqdn is empty string; expected at least 'localhost'")
+	if fqdn != "example.com" {
+		t.Errorf("fqdn = %q, want validated request Host example.com", fqdn)
 	}
 }
 

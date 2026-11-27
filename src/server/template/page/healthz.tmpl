@@ -77,6 +77,7 @@
                     <dt>{{ t "healthz.requests_total_label" }}</dt><dd>{{.Stats.RequestsTotal}}</dd>
                     <dt>{{ t "healthz.requests_24h_label" }}</dt><dd>{{.Stats.Requests24h}}</dd>
                     <dt>{{ t "healthz.active_connections_label" }}</dt><dd>{{.Stats.ActiveConnections}}</dd>
+                    {{range .Stats.Registered}}<dt>{{.Label}}</dt><dd>{{.Value}}</dd>{{end}}
                 </dl>
             </section>
             <section class="section-card" aria-labelledby="health-checked-title">

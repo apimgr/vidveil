@@ -1,5 +1,5 @@
 {{define "public/footer"}}
-{{/* AI.md PART 16: Footer contains About, Privacy, Help, GitHub, version */}}
+{{/* AI.md PART 16: Footer contains the standard pages, API docs, language link, project attribution and version. */}}
 <footer class="footer" role="contentinfo">
     {{/* Onion address - shown only if Tor is enabled, running, and published (AI.md PART 16) */}}
     {{ if and .TorEnabled .TorRunning .OnionAddress }}
@@ -23,7 +23,11 @@
         <span>&#8226;</span>
         <a href="{{ path "/server/privacy" }}">{{ t "nav.privacy" }}</a>
         <span>&#8226;</span>
+        <a href="{{ path "/server/terms" }}">{{ t "terms.title" }}</a>
+        <span>&#8226;</span>
         <a href="{{ path "/server/help" }}">{{ t "nav.help" }}</a>
+        <span>&#8226;</span>
+        <a href="{{ path "/server/docs/swagger" }}">{{ t "help.api_access" }}</a>
         <span>&#8226;</span>
         <a href="{{ path "/server/preferences" }}">{{ t "prefs.title" }}</a>
         <span>&#8226;</span>

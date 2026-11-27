@@ -219,10 +219,10 @@ func TestSaveSetupWizardConfig_NoSave_ReturnsNil(t *testing.T) {
 	}
 }
 
-func TestSaveSetupWizardConfig_EmptyURLNoSave_ReturnsNil(t *testing.T) {
+func TestSaveSetupWizardConfig_EmptyURLNoSave_ReturnsValidationError(t *testing.T) {
 	err := SaveSetupWizardConfig("", "", false)
-	if err != nil {
-		t.Errorf("SaveSetupWizardConfig empty no save: expected nil, got %v", err)
+	if err == nil {
+		t.Error("SaveSetupWizardConfig empty no save: expected URL validation error")
 	}
 }
 

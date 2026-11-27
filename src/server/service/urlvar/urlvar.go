@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/paths"
 )
 
 // URLVarsConfig holds URL detection configuration per AI.md
@@ -242,7 +243,7 @@ func (r *URLResolver) GetURLVars(req *http.Request) (proto, fqdn, port string) {
 	port = r.resolvePort(req, proto)
 
 	// Record observation for learning
-	if r.config.Learning && fqdn != "localhost" {
+	if r.config.Learning && fqdn != "" {
 		r.recordObservation(fqdn)
 	}
 
@@ -364,21 +365,26 @@ func (r *URLResolver) resolveFQDN(req *http.Request) string {
 	// Priority 1: Reverse Proxy Headers — only from trusted peers
 	if r.isTrustedProxy(req.RemoteAddr) {
 		if host := req.Header.Get("X-Forwarded-Host"); host != "" {
-			if h, _, err := net.SplitHostPort(host); err == nil {
+			if h, ok := r.validDisplayHost(host); ok {
 				return h
 			}
-			return host
 		}
 		if host := req.Header.Get("X-Real-Host"); host != "" {
-			if h, _, err := net.SplitHostPort(host); err == nil {
+			if h, ok := r.validDisplayHost(host); ok {
 				return h
 			}
-			return host
 		}
 		if host := req.Header.Get("X-Original-Host"); host != "" {
-			if h, _, err := net.SplitHostPort(host); err == nil {
+			if h, ok := r.validDisplayHost(host); ok {
 				return h
 			}
+		}
+	}
+
+	// The request Host is usable only when it is valid and, when DOMAIN pins
+	// the deployment, belongs to that allowlist or its inferred wildcard.
+	if req.Host != "" {
+		if host, ok := r.validDisplayHost(req.Host); ok && r.requestHostAllowed(host) {
 			return host
 		}
 	}
@@ -386,19 +392,26 @@ func (r *URLResolver) resolveFQDN(req *http.Request) string {
 	// Priority 2: DOMAIN env var (first in comma-separated list)
 	if domain := os.Getenv("DOMAIN"); domain != "" {
 		parts := strings.Split(domain, ",")
-		if len(parts) > 0 && parts[0] != "" {
-			return strings.TrimSpace(parts[0])
+		for _, part := range parts {
+			candidate := strings.TrimSpace(part)
+			if candidate != "" && r.validConfiguredHost(candidate) {
+				return candidate
+			}
 		}
 	}
 
 	// Priority 3: os.Hostname()
 	if hostname, err := os.Hostname(); err == nil && hostname != "" {
-		return hostname
+		if candidate, ok := r.validDisplayHost(hostname); ok {
+			return candidate
+		}
 	}
 
 	// Priority 4: $HOSTNAME env var
 	if hostname := os.Getenv("HOSTNAME"); hostname != "" {
-		return hostname
+		if candidate, ok := r.validDisplayHost(hostname); ok {
+			return candidate
+		}
 	}
 
 	// Priority 5 & 6: Public IP detection
@@ -406,8 +419,54 @@ func (r *URLResolver) resolveFQDN(req *http.Request) string {
 		return publicIP
 	}
 
-	// Priority 7: localhost
-	return "localhost"
+	// Priority 7: unresolved. Never manufacture a localhost URL.
+	return ""
+}
+
+func (r *URLResolver) validDisplayHost(authority string) (string, bool) {
+	host := strings.TrimSpace(authority)
+	if host == "" || strings.Contains(host, ",") {
+		return "", false
+	}
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	} else if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+	}
+	r.mu.RLock()
+	mode := ""
+	if r.appCfg != nil {
+		mode = r.appCfg.Server.Mode
+	}
+	r.mu.RUnlock()
+	devMode := strings.EqualFold(mode, "development") || strings.EqualFold(mode, "debug")
+	if !config.IsValidHost(host, devMode, paths.ProjectName) {
+		return "", false
+	}
+	return host, true
+}
+
+func (r *URLResolver) validConfiguredHost(host string) bool {
+	_, ok := r.validDisplayHost(host)
+	return ok
+}
+
+func (r *URLResolver) requestHostAllowed(host string) bool {
+	domain := strings.TrimSpace(os.Getenv("DOMAIN"))
+	if domain == "" {
+		return true
+	}
+	for _, entry := range strings.Split(domain, ",") {
+		allowed := strings.TrimSpace(entry)
+		if allowed == "" || !r.validConfiguredHost(allowed) {
+			continue
+		}
+		if strings.EqualFold(host, allowed) {
+			return true
+		}
+	}
+	wildcard := strings.TrimPrefix(strings.TrimSpace(r.GetWildcardDomain()), "*.")
+	return wildcard != "" && strings.HasSuffix(strings.ToLower(host), "."+strings.ToLower(wildcard))
 }
 
 // resolvePort resolves port per AI.md PART 12 priority order.
@@ -604,6 +663,9 @@ func extractBaseDomain(hostname string) string {
 // :80 and :443 are NEVER included
 func (r *URLResolver) BuildURL(req *http.Request, path string) string {
 	proto, fqdn, port := r.GetURLVars(req)
+	if fqdn == "" {
+		return ""
+	}
 	prefix := r.resolvePathPrefix(req)
 	// Avoid double-slash: if prefix is "/" treat as empty path component.
 	var base string

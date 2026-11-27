@@ -25,7 +25,7 @@ func TestOwnerTokensPageOnlyOffersRestoreWithoutPrimaryCookie(t *testing.T) {
 		if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" {
 			t.Fatalf("OwnerTokensPage(%q) response = %d, cache-control %q", userAgent, response.Code, response.Header().Get("Cache-Control"))
 		}
-		if !strings.Contains(body, `action="/server/preferences/token/restore"`) || strings.Contains(body, `action="/server/preferences/token/reveal"`) || strings.Contains(body, "Linked tokens") {
+		if !strings.Contains(body, `action="/server/preferences/token/restore"`) || strings.Contains(body, `action="/server/preferences/token/reveal"`) || strings.Contains(body, `action="/server/preferences/token/revoke"`) || strings.Contains(body, "Linked tokens") {
 			t.Errorf("OwnerTokensPage(%q) exposed token management without a primary cookie: %s", userAgent, body)
 		}
 	}
@@ -41,7 +41,7 @@ func TestOwnerTokensPageMasksPrimaryAndRendersManagementForms(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := apitoken.NewManager(schema.GetDB(), strings.Repeat("ab", 32))
+	manager, err := apitoken.NewManager(schema.GetAppDatabase(), strings.Repeat("ab", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,6 +55,7 @@ func TestOwnerTokensPageMasksPrimaryAndRendersManagementForms(t *testing.T) {
 	}
 	h := newRenderTestHandler()
 	h.tokenManager = manager
+	h.store = schema.GetAppDatabase()
 	for _, userAgent := range []string{"Mozilla/5.0", "Lynx/2.9"} {
 		request := httptest.NewRequest(http.MethodGet, "/server/preferences/tokens", nil)
 		request.Header.Set("Accept", "text/html")
@@ -63,7 +64,7 @@ func TestOwnerTokensPageMasksPrimaryAndRendersManagementForms(t *testing.T) {
 		response := httptest.NewRecorder()
 		h.OwnerTokensPage(response, request)
 		body := response.Body.String()
-		for _, marker := range []string{`own_••••••••••••••••••••••••` + issued.Token[len(issued.Token)-4:], `action="/server/preferences/token/reveal"`, `action="/server/preferences/token/rotate"`, `action="/server/preferences/tokens"`, `automation`, linked.Token[len(linked.Token)-4:], `name="csrf_token"`, `class="copy-value"`, `This browser`, `Forget saved token`, `Expires on`} {
+		for _, marker := range []string{`own_••••••••••••••••••••••••` + issued.Token[len(issued.Token)-4:], `action="/server/preferences/token/reveal"`, `action="/server/preferences/token/rotate"`, `action="/server/preferences/tokens"`, `action="/server/preferences/token/revoke"`, `automation`, linked.Token[len(linked.Token)-4:], `name="csrf_token"`, `class="copy-value"`, `This browser`, `Forget saved token`, `Expires on`, `Type the last 4 characters of your primary token (` + issued.Token[len(issued.Token)-4:] + `) to confirm`, `1 linked tokens and 0 favorites`} {
 			if !strings.Contains(body, marker) {
 				t.Errorf("OwnerTokensPage(%q) omitted %q: %s", userAgent, marker, body)
 			}

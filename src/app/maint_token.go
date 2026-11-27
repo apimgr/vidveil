@@ -13,7 +13,9 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/common/terminal"
+	"github.com/apimgr/vidveil/src/server/service/database"
 )
 
 // handleMaintenanceToken implements --maintenance token list|revoke <prefix>.
@@ -51,16 +53,17 @@ func handleMaintenanceToken(arg, configDir, dataDir string) error {
 	defer func() { _ = mgr.Close() }()
 
 	if fields[0] == "list" {
-		return listAPITokens(mgr.GetDB())
+		return listAPITokens(mgr.GetAppDatabase())
 	}
-	return revokeAPIToken(mgr.GetDB(), fields[1])
+	return revokeAPIToken(mgr.GetAppDatabase(), fields[1])
 }
 
 // listAPITokens prints metadata and status without exposing token values.
-func listAPITokens(db *sql.DB) error {
+func listAPITokens(db *database.AppDatabase) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	rows, err := db.QueryContext(ctx, `
+	return db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+		rows, err := readDB.QueryContext(readCtx, `
 		SELECT token_prefix,
 		       kind,
 	       COALESCE(owner_id, ''),
@@ -71,84 +74,84 @@ func listAPITokens(db *sql.DB) error {
 		       revoked_at
 		FROM api_tokens
 		ORDER BY created_at DESC`)
-	if err != nil {
-		return fmt.Errorf("query tokens: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	defer func() { _ = w.Flush() }()
-	_, _ = fmt.Fprintln(w, "PREFIX\tKIND\tOWNER\tNAME\tCREATED\tEXPIRES\tLAST USED\tSTATUS")
-
-	count := 0
-	for rows.Next() {
-		var prefix, kind, ownerID, name string
-		var createdAt int64
-		var expiresAt, lastUsedAt, revokedAt sql.NullInt64
-		if err := rows.Scan(&prefix, &kind, &ownerID, &name, &createdAt,
-			&expiresAt, &lastUsedAt, &revokedAt); err != nil {
-			return fmt.Errorf("scan token: %w", err)
+		if err != nil {
+			return fmt.Errorf("query tokens: %w", err)
 		}
-		status := "active"
-		if revokedAt.Valid {
-			status = "revoked"
-		} else if expiresAt.Valid && expiresAt.Int64 <= time.Now().Unix() {
-			status = "expired"
+		defer func() { _ = rows.Close() }()
+
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		defer func() { _ = w.Flush() }()
+		_, _ = fmt.Fprintln(w, "PREFIX\tKIND\tOWNER\tNAME\tCREATED\tEXPIRES\tLAST USED\tSTATUS")
+
+		count := 0
+		for rows.Next() {
+			var prefix, kind, ownerID, name string
+			var createdAt int64
+			var expiresAt, lastUsedAt, revokedAt sql.NullInt64
+			if err := rows.Scan(&prefix, &kind, &ownerID, &name, &createdAt,
+				&expiresAt, &lastUsedAt, &revokedAt); err != nil {
+				return fmt.Errorf("scan token: %w", err)
+			}
+			status := "active"
+			if revokedAt.Valid {
+				status = "revoked"
+			} else if expiresAt.Valid && expiresAt.Int64 <= time.Now().Unix() {
+				status = "expired"
+			}
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				prefix,
+				kind,
+				ownerID,
+				name,
+				formatUnixTime(createdAt),
+				formatOptionalUnixTime(expiresAt),
+				formatOptionalUnixTime(lastUsedAt),
+				status)
+			count++
 		}
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			prefix,
-			kind,
-			ownerID,
-			name,
-			formatUnixTime(createdAt),
-			formatOptionalUnixTime(expiresAt),
-			formatOptionalUnixTime(lastUsedAt),
-			status)
-		count++
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("read tokens: %w", err)
-	}
-	if count == 0 {
-		fmt.Println("No API tokens.")
-	}
-	return nil
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("read tokens: %w", err)
+		}
+		if count == 0 {
+			fmt.Println("No API tokens.")
+		}
+		return nil
+	})
 }
 
 // revokeAPIToken revokes one linked token or an entire owner via its primary.
-func revokeAPIToken(db *sql.DB, prefix string) error {
+func revokeAPIToken(db *database.AppDatabase, prefix string) error {
 	readCtx, cancelRead := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelRead()
+	var id, ownerID, kind string
 
 	// Resolve the prefix to a single token first so an ambiguous or unknown
 	// prefix fails loudly instead of revoking more than the operator asked for.
-	rows, err := db.QueryContext(readCtx, `
+	err := db.Read(readCtx, func(ctx context.Context, readDB dbstore.Reader) error {
+		rows, err := readDB.QueryContext(ctx, `
 		SELECT id, COALESCE(owner_id, ''), kind FROM api_tokens
 		WHERE token_prefix = ? AND revoked_at IS NULL
 		ORDER BY created_at DESC`, prefix)
-	if err != nil {
-		return fmt.Errorf("lookup token: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-	var id string
-	var ownerID, kind string
-	if rows.Next() {
-		if err := rows.Scan(&id, &ownerID, &kind); err != nil {
-			return fmt.Errorf("scan token: %w", err)
+		if err != nil {
+			return fmt.Errorf("lookup token: %w", err)
 		}
-	} else if err := rows.Err(); err != nil {
-		return fmt.Errorf("read token: %w", err)
-	} else {
-		return fmt.Errorf("no active token with prefix %q", prefix)
-	}
-	if rows.Next() {
-		return fmt.Errorf("multiple active tokens share prefix %q; refusing to revoke an arbitrary token", prefix)
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("read token: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return fmt.Errorf("close token lookup: %w", err)
+		defer func() { _ = rows.Close() }()
+		if rows.Next() {
+			if err := rows.Scan(&id, &ownerID, &kind); err != nil {
+				return fmt.Errorf("scan token: %w", err)
+			}
+		} else if err := rows.Err(); err != nil {
+			return fmt.Errorf("read token: %w", err)
+		} else {
+			return fmt.Errorf("no active token with prefix %q", prefix)
+		}
+		if rows.Next() {
+			return fmt.Errorf("multiple active tokens share prefix %q; refusing to revoke an arbitrary token", prefix)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return err
 	}
 
 	if !promptYesNo(fmt.Sprintf("Revoke token %s? [y/N]: ", prefix)) {
@@ -163,13 +166,22 @@ func revokeAPIToken(db *sql.DB, prefix string) error {
 		query = `UPDATE api_tokens SET revoked_at = ?, revoked_reason = ? WHERE owner_id = ? AND revoked_at IS NULL`
 		args = []any{time.Now().Unix(), "operator_action", ownerID}
 	}
-	result, err := db.ExecContext(writeCtx, query, args...)
+	var affected int64
+	err = db.Write(writeCtx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(writeCtx, query, args...)
+		if err != nil {
+			return fmt.Errorf("revoke token: %w", err)
+		}
+		affected, err = result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("verify token revocation: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("revoke token: %w", err)
+		return err
 	}
-	if affected, err := result.RowsAffected(); err != nil {
-		return fmt.Errorf("verify token revocation: %w", err)
-	} else if affected != 1 {
+	if affected != 1 {
 		return fmt.Errorf("token %q is no longer active", prefix)
 	}
 	fmt.Println(terminal.StatusIcon(true) + " Token revoked: " + prefix)

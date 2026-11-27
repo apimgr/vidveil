@@ -12,7 +12,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/server/service/secreport"
+	"github.com/apimgr/vidveil/src/server/service/secret"
 )
 
 const encryptedHashPrefix = "enc:v1:"
@@ -125,58 +127,49 @@ func DecryptHashWithPrevious(currentKey, previousKey, stored string) (string, bo
 
 // NormalizeLegacyHashes converts encrypted legacy digests to the SHA-256
 // representation required by the current schema. Plain digests remain intact.
-func NormalizeLegacyHashes(ctx context.Context, db *sql.DB, encryptionKey string) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin API-token digest migration: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	rows, err := tx.QueryContext(ctx, `SELECT id, token_hash FROM api_tokens ORDER BY id`)
-	if err != nil {
-		return fmt.Errorf("read API-token digests: %w", err)
-	}
+func NormalizeLegacyHashes(ctx context.Context, db secret.Store, encryptionKey string) error {
 	type storedHash struct {
-		id   int64
+		id   any
 		hash string
 	}
 	var pending []storedHash
-	for rows.Next() {
-		var item storedHash
-		if err := rows.Scan(&item.id, &item.hash); err != nil {
-			_ = rows.Close()
-			return fmt.Errorf("scan API-token digest: %w", err)
-		}
-		if !strings.HasPrefix(item.hash, encryptedHashPrefix) {
-			if !sha256HashPattern.MatchString(item.hash) {
-				_ = rows.Close()
-				return fmt.Errorf("validate API-token digest %d: invalid digest", item.id)
-			}
-			continue
-		}
-		plain, err := DecryptHash(encryptionKey, item.hash)
+	err := db.Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+		rows, err := readDB.QueryContext(readCtx, `SELECT id, token_hash FROM api_tokens ORDER BY id`)
 		if err != nil {
-			_ = rows.Close()
-			return fmt.Errorf("decrypt legacy API-token digest %d: %w", item.id, err)
+			return fmt.Errorf("read API-token digests: %w", err)
 		}
-		item.hash = plain
-		pending = append(pending, item)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return fmt.Errorf("read API-token digests: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return fmt.Errorf("close API-token digests: %w", err)
-	}
-	for _, item := range pending {
-		if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_hash = ? WHERE id = ?`, item.hash, item.id); err != nil {
-			return fmt.Errorf("store API-token digest %d: %w", item.id, err)
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var item storedHash
+			if err := rows.Scan(&item.id, &item.hash); err != nil {
+				return fmt.Errorf("scan API-token digest: %w", err)
+			}
+			if !strings.HasPrefix(item.hash, encryptedHashPrefix) {
+				if !sha256HashPattern.MatchString(item.hash) {
+					return fmt.Errorf("validate API-token digest %v: invalid digest", item.id)
+				}
+				continue
+			}
+			plain, err := DecryptHash(encryptionKey, item.hash)
+			if err != nil {
+				return fmt.Errorf("decrypt legacy API-token digest %v: %w", item.id, err)
+			}
+			item.hash = plain
+			pending = append(pending, item)
 		}
+		return rows.Err()
+	})
+	if err != nil {
+		return err
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit API-token digest migration: %w", err)
-	}
-	return nil
+	return db.Write(ctx, func(tx *sql.Tx) error {
+		for _, item := range pending {
+			if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_hash = ? WHERE id = ?`, item.hash, item.id); err != nil {
+				return fmt.Errorf("store API-token digest %v: %w", item.id, err)
+			}
+		}
+		return nil
+	})
 }
 
 // ReencryptHashes normalizes legacy encrypted digests in the caller's transaction.
@@ -186,7 +179,7 @@ func ReencryptHashes(ctx context.Context, tx *sql.Tx, oldKey, newKey string) err
 		return fmt.Errorf("read API-token digests for rotation: %w", err)
 	}
 	type storedHash struct {
-		id   int64
+		id   any
 		hash string
 	}
 	var hashes []storedHash
@@ -208,10 +201,10 @@ func ReencryptHashes(ctx context.Context, tx *sql.Tx, oldKey, newKey string) err
 	for _, item := range hashes {
 		hash, err := DecryptHash(oldKey, item.hash)
 		if err != nil {
-			return fmt.Errorf("decrypt API-token digest %d for rotation: %w", item.id, err)
+			return fmt.Errorf("decrypt API-token digest %v for rotation: %w", item.id, err)
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_hash = ? WHERE id = ?`, hash, item.id); err != nil {
-			return fmt.Errorf("store API-token digest %d: %w", item.id, err)
+			return fmt.Errorf("store API-token digest %v: %w", item.id, err)
 		}
 	}
 	return nil
@@ -225,7 +218,7 @@ func ReencryptTokens(ctx context.Context, tx *sql.Tx, oldKey, newKey string) err
 		return fmt.Errorf("read encrypted API tokens for rotation: %w", err)
 	}
 	type storedToken struct {
-		id    int64
+		id    any
 		token string
 	}
 	var tokens []storedToken
@@ -247,14 +240,14 @@ func ReencryptTokens(ctx context.Context, tx *sql.Tx, oldKey, newKey string) err
 	for _, item := range tokens {
 		plain, err := DecryptToken(oldKey, item.token)
 		if err != nil {
-			return fmt.Errorf("decrypt API token %d for rotation: %w", item.id, err)
+			return fmt.Errorf("decrypt API token %v for rotation: %w", item.id, err)
 		}
 		value, err := EncryptToken(newKey, plain)
 		if err != nil {
-			return fmt.Errorf("encrypt API token %d for rotation: %w", item.id, err)
+			return fmt.Errorf("encrypt API token %v for rotation: %w", item.id, err)
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET token_enc = ? WHERE id = ?`, value, item.id); err != nil {
-			return fmt.Errorf("store rotated API token %d: %w", item.id, err)
+			return fmt.Errorf("store rotated API token %v: %w", item.id, err)
 		}
 	}
 	return nil

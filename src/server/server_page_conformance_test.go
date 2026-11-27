@@ -56,10 +56,14 @@ func TestServerPageConformance(t *testing.T) {
 			_ = schema.Close()
 			t.Fatal(err)
 		}
-		defer schema.Close()
+		t.Cleanup(func() {
+			if err := schema.Close(); err != nil {
+				t.Errorf("close conformance schema: %v", err)
+			}
+		})
 		s.appConfig.Server.Security.EncryptionKey = strings.Repeat("a", 64)
-		s.serverHandler.SetDB(schema.GetDB())
-		submission, err := secreport.CreateReport(t.Context(), schema.GetDB(), s.configDir, s.appConfig.Server.Security.EncryptionKey, secreport.Input{
+		s.serverHandler.SetDatabase(schema.GetAppDatabase())
+		submission, err := secreport.CreateReport(t.Context(), schema.GetAppDatabase(), s.configDir, s.appConfig.Server.Security.EncryptionKey, secreport.Input{
 			IDWindow: time.Now().Unix(), Severity: "low", Component: "conformance",
 			Body: []byte("conformance report"), CreditPreference: "none",
 		})

@@ -612,10 +612,10 @@ func TestOpenDatabases_SetsLastUpdate(t *testing.T) {
 	after := time.Now()
 
 	lu := svc.LastUpdate()
-	if lu.IsZero() {
-		t.Error("lastUpdate is zero after openDatabases(), want non-zero")
+	if !lu.IsZero() {
+		t.Errorf("lastUpdate = %v after opening databases without an update marker, want zero", lu)
 	}
-	if lu.Before(before) || lu.After(after) {
+	if !lu.IsZero() && (lu.Before(before) || lu.After(after)) {
 		t.Errorf("lastUpdate %v outside expected range [%v, %v]", lu, before, after)
 	}
 }
@@ -798,8 +798,8 @@ func TestUpdate_Enabled_NoDBFlags_SetsLastUpdate(t *testing.T) {
 	if err := svc.Update(); err != nil {
 		t.Fatalf("Update() returned error: %v", err)
 	}
-	if svc.LastUpdate().IsZero() {
-		t.Error("Update() with no DB flags: lastUpdate is still zero")
+	if !svc.LastUpdate().IsZero() {
+		t.Errorf("Update() with no configured databases changed lastUpdate to %v", svc.LastUpdate())
 	}
 }
 

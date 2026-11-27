@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/apimgr/vidveil/src/server/service/database"
 )
 
 // keyserverStateFile records, per keyserver, the last successful publish so a
@@ -239,18 +241,21 @@ func LoadKeyserverState(configDir string) ([]KeyserverState, error) {
 
 // UpdateKeyserversPublished writes the given keyserver states into the
 // keyservers_published column of the live pgp_keypair row.
-func UpdateKeyserversPublished(db *sql.DB, states []KeyserverState) error {
+func UpdateKeyserversPublished(db *database.AppDatabase, states []KeyserverState) error {
 	data, err := json.Marshal(states)
 	if err != nil {
 		return fmt.Errorf("encode keyservers_published: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), storeQueryTimeout)
 	defer cancel()
-	if _, err := db.ExecContext(ctx,
-		`UPDATE pgp_keypair SET keyservers_published = ?
+	if err := db.Write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx,
+			`UPDATE pgp_keypair SET keyservers_published = ?
 		 WHERE id = (SELECT id FROM pgp_keypair ORDER BY id DESC LIMIT 1)`,
-		string(data),
-	); err != nil {
+			string(data),
+		)
+		return err
+	}); err != nil {
 		return fmt.Errorf("update keyservers_published: %w", err)
 	}
 	return nil

@@ -84,6 +84,27 @@ func TestHandlerServesStatelessOpenAPITools(t *testing.T) {
 	}
 }
 
+func TestHandlerFiltersAndRejectsToolsOutsideTokenScope(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	handler := Handler(cfg, http.NotFoundHandler(), nil, validTestBearer, func(_ *http.Request, method string) bool {
+		return method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions
+	})
+	listBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`
+	listed := serveMCP(t, handler, listBody, "")
+	if listed.Code != http.StatusOK || strings.Contains(listed.Body.String(), `"name":"submitServerContact"`) || !strings.Contains(listed.Body.String(), `"name":"searchVideos"`) {
+		t.Fatalf("read-scoped tools/list did not filter mutation tools: %d %s", listed.Code, listed.Body.String())
+	}
+	callBody := `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"submitServerContact","arguments":{}}}`
+	request := httptest.NewRequest(http.MethodPost, "http://api.example.test/mcp", strings.NewReader(callBody))
+	setMCPHeaders(request, callBody)
+	request.Header.Set("Authorization", "Bearer test-token")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || response.Header().Get("WWW-Authenticate") != `Bearer error="insufficient_scope"` {
+		t.Fatalf("read-scoped mutating tool response = %d %s", response.Code, response.Body.String())
+	}
+}
+
 func TestHandlerOriginValidation(t *testing.T) {
 	cfg := config.DefaultAppConfig()
 	handler := OriginMiddleware(cfg, Handler(cfg, http.NotFoundHandler(), nil, validTestBearer))

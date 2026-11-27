@@ -88,22 +88,15 @@ func TestRunServesAndShutsDownWithContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	outputReader, outputWriter, err := os.Pipe()
+	outputFile, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatalf("capture app output: %v", err)
 	}
 	stdout, stderr := os.Stdout, os.Stderr
-	os.Stdout, os.Stderr = outputWriter, outputWriter
-	outputDrained := make(chan struct{})
-	go func() {
-		_, _ = io.Copy(io.Discard, outputReader)
-		close(outputDrained)
-	}()
+	os.Stdout, os.Stderr = outputFile, outputFile
 	defer func() {
 		os.Stdout, os.Stderr = stdout, stderr
-		_ = outputWriter.Close()
-		<-outputDrained
-		_ = outputReader.Close()
+		_ = outputFile.Close()
 	}()
 	ready := make(chan struct{})
 	cfg.Runtime.TestMode = true
@@ -158,7 +151,8 @@ func TestRunServesAndShutsDownWithContext(t *testing.T) {
 
 func TestRunReturnsExitCodeInsteadOfExitingProcess(t *testing.T) {
 	cfg := *config.DefaultAppConfig()
-	cfg.Runtime.Command = []string{"tor", "unsupported"}
+	cfg.Runtime.TestMode = true
+	cfg.Runtime.Command = []string{"--service", "unsupported"}
 	err := Run(context.Background(), cfg)
 	var exitErr ExitError
 	if !errors.As(err, &exitErr) {
@@ -609,7 +603,10 @@ func TestPrintComplianceDataSummaryUsesConfiguredSQLiteAndAuditIntegrity(t *test
 	if err := manager.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.GetDB().Exec(`INSERT INTO audit_log(timestamp,category,action,success) VALUES (strftime('%s','now'),'compliance','compliance.test',1)`); err != nil {
+	if err := manager.GetAppDatabase().Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO audit_log(timestamp,category,action,success) VALUES (strftime('%s','now'),'compliance','compliance.test',1)`)
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := manager.Close(); err != nil {
@@ -1017,6 +1014,7 @@ func TestHandleMaintenanceCommand_Setup_ContainsServerYML(t *testing.T) {
 // TestHandleMaintenanceCommand_Backup creates a real backup using temp dirs.
 // It calls the "backup" sub-command which does NOT call os.Exit on success.
 func TestHandleMaintenanceCommand_Backup_NoPanic(t *testing.T) {
+	setBackupTestDiskThreshold(t)
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
@@ -1040,6 +1038,7 @@ func TestHandleMaintenanceCommand_Backup_NoPanic(t *testing.T) {
 // stdin has no data (EOF): the interactive encryption prompt reads as "no" per
 // AI.md PART 21 (no --password flag), so this exercises the plain-backup branch.
 func TestHandleMaintenanceCommand_Backup_WithPassword_NoPanic(t *testing.T) {
+	setBackupTestDiskThreshold(t)
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
@@ -1130,6 +1129,7 @@ func TestHandleMaintenanceCommand_ModeFalse_NoPanic(t *testing.T) {
 // TestHandleMaintenanceCommand_RestoreEmpty tests the "restore" with no arg.
 // With no backup files, it returns an error — captured without os.Exit.
 func TestHandleMaintenanceCommand_Restore_NoPanic(t *testing.T) {
+	setBackupTestDiskThreshold(t)
 	base := t.TempDir()
 	cfgDir := base + "/config"
 	dataDir := base + "/data"
@@ -1154,12 +1154,21 @@ func TestHandleMaintenanceCommand_Restore_NoPanic(t *testing.T) {
 	})
 }
 
+func setBackupTestDiskThreshold(t *testing.T) {
+	t.Helper()
+	previous := loadedServerConfig
+	appConfig := config.DefaultAppConfig()
+	appConfig.Server.Maintenance.Cleanup.DiskThreshold = 99
+	loadedServerConfig = appConfig
+	t.Cleanup(func() { loadedServerConfig = previous })
+}
+
 // ── isDBFirstRun ──────────────────────────────────────────────────────────────
 
 func TestIsDBFirstRun_EmptyDB_ReturnsTrue(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := database.NewAppDatabase(database.DatabaseConfig{Driver: database.DriverSQLite, Path: ":memory:"})
 	if err != nil {
-		t.Fatal("sql.Open:", err)
+		t.Fatal("open database:", err)
 	}
 	defer func() { _ = db.Close() }()
 	if !isDBFirstRun(db) {
@@ -1168,16 +1177,19 @@ func TestIsDBFirstRun_EmptyDB_ReturnsTrue(t *testing.T) {
 }
 
 func TestIsDBFirstRun_TableWithRows_ReturnsFalse(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := database.NewAppDatabase(database.DatabaseConfig{Driver: database.DriverSQLite, Path: ":memory:"})
 	if err != nil {
-		t.Fatal("sql.Open:", err)
+		t.Fatal("open database:", err)
 	}
 	defer func() { _ = db.Close() }()
-	if _, err := db.Exec("CREATE TABLE settings (key TEXT, value TEXT)"); err != nil {
-		t.Fatal("CREATE TABLE:", err)
-	}
-	if _, err := db.Exec("INSERT INTO settings VALUES ('key', 'val')"); err != nil {
-		t.Fatal("INSERT:", err)
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		if _, err := tx.Exec("CREATE TABLE settings (key TEXT, value TEXT)"); err != nil {
+			return err
+		}
+		_, err := tx.Exec("INSERT INTO settings VALUES ('key', 'val')")
+		return err
+	}); err != nil {
+		t.Fatal("initialize settings:", err)
 	}
 	if isDBFirstRun(db) {
 		t.Error("isDBFirstRun with rows: expected false")
@@ -1185,13 +1197,16 @@ func TestIsDBFirstRun_TableWithRows_ReturnsFalse(t *testing.T) {
 }
 
 func TestIsDBFirstRun_EmptySettingsTable_ReturnsTrue(t *testing.T) {
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := database.NewAppDatabase(database.DatabaseConfig{Driver: database.DriverSQLite, Path: ":memory:"})
 	if err != nil {
-		t.Fatal("sql.Open:", err)
+		t.Fatal("open database:", err)
 	}
 	defer func() { _ = db.Close() }()
-	if _, err := db.Exec("CREATE TABLE settings (key TEXT, value TEXT)"); err != nil {
-		t.Fatal("CREATE TABLE:", err)
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec("CREATE TABLE settings (key TEXT, value TEXT)")
+		return err
+	}); err != nil {
+		t.Fatal("create settings table:", err)
 	}
 	if !isDBFirstRun(db) {
 		t.Error("isDBFirstRun with empty settings table: expected true")

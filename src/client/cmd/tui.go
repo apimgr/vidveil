@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/apimgr/vidveil/src/client/api"
 	"github.com/apimgr/vidveil/src/client/browser"
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/terminal"
@@ -25,13 +26,17 @@ const (
 	TUIMinTruncationWidth = 30
 	TUIDefaultTheme       = "dark"
 	TUICommandSearch      = "search"
+	TUICommandHealth      = "health"
 	TUICommandEngines     = "engines"
 	TUICommandBangs       = "bangs"
+	TUICommandFavorites   = "favorites"
 	TUICommandProbe       = "probe"
 	TUICommandLogin       = "login"
+	TUICommandUpdate      = "update"
+	TUICommandSetup       = "setup"
 )
 
-var tuiCommandOrder = []string{TUICommandSearch, TUICommandEngines, TUICommandBangs, TUICommandProbe, TUICommandLogin}
+var tuiCommandOrder = []string{TUICommandSearch, TUICommandEngines, TUICommandBangs, TUICommandProbe, TUICommandHealth, TUICommandFavorites, TUICommandLogin, TUICommandUpdate, TUICommandSetup}
 
 func tuiTranslate(locale, key string) string {
 	return i18n.Translate(locale, "tui."+key)
@@ -267,6 +272,10 @@ type TUIModel struct {
 	statusMessage     string
 	openedURL         string
 	showShortcutsHelp bool
+	setupRequested    bool
+	utilityMode       string
+	utilityField      int
+	utilityValues     [4]string
 }
 
 // TUISearchResult represents a single search result in TUI
@@ -380,7 +389,11 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewRows = nil
 				m.lastError = nil
 				m.statusMessage = ""
-				if m.activeView == TUICommandEngines || m.activeView == TUICommandBangs {
+				if m.activeView == TUICommandSetup {
+					m.setupRequested = true
+					return m, tea.Quit
+				}
+				if m.activeView == TUICommandEngines || m.activeView == TUICommandBangs || m.activeView == TUICommandHealth || m.activeView == TUICommandFavorites || m.activeView == TUICommandUpdate {
 					m.viewLoading = true
 					return m, loadTUIView(m.activeView, m.language)
 				}
@@ -665,6 +678,29 @@ func (m TUIModel) View() string {
 			}
 			viewBuilder.WriteString(serverPrefix + tuiTranslate(m.language, "server_url") + ": " + m.loginServerURL + "\n")
 			viewBuilder.WriteString(tokenPrefix + tuiTranslate(m.language, "api_token") + ": " + strings.Repeat("•", len(m.loginToken)) + "\n" + tuiTranslate(m.language, "login_instructions"))
+		case TUICommandHealth:
+			viewBuilder.WriteString(tuiTranslate(m.language, "health_instructions"))
+		case TUICommandFavorites:
+			viewBuilder.WriteString(tuiTranslate(m.language, "favorites_instructions") + "\n")
+			switch m.utilityMode {
+			case "add":
+				labels := []string{"favorite_url", "favorite_title", "favorite_thumbnail", "favorite_source"}
+				for index, label := range labels {
+					prefix := "  "
+					value := m.utilityValues[index]
+					if index == m.utilityField {
+						prefix = "> "
+						value += "_"
+					}
+					viewBuilder.WriteString(prefix + tuiTranslate(m.language, label) + ": " + value + "\n")
+				}
+			case "remove":
+				viewBuilder.WriteString(tuiTranslate(m.language, "favorite_id") + ": " + m.utilityValues[0] + "_\n")
+			}
+		case TUICommandUpdate:
+			viewBuilder.WriteString(tuiTranslate(m.language, "update_instructions"))
+		case TUICommandSetup:
+			viewBuilder.WriteString(tuiTranslate(m.language, "setup_instructions"))
 		default:
 			if m.activeView == TUICommandEngines {
 				viewBuilder.WriteString(tuiTranslate(m.language, "engines_instructions") + "\n")
@@ -975,6 +1011,104 @@ func (m TUIModel) updateCommandViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+	case TUICommandHealth:
+		if msg.String() == "r" {
+			m.viewLoading = true
+			return m, loadTUIView(m.activeView, m.language)
+		}
+	case TUICommandUpdate:
+		switch msg.String() {
+		case "c":
+			m.viewLoading = true
+			return m, loadTUIView(m.activeView, m.language)
+		case "y":
+			if err := RunCLIUpdateCommand([]string{"yes"}); err != nil {
+				m.lastError = err
+			} else {
+				m.statusMessage = tuiTranslate(m.language, "update_started")
+			}
+		}
+	case TUICommandFavorites:
+		if m.statusMessage == tuiTranslate(m.language, "favorites_clear_confirm") && msg.String() != "y" {
+			m.statusMessage = ""
+			return m, nil
+		}
+		if m.utilityMode == "add" || m.utilityMode == "remove" {
+			switch msg.String() {
+			case "tab":
+				fieldCount := 1
+				if m.utilityMode == "add" {
+					fieldCount = 4
+				}
+				m.utilityField = (m.utilityField + 1) % fieldCount
+			case "ctrl+s":
+				if apiClient == nil {
+					m.lastError = fmt.Errorf("%s", tuiTranslate(m.language, "error.server_unconfigured"))
+					break
+				}
+				if m.utilityMode == "add" {
+					err := apiClient.AddFavorite(api.Favorite{URL: strings.TrimSpace(m.utilityValues[0]), Title: strings.TrimSpace(m.utilityValues[1]), Thumbnail: strings.TrimSpace(m.utilityValues[2]), Source: strings.TrimSpace(m.utilityValues[3])})
+					if err != nil {
+						m.lastError = err
+					} else {
+						m.utilityMode = ""
+						m.utilityValues = [4]string{}
+						m.statusMessage = tuiTranslate(m.language, "favorite_added")
+						return m, loadTUIView(m.activeView, m.language)
+					}
+				} else {
+					id, err := strconv.ParseInt(strings.TrimSpace(m.utilityValues[0]), 10, 64)
+					if err != nil || id <= 0 {
+						m.lastError = fmt.Errorf("%s", tuiTranslate(m.language, "error.favorite_id_invalid"))
+						break
+					}
+					if err := apiClient.RemoveFavorite(id); err != nil {
+						m.lastError = err
+					} else {
+						m.utilityMode = ""
+						m.utilityValues = [4]string{}
+						m.statusMessage = tuiTranslate(m.language, "favorite_removed")
+						return m, loadTUIView(m.activeView, m.language)
+					}
+				}
+			case "backspace":
+				if len(m.utilityValues[m.utilityField]) > 0 {
+					m.utilityValues[m.utilityField] = m.utilityValues[m.utilityField][:len(m.utilityValues[m.utilityField])-1]
+				}
+			default:
+				if len(msg.String()) == 1 {
+					m.utilityValues[m.utilityField] += msg.String()
+				}
+			}
+		} else {
+			switch msg.String() {
+			case "a":
+				m.utilityMode = "add"
+				m.utilityField = 0
+				m.utilityValues = [4]string{}
+			case "r":
+				m.utilityMode = "remove"
+				m.utilityField = 0
+				m.utilityValues = [4]string{}
+			case "l":
+				return m, loadTUIView(m.activeView, m.language)
+			case "c":
+				m.statusMessage = tuiTranslate(m.language, "favorites_clear_confirm")
+			case "y":
+				if m.statusMessage == tuiTranslate(m.language, "favorites_clear_confirm") {
+					if apiClient == nil {
+						m.lastError = fmt.Errorf("%s", tuiTranslate(m.language, "error.server_unconfigured"))
+						break
+					}
+					if err := apiClient.ClearFavorites(); err != nil {
+						m.lastError = err
+					} else {
+						m.statusMessage = tuiTranslate(m.language, "favorites_cleared")
+						return m, loadTUIView(m.activeView, m.language)
+					}
+				}
+			}
+		}
 	}
 	return m, nil
 }
@@ -983,6 +1117,39 @@ func loadTUIView(view, language string) tea.Cmd {
 	return func() tea.Msg {
 		var rows []string
 		switch view {
+		case TUICommandHealth:
+			if apiClient == nil {
+				return TUIViewDoneMsg{view: view, err: fmt.Errorf("%s", tuiTranslate(language, "error.server_unconfigured"))}
+			}
+			healthy, err := apiClient.Health()
+			if err != nil {
+				return TUIViewDoneMsg{view: view, err: err}
+			}
+			if !healthy {
+				return TUIViewDoneMsg{view: view, err: fmt.Errorf("%s", tuiTranslate(language, "error.health_failed"))}
+			}
+			return TUIViewDoneMsg{view: view, rows: []string{tuiTranslate(language, "health_healthy")}}
+		case TUICommandFavorites:
+			if apiClient == nil {
+				return TUIViewDoneMsg{view: view, err: fmt.Errorf("%s", tuiTranslate(language, "error.server_unconfigured"))}
+			}
+			favorites, err := apiClient.ListFavorites()
+			if err != nil {
+				return TUIViewDoneMsg{view: view, err: err}
+			}
+			for _, favorite := range favorites {
+				rows = append(rows, i18n.TranslateFormat(language, "tui.favorite_row", "id", favorite.ID, "title", favorite.Title, "url", favorite.URL))
+			}
+			return TUIViewDoneMsg{view: view, rows: rows}
+		case TUICommandUpdate:
+			info, err := CheckCLIUpdate()
+			if err != nil {
+				return TUIViewDoneMsg{view: view, err: err}
+			}
+			if info == nil || !info.UpdateAvailable {
+				return TUIViewDoneMsg{view: view, rows: []string{tuiTranslate(language, "update_current")}}
+			}
+			return TUIViewDoneMsg{view: view, rows: []string{i18n.TranslateFormat(language, "tui.update_available", "version", info.LatestVersion)}}
 		case TUICommandEngines:
 			data, err := FetchEnginesList()
 			if err != nil {
@@ -1064,7 +1231,25 @@ func executeTUISearchWithOptions(searchQuery string, page, limit int, engines []
 // runInteractiveTUI runs the interactive TUI
 // Per AI.md PART 1: Function names MUST reveal intent - "runTUI" is ambiguous
 func runInteractiveTUI() error {
-	tuiProgram := tea.NewProgram(createInitialTUIModel(), tea.WithAltScreen())
-	_, err := tuiProgram.Run()
-	return err
+	for {
+		tuiProgram := tea.NewProgram(createInitialTUIModel(), tea.WithAltScreen())
+		finalModel, err := tuiProgram.Run()
+		if err != nil {
+			return err
+		}
+		model, ok := finalModel.(TUIModel)
+		if !ok || !model.setupRequested {
+			return nil
+		}
+		if err := runSetupWizard(); err != nil {
+			return err
+		}
+		if err := LoadCLIConfigFromFile(); err != nil {
+			return err
+		}
+		if err := initializeCLILogging(); err != nil {
+			return err
+		}
+		initAPIClient()
+	}
 }

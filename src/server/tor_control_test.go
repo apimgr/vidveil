@@ -7,9 +7,12 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -21,16 +24,17 @@ import (
 // fakeTorControl is a minimal, fully scriptable TorControl implementation
 // used to exercise every handler branch without a real Tor process.
 type fakeTorControl struct {
-	enabled      bool
-	running      bool
-	starting     bool
-	status       tor.TorServiceStatus
-	statusString string
-	uptime       string
-	onionAddress string
-	info         map[string]interface{}
-	vanityStatus *tor.VanityStatus
-	testResult   *tor.TestConnectionResult
+	enabled          bool
+	running          bool
+	starting         bool
+	status           tor.TorServiceStatus
+	statusString     string
+	uptime           string
+	onionAddress     string
+	info             map[string]interface{}
+	vanityStatus     *tor.VanityStatus
+	vanityCandidates []string
+	testResult       *tor.TestConnectionResult
 
 	regenerateErr error
 	vanityErr     error
@@ -38,24 +42,41 @@ type fakeTorControl struct {
 	importErr     error
 	restartErr    error
 
-	cancelCalled     bool
-	lastVanityPrefix string
-	lastImportedKey  []byte
+	cancelCalled      bool
+	lastVanityPrefix  string
+	lastVanityWorkers int
+	lastImportedKey   []byte
+	regenerateCalls   int
+	applyCalls        int
 }
 
-func (f *fakeTorControl) IsEnabled() bool                           { return f.enabled }
-func (f *fakeTorControl) IsRunning() bool                           { return f.running }
-func (f *fakeTorControl) IsStarting() bool                          { return f.starting }
-func (f *fakeTorControl) GetStatus() tor.TorServiceStatus           { return f.status }
-func (f *fakeTorControl) GetStatusString() string                   { return f.statusString }
-func (f *fakeTorControl) GetUptime() string                         { return f.uptime }
-func (f *fakeTorControl) GetOnionAddress() string                   { return f.onionAddress }
-func (f *fakeTorControl) GetInfo() map[string]interface{}           { return f.info }
-func (f *fakeTorControl) GetVanityStatus() *tor.VanityStatus        { return f.vanityStatus }
+func (f *fakeTorControl) IsEnabled() bool                 { return f.enabled }
+func (f *fakeTorControl) IsRunning() bool                 { return f.running }
+func (f *fakeTorControl) IsStarting() bool                { return f.starting }
+func (f *fakeTorControl) GetStatus() tor.TorServiceStatus { return f.status }
+func (f *fakeTorControl) GetStatusString() string         { return f.statusString }
+func (f *fakeTorControl) GetUptime() string               { return f.uptime }
+func (f *fakeTorControl) GetOnionAddress() string         { return f.onionAddress }
+func (f *fakeTorControl) GetInfo() map[string]interface{} { return f.info }
+func (f *fakeTorControl) GetControlStatus() map[string]interface{} {
+	return map[string]interface{}{
+		"running": f.running, "version": "", "onion_address": f.onionAddress,
+		"bootstrap_percent": 0, "circuit_established": false,
+		"vanity": map[string]interface{}{"state": "idle"},
+	}
+}
+func (f *fakeTorControl) GetVanityStatus() *tor.VanityStatus {
+	if f.vanityStatus != nil {
+		return f.vanityStatus
+	}
+	return &tor.VanityStatus{Workers: f.lastVanityWorkers}
+}
+func (f *fakeTorControl) GetVanityCandidates() []string             { return f.vanityCandidates }
 func (f *fakeTorControl) TestConnection() *tor.TestConnectionResult { return f.testResult }
 func (f *fakeTorControl) CancelVanityGeneration()                   { f.cancelCalled = true }
 
 func (f *fakeTorControl) RegenerateAddress() error {
+	f.regenerateCalls++
 	if f.regenerateErr != nil {
 		return f.regenerateErr
 	}
@@ -63,12 +84,16 @@ func (f *fakeTorControl) RegenerateAddress() error {
 	return nil
 }
 
-func (f *fakeTorControl) GenerateVanityAddress(prefix string) error {
+func (f *fakeTorControl) GenerateVanityAddress(prefix string, workers ...int) error {
 	f.lastVanityPrefix = prefix
+	if len(workers) > 0 {
+		f.lastVanityWorkers = workers[0]
+	}
 	return f.vanityErr
 }
 
-func (f *fakeTorControl) ApplyVanityAddress() error {
+func (f *fakeTorControl) ApplyVanityAddress(address ...string) error {
+	f.applyCalls++
 	if f.applyErr != nil {
 		return f.applyErr
 	}
@@ -254,6 +279,10 @@ func TestHandleTorControlRestart_Error(t *testing.T) {
 
 func TestTorControlOperationErrorsHideInternalDetails(t *testing.T) {
 	const privateDetail = "failed opening /private/tor/secret-key"
+	keyDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(keyDir, "hs_ed25519_secret_key"), make([]byte, 64), 0600); err != nil {
+		t.Fatal(err)
+	}
 	tc := &fakeTorControl{
 		restartErr:    errors.New(privateDetail),
 		regenerateErr: errors.New(privateDetail),
@@ -268,10 +297,10 @@ func TestTorControlOperationErrorsHideInternalDetails(t *testing.T) {
 		body   string
 	}{
 		{http.MethodPost, "/server/tor/restart", ""},
-		{http.MethodPost, "/server/tor/regenerate", ""},
+		{http.MethodPost, "/server/tor/regenerate", `{"confirm":true}`},
 		{http.MethodPost, "/server/tor/vanity/start", `{"prefix":"abc"}`},
-		{http.MethodPost, "/server/tor/vanity/apply", ""},
-		{http.MethodPost, "/server/tor/import-keys", `{"secret_key":"aGVsbG8="}`},
+		{http.MethodPost, "/server/tor/vanity/apply", `{"confirm":true}`},
+		{http.MethodPost, "/server/tor/import-keys", `{"path":"` + keyDir + `","confirm":true}`},
 	}
 	for _, request := range requests {
 		rec := doLoopback(r, request.method, request.path, request.body)
@@ -284,11 +313,30 @@ func TestTorControlOperationErrorsHideInternalDetails(t *testing.T) {
 	}
 }
 
+func TestHandleTorControlVanityStop(t *testing.T) {
+	tc := &fakeTorControl{vanityStatus: &tor.VanityStatus{Active: true}, vanityCandidates: []string{"abc.onion"}}
+	_, r := newTestServerWithTorControl(tc)
+	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/stop", "")
+	var payload struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Stopped    bool     `json:"stopped"`
+			Candidates []string `json:"candidates"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK || !tc.cancelCalled || !payload.OK || !payload.Data.Stopped || len(payload.Data.Candidates) != 1 || payload.Data.Candidates[0] != "abc.onion" {
+		t.Errorf("vanity stop response=%d %q cancel=%v", rec.Code, rec.Body.String(), tc.cancelCalled)
+	}
+}
+
 // ── handleTorControlRegenerate ───────────────────────────────────────────────
 
 func TestHandleTorControlRegenerate_NilControl(t *testing.T) {
 	_, r := newTestServerWithTorControl(nil)
-	rec := doLoopback(r, http.MethodPost, "/server/tor/regenerate", "")
+	rec := doLoopback(r, http.MethodPost, "/server/tor/regenerate", `{"confirm":true}`)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("regenerate with nil torControl = %d, want 404", rec.Code)
 	}
@@ -297,7 +345,7 @@ func TestHandleTorControlRegenerate_NilControl(t *testing.T) {
 func TestHandleTorControlRegenerate_Success(t *testing.T) {
 	tc := &fakeTorControl{}
 	_, r := newTestServerWithTorControl(tc)
-	rec := doLoopback(r, http.MethodPost, "/server/tor/regenerate", "")
+	rec := doLoopback(r, http.MethodPost, "/server/tor/regenerate", `{"confirm":true}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("regenerate = %d, want 200", rec.Code)
 	}
@@ -309,9 +357,18 @@ func TestHandleTorControlRegenerate_Success(t *testing.T) {
 func TestHandleTorControlRegenerate_Error(t *testing.T) {
 	tc := &fakeTorControl{regenerateErr: errors.New("boom")}
 	_, r := newTestServerWithTorControl(tc)
-	rec := doLoopback(r, http.MethodPost, "/server/tor/regenerate", "")
+	rec := doLoopback(r, http.MethodPost, "/server/tor/regenerate", `{"confirm":true}`)
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("regenerate error = %d, want 500", rec.Code)
+	}
+}
+
+func TestHandleTorControlRegenerate_RequiresConfirmation(t *testing.T) {
+	tc := &fakeTorControl{}
+	_, r := newTestServerWithTorControl(tc)
+	rec := doLoopback(r, http.MethodPost, "/server/tor/regenerate", `{}`)
+	if rec.Code != http.StatusBadRequest || tc.regenerateCalls != 0 {
+		t.Errorf("regenerate without confirmation: status=%d calls=%d, want 400 and no mutation", rec.Code, tc.regenerateCalls)
 	}
 }
 
@@ -319,7 +376,7 @@ func TestHandleTorControlRegenerate_Error(t *testing.T) {
 
 func TestHandleTorControlVanityStart_NilControl(t *testing.T) {
 	_, r := newTestServerWithTorControl(nil)
-	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/start", `{"prefix":"abc"}`)
+	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/start", `{"prefix":"abc","workers":2}`)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("vanity start with nil torControl = %d, want 404", rec.Code)
 	}
@@ -337,17 +394,38 @@ func TestHandleTorControlVanityStart_MissingPrefix(t *testing.T) {
 func TestHandleTorControlVanityStart_Success(t *testing.T) {
 	tc := &fakeTorControl{}
 	_, r := newTestServerWithTorControl(tc)
-	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/start", `{"prefix":"abc"}`)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("vanity start = %d, want 200", rec.Code)
+	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/start", `{"prefix":"abc","workers":2}`)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("vanity start = %d, want 202", rec.Code)
 	}
 	if tc.lastVanityPrefix != "abc" {
 		t.Errorf("vanity start: prefix passed through = %q, want %q", tc.lastVanityPrefix, "abc")
 	}
+	var payload struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Workers int `json:"workers"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if tc.lastVanityWorkers != 2 || !payload.OK || payload.Data.Workers != 2 {
+		t.Errorf("vanity start workers = %d response=%q, want 2", tc.lastVanityWorkers, rec.Body.String())
+	}
+}
+
+func TestHandleTorControlVanityStart_Conflict(t *testing.T) {
+	tc := &fakeTorControl{vanityErr: errors.New(`vanity search already running for prefix "abc"`)}
+	_, r := newTestServerWithTorControl(tc)
+	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/start", `{"prefix":"xyz"}`)
+	if rec.Code != http.StatusConflict {
+		t.Errorf("vanity start conflict = %d, want 409", rec.Code)
+	}
 }
 
 func TestHandleTorControlVanityStart_Error(t *testing.T) {
-	tc := &fakeTorControl{vanityErr: errors.New("already running")}
+	tc := &fakeTorControl{vanityErr: errors.New("disk write failed")}
 	_, r := newTestServerWithTorControl(tc)
 	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/start", `{"prefix":"abc"}`)
 	if rec.Code != http.StatusInternalServerError {
@@ -359,7 +437,7 @@ func TestHandleTorControlVanityStart_Error(t *testing.T) {
 
 func TestHandleTorControlVanityApply_NilControl(t *testing.T) {
 	_, r := newTestServerWithTorControl(nil)
-	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/apply", "")
+	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/apply", `{"confirm":true}`)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("vanity apply with nil torControl = %d, want 404", rec.Code)
 	}
@@ -368,7 +446,7 @@ func TestHandleTorControlVanityApply_NilControl(t *testing.T) {
 func TestHandleTorControlVanityApply_Success(t *testing.T) {
 	tc := &fakeTorControl{}
 	_, r := newTestServerWithTorControl(tc)
-	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/apply", "")
+	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/apply", `{"confirm":true}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("vanity apply = %d, want 200", rec.Code)
 	}
@@ -377,10 +455,19 @@ func TestHandleTorControlVanityApply_Success(t *testing.T) {
 	}
 }
 
+func TestHandleTorControlVanityApply_RequiresConfirmation(t *testing.T) {
+	tc := &fakeTorControl{}
+	_, r := newTestServerWithTorControl(tc)
+	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/apply", `{}`)
+	if rec.Code != http.StatusBadRequest || tc.applyCalls != 0 {
+		t.Errorf("vanity apply without confirmation: status=%d calls=%d, want 400 and no mutation", rec.Code, tc.applyCalls)
+	}
+}
+
 func TestHandleTorControlVanityApply_Error(t *testing.T) {
 	tc := &fakeTorControl{applyErr: errors.New("no pending address")}
 	_, r := newTestServerWithTorControl(tc)
-	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/apply", "")
+	rec := doLoopback(r, http.MethodPost, "/server/tor/vanity/apply", `{"confirm":true}`)
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("vanity apply error = %d, want 500", rec.Code)
 	}
@@ -390,7 +477,7 @@ func TestHandleTorControlVanityApply_Error(t *testing.T) {
 
 func TestHandleTorControlImportKeys_NilControl(t *testing.T) {
 	_, r := newTestServerWithTorControl(nil)
-	rec := doLoopback(r, http.MethodPost, "/server/tor/import-keys", `{"secret_key":"AAAA"}`)
+	rec := doLoopback(r, http.MethodPost, "/server/tor/import-keys", `{"path":"/tmp/keys","confirm":true}`)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("import-keys with nil torControl = %d, want 404", rec.Code)
 	}
@@ -408,13 +495,21 @@ func TestHandleTorControlImportKeys_MissingKey(t *testing.T) {
 func TestHandleTorControlImportKeys_Success(t *testing.T) {
 	tc := &fakeTorControl{}
 	_, r := newTestServerWithTorControl(tc)
-	// base64 of "hello" per encoding/json []byte marshaling rules
-	rec := doLoopback(r, http.MethodPost, "/server/tor/import-keys", `{"secret_key":"aGVsbG8="}`)
+	keyDir := t.TempDir()
+	secretKey := []byte(strings.Repeat("k", 64))
+	if err := os.WriteFile(filepath.Join(keyDir, "hs_ed25519_secret_key"), secretKey, 0600); err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(torImportKeysRequest{Path: keyDir, Confirm: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := doLoopback(r, http.MethodPost, "/server/tor/import-keys", string(body))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("import-keys = %d, want 200, body=%s", rec.Code, rec.Body.String())
 	}
-	if string(tc.lastImportedKey) != "hello" {
-		t.Errorf("import-keys: decoded key = %q, want %q", tc.lastImportedKey, "hello")
+	if string(tc.lastImportedKey) != string(secretKey) {
+		t.Errorf("import-keys: loaded key = %q, want supplied key", tc.lastImportedKey)
 	}
 	if !strings.Contains(rec.Body.String(), "imported.onion") {
 		t.Errorf("import-keys body missing address: %q", rec.Body.String())
@@ -424,9 +519,33 @@ func TestHandleTorControlImportKeys_Success(t *testing.T) {
 func TestHandleTorControlImportKeys_Error(t *testing.T) {
 	tc := &fakeTorControl{importErr: errors.New("invalid key format")}
 	_, r := newTestServerWithTorControl(tc)
-	rec := doLoopback(r, http.MethodPost, "/server/tor/import-keys", `{"secret_key":"aGVsbG8="}`)
+	keyDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(keyDir, "hs_ed25519_secret_key"), []byte(strings.Repeat("k", 64)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(torImportKeysRequest{Path: keyDir, Confirm: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := doLoopback(r, http.MethodPost, "/server/tor/import-keys", string(body))
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("import-keys error = %d, want 500", rec.Code)
+	}
+}
+
+func TestHandleTorControlImportKeys_RequiresPathConfirmationAndNoSecretBody(t *testing.T) {
+	for name, body := range map[string]string{
+		"missing confirmation": `{"path":"/tmp/keys"}`,
+		"relative path":        `{"path":"keys","confirm":true}`,
+		"raw secret rejected":  `{"secret_key":"aGVsbG8=","confirm":true}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, r := newTestServerWithTorControl(&fakeTorControl{})
+			rec := doLoopback(r, http.MethodPost, "/server/tor/import-keys", body)
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("import-keys status = %d, want 400", rec.Code)
+			}
+		})
 	}
 }
 

@@ -57,3 +57,15 @@ func TestPrivacySignals_DNTHonoredWhenOptedIn(t *testing.T) {
 		t.Error("DNT: 1 should be honored when web.honor_dnt is true")
 	}
 }
+
+func TestAnonymizeAuditIPMasksOnlyTheSpecifiedAddressSuffix(t *testing.T) {
+	for input, want := range map[string]string{
+		"192.0.2.123":                            "192.0.2.0",
+		"2001:db8:abcd:1234:5678:9abc:def0:1234": "2001:db8:abcd::",
+		"invalid":                                "",
+	} {
+		if got := anonymizeAuditIP(input); got != want {
+			t.Errorf("anonymizeAuditIP(%q) = %q, want %q", input, got, want)
+		}
+	}
+}

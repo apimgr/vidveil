@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
-	"database/sql"
 	"embed"
 	"fmt"
 	"html/template"
@@ -28,6 +27,7 @@ import (
 
 	"github.com/apimgr/vidveil/src/common/apiroute"
 	"github.com/apimgr/vidveil/src/common/authpad"
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/netutil"
 	"github.com/apimgr/vidveil/src/common/outsan"
@@ -42,6 +42,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/alertcheck"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
 	"github.com/apimgr/vidveil/src/server/service/branding"
+	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/email"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/health"
@@ -99,6 +100,7 @@ type Server struct {
 	rateLimiter        *ratelimit.RateLimiter
 	tokenActionLimiter *ratelimit.RateLimiter
 	searchHandler      *handler.SearchHandler
+	metrics            *handler.ServerMetrics
 	serverHandler      *handler.ServerHandler
 	emailService       *email.EmailService
 	notifyDispatcher   *notify.Dispatcher
@@ -141,7 +143,7 @@ type MigrationManager interface {
 	GetMigrationStatus() ([]map[string]interface{}, error)
 	RunMigrations() error
 	RollbackMigration() error
-	GetDB() *sql.DB
+	GetAppDatabase() *database.AppDatabase
 }
 
 func permissionsPolicyHeader() string {
@@ -202,11 +204,12 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 		scheduler:          sched,
 		logger:             logger,
 		router:             chi.NewRouter(),
+		metrics:            handler.NewMetrics(appConfig, engineMgr),
 		rateLimiter:        limiter,
 		tokenActionLimiter: ratelimit.NewRateLimiter(true, 5, 15*60),
 	}
-	if migrationMgr != nil && migrationMgr.GetDB() != nil {
-		s.secretsMgr = secret.NewManager(migrationMgr.GetDB())
+	if migrationMgr != nil && migrationMgr.GetAppDatabase() != nil {
+		s.secretsMgr = secret.NewManager(migrationMgr.GetAppDatabase())
 	}
 	s.brandingImages = branding.NewImageCache(dataDir, branding.ImageSources{
 		Logo:    appConfig.Server.Branding.Logo,
@@ -277,7 +280,7 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 			if idleDays <= 0 || s.migrationMgr == nil {
 				return nil
 			}
-			manager, err := apitoken.NewManager(s.migrationMgr.GetDB(), appConfig.Server.Security.EncryptionKey)
+			manager, err := apitoken.NewManager(s.migrationMgr.GetAppDatabase(), appConfig.Server.Security.EncryptionKey)
 			if err != nil {
 				return err
 			}
@@ -293,13 +296,13 @@ func NewServer(appConfig *config.AppConfig, configDir, dataDir string, engineMgr
 			if _, err := pgp.CleanupRetiredPrivateKey(configDir, time.Now().UTC()); err != nil {
 				return err
 			}
-			if s.migrationMgr == nil || s.migrationMgr.GetDB() == nil {
+			if s.migrationMgr == nil || s.migrationMgr.GetAppDatabase() == nil {
 				return nil
 			}
-			if _, err := secret.RetirePreviousEncryptionKey(ctx, s.migrationMgr.GetDB(), time.Now().UTC()); err != nil {
+			if _, err := secret.RetirePreviousEncryptionKey(ctx, s.migrationMgr.GetAppDatabase(), time.Now().UTC()); err != nil {
 				return err
 			}
-			deleted, err := secreport.CleanupClosedReports(ctx, s.migrationMgr.GetDB(), appConfig.Server.Security.Reports.RetentionDays, time.Now().UTC())
+			deleted, err := secreport.CleanupClosedReports(ctx, s.migrationMgr.GetAppDatabase(), appConfig.Server.Security.Reports.RetentionDays, time.Now().UTC())
 			if err == nil && deleted > 0 {
 				log.Printf("deleted %d expired security reports", deleted)
 			}
@@ -350,17 +353,12 @@ func (s *Server) runDatabaseCheck(ctx context.Context) error {
 		return nil
 	}
 	var probeErr error
-	if s.migrationMgr == nil || s.migrationMgr.GetDB() == nil {
+	if s.migrationMgr == nil || s.migrationMgr.GetAppDatabase() == nil {
 		probeErr = fmt.Errorf("database handle is unavailable")
 	} else {
-		probeErr = alertcheck.ProbeDatabase(ctx, s.migrationMgr.GetDB())
-		if probeErr == nil {
-			readDB := s.migrationMgr.GetDB()
-			if manager, ok := s.migrationMgr.(interface{ GetReadDB() *sql.DB }); ok {
-				readDB = manager.GetReadDB()
-			}
-			probeErr = alertcheck.ProbeDatabase(ctx, readDB)
-		}
+		probeErr = s.migrationMgr.GetAppDatabase().Read(ctx, func(readCtx context.Context, readDB dbstore.Reader) error {
+			return alertcheck.ProbeDatabase(readCtx, readDB)
+		})
 	}
 	settings := s.appConfig.Server.Notifications.DatabaseError
 	failureThreshold := settings.Failures
@@ -581,6 +579,14 @@ func (s *Server) SetBlocklistService(b IPBlocklistChecker) {
 
 // setupMiddleware configures middleware
 func (s *Server) setupMiddleware() {
+	// Middleware execution order per AI.md PART 5 / PART 16 spec (first Use = first to execute):
+	// 1. URLNormalize → 2. RequestID → 3. PathSecurity → 4. SecurityHeaders →
+	// 5. Allowlist → 6. Blocklist → 7. RateLimit → 8. GeoIP → 10. Logger (innermost)
+
+	// URL Normalization per AI.md PART 16 — MUST be first to execute.
+	s.router.Use(URLNormalizeMiddleware)
+	s.router.Use(requestStatsMiddleware(s.metrics))
+
 	if s.appConfig != nil && s.appConfig.Server.SEO.NoIndex {
 		s.router.Use(func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -589,13 +595,6 @@ func (s *Server) setupMiddleware() {
 			})
 		})
 	}
-	// Middleware execution order per AI.md PART 5 / PART 16 spec (first Use = first to execute):
-	// 1. URLNormalize → 2. RequestID → 3. PathSecurity → 4. SecurityHeaders →
-	// 5. Allowlist → 6. Blocklist → 7. RateLimit → 8. GeoIP → 10. Logger (innermost)
-
-	// 1. URL Normalization per AI.md PART 16 — MUST be first to execute
-	s.router.Use(URLNormalizeMiddleware)
-
 	// Finalize every state-changing response to the PART 11 minimum duration.
 	// This covers both successful writes and early failures from downstream
 	// middleware or handlers, including CSRF and rate-limit rejections.
@@ -630,6 +629,7 @@ func (s *Server) setupMiddleware() {
 	// Security headers per AI.md PART 11 (NON-NEGOTIABLE)
 	s.router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			targetWriter := w
 			// Required security headers per PART 11
 			w.Header().Set("X-Content-Type-Options", "nosniff")
 			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
@@ -657,11 +657,14 @@ func (s *Server) setupMiddleware() {
 			}
 			// Reporting-Endpoints + legacy Report-To + NEL per AI.md PART 11
 			// Both modern (Reporting-Endpoints) and legacy (Report-To) formats are required.
-			proto, fqdn, _ := urlvar.GlobalResolver().GetURLVars(r)
-			reportsBase := proto + "://" + fqdn + s.appConfig.APIBasePath() + "/server/reports"
-			w.Header().Set("Reporting-Endpoints", `default="`+reportsBase+`/default"`)
-			w.Header().Set("Report-To", `{"group":"default","max_age":10886400,"endpoints":[{"url":"`+reportsBase+`/default"}]}`)
-			w.Header().Set("NEL", `{"report_to":"default","max_age":2592000,"include_subdomains":true}`)
+			reportsBase := urlvar.BuildURL(r, s.appConfig.APIBasePath()+"/server/reports")
+			if reportsBase != "" {
+				defaultReportsURL := reportsBase + "/default"
+				nelReportsURL := reportsBase + "/nel"
+				w.Header().Set("Reporting-Endpoints", `default="`+defaultReportsURL+`", nel="`+nelReportsURL+`"`)
+				w.Header().Set("Report-To", `{"group":"default","max_age":10886400,"endpoints":[{"url":"`+defaultReportsURL+`"}]}, {"group":"nel","max_age":10886400,"endpoints":[{"url":"`+nelReportsURL+`"}]}`)
+				w.Header().Set("NEL", `{"report_to":"nel","max_age":2592000,"include_subdomains":true}`)
+			}
 			// Add Request ID to response headers per AI.md PART 14
 			if reqID := middleware.GetReqID(r.Context()); reqID != "" {
 				w.Header().Set("X-Request-ID", reqID)
@@ -679,35 +682,34 @@ func (s *Server) setupMiddleware() {
 					w.Header().Set("ETag", `"`+version.AssetStamp()+`"`)
 				}
 			} else if strings.HasPrefix(path, "/api/") {
-				// API responses: no cache
-				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-				w.Header().Set("Pragma", "no-cache")
-				w.Header().Set("Expires", "0")
+				// Public read-only API responses may be cached briefly. Requests
+				// carrying credentials or changing state are always private.
+				if (r.Method == http.MethodGet || r.Method == http.MethodHead) && r.Header.Get("Authorization") == "" {
+					w.Header().Set("Cache-Control", "public, max-age=60")
+				} else {
+					w.Header().Set("Cache-Control", "private, no-store")
+				}
 			} else {
 				// HTML pages per PART 9: no-store plus a build-stamp ETag so any
 				// intermediary that ignores no-store still revalidates.
 				w.Header().Set("Cache-Control", "no-store, must-revalidate")
 				w.Header().Set("ETag", `"`+version.AssetStamp()+`"`)
-				// Version-change purge per PART 9: every HTML response carries a
-				// vidveil_build cookie with the running stamp. A mismatched cookie
-				// means a stale client — add Clear-Site-Data: "cache", "storage"
-				// (NEVER "cookies") to evict poisoned caches and service workers.
-				// One-shot by design: the re-set cookie stops the purge next time;
-				// first-ever visits (no cookie) never purge.
+				// The build cookie is refreshed on every HTML response. Only a
+				// successful top-level navigation may trigger the stale-client purge.
 				stamp := version.AssetStamp()
-				if c, err := r.Cookie("vidveil_build"); err == nil && c.Value != stamp {
-					w.Header().Set("Clear-Site-Data", `"cache", "storage"`)
+				if c, err := r.Cookie("vidveil_build"); err == nil && c.Value != stamp && isTopLevelDocumentNavigation(r) {
+					targetWriter = &versionPurgeWriter{ResponseWriter: w}
 				}
 				http.SetCookie(w, &http.Cookie{
 					Name:     "vidveil_build",
 					Value:    stamp,
 					Path:     "/",
 					MaxAge:   31536000,
-					Secure:   s.appConfig.Server.SSL.Enabled,
+					Secure:   s.appConfig.Server.SSL.Enabled && !urlvar.GlobalResolver().IsOverlayRequest(r),
 					SameSite: http.SameSiteLaxMode,
 				})
 			}
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(targetWriter, r)
 		})
 	})
 
@@ -1205,7 +1207,7 @@ func extensionStripMiddleware(next http.Handler) http.Handler {
 func (s *Server) setupRoutes() {
 	h := handler.NewSearchHandler(s.appConfig, s.engineMgr)
 	if s.migrationMgr != nil {
-		manager, err := apitoken.NewManager(s.migrationMgr.GetDB(), s.appConfig.Server.Security.EncryptionKey)
+		manager, err := apitoken.NewManager(s.migrationMgr.GetAppDatabase(), s.appConfig.Server.Security.EncryptionKey)
 		if err != nil {
 			log.Printf("owner-token manager could not be initialized: %v", err)
 		} else {
@@ -1215,6 +1217,11 @@ func (s *Server) setupRoutes() {
 				}
 			})
 			s.tokenManager = manager
+		}
+	}
+	if s.migrationMgr != nil {
+		if err := svcmetrics.RefreshOwnerTokenMetrics(s.migrationMgr.GetAppDatabase()); err != nil && s.logger != nil {
+			s.logger.Warn("could not initialize active owner-token metrics", map[string]interface{}{"error": err.Error()})
 		}
 	}
 	s.router.Use(s.ownerTokenCookieMiddleware)
@@ -1228,7 +1235,7 @@ func (s *Server) setupRoutes() {
 	// /server/contact?security_id={id} mode switch.
 	secretsMgr := s.secretsMgr
 	if secretsMgr == nil {
-		db := s.migrationMgr.GetDB()
+		db := s.migrationMgr.GetAppDatabase()
 		secretsMgr = secret.NewManager(db)
 		if db != nil {
 			s.secretsMgr = secretsMgr
@@ -1239,15 +1246,17 @@ func (s *Server) setupRoutes() {
 	// Set config directory so the PGP public key (/.well-known/pgp-key.asc) can
 	// be served from {config_dir}/security/pgp.pub.asc per AI.md PART 12.
 	h.SetConfigDir(s.configDir)
-	metrics := handler.NewMetrics(s.appConfig, s.engineMgr)
+	metrics := s.metrics
 	h.SetMetrics(metrics)
+	if s.migrationMgr != nil {
+		if err := metrics.SetPersistence(s.migrationMgr.GetAppDatabase()); err != nil {
+			log.Printf("health: failed to restore request statistics: %v", err)
+		}
+	}
 
 	// Wire real dependency probes for /server/healthz (AI.md PART 13): the
 	// database ping and the scheduler running-state check.
-	h.SetHealthDB(s.migrationMgr.GetDB())
-	if manager, ok := s.migrationMgr.(interface{ GetReadDB() *sql.DB }); ok {
-		h.SetReadHealthDB(manager.GetReadDB())
-	}
+	h.SetDatabase(s.migrationMgr.GetAppDatabase())
 	h.SetOwnerTokenManager(s.tokenManager)
 	if s.scheduler != nil {
 		h.SetScheduler(s.scheduler)
@@ -1460,6 +1469,7 @@ func (s *Server) setupRoutes() {
 		r.Post("/server/preferences/token/forget", s.ownerTokenWebForget)
 		r.Post("/server/preferences/token/reveal", s.ownerTokenWebRevealPrimary)
 		r.Post("/server/preferences/token/rotate", s.ownerTokenWebRotatePrimary)
+		r.Post("/server/preferences/token/revoke", s.ownerTokenWebRevokePrimary)
 		r.Post("/server/preferences/tokens", s.ownerTokenWebCreateLinked)
 		r.Post("/server/preferences/tokens/{id}/reveal", s.ownerTokenWebRevealLinked)
 		r.Post("/server/preferences/tokens/{id}/rotate", s.ownerTokenWebRotateLinked)
@@ -1474,11 +1484,11 @@ func (s *Server) setupRoutes() {
 
 	// Server routes per AI.md PART 14 (Route Scopes)
 	server = handler.NewServerHandler(s.appConfig)
-	server.SetDB(s.migrationMgr.GetDB())
+	server.SetDatabase(s.migrationMgr.GetAppDatabase())
 	server.SetSecretsManager(secretsMgr)
 	server.SetConfigDir(s.configDir)
 	server.SetLogger(s.logger)
-	s.emailService = email.NewEmailService(s.appConfig)
+	s.emailService = email.NewEmailServiceAt(s.appConfig, s.configDir)
 	server.SetEmailService(s.emailService)
 	s.notifyDispatcher = notify.New(&s.appConfig.Server.Contact, paths.ProjectName, version.GetVersion(), s.appConfig.GetPublicURL())
 	if s.logger != nil {
@@ -1526,6 +1536,26 @@ func (s *Server) setupRoutes() {
 	metricsHandler := svcmetrics.ServiceHandler(s.appConfig, s.logger)
 	mcpHandler := mcpserver.OriginMiddleware(s.appConfig, mcpserver.Handler(s.appConfig, s.router, s.isBearerOperatorToken, func(r *http.Request) bool {
 		return s.bearerTokenKind(r) != ""
+	}, func(r *http.Request, method string) bool {
+		if s.isBearerOperatorToken(r) {
+			return true
+		}
+		token, ok := bearerToken(strings.TrimSpace(r.Header.Get("Authorization")))
+		if !ok || s.tokenManager == nil {
+			return false
+		}
+		principal, err := s.tokenManager.ValidateOnly(r.Context(), token)
+		if err != nil {
+			return false
+		}
+		switch principal.Scope {
+		case "global", "read-write":
+			return true
+		case "read":
+			return method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions
+		default:
+			return false
+		}
 	}))
 	apiRoutes := apiroute.NewRegistry()
 	apiHandlers := map[string]http.HandlerFunc{
@@ -1551,18 +1581,12 @@ func (s *Server) setupRoutes() {
 		"exportPreferences": h.PreferencesExport, "importPreferences": h.PreferencesImport,
 		"listOwnerTokens": s.ownerTokensAPIList, "createLinkedToken": s.ownerTokensAPICreate,
 		"issuePrimaryOwnerToken": s.ownerTokensAPIIssuePrimary, "revealPrimaryToken": s.ownerTokensAPIRevealPrimary,
-		"rotatePrimaryToken": s.ownerTokensAPIRotatePrimary, "revealLinkedToken": s.ownerTokensAPIRevealLinked,
+		"rotatePrimaryToken": s.ownerTokensAPIRotatePrimary, "revokePrimaryToken": s.ownerTokensAPIRevokePrimary, "revealLinkedToken": s.ownerTokensAPIRevealLinked,
 		"rotateLinkedToken": s.ownerTokensAPIRotateLinked, "updateLinkedToken": s.ownerTokensAPIUpdateLinked,
 		"revokeLinkedToken": s.ownerTokensAPIRevokeLinked,
 		"getOpenAPISpec":    swagger.SpecHandler(s.appConfig), "executeGraphQL": gql.Handle, "executeGraphQLQuery": gql.Handle,
 		"getMetrics": metricsHandler, "getServiceMetrics": metricsHandler,
-		"debugEngines": func(w http.ResponseWriter, r *http.Request) {
-			s.requireOperatorToken(http.HandlerFunc(h.DebugEnginesList)).ServeHTTP(w, r)
-		},
-		"debugEngine": func(w http.ResponseWriter, r *http.Request) {
-			s.requireOperatorToken(http.HandlerFunc(h.DebugEngine)).ServeHTTP(w, r)
-		},
-		"autodiscover": h.Autodiscover, "executeMCP": mcpHandler.ServeHTTP,
+		"getAPIRoot": h.Autodiscover, "autodiscover": h.Autodiscover, "executeMCP": mcpHandler.ServeHTTP,
 	}
 	for _, definition := range apiroute.Definitions() {
 		handlerFunc := apiHandlers[definition.OperationID]
@@ -1600,6 +1624,29 @@ func (s *Server) setupRoutes() {
 		}
 		return false
 	})
+}
+
+// requestStatsMiddleware maintains the public aggregate counters. Health and
+// metrics scrapes are excluded from the request totals by the PART 13 contract.
+func requestStatsMiddleware(metrics *handler.ServerMetrics) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if metrics == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			metrics.IncrementActiveConnections()
+			defer metrics.DecrementActiveConnections()
+			path := strings.TrimSuffix(r.URL.Path, ".json")
+			path = strings.TrimSuffix(path, ".txt")
+			isHealth := path == "/healthz" || strings.HasSuffix(path, "/healthz")
+			isMetrics := path == "/metrics" || strings.HasSuffix(path, "/metrics")
+			if !isHealth && !isMetrics {
+				metrics.IncrementRequests()
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func (s *Server) notifyScheduledTaskFailure(task scheduler.ScheduledTask, history scheduler.TaskHistory) {
@@ -2016,6 +2063,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	if s.tokenActionLimiter != nil {
 		s.tokenActionLimiter.Stop()
+	}
+	if s.metrics != nil {
+		if flushErr := s.metrics.Close(); flushErr != nil && err == nil {
+			err = fmt.Errorf("persist health request statistics: %w", flushErr)
+		}
 	}
 	return err
 }

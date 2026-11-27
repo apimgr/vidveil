@@ -2,8 +2,12 @@
 package app
 
 import (
+	"context"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"github.com/apimgr/vidveil/src/common/dbstore"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -27,14 +31,19 @@ func newDataTestDB(t *testing.T) *database.SchemaManager {
 
 func TestReadOwnerFavoritesIsScopedToOwner(t *testing.T) {
 	mgr := newDataTestDB(t)
-	db := mgr.GetDB()
-	for _, owner := range []string{"owner-a", "owner-b"} {
-		if _, err := db.Exec(`INSERT INTO owners (id) VALUES (?)`, owner); err != nil {
-			t.Fatal(err)
+	db := mgr.GetAppDatabase()
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		for _, owner := range []string{"owner-a", "owner-b"} {
+			if _, err := tx.Exec(`INSERT INTO owners (id) VALUES (?)`, owner); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(`INSERT INTO favorites (owner_id, visitor_id, url, title) VALUES (?, ?, ?, ?)`, owner, owner, "https://example.test/"+owner, owner); err != nil {
+				return err
+			}
 		}
-		if _, err := db.Exec(`INSERT INTO favorites (owner_id, visitor_id, url, title) VALUES (?, ?, ?, ?)`, owner, owner, "https://example.test/"+owner, owner); err != nil {
-			t.Fatal(err)
-		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 	rows, err := readOwnerFavorites(db, "owner-a")
 	if err != nil {
@@ -50,21 +59,26 @@ func TestReadOwnerFavoritesIsScopedToOwner(t *testing.T) {
 
 func TestResolveOwnerIDByUniqueTokenPrefix(t *testing.T) {
 	mgr := newDataTestDB(t)
-	db := mgr.GetDB()
-	for _, owner := range []string{"owner-a", "owner-b"} {
-		if _, err := db.Exec(`INSERT INTO owners (id) VALUES (?)`, owner); err != nil {
-			t.Fatal(err)
+	db := mgr.GetAppDatabase()
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		for _, owner := range []string{"owner-a", "owner-b"} {
+			if _, err := tx.Exec(`INSERT INTO owners (id) VALUES (?)`, owner); err != nil {
+				return err
+			}
 		}
-	}
-	for _, token := range []struct{ owner, prefix string }{{"owner-a", "own_abc123"}, {"owner-b", "own_def456"}} {
-		id, err := uuid.NewV7()
-		if err != nil {
-			t.Fatal(err)
+		for _, token := range []struct{ owner, prefix string }{{"owner-a", "own_abc123"}, {"owner-b", "own_def456"}} {
+			id, err := uuid.NewV7()
+			if err != nil {
+				return err
+			}
+			hashPrefix := token.owner[len(token.owner)-1:]
+			if _, err := tx.Exec(`INSERT INTO api_tokens (id, owner_id, kind, token_hash, token_prefix, token_last4, token_enc) VALUES (?, ?, 'linked', ?, ?, '', '')`, id.String(), token.owner, strings.Repeat(hashPrefix, 64), token.prefix); err != nil {
+				return err
+			}
 		}
-		hashPrefix := token.owner[len(token.owner)-1:]
-		if _, err := db.Exec(`INSERT INTO api_tokens (id, owner_id, kind, token_hash, token_prefix, token_last4, token_enc) VALUES (?, ?, 'linked', ?, ?, '', '')`, id.String(), token.owner, strings.Repeat(hashPrefix, 64), token.prefix); err != nil {
-			t.Fatal(err)
-		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 	got, err := resolveOwnerID(db, "own_abc")
 	if err != nil || got != "owner-a" {
@@ -77,15 +91,18 @@ func TestResolveOwnerIDByUniqueTokenPrefix(t *testing.T) {
 
 func TestOwnerTokenExportContainsNoCredentialMaterial(t *testing.T) {
 	mgr := newDataTestDB(t)
-	db := mgr.GetDB()
-	if _, err := db.Exec(`INSERT INTO owners (id) VALUES ('owner-a')`); err != nil {
-		t.Fatal(err)
-	}
+	db := mgr.GetAppDatabase()
 	id, err := uuid.NewV7()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`INSERT INTO api_tokens (id, owner_id, kind, token_hash, token_prefix, token_last4, token_enc) VALUES (?, 'owner-a', 'linked', ?, 'own_abc123', '1234', 'secret-token')`, id.String(), strings.Repeat("b", 64)); err != nil {
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		if _, err := tx.Exec(`INSERT INTO owners (id) VALUES ('owner-a')`); err != nil {
+			return err
+		}
+		_, err := tx.Exec(`INSERT INTO api_tokens (id, owner_id, kind, token_hash, token_prefix, token_last4, token_enc) VALUES (?, 'owner-a', 'linked', ?, 'own_abc123', '1234', 'secret-token')`, id.String(), strings.Repeat("b", 64))
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	tokens, err := readOwnerTokens(db, "owner-a")
@@ -105,31 +122,31 @@ func TestOwnerTokenExportContainsNoCredentialMaterial(t *testing.T) {
 
 func TestDeleteOwnerResourcesOnlyDeletesSelectedOwner(t *testing.T) {
 	mgr := newDataTestDB(t)
-	db := mgr.GetDB()
-	for _, owner := range []string{"owner-a", "owner-b"} {
-		if _, err := db.Exec(`INSERT INTO owners (id) VALUES (?)`, owner); err != nil {
-			t.Fatal(err)
+	db := mgr.GetAppDatabase()
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		for _, owner := range []string{"owner-a", "owner-b"} {
+			if _, err := tx.Exec(`INSERT INTO owners (id) VALUES (?)`, owner); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(`INSERT INTO favorites (owner_id, visitor_id, url, title) VALUES (?, ?, ?, ?)`, owner, owner, "https://example.test/"+owner, owner); err != nil {
+				return err
+			}
 		}
-		if _, err := db.Exec(`INSERT INTO favorites (owner_id, visitor_id, url, title) VALUES (?, ?, ?, ?)`, owner, owner, "https://example.test/"+owner, owner); err != nil {
-			t.Fatal(err)
+		count, err := deleteOwnerResources(t.Context(), tx, "owner-a")
+		if err != nil {
+			return err
 		}
-	}
-	tx, err := db.Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
-	count, err := deleteOwnerResources(t.Context(), tx, "owner-a")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count != 1 {
-		t.Fatalf("deleted count = %d, want 1", count)
-	}
-	if err := tx.Commit(); err != nil {
+		if count != 1 {
+			return fmt.Errorf("deleted count = %d, want 1", count)
+		}
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	var remaining int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM favorites`).Scan(&remaining); err != nil {
+	if err := db.Read(context.Background(), func(ctx context.Context, readDB dbstore.Reader) error {
+		return readDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM favorites`).Scan(&remaining)
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if remaining != 1 {

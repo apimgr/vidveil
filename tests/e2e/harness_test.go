@@ -180,6 +180,8 @@ func (st *suite) start() error {
     enabled: false
   rate_limit:
     enabled: false
+  seo:
+    canonical: "https://vidveil.e2e.test"
   update:
     auto_install: false
 `, port)

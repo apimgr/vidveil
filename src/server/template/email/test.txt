@@ -1,4 +1,4 @@
-Subject: Test Email from {app_name}
+Subject: Test Email - {app_name}
 ---
 Hello,
 

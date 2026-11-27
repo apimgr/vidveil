@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -94,7 +95,7 @@ func TestOperatorTokenRegenerationRotatesCSRFSecret(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager := secret.NewManager(schema.GetDB())
+	manager := secret.NewManager(schema.GetAppDatabase())
 	if err := manager.EnsureSecrets(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +125,7 @@ func TestOwnerTokensAPIRequiresPrimaryBearerAndMasksList(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := apitoken.NewManager(schema.GetDB(), strings.Repeat("ef", 32))
+	manager, err := apitoken.NewManager(schema.GetAppDatabase(), strings.Repeat("ef", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,27 +174,29 @@ func TestOwnerTokensAPIRequiresPrimaryBearerAndMasksList(t *testing.T) {
 		t.Fatal("token list leaked the raw primary token")
 	}
 
-	create := httptest.NewRequest(http.MethodPost, "/api/v1/server/preferences/tokens", strings.NewReader(`{"name":"automation","expires":"30d"}`))
+	create := httptest.NewRequest(http.MethodPost, "/api/v1/server/preferences/tokens", strings.NewReader(`{"name":"automation","scope":"read","expires":"30d"}`))
 	create.Header.Set("Authorization", "Bearer "+issued.Token)
 	create.Header.Set("Content-Type", "application/json")
 	created := httptest.NewRecorder()
 	s.ownerTokensAPICreate(created, create)
-	if created.Code != http.StatusOK {
+	if created.Code != http.StatusCreated {
 		t.Fatalf("linked-token creation status = %d: %s", created.Code, created.Body.String())
 	}
 	var result struct {
 		Data struct {
-			Token string `json:"token"`
+			LinkedToken string `json:"linked_token"`
+			Scope       string `json:"scope"`
+			Masked      string `json:"token_masked"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(created.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Data.Token == "" {
+	if result.Data.LinkedToken == "" || result.Data.Scope != "read" || !strings.Contains(result.Data.Masked, "...") {
 		t.Fatal("linked-token creation did not return the issued token")
 	}
 	linkedRequest := httptest.NewRequest(http.MethodGet, "/api/v1/server/preferences/tokens", nil)
-	linkedRequest.Header.Set("Authorization", "Bearer "+result.Data.Token)
+	linkedRequest.Header.Set("Authorization", "Bearer "+result.Data.LinkedToken)
 	linkedDenied := httptest.NewRecorder()
 	s.ownerTokensAPIList(linkedDenied, linkedRequest)
 	if linkedDenied.Code != http.StatusForbidden || linkedDenied.Header().Get("WWW-Authenticate") != `Bearer error="insufficient_scope"` {
@@ -203,7 +206,7 @@ func TestOwnerTokensAPIRequiresPrimaryBearerAndMasksList(t *testing.T) {
 	primaryList.Header.Set("Authorization", "Bearer "+issued.Token)
 	listed := httptest.NewRecorder()
 	s.ownerTokensAPIList(listed, primaryList)
-	if listed.Code != http.StatusOK || strings.Contains(listed.Body.String(), result.Data.Token) {
+	if listed.Code != http.StatusOK || strings.Contains(listed.Body.String(), result.Data.LinkedToken) {
 		t.Fatalf("primary token list = %d %q", listed.Code, listed.Body.String())
 	}
 }
@@ -217,7 +220,7 @@ func TestOwnerTokensAPIIssuePrimaryAndRejectsExistingCredentials(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := apitoken.NewManager(schema.GetDB(), strings.Repeat("cd", 32))
+	manager, err := apitoken.NewManager(schema.GetAppDatabase(), strings.Repeat("cd", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +269,7 @@ func TestOwnerTokenWebIssuePrimarySetsCookieAndRejectsExistingIdentity(t *testin
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := apitoken.NewManager(schema.GetDB(), strings.Repeat("de", 32))
+	manager, err := apitoken.NewManager(schema.GetAppDatabase(), strings.Repeat("de", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +314,7 @@ func TestOwnerTokenRestoreSetsStrictPrimaryCookie(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := apitoken.NewManager(schema.GetDB(), strings.Repeat("ab", 32))
+	manager, err := apitoken.NewManager(schema.GetAppDatabase(), strings.Repeat("ab", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +349,7 @@ func TestOperatorRouteDistinguishesValidOwnerToken(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := apitoken.NewManager(schema.GetDB(), strings.Repeat("12", 32))
+	manager, err := apitoken.NewManager(schema.GetAppDatabase(), strings.Repeat("12", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,5 +368,159 @@ func TestOperatorRouteDistinguishesValidOwnerToken(t *testing.T) {
 	route.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden || response.Header().Get("WWW-Authenticate") != `Bearer error="insufficient_scope"` || called {
 		t.Fatalf("valid owner token response = %d, challenge %q, route called %t", response.Code, response.Header().Get("WWW-Authenticate"), called)
+	}
+}
+
+func TestOwnerTokensAPIRevokePrimaryRequiresConfirmationAndDeletesOwner(t *testing.T) {
+	schema, err := database.NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = schema.Close() }()
+	if err := schema.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := apitoken.NewManager(schema.GetAppDatabase(), strings.Repeat("ac", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	issued, err := manager.IssuePrimary(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	primary, err := manager.Authenticate(ctx, issued.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linked, err := manager.CreateLinked(ctx, primary, "automation", nil, 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := schema.GetAppDatabase().Write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO favorites (owner_id, visitor_id, url, title) VALUES (?, ?, ?, ?)`, issued.OwnerID, "owner-revoke-test", "https://example.test/video", "saved")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{appConfig: config.DefaultAppConfig(), tokenManager: manager}
+	s.tokenActionLimiter = ratelimit.NewRateLimiter(true, 10, 900)
+	defer s.tokenActionLimiter.Stop()
+
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/server/preferences/tokens/primary", strings.NewReader(`{"confirm":"wrong"}`))
+	request.Header.Set("Authorization", "Bearer "+issued.Token)
+	response := httptest.NewRecorder()
+	s.ownerTokensAPIRevokePrimary(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("wrong confirmation status = %d, want 400: %s", response.Code, response.Body.String())
+	}
+	if _, err := manager.Authenticate(ctx, issued.Token); err != nil {
+		t.Fatalf("wrong confirmation deleted primary token: %v", err)
+	}
+
+	linkedRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/server/preferences/tokens/primary", strings.NewReader(`{"confirm":"`+issued.Token[len(issued.Token)-4:]+`"}`))
+	linkedRequest.Header.Set("Authorization", "Bearer "+linked.Token)
+	linkedResponse := httptest.NewRecorder()
+	s.ownerTokensAPIRevokePrimary(linkedResponse, linkedRequest)
+	if linkedResponse.Code != http.StatusForbidden {
+		t.Fatalf("linked-token primary revocation status = %d, want 403: %s", linkedResponse.Code, linkedResponse.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodDelete, "/api/v1/server/preferences/tokens/primary", strings.NewReader(`{"confirm":"`+issued.Token[len(issued.Token)-4:]+`"}`))
+	request.Header.Set("Authorization", "Bearer "+issued.Token)
+	response = httptest.NewRecorder()
+	s.ownerTokensAPIRevokePrimary(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("primary revocation status = %d, want 200: %s", response.Code, response.Body.String())
+	}
+	var result struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Tokens    int64 `json:"tokens"`
+			Resources int64 `json:"resources"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK || result.Data.Tokens != 2 || result.Data.Resources != 1 {
+		t.Fatalf("primary revocation response = %+v, want two tokens and one resource", result)
+	}
+	if _, err := manager.Authenticate(ctx, issued.Token); err != apitoken.ErrInvalidToken {
+		t.Fatalf("deleted primary authentication error = %v, want invalid token", err)
+	}
+}
+
+func TestOwnerTokensAPIRevokePrimaryConsumesStrictLimitOnEveryAttempt(t *testing.T) {
+	s := &Server{appConfig: config.DefaultAppConfig()}
+	s.tokenActionLimiter = ratelimit.NewRateLimiter(true, 1, 900)
+	defer s.tokenActionLimiter.Stop()
+	for index, want := range []int{http.StatusUnauthorized, http.StatusTooManyRequests} {
+		request := httptest.NewRequest(http.MethodDelete, "/api/v1/server/preferences/tokens/primary", strings.NewReader(`{}`))
+		response := httptest.NewRecorder()
+		s.ownerTokenPrincipal(response, request)
+		if response.Code != want {
+			t.Fatalf("revoke attempt %d status = %d, want %d", index+1, response.Code, want)
+		}
+	}
+}
+
+func TestOwnerTokenWebRevokePrimaryConfirmsClearsCredentialsAndRedirects(t *testing.T) {
+	schema, err := database.NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = schema.Close() }()
+	if err := schema.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := apitoken.NewManager(schema.GetAppDatabase(), strings.Repeat("ac", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := manager.IssuePrimary(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{appConfig: config.DefaultAppConfig(), tokenManager: manager}
+	s.tokenActionLimiter = ratelimit.NewRateLimiter(true, 10, 900)
+	defer s.tokenActionLimiter.Stop()
+
+	request := httptest.NewRequest(http.MethodPost, "/server/preferences/token/revoke", strings.NewReader("confirm=wrong"))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(&http.Cookie{Name: ownerTokenCookieName, Value: issued.Token})
+	response := httptest.NewRecorder()
+	s.ownerTokenWebRevokePrimary(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("wrong web confirmation status = %d, want 400", response.Code)
+	}
+	if _, err := manager.Authenticate(context.Background(), issued.Token); err != nil {
+		t.Fatalf("wrong web confirmation deleted primary token: %v", err)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/server/preferences/token/revoke", strings.NewReader("confirm="+issued.Token[len(issued.Token)-4:]))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(&http.Cookie{Name: ownerTokenCookieName, Value: issued.Token})
+	response = httptest.NewRecorder()
+	s.ownerTokenWebRevokePrimary(response, request)
+	location, err := url.Parse(response.Header().Get("Location"))
+	if err != nil || response.Code != http.StatusSeeOther || location.Path != "/server/preferences/tokens" {
+		t.Fatalf("web revocation redirect = %d %q, want 303 to token page", response.Code, response.Header().Get("Location"))
+	}
+	if response.Header().Get("Clear-Site-Data") != `"storage"` {
+		t.Fatalf("web revocation Clear-Site-Data = %q, want storage only", response.Header().Get("Clear-Site-Data"))
+	}
+	var cleared *http.Cookie
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == ownerTokenCookieName {
+			cleared = cookie
+			break
+		}
+	}
+	if cleared == nil || cleared.Value != "" || cleared.MaxAge != 0 || !cleared.HttpOnly || !cleared.Secure || cleared.SameSite != http.SameSiteStrictMode {
+		t.Fatalf("web revocation did not clear the primary cookie with matching attributes: %#v", cleared)
+	}
+	if _, err := manager.Authenticate(context.Background(), issued.Token); err != apitoken.ErrInvalidToken {
+		t.Fatalf("deleted primary authentication error = %v, want invalid token", err)
 	}
 }

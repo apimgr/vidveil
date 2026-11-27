@@ -29,7 +29,7 @@ jobs:
       image: casjaysdev/go:latest
       options: "--user 0:0"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Verify generated API specifications are current
         run: |
           before=$(sha256sum src/swagger/openapi_generated.json src/graphql/schema_generated.graphql)
@@ -45,7 +45,7 @@ jobs:
   secret-scan:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # Full history — truffleHog scans the commit range
           fetch-depth: 0
@@ -66,16 +66,13 @@ jobs:
         with:
           base: ${{ steps.range.outputs.base }}
           head: ${{ steps.range.outputs.head }}
-          # The weekly full-history scan excludes AI.md's credential-shaped examples.
-          # Push and pull-request scans still include AI.md in their commit ranges.
-          extra_args: >-
-            --results=verified,unknown
-            ${{ github.event_name == 'schedule' && '--exclude-paths=.github/trufflehog-exclude-paths.txt' || '' }}
+          # Range scans block on verified and unknown; full-history scans block on verified only.
+          extra_args: --results=${{ steps.range.outputs.base == '' && 'verified' || 'verified,unknown' }} --exclude-paths=.github/trufflehog-exclude.txt
 
   workflow-policy:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Enforce SHA-pinned third-party actions
         run: |
           # Every third-party action must be pinned to a full 40-char commit SHA
@@ -95,7 +92,7 @@ jobs:
     env:
       CGO_ENABLED: "0"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Verify generated API specifications are current
         run: |
           before=$(sha256sum src/swagger/openapi_generated.json src/graphql/schema_generated.graphql)
@@ -132,7 +129,7 @@ jobs:
     env:
       CGO_ENABLED: "0"
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Verify generated API specifications are current
         run: |
           before=$(sha256sum src/swagger/openapi_generated.json src/graphql/schema_generated.graphql)
@@ -152,13 +149,13 @@ jobs:
     env:
       GOFLAGS: -buildvcs=false
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - run: govulncheck ./...
 
   image-scan:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Build image for scanning
         # Only when the project ships a Docker image
         if: hashFiles('docker/Dockerfile') != ''

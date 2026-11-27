@@ -126,7 +126,7 @@ func TestReadHostnameFile_TrimsWhitespace(t *testing.T) {
 func TestPrintTorHelp_ListsAllSubcommands(t *testing.T) {
 	out := captureStdout(printTorHelp)
 	// Per AI.md PART 31 CLI table: all seven operations must be documented
-	for _, cmd := range []string{"tor status", "tor validate", "tor restart", "tor regenerate", "tor vanity start", "tor vanity apply", "tor import-keys"} {
+	for _, cmd := range []string{"tor status", "tor validate", "tor restart", "tor regenerate", "tor vanity start", "tor vanity stop", "tor vanity apply", "tor import-keys"} {
 		if !strings.Contains(out, cmd) {
 			t.Errorf("printTorHelp: missing %q", cmd)
 		}
@@ -355,7 +355,7 @@ func TestTorRegenerate_NoRunningServer(t *testing.T) {
 	base := t.TempDir()
 	var code int
 	errOut := captureStderr(func() {
-		code = torRegenerate(filepath.Join(base, "config"), filepath.Join(base, "data"))
+		code = torRegenerate(filepath.Join(base, "config"), filepath.Join(base, "data"), true)
 	})
 	if code != 1 {
 		t.Errorf("torRegenerate without a running server = %d, want 1", code)
@@ -368,12 +368,19 @@ func TestTorRegenerate_NoRunningServer(t *testing.T) {
 func TestTorRegenerate_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/server/tor/regenerate", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Confirm bool `json:"confirm"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !req.Confirm {
+			jsonError(w, "confirm is required")
+			return
+		}
 		jsonOK(w, map[string]interface{}{"onion_address": "regenerated.onion"})
 	})
 	configDir, dataDir := startFakeControlServer(t, mux)
 
 	var code int
-	out := captureStdout(func() { code = torRegenerate(configDir, dataDir) })
+	out := captureStdout(func() { code = torRegenerate(configDir, dataDir, true) })
 	if code != 0 {
 		t.Errorf("torRegenerate = %d, want 0", code)
 	}
@@ -401,6 +408,14 @@ func TestTorVanityStart_NoRunningServer(t *testing.T) {
 func TestTorVanityStart_FindsPendingAddress(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/server/tor/vanity/start", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Prefix  string `json:"prefix"`
+			Workers int    `json:"workers"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Prefix != "abc" || req.Workers != 2 {
+			jsonError(w, "invalid vanity request")
+			return
+		}
 		jsonOK(w, map[string]interface{}{"message": "vanity generation started"})
 	})
 	mux.HandleFunc("/server/tor/status", func(w http.ResponseWriter, r *http.Request) {
@@ -423,7 +438,7 @@ func TestTorVanityStart_FindsPendingAddress(t *testing.T) {
 	}
 
 	var code int
-	out := captureStdout(func() { code = torVanityStart(configDir, dataDir, "abc") })
+	out := captureStdout(func() { code = torVanityStart(configDir, dataDir, "abc", 2) })
 	if code != 0 {
 		t.Errorf("torVanityStart = %d, want 0", code)
 	}
@@ -436,7 +451,7 @@ func TestTorVanityApply_NoRunningServer(t *testing.T) {
 	base := t.TempDir()
 	var code int
 	errOut := captureStderr(func() {
-		code = torVanityApply(filepath.Join(base, "config"), filepath.Join(base, "data"))
+		code = torVanityApply(filepath.Join(base, "config"), filepath.Join(base, "data"), true)
 	})
 	if code != 1 {
 		t.Errorf("torVanityApply without a running server = %d, want 1", code)
@@ -449,12 +464,19 @@ func TestTorVanityApply_NoRunningServer(t *testing.T) {
 func TestTorVanityApply_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/server/tor/vanity/apply", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Confirm bool `json:"confirm"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !req.Confirm {
+			jsonError(w, "confirm is required")
+			return
+		}
 		jsonOK(w, map[string]interface{}{"onion_address": "applied.onion"})
 	})
 	configDir, dataDir := startFakeControlServer(t, mux)
 
 	var code int
-	out := captureStdout(func() { code = torVanityApply(configDir, dataDir) })
+	out := captureStdout(func() { code = torVanityApply(configDir, dataDir, true) })
 	if code != 0 {
 		t.Errorf("torVanityApply = %d, want 0", code)
 	}
@@ -463,13 +485,41 @@ func TestTorVanityApply_Success(t *testing.T) {
 	}
 }
 
+func TestTorVanityStop_NoRunningServer(t *testing.T) {
+	base := t.TempDir()
+	var code int
+	errOut := captureStderr(func() {
+		code = torVanityStop(filepath.Join(base, "config"), filepath.Join(base, "data"))
+	})
+	if code != 1 || !strings.Contains(errOut, errNoRunningServer) {
+		t.Errorf("torVanityStop without server: code=%d stderr=%q", code, errOut)
+	}
+}
+
+func TestTorVanityStop_Success(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/server/tor/vanity/stop", func(w http.ResponseWriter, r *http.Request) {
+		jsonOK(w, map[string]interface{}{"stopped": true, "candidates": []string{"abc.onion"}})
+	})
+	configDir, dataDir := startFakeControlServer(t, mux)
+	var code int
+	out := captureStdout(func() { code = torVanityStop(configDir, dataDir) })
+	if code != 0 || !strings.Contains(out, "Vanity search stopped") {
+		t.Errorf("torVanityStop: code=%d output=%q", code, out)
+	}
+}
+
 // ── torImportKeys ─────────────────────────────────────────────────────────────
 
 func TestTorImportKeys_NoRunningServer(t *testing.T) {
 	base := t.TempDir()
+	keyDir := filepath.Join(base, "keys")
+	if err := os.MkdirAll(keyDir, 0700); err != nil {
+		t.Fatal(err)
+	}
 	var code int
 	errOut := captureStderr(func() {
-		code = torImportKeys(filepath.Join(base, "config"), filepath.Join(base, "data"), filepath.Join(base, "nope.key"))
+		code = torImportKeys(filepath.Join(base, "config"), filepath.Join(base, "data"), keyDir, true)
 	})
 	if code != 1 {
 		t.Errorf("torImportKeys without a running server = %d, want 1", code)
@@ -488,13 +538,13 @@ func TestTorImportKeys_MissingFile(t *testing.T) {
 
 	var code int
 	errOut := captureStderr(func() {
-		code = torImportKeys(configDir, dataDir, filepath.Join(dataDir, "nope.key"))
+		code = torImportKeys(configDir, dataDir, filepath.Join(dataDir, "nope"), true)
 	})
 	if code != 1 {
 		t.Errorf("torImportKeys with missing file = %d, want 1", code)
 	}
-	if !strings.Contains(errOut, "Failed to read key file") {
-		t.Errorf("torImportKeys: stderr = %q, want to contain read-failure message", errOut)
+	if !strings.Contains(errOut, "Key directory is unavailable") {
+		t.Errorf("torImportKeys: stderr = %q, want to contain unavailable-directory message", errOut)
 	}
 }
 
@@ -502,23 +552,27 @@ func TestTorImportKeys_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/server/tor/import-keys", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			SecretKey []byte `json:"secret_key"`
+			Path    string `json:"path"`
+			Confirm bool   `json:"confirm"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.SecretKey) == 0 {
-			jsonError(w, "secret_key is required")
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" || !req.Confirm {
+			jsonError(w, "path and confirmation are required")
 			return
 		}
 		jsonOK(w, map[string]interface{}{"onion_address": "imported.onion"})
 	})
 	configDir, dataDir := startFakeControlServer(t, mux)
 
-	keyPath := filepath.Join(dataDir, "imported.key")
-	if err := os.WriteFile(keyPath, []byte("stub-secret-key-bytes"), 0600); err != nil {
+	keyPath := filepath.Join(dataDir, "imported")
+	if err := os.MkdirAll(keyPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(keyPath, "hs_ed25519_secret_key"), []byte("stub-secret-key-bytes"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
 	var code int
-	out := captureStdout(func() { code = torImportKeys(configDir, dataDir, keyPath) })
+	out := captureStdout(func() { code = torImportKeys(configDir, dataDir, keyPath, true) })
 	if code != 0 {
 		t.Errorf("torImportKeys = %d, want 0", code)
 	}

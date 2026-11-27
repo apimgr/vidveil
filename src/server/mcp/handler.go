@@ -29,6 +29,7 @@ import (
 // authorization behavior.
 type OperatorAuthorizer func(*http.Request) bool
 type BearerAuthorizer func(*http.Request) bool
+type ScopeAuthorizer func(*http.Request, string) bool
 
 type internalDispatchKey struct{}
 
@@ -48,7 +49,11 @@ func IsInternalDispatch(ctx context.Context) bool {
 	return value
 }
 
-func Handler(cfg *config.AppConfig, api http.Handler, isOperator OperatorAuthorizer, isAuthenticated BearerAuthorizer) http.Handler {
+func Handler(cfg *config.AppConfig, api http.Handler, isOperator OperatorAuthorizer, isAuthenticated BearerAuthorizer, scopeAuthorizers ...ScopeAuthorizer) http.Handler {
+	var scopeAllowed ScopeAuthorizer
+	if len(scopeAuthorizers) > 0 {
+		scopeAllowed = scopeAuthorizers[0]
+	}
 	streamable := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
 		server := sdk.NewServer(&sdk.Implementation{Name: "vidveil", Version: version.GetVersion()}, &sdk.ServerOptions{})
 		if cfg == nil || api == nil {
@@ -57,6 +62,9 @@ func Handler(cfg *config.AppConfig, api http.Handler, isOperator OperatorAuthori
 		operatorAuthorized := isOperator != nil && isOperator(r)
 		for _, op := range operations(cfg, r, operatorAuthorized) {
 			operation := op
+			if scopeAllowed != nil && !scopeAllowed(r, operation.method) {
+				continue
+			}
 			server.AddTool(&sdk.Tool{
 				Name:        operation.name,
 				Description: operation.description,
@@ -128,6 +136,15 @@ func Handler(cfg *config.AppConfig, api http.Handler, isOperator OperatorAuthori
 		if !supportedMethod(envelope.Method) {
 			writeRPCError(w, http.StatusNotFound, envelope.ID, -32601, "Method not found")
 			return
+		}
+		if envelope.Method == "tools/call" && scopeAllowed != nil {
+			for _, op := range operations(cfg, r, isOperator != nil && isOperator(r)) {
+				if op.name == envelope.Params.Name && !scopeAllowed(r, op.method) {
+					w.Header().Set("WWW-Authenticate", `Bearer error="insufficient_scope"`)
+					writeRPCError(w, http.StatusForbidden, envelope.ID, -32000, "Insufficient token scope")
+					return
+				}
+			}
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))
 		streamable.ServeHTTP(w, r)

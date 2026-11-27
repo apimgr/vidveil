@@ -22,7 +22,7 @@ func newTestTUIModel() TUIModel {
 }
 
 func TestTUICommandTreeMatchesHelpOrder(t *testing.T) {
-	want := []string{TUICommandSearch, TUICommandEngines, TUICommandBangs, TUICommandProbe, TUICommandLogin}
+	want := []string{TUICommandSearch, TUICommandEngines, TUICommandBangs, TUICommandProbe, TUICommandHealth, TUICommandFavorites, TUICommandLogin, TUICommandUpdate, TUICommandSetup}
 	if !reflect.DeepEqual(tuiCommandOrder, want) {
 		t.Fatalf("TUI command order = %v, want %v", tuiCommandOrder, want)
 	}

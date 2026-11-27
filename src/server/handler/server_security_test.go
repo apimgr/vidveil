@@ -157,14 +157,14 @@ func newSecurityTestHandler(t *testing.T) (*ServerHandler, string) {
 	}
 	t.Cleanup(func() { _ = sm.Close() })
 
-	db := sm.GetDB()
+	db := sm.GetAppDatabase()
 	secretsMgr := secret.NewManager(db)
 	if err := secretsMgr.EnsureSecrets(context.Background()); err != nil {
 		t.Fatalf("EnsureSecrets: %v", err)
 	}
 
 	h := NewServerHandler(config.DefaultAppConfig())
-	h.SetDB(db)
+	h.SetDatabase(db)
 	h.SetSecretsManager(secretsMgr)
 	h.SetConfigDir(t.TempDir())
 
@@ -177,14 +177,14 @@ func newSecurityTestHandler(t *testing.T) (*ServerHandler, string) {
 }
 
 func TestAPISecurityReturnsPublicOverviewContract(t *testing.T) {
-	t.Setenv("DOMAIN", "example.test")
+	t.Setenv("DOMAIN", "example.com")
 	h, _ := newSecurityTestHandler(t)
 	h.appConfig.Web.Security.ReportURL = "https://github.com/apimgr/vidveil/security/advisories/new"
 	h.appConfig.Web.Security.Contact = "mailto:security@example.test"
 	h.appConfig.Server.Pages.Contact.Enabled = true
 	h.appConfig.Web.Security.Expires = "2030-01-01T00:00:00Z"
-	request := httptest.NewRequest(http.MethodGet, "https://example.test/api/v1/server/security", nil)
-	request.Host = "example.test"
+	request := httptest.NewRequest(http.MethodGet, "https://example.com/api/v1/server/security", nil)
+	request.Host = "example.com"
 	response := httptest.NewRecorder()
 	h.APISecurity(response, request)
 	if response.Code != http.StatusOK {
@@ -217,7 +217,7 @@ func TestAPISecurityReturnsPublicOverviewContract(t *testing.T) {
 	if payload.Data.Expires != "2030-01-01T00:00:00Z" || payload.Data.PGP.Available || payload.Data.PGP.URL != nil || payload.Data.PGP.Fingerprint != nil {
 		t.Fatalf("security response optional metadata = %#v", payload.Data)
 	}
-	if payload.Data.PolicyURL != "https://example.test/server/security/policy" || payload.Data.ThanksURL != "https://example.test/server/security/thanks" || payload.Data.ReportURL != "https://example.test/server/contact" {
+	if payload.Data.PolicyURL != "https://example.com/server/security/policy" || payload.Data.ThanksURL != "https://example.com/server/security/thanks" || payload.Data.ReportURL != "https://example.com/server/contact" {
 		t.Fatalf("security response links = %#v", payload.Data)
 	}
 }

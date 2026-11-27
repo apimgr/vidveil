@@ -72,9 +72,10 @@ type TorService struct {
 	serverPort int
 
 	// Status tracking
-	status    TorServiceStatus
-	startTime time.Time
-	mu        sync.RWMutex
+	status           TorServiceStatus
+	startTime        time.Time
+	bootstrapPercent int
+	mu               sync.RWMutex
 
 	// Vanity generation
 	vanityCtx    context.Context
@@ -107,11 +108,14 @@ const (
 
 // VanityStatus tracks vanity address generation progress
 type VanityStatus struct {
-	Active      bool      `json:"active"`
-	Prefix      string    `json:"prefix"`
-	StartTime   time.Time `json:"start_time"`
-	Attempts    int64     `json:"attempts"`
-	ElapsedTime string    `json:"elapsed_time"`
+	Active         bool      `json:"active"`
+	Prefix         string    `json:"prefix"`
+	StartTime      time.Time `json:"start_time"`
+	Attempts       int64     `json:"attempts"`
+	ElapsedTime    string    `json:"elapsed_time"`
+	Workers        int       `json:"workers"`
+	Rate           float64   `json:"rate"`
+	ElapsedSeconds float64   `json:"elapsed_seconds"`
 }
 
 // NewTorService creates a new Tor service instance
@@ -220,6 +224,7 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	}
 	s.status = TorServiceStatusStarting
 	s.startTime = time.Now()
+	s.bootstrapPercent = 0
 
 	// Ensure data directories exist per AI.md PART 31 spec.
 	// DataDir = {data_dir}/tor/ (s.dataDir); siteDir = {data_dir}/tor/site/
@@ -320,8 +325,10 @@ func (s *TorService) Start(ctx context.Context, serverPort int) error {
 	events, eventCancel, err := bootstrapTor(controlConn, eventControl)
 	process.eventCancel = eventCancel
 	if err == nil {
-		err = waitBootstrap(dialCtx, controlConn, events, func(reason string) {
+		err = waitBootstrapProgress(dialCtx, controlConn, events, func(reason string) {
 			s.logger.Debug("Tor bootstrap reported a warning", map[string]interface{}{"reason": reason})
+		}, func(progress int) {
+			s.bootstrapPercent = progress
 		})
 	}
 	if err != nil {
@@ -771,8 +778,11 @@ func (s *TorService) RegenerateAddress() error {
 
 // GenerateVanityAddress starts background generation of a vanity address
 // maxPrefixLength is limited to 6 characters per AI.md PART 31
-func (s *TorService) GenerateVanityAddress(prefix string) error {
+func (s *TorService) GenerateVanityAddress(prefix string, requestedWorkers ...int) error {
 	prefix = strings.ToLower(prefix)
+	if len(prefix) == 0 {
+		return fmt.Errorf("prefix is required")
+	}
 
 	// Validate prefix
 	if len(prefix) > 6 {
@@ -785,12 +795,24 @@ func (s *TorService) GenerateVanityAddress(prefix string) error {
 			return fmt.Errorf("invalid character '%c' in prefix (must be a-z or 2-7)", c)
 		}
 	}
+	workers := runtime.NumCPU() - 1
+	if workers < 1 {
+		workers = 1
+	}
+	if len(requestedWorkers) > 0 && requestedWorkers[0] > 0 {
+		workers = requestedWorkers[0]
+	} else if len(requestedWorkers) > 0 && requestedWorkers[0] < 0 {
+		return fmt.Errorf("workers must be between 1 and %d", runtime.NumCPU())
+	}
+	if workers > runtime.NumCPU() {
+		return fmt.Errorf("workers must be between 1 and %d", runtime.NumCPU())
+	}
 
 	s.mu.Lock()
-
-	// Cancel any existing generation
-	if s.vanityCancel != nil {
-		s.vanityCancel()
+	if s.vanityStatus != nil && s.vanityStatus.Active {
+		activePrefix := s.vanityStatus.Prefix
+		s.mu.Unlock()
+		return fmt.Errorf("vanity search already running for prefix %q", activePrefix)
 	}
 
 	s.vanityCtx, s.vanityCancel = context.WithCancel(context.Background())
@@ -799,13 +821,16 @@ func (s *TorService) GenerateVanityAddress(prefix string) error {
 		Prefix:    prefix,
 		StartTime: time.Now(),
 		Attempts:  0,
+		Workers:   workers,
 	}
 
 	ctx := s.vanityCtx
 	s.mu.Unlock()
 
 	// Start background generation
-	go s.runVanityGeneration(ctx, prefix)
+	for worker := 0; worker < workers; worker++ {
+		go s.runVanityGeneration(ctx, prefix)
+	}
 
 	return nil
 }
@@ -848,49 +873,83 @@ func (s *TorService) runVanityGeneration(ctx context.Context, prefix string) {
 			if attempts%10000 == 0 {
 				s.mu.Lock()
 				if s.vanityStatus != nil {
-					s.vanityStatus.Attempts = attempts
-					s.vanityStatus.ElapsedTime = time.Since(s.vanityStatus.StartTime).Round(time.Second).String()
+					elapsed := time.Since(s.vanityStatus.StartTime).Seconds()
+					s.vanityStatus.Attempts += 10000
+					s.vanityStatus.ElapsedTime = time.Duration(elapsed * float64(time.Second)).Round(time.Second).String()
+					s.vanityStatus.ElapsedSeconds = elapsed
+					if elapsed > 0 {
+						s.vanityStatus.Rate = float64(s.vanityStatus.Attempts) / elapsed
+					}
 				}
 				s.mu.Unlock()
 			}
 
 			// Check if address matches prefix
 			if strings.HasPrefix(address, prefix) {
-				// Found a match! Save it to pending directory
+				// Found a match! Persist the candidate in a temporary directory and rename it atomically.
 				s.mu.Lock()
-
-				pendingDir := filepath.Join(s.dataDir, "vanity_pending")
-				if err := os.MkdirAll(pendingDir, 0700); err != nil {
+				if s.vanityStatus == nil || !s.vanityStatus.Active {
 					s.mu.Unlock()
 					return
 				}
+
+				candidateRoot := filepath.Join(s.dataDir, "vanity")
+				if err := os.MkdirAll(candidateRoot, 0700); err != nil {
+					s.mu.Unlock()
+					return
+				}
+				candidateDir, err := os.MkdirTemp(candidateRoot, ".candidate-")
+				if err != nil {
+					s.mu.Unlock()
+					return
+				}
+				_ = os.Chmod(candidateDir, 0700)
+				candidatePublished := false
+				defer func() {
+					if !candidatePublished {
+						_ = os.RemoveAll(candidateDir)
+					}
+				}()
 
 				// Save keys to pending directory
 				header := []byte("== ed25519v1-secret: type0 ==\x00\x00\x00")
 				secretData := append(header, priv.Seed()...)
 				secretData = append(secretData, priv[32:]...)
-				if err := os.WriteFile(filepath.Join(pendingDir, "hs_ed25519_secret_key"), secretData, 0600); err != nil {
+				if err := os.WriteFile(filepath.Join(candidateDir, "hs_ed25519_secret_key"), secretData, 0600); err != nil {
 					s.mu.Unlock()
 					return
 				}
 
 				pubHeader := []byte("== ed25519v1-public: type0 ==\x00\x00\x00")
 				pubData := append(pubHeader, pub...)
-				if err := os.WriteFile(filepath.Join(pendingDir, "hs_ed25519_public_key"), pubData, 0600); err != nil {
+				if err := os.WriteFile(filepath.Join(candidateDir, "hs_ed25519_public_key"), pubData, 0600); err != nil {
 					s.mu.Unlock()
 					return
 				}
 
 				hostname := address + ".onion\n"
-				if err := os.WriteFile(filepath.Join(pendingDir, "hostname"), []byte(hostname), 0600); err != nil {
+				if err := os.WriteFile(filepath.Join(candidateDir, "hostname"), []byte(hostname), 0600); err != nil {
 					s.mu.Unlock()
 					return
 				}
+				if err := os.Rename(candidateDir, filepath.Join(candidateRoot, address+".onion")); err != nil {
+					s.mu.Unlock()
+					return
+				}
+				candidatePublished = true
 
 				if s.vanityStatus != nil {
 					s.vanityStatus.Active = false
-					s.vanityStatus.Attempts = attempts
-					s.vanityStatus.ElapsedTime = time.Since(s.vanityStatus.StartTime).Round(time.Second).String()
+					elapsed := time.Since(s.vanityStatus.StartTime).Seconds()
+					s.vanityStatus.Attempts += attempts % 10000
+					s.vanityStatus.ElapsedTime = time.Duration(elapsed * float64(time.Second)).Round(time.Second).String()
+					s.vanityStatus.ElapsedSeconds = elapsed
+					if elapsed > 0 {
+						s.vanityStatus.Rate = float64(s.vanityStatus.Attempts) / elapsed
+					}
+					if s.vanityCancel != nil {
+						s.vanityCancel()
+					}
 				}
 
 				s.mu.Unlock()
@@ -922,90 +981,238 @@ func (s *TorService) GetVanityStatus() *VanityStatus {
 
 	// Return a copy
 	return &VanityStatus{
-		Active:      s.vanityStatus.Active,
-		Prefix:      s.vanityStatus.Prefix,
-		StartTime:   s.vanityStatus.StartTime,
-		Attempts:    s.vanityStatus.Attempts,
-		ElapsedTime: s.vanityStatus.ElapsedTime,
+		Active:         s.vanityStatus.Active,
+		Prefix:         s.vanityStatus.Prefix,
+		StartTime:      s.vanityStatus.StartTime,
+		Attempts:       s.vanityStatus.Attempts,
+		ElapsedTime:    s.vanityStatus.ElapsedTime,
+		Workers:        s.vanityStatus.Workers,
+		Rate:           s.vanityStatus.Rate,
+		ElapsedSeconds: s.vanityStatus.ElapsedSeconds,
 	}
 }
 
-// ApplyVanityAddress applies the pending vanity address
-func (s *TorService) ApplyVanityAddress() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// GetVanityCandidates returns persisted vanity hostnames waiting to be applied.
+func (s *TorService) GetVanityCandidates() []string {
+	candidates := make([]string, 0)
+	appendHostname := func(hostnamePath string) {
+		data, err := os.ReadFile(hostnamePath)
+		if err == nil {
+			if address := strings.TrimSpace(string(data)); address != "" {
+				candidates = append(candidates, address)
+			}
+		}
+	}
+	appendHostname(filepath.Join(s.dataDir, "vanity_pending", "hostname"))
+	entries, err := os.ReadDir(filepath.Join(s.dataDir, "vanity"))
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				appendHostname(filepath.Join(s.dataDir, "vanity", entry.Name(), "hostname"))
+			}
+		}
+	}
+	return candidates
+}
 
-	pendingDir := filepath.Join(s.dataDir, "vanity_pending")
-	siteDir := filepath.Join(s.dataDir, "site")
+// GetControlStatus returns the canonical internal Tor status payload.
+func (s *TorService) GetControlStatus() map[string]interface{} {
+	s.mu.RLock()
+	process := s.torProcess
+	connection := s.torControl
+	status := s.status
+	bootstrap := s.bootstrapPercent
+	address := s.onionAddress
+	var vanity *VanityStatus
+	if s.vanityStatus != nil {
+		copy := *s.vanityStatus
+		vanity = &copy
+	}
+	s.mu.RUnlock()
 
-	// Check if pending keys exist
-	if _, err := os.Stat(filepath.Join(pendingDir, "hs_ed25519_secret_key")); os.IsNotExist(err) {
-		return fmt.Errorf("no pending vanity address found")
+	running := process != nil && process.cmd != nil && process.cmd.Process != nil && status == TorServiceStatusConnected
+	if running {
+		bootstrap = 100
+	}
+	result := map[string]interface{}{
+		"running":             running,
+		"version":             "",
+		"bootstrap_percent":   bootstrap,
+		"circuit_established": false,
+		"vanity": map[string]interface{}{
+			"state": "idle",
+		},
+	}
+	if running {
+		result["pid"] = process.cmd.Process.Pid
+		if address != "" {
+			result["onion_address"] = address
+		}
+	}
+	if connection != nil {
+		if versionInfo, err := connection.GetInfo("version"); err == nil {
+			for _, item := range versionInfo {
+				if item.Key == "version" {
+					result["version"] = item.Val
+					break
+				}
+			}
+		}
+		if circuitInfo, err := connection.GetInfo("circuit-status"); err == nil {
+			for _, item := range circuitInfo {
+				if strings.Contains(item.Val, " BUILT ") {
+					result["circuit_established"] = true
+					break
+				}
+			}
+		}
+	}
+	if vanity != nil {
+		state := "idle"
+		if vanity.Active {
+			state = "running"
+		} else if len(s.GetVanityCandidates()) > 0 {
+			state = "found"
+		}
+		result["vanity"] = map[string]interface{}{
+			"state":           state,
+			"prefix":          vanity.Prefix,
+			"workers":         vanity.Workers,
+			"attempts":        vanity.Attempts,
+			"rate":            vanity.Rate,
+			"elapsed_seconds": vanity.ElapsedSeconds,
+			"candidates":      s.GetVanityCandidates(),
+		}
+	} else if candidates := s.GetVanityCandidates(); len(candidates) > 0 {
+		result["vanity"] = map[string]interface{}{"state": "found", "candidates": candidates}
+	}
+	return result
+}
+
+// ApplyVanityAddress atomically activates a unique candidate address.
+func (s *TorService) ApplyVanityAddress(requestedAddress ...string) error {
+	candidates := s.GetVanityCandidates()
+	wanted := ""
+	if len(requestedAddress) > 0 {
+		wanted = strings.TrimSpace(requestedAddress[0])
+	}
+	matches := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		bare := strings.TrimSuffix(candidate, ".onion")
+		if wanted == "" || strings.HasPrefix(bare, strings.TrimSuffix(wanted, ".onion")) || strings.HasPrefix(candidate, wanted) {
+			matches = append(matches, candidate)
+		}
+	}
+	if len(matches) == 0 {
+		return fmt.Errorf("no matching vanity candidate found; candidates: %s", strings.Join(candidates, ", "))
+	}
+	if len(matches) > 1 {
+		return fmt.Errorf("vanity candidate prefix is ambiguous; candidates: %s", strings.Join(matches, ", "))
+	}
+	candidate := matches[0]
+	sourceDir := filepath.Join(s.dataDir, "vanity", candidate)
+	if _, err := os.Stat(filepath.Join(sourceDir, "hs_ed25519_secret_key")); err != nil {
+		if _, legacyErr := os.Stat(filepath.Join(s.dataDir, "vanity_pending", "hs_ed25519_secret_key")); legacyErr == nil {
+			sourceDir = filepath.Join(s.dataDir, "vanity_pending")
+		} else {
+			return fmt.Errorf("vanity candidate keys are unavailable: %w", err)
+		}
 	}
 
-	// Backup current keys
+	s.mu.RLock()
+	wasRunning := s.torProcess != nil && s.serverPort > 0
+	s.mu.RUnlock()
+	if wasRunning {
+		if err := s.Stop(); err != nil {
+			return fmt.Errorf("stop Tor before applying vanity address: %w", err)
+		}
+	}
+
+	s.mu.Lock()
+	siteDir := filepath.Join(s.dataDir, "site")
 	backupDir := filepath.Join(s.dataDir, "backup_"+time.Now().Format("20060102150405"))
 	if err := os.MkdirAll(backupDir, 0700); err != nil {
+		s.mu.Unlock()
 		return fmt.Errorf("create onion key backup: %w", err)
 	}
-	for _, name := range []string{"hs_ed25519_secret_key", "hs_ed25519_public_key", "hostname"} {
-		if err := copyFile(filepath.Join(siteDir, name), filepath.Join(backupDir, name)); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("backup onion key %s: %w", name, err)
-		}
+	backupSiteDir := filepath.Join(backupDir, "site")
+	if err := os.Rename(siteDir, backupSiteDir); err != nil && !os.IsNotExist(err) {
+		s.mu.Unlock()
+		return fmt.Errorf("backup onion keys: %w", err)
 	}
-	for _, name := range []string{"hs_ed25519_secret_key", "hs_ed25519_public_key", "hostname"} {
-		if err := os.Rename(filepath.Join(pendingDir, name), filepath.Join(siteDir, name)); err != nil {
-			return fmt.Errorf("apply vanity onion key %s: %w", name, err)
-		}
+	if err := os.Rename(sourceDir, siteDir); err != nil {
+		_ = os.Rename(backupSiteDir, siteDir)
+		s.mu.Unlock()
+		return fmt.Errorf("apply vanity candidate: %w", err)
 	}
-	if err := os.RemoveAll(pendingDir); err != nil {
-		return fmt.Errorf("remove pending vanity keys: %w", err)
+	if err := os.Chmod(siteDir, 0700); err != nil {
+		s.mu.Unlock()
+		return fmt.Errorf("secure applied vanity directory: %w", err)
 	}
+	if err := s.loadOrGenerateKeys(); err != nil {
+		s.mu.Unlock()
+		return fmt.Errorf("load applied vanity keys: %w", err)
+	}
+	s.mu.Unlock()
 
-	// Reload keys
-	return s.loadOrGenerateKeys()
+	if wasRunning {
+		if err := s.Start(context.Background(), s.serverPort); err != nil {
+			return fmt.Errorf("restart Tor after applying vanity address: %w", err)
+		}
+		if s.GetOnionAddress() != candidate {
+			return fmt.Errorf("tor hostname mismatch after applying vanity address: expected %s, got %s", candidate, s.GetOnionAddress())
+		}
+	}
+	return nil
 }
 
 // ImportKeys imports externally generated keys
 func (s *TorService) ImportKeys(secretKey []byte) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	siteDir := filepath.Join(s.dataDir, "site")
-
-	// Validate key format
-	if len(secretKey) < 64 {
-		return fmt.Errorf("invalid key format (too short)")
-	}
-
-	// Backup current keys
-	backupDir := filepath.Join(s.dataDir, "backup_"+time.Now().Format("20060102150405"))
-	if err := os.MkdirAll(backupDir, 0700); err != nil {
-		return fmt.Errorf("create onion key backup: %w", err)
-	}
-	for _, name := range []string{"hs_ed25519_secret_key", "hs_ed25519_public_key", "hostname"} {
-		if err := copyFile(filepath.Join(siteDir, name), filepath.Join(backupDir, name)); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("backup onion key %s: %w", name, err)
+	s.mu.RLock()
+	wasRunning := s.torProcess != nil && s.serverPort > 0
+	serverPort := s.serverPort
+	s.mu.RUnlock()
+	if wasRunning {
+		if err := s.Stop(); err != nil {
+			return fmt.Errorf("stop Tor before importing keys: %w", err)
 		}
 	}
-
-	// Write new secret key
-	if err := os.WriteFile(filepath.Join(siteDir, "hs_ed25519_secret_key"), secretKey, 0600); err != nil {
-		return fmt.Errorf("failed to write secret key: %w", err)
-	}
-
-	// Reload keys from the newly written secret key
-	if err := s.loadOrGenerateKeys(); err != nil {
+	if err := func() error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		siteDir := filepath.Join(s.dataDir, "site")
+		if len(secretKey) < 64 {
+			return fmt.Errorf("invalid key format (too short)")
+		}
+		backupDir := filepath.Join(s.dataDir, "backup_"+time.Now().Format("20060102150405"))
+		if err := os.MkdirAll(backupDir, 0700); err != nil {
+			return fmt.Errorf("create onion key backup: %w", err)
+		}
+		for _, name := range []string{"hs_ed25519_secret_key", "hs_ed25519_public_key", "hostname"} {
+			if err := copyFile(filepath.Join(siteDir, name), filepath.Join(backupDir, name)); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("backup onion key %s: %w", name, err)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(siteDir, "hs_ed25519_secret_key"), secretKey, 0600); err != nil {
+			return fmt.Errorf("failed to write secret key: %w", err)
+		}
+		if err := s.loadOrGenerateKeys(); err != nil {
+			return err
+		}
+		s.onionAddress = s.generateOnionAddress()
+		hostname := s.onionAddress + "\n"
+		if err := os.WriteFile(filepath.Join(siteDir, "hostname"), []byte(hostname), 0600); err != nil {
+			return fmt.Errorf("failed to write hostname: %w", err)
+		}
+		return nil
+	}(); err != nil {
 		return err
 	}
-
-	// Per AI.md PART 31: imported keys replace the address — refresh hostname file
-	s.onionAddress = s.generateOnionAddress()
-	hostname := s.onionAddress + "\n"
-	if err := os.WriteFile(filepath.Join(siteDir, "hostname"), []byte(hostname), 0600); err != nil {
-		return fmt.Errorf("failed to write hostname: %w", err)
+	if wasRunning {
+		if err := s.Start(context.Background(), serverPort); err != nil {
+			return fmt.Errorf("restart Tor after importing keys: %w", err)
+		}
 	}
-
 	return nil
 }
 

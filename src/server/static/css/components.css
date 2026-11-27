@@ -415,6 +415,15 @@ dialog::backdrop {
   margin: 0.25rem 0;
 }
 
+.code-block pre {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+  -webkit-overflow-scrolling: touch;
+}
+
 .code-content {
   display: block;
   flex: 1;
@@ -453,6 +462,18 @@ dialog::backdrop {
 .copy-btn.copied {
   background: var(--color-success-bg);
   border-color: var(--color-success);
+}
+
+.copy-btn.copy-failed {
+  background: var(--color-error-bg);
+  border-color: var(--color-error);
+}
+
+.copy-helper-input {
+  position: fixed;
+  inset-inline-start: -10000px;
+  inset-block-start: 0;
+  opacity: 0;
 }
 
 .copy-text {

@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
@@ -28,12 +29,13 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/server/service/database"
 )
 
 // SSLManager handles SSL/TLS certificates including Let's Encrypt
 type SSLManager struct {
 	appConfig *config.AppConfig
-	db        *sql.DB
+	db        *database.AppDatabase
 	// certPath is the base SSL directory ({config_dir}/ssl or CertPath override)
 	certPath string
 	// configDir is the config root used to build spec-compliant subdirectory paths
@@ -54,45 +56,68 @@ type SSLManager struct {
 }
 
 // SetDatabase enables persistence of DNS provider validation state.
-func (m *SSLManager) SetDatabase(db *sql.DB) { m.db = db }
+func (m *SSLManager) SetDatabase(db *database.AppDatabase) { m.db = db }
 
-func (m *SSLManager) syncDNSConfigState() error {
-	if m.db == nil {
-		return nil
-	}
+func (m *SSLManager) dnsConfigFingerprint() (string, error) {
 	le := m.appConfig.Server.SSL.LetsEncrypt
 	payload, err := json.Marshal(struct {
 		Provider    string            `json:"provider"`
 		Credentials map[string]string `json:"credentials"`
 	}{le.DNSProvider, le.DNSCredentials})
 	if err != nil {
-		return err
+		return "", err
 	}
 	digest := sha256.Sum256(payload)
-	fingerprint := hex.EncodeToString(digest[:])
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func syncDNSConfigStateTx(ctx context.Context, tx *sql.Tx, fingerprint string) error {
 	var old string
-	err = m.db.QueryRow("SELECT value FROM app_secrets WHERE key = ?", "dns_config_fingerprint").Scan(&old)
+	err := tx.QueryRowContext(ctx, "SELECT value FROM app_secrets WHERE key = ?", "dns_config_fingerprint").Scan(&old)
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
 	if old != "" && old != fingerprint {
-		if _, err := m.db.Exec("DELETE FROM app_secrets WHERE key = ?", "dns_validated_at"); err != nil {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM app_secrets WHERE key = ?", "dns_validated_at"); err != nil {
 			return err
 		}
 	}
-	_, err = m.db.Exec("INSERT INTO app_secrets (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", "dns_config_fingerprint", fingerprint)
+	_, err = tx.ExecContext(ctx, "INSERT INTO app_secrets (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", "dns_config_fingerprint", fingerprint)
 	return err
+}
+
+func (m *SSLManager) syncDNSConfigState() error {
+	if m.db == nil {
+		return nil
+	}
+	fingerprint, err := m.dnsConfigFingerprint()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return m.db.Write(ctx, func(tx *sql.Tx) error {
+		return syncDNSConfigStateTx(ctx, tx, fingerprint)
+	})
 }
 
 func (m *SSLManager) recordDNSValidation() error {
 	if m.db == nil {
 		return nil
 	}
-	if err := m.syncDNSConfigState(); err != nil {
+	fingerprint, err := m.dnsConfigFingerprint()
+	if err != nil {
 		return err
 	}
-	_, err := m.db.Exec("INSERT INTO app_secrets (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", "dns_validated_at", time.Now().UTC().Format(time.RFC3339))
-	return err
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return m.db.Write(ctx, func(tx *sql.Tx) error {
+		if err := syncDNSConfigStateTx(ctx, tx, fingerprint); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, "INSERT INTO app_secrets (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", "dns_validated_at", time.Now().UTC().Format(time.RFC3339))
+		return err
+	})
 }
 
 // CertInfo contains certificate information
@@ -216,7 +241,7 @@ func (m *SSLManager) Initialize() error {
 		if config.IsValidSSLHost(fqdn) {
 			return m.RequestCertificate(fqdn)
 		}
-		fmt.Printf("Warning: Domain '%s' is not valid for Let's Encrypt. Using self-signed certificate.\n", fqdn)
+		log.Printf("WARN: domain %q is not valid for Let's Encrypt; using a self-signed certificate", fqdn)
 	}
 
 	return m.generateSelfSigned()
@@ -237,12 +262,41 @@ func (m *SSLManager) loadCertificate(certFile, keyFile string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load certificate: %w", err)
 	}
+	if len(cert.Certificate) == 0 {
+		return fmt.Errorf("failed to load certificate: empty certificate chain")
+	}
+	leaf, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return fmt.Errorf("failed to parse certificate: %w", err)
+	}
+	now := time.Now()
+	if now.Before(leaf.NotBefore) || !now.Before(leaf.NotAfter) {
+		return fmt.Errorf("certificate is not currently valid")
+	}
+	if hostname := strings.TrimSpace(m.appConfig.Server.FQDN); hostname != "" {
+		if err := leaf.VerifyHostname(hostname); err != nil && !certificateCommonNameMatches(leaf.Subject.CommonName, hostname) {
+			return fmt.Errorf("certificate does not match configured hostname")
+		}
+	}
+	cert.Leaf = leaf
 
 	m.mu.Lock()
 	m.certificate = &cert
 	m.mu.Unlock()
 
 	return nil
+}
+
+func certificateCommonNameMatches(commonName, hostname string) bool {
+	commonName = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(commonName)), ".")
+	hostname = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(hostname)), ".")
+	if commonName == hostname {
+		return true
+	}
+	if !strings.HasPrefix(commonName, "*.") || strings.Count(commonName, ".") != strings.Count(hostname, ".") {
+		return false
+	}
+	return strings.HasSuffix(hostname, commonName[1:])
 }
 
 // generateSelfSigned generates a self-signed certificate
@@ -350,7 +404,7 @@ func (m *SSLManager) RequestCertificate(domain string) error {
 // requestHTTP01 requests a certificate using HTTP-01 challenge via autocert
 func (m *SSLManager) requestHTTP01(domain string) error {
 	// HTTP-01 challenge requires port 80 to be accessible
-	fmt.Printf("Requesting Let's Encrypt certificate for %s using HTTP-01 challenge\n", domain)
+	log.Printf("INFO: requesting Let's Encrypt certificate for %s using HTTP-01 challenge", domain)
 
 	// Get email for Let's Encrypt registration
 	email := m.appConfig.Server.SSL.LetsEncrypt.Email
@@ -361,15 +415,13 @@ func (m *SSLManager) requestHTTP01(domain string) error {
 	// Create autocert manager for HTTP-01 challenge
 	m.autocertMgr = &autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
-		Cache:      autocert.DirCache(m.certPath),
+		Cache:      newManagedACMECache(m.configDir, domain),
 		HostPolicy: autocert.HostWhitelist(domain),
 		Email:      email,
 	}
 	m.useAutocert = true
 
-	fmt.Printf("Let's Encrypt autocert manager configured for domain: %s\n", domain)
-	fmt.Println("Note: Certificate will be obtained on first TLS handshake.")
-	fmt.Println("Ensure port 80 is accessible for HTTP-01 challenge verification.")
+	log.Printf("INFO: Let's Encrypt HTTP-01 manager configured for %s; certificate issuance begins on the first TLS handshake", domain)
 
 	return nil
 }
@@ -377,7 +429,7 @@ func (m *SSLManager) requestHTTP01(domain string) error {
 // requestTLSALPN01 requests a certificate using TLS-ALPN-01 challenge
 // This challenge is handled automatically by autocert when using TLS
 func (m *SSLManager) requestTLSALPN01(domain string) error {
-	fmt.Printf("Requesting Let's Encrypt certificate for %s using TLS-ALPN-01 challenge\n", domain)
+	log.Printf("INFO: requesting Let's Encrypt certificate for %s using TLS-ALPN-01 challenge", domain)
 
 	// Get email for Let's Encrypt registration
 	email := m.appConfig.Server.SSL.LetsEncrypt.Email
@@ -389,15 +441,13 @@ func (m *SSLManager) requestTLSALPN01(domain string) error {
 	// It works by responding to the challenge on the TLS port directly
 	m.autocertMgr = &autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
-		Cache:      autocert.DirCache(m.certPath),
+		Cache:      newManagedACMECache(m.configDir, domain),
 		HostPolicy: autocert.HostWhitelist(domain),
 		Email:      email,
 	}
 	m.useAutocert = true
 
-	fmt.Printf("Let's Encrypt autocert manager configured for domain: %s (TLS-ALPN-01)\n", domain)
-	fmt.Println("Note: Certificate will be obtained on first TLS handshake.")
-	fmt.Println("Ensure port 443 is accessible for TLS-ALPN-01 challenge verification.")
+	log.Printf("INFO: Let's Encrypt TLS-ALPN-01 manager configured for %s; certificate issuance begins on the first TLS handshake", domain)
 
 	return nil
 }
@@ -486,7 +536,7 @@ func (m *SSLManager) GetCertInfo() (*CertInfo, error) {
 	}, nil
 }
 
-// NeedsRenewal returns true when the app-managed cert expires within 7 days.
+// NeedsRenewal returns true when the app-managed cert expires within 30 days.
 // Per AI.md PART 15: only {config_dir}/ssl/letsencrypt/{fqdn}/ certs are auto-renewed.
 // System certs (/etc/letsencrypt/live/**) and user certs (ssl/local/**) are never renewed by the app.
 func (m *SSLManager) NeedsRenewal() bool {
@@ -499,7 +549,7 @@ func (m *SSLManager) NeedsRenewal() bool {
 		// No cert loaded — attempt renewal to get one
 		return true
 	}
-	return info.DaysLeft < 7
+	return time.Until(info.NotAfter) <= 30*24*time.Hour
 }
 
 // RenewCertificate renews the certificate if needed
@@ -519,7 +569,19 @@ func (m *SSLManager) RenewCertificate(ctx context.Context) error {
 	}
 
 	if m.appConfig.Server.SSL.LetsEncrypt.Enabled {
-		return m.RequestCertificate(domain)
+		if err := m.RequestCertificate(domain); err != nil {
+			return err
+		}
+		if m.useAutocert && m.autocertMgr != nil {
+			cert, err := m.autocertMgr.GetCertificate(&tls.ClientHelloInfo{ServerName: domain})
+			if err != nil {
+				return fmt.Errorf("renew Let's Encrypt certificate: %w", err)
+			}
+			m.mu.Lock()
+			m.certificate = cert
+			m.mu.Unlock()
+		}
+		return nil
 	}
 
 	return m.generateSelfSigned()

@@ -1,0 +1,14 @@
+Subject: Server Started - {app_name}
+---
+SERVER STARTED
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+The server started successfully.
+Version: {version}
+Mode: {mode}
+Host: {hostname}
+
+{app_name}
+{app_url}

@@ -14,7 +14,7 @@ func TestEnsureSchemaRenamesLegacySchedulerColumnsBeforeCreatingIndexes(t *testi
 	}
 	defer func() { _ = manager.Close() }()
 
-	legacy := manager.GetDB()
+	legacy := manager.db
 	for _, statement := range []string{
 		`CREATE TABLE scheduler_tasks (
 			task_id TEXT PRIMARY KEY, task_name TEXT NOT NULL, enabled INTEGER NOT NULL,

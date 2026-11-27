@@ -100,7 +100,7 @@ func TestCSRFMiddlewareSignsAndReissuesTokensAfterSecretRotation(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager := secret.NewManager(schema.GetDB())
+	manager := secret.NewManager(schema.GetAppDatabase())
 	if err := manager.EnsureSecrets(context.Background()); err != nil {
 		t.Fatal(err)
 	}

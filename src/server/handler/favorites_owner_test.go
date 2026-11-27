@@ -22,12 +22,12 @@ func TestFavoritesIssueOwnerTokenAndScopeFavorites(t *testing.T) {
 	if err := schema.EnsureSchema(); err != nil {
 		t.Fatal(err)
 	}
-	manager, err := apitoken.NewManager(schema.GetDB(), strings.Repeat("cd", 32))
+	manager, err := apitoken.NewManager(schema.GetAppDatabase(), strings.Repeat("cd", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
 	h := newAPITestHandler()
-	h.SetHealthDB(schema.GetDB())
+	h.SetDatabase(schema.GetAppDatabase())
 	h.SetOwnerTokenManager(manager)
 
 	form := url.Values{"url": {"https://example.test/video"}, "title": {"Saved video"}}
@@ -98,5 +98,43 @@ func TestFavoritesIssueOwnerTokenAndScopeFavorites(t *testing.T) {
 	h.FavoritesAPIList(global, operator)
 	if global.Code != http.StatusOK || !strings.Contains(global.Body.String(), "Saved video") {
 		t.Fatalf("operator favorite list = %d %q", global.Code, global.Body.String())
+	}
+}
+
+func TestReadScopedLinkedTokenCannotWriteFavorites(t *testing.T) {
+	schema, err := database.NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = schema.Close() }()
+	if err := schema.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := apitoken.NewManager(schema.GetAppDatabase(), strings.Repeat("ef", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	primaryToken, err := manager.IssuePrimary(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	primary, err := manager.Authenticate(context.Background(), primaryToken.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linked, err := manager.CreateLinkedWithScope(context.Background(), primary, "read-only", "read", nil, 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newAPITestHandler()
+	h.SetDatabase(schema.GetAppDatabase())
+	h.SetOwnerTokenManager(manager)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/favorites", strings.NewReader(`{"url":"https://example.test/video","title":"Saved video"}`))
+	request.Header.Set("Authorization", "Bearer "+linked.Token)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	h.FavoritesAPIAdd(response, request)
+	if response.Code != http.StatusForbidden || response.Header().Get("WWW-Authenticate") != `Bearer error="insufficient_scope"` {
+		t.Fatalf("read-scoped mutation response = %d %q", response.Code, response.Body.String())
 	}
 }

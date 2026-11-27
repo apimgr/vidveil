@@ -20,6 +20,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/terminal"
 	"github.com/apimgr/vidveil/src/config"
+	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
@@ -288,6 +289,24 @@ func ExecuteCLI() error {
 				FirstRun:   !IsServerConfigured(),
 				SaveLogin:  saveCLILogin,
 				SaveServer: saveCLIServerConfiguration,
+				SaveSetup: func(serverURL, token string, save, setAsDefault bool) error {
+					return SaveSetupWizardConfig(serverURL, token, save, setAsDefault)
+				},
+				CheckUpdate: func() (string, error) {
+					info, err := CheckCLIUpdate()
+					if err != nil {
+						return "", err
+					}
+					if info == nil || !info.UpdateAvailable {
+						return i18n.Translate(resolveCLILanguage(), "cli.update.current"), nil
+					}
+					return i18n.TranslateFormat(resolveCLILanguage(), "cli.update.available", "version", info.LatestVersion), nil
+				},
+				ApplyUpdate: func() error { return RunCLIUpdateCommand([]string{"yes"}) },
+			}
+			if cliAutostartSupported() {
+				guiCfg.AutostartEnabled = cliAutostartEnabled
+				guiCfg.SetAutostart = setCLIAutostartEnabled
 			}
 			if cliConfig != nil {
 				guiCfg.ServerURL = cliConfig.Server.Address
@@ -298,16 +317,24 @@ func ExecuteCLI() error {
 			return gui.Launch(guiCfg)
 		}
 
+		if !IsServerConfigured() && (displayEnv.Mode == display.DisplayModeCLI || displayEnv.Cols < 40 || !term.IsTerminal(int(os.Stdin.Fd()))) {
+			if err := RunInlineSetupWizard(); err != nil {
+				return err
+			}
+			if err := initializeCLILogging(); err != nil {
+				return err
+			}
+			initAPIClient()
+			printCLIHelpMessage()
+			return nil
+		}
+
 		// Priority 2: TUI mode — interactive terminal
 		if displayEnv.Mode == display.DisplayModeTUI && displayEnv.IsTerminal && IsCLITUIEnabled() {
 			// Per AI.md PART 32: CLI First-Run Flow
 			// Run setup wizard if no server configured
 			if !IsServerConfigured() {
 				if err := runSetupWizard(); err != nil {
-					return err
-				}
-				// Reload config after setup wizard
-				if err := LoadCLIConfigFromFile(); err != nil {
 					return err
 				}
 				if err := initializeCLILogging(); err != nil {
@@ -321,7 +348,10 @@ func ExecuteCLI() error {
 			}
 			return runInteractiveTUI()
 		}
-		// Non-interactive or headless: show help
+		if displayEnv.Mode == display.DisplayModeHeadless {
+			return fmt.Errorf("%s", i18n.Translate(resolveCLILanguage(), "cli.headless.no_interactive"))
+		}
+		// Non-interactive CLI mode: show help.
 		printCLIHelpMessage()
 		return nil
 	}

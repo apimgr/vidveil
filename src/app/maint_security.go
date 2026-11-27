@@ -32,7 +32,7 @@ func handleMaintenanceSecurity(arg, configDir, dataDir string) error {
 	defer func() { _ = mgr.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	db := mgr.GetDB()
+	db := mgr.GetAppDatabase()
 	switch fields[0] {
 	case "list":
 		status := ""

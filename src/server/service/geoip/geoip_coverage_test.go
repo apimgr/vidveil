@@ -91,8 +91,8 @@ func TestOpenDatabases_ASN_InvalidMMDB_ReturnsError(t *testing.T) {
 	createFakeMMDB(t, filepath.Join(tmp, "iptoasn-asn.mmdb"))
 
 	err := s.openDatabases()
-	if err == nil {
-		t.Error("openDatabases(invalid ASN): expected error, got nil")
+	if err != nil {
+		t.Errorf("openDatabases(invalid ASN): expected isolated failure, got %v", err)
 	}
 }
 
@@ -104,8 +104,8 @@ func TestOpenDatabases_Country_InvalidMMDB_ReturnsError(t *testing.T) {
 	createFakeMMDB(t, filepath.Join(tmp, "iptoasn-country.mmdb"))
 
 	err := s.openDatabases()
-	if err == nil {
-		t.Error("openDatabases(invalid Country): expected error, got nil")
+	if err != nil {
+		t.Errorf("openDatabases(invalid Country): expected isolated failure, got %v", err)
 	}
 }
 
@@ -117,14 +117,14 @@ func TestOpenDatabases_City_InvalidMMDB_ReturnsError(t *testing.T) {
 	createFakeMMDB(t, filepath.Join(tmp, "dbip-city-ipv4.mmdb"))
 
 	err := s.openDatabases()
-	if err == nil {
-		t.Error("openDatabases(invalid City): expected error, got nil")
+	if err != nil {
+		t.Errorf("openDatabases(invalid City): expected isolated failure, got %v", err)
 	}
 }
 
-func TestOpenDatabases_NoFiles_SetsLastUpdate(t *testing.T) {
+func TestOpenDatabases_NoFiles_LeavesLastUpdateZero(t *testing.T) {
 	s, _ := newGeoIPForTest(t)
-	// No DB files exist → stat fails → skips opening → sets lastUpdate
+	// No database update marker exists, so opening files cannot claim freshness.
 	s.appConfig.Server.GeoIP.Databases.ASN = true
 	s.appConfig.Server.GeoIP.Databases.Country = true
 	s.appConfig.Server.GeoIP.Databases.City = true
@@ -133,14 +133,14 @@ func TestOpenDatabases_NoFiles_SetsLastUpdate(t *testing.T) {
 	if err != nil {
 		t.Errorf("openDatabases(no files): expected nil, got %v", err)
 	}
-	if s.lastUpdate.IsZero() {
-		t.Error("openDatabases(no files): lastUpdate should be set")
+	if !s.lastUpdate.IsZero() {
+		t.Error("openDatabases(no files): lastUpdate should remain zero")
 	}
 }
 
 // ── Initialize — enabled with pre-existing (invalid) DB files ─────────────────
 
-func TestInitialize_Enabled_DBFilesExist_InvalidMMDB_ReturnsError(t *testing.T) {
+func TestInitialize_Enabled_DBFilesExist_InvalidMMDBDegradesWithoutError(t *testing.T) {
 	s, tmp := newGeoIPForTest(t)
 	s.appConfig.Server.GeoIP.Databases.Country = false
 	s.appConfig.Server.GeoIP.Databases.City = false
@@ -148,8 +148,8 @@ func TestInitialize_Enabled_DBFilesExist_InvalidMMDB_ReturnsError(t *testing.T) 
 	createFakeMMDB(t, filepath.Join(tmp, "iptoasn-asn.mmdb"))
 
 	err := s.Initialize()
-	if err == nil {
-		t.Error("Initialize(invalid ASN DB): expected error, got nil")
+	if err != nil {
+		t.Errorf("Initialize(invalid ASN DB): expected degraded startup without error, got %v", err)
 	}
 }
 

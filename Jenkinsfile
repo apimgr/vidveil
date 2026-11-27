@@ -416,6 +416,72 @@ pipeline {
             }
         }
 
+        // Security gates mirror the required CI provider jobs.
+        stage('Security') {
+            parallel {
+                stage('Secret scan') {
+                    agent { label 'amd64' }
+                    steps {
+                        script {
+                            // Scheduled and manually started jobs scan all
+                            // history; change and branch builds scan a range.
+                            def fullHistory = !currentBuild.getBuildCauses('hudson.triggers.TimerTrigger$TimerTriggerCause').isEmpty() ||
+                                !currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').isEmpty()
+                            def scanArgs = fullHistory
+                                ? 'git file://. --results=verified'
+                                : 'git file://. --since-commit HEAD~1 --results=verified,unknown'
+                            sh """
+                            docker run --rm \
+                                -v '${env.WORKSPACE}:/repo' \
+                                -w /repo \
+                                docker.io/trufflesecurity/trufflehog@sha256:59b244249d1a1aef4baa24fe73d3c931616264482580d806d77f6c74d26b3e42 \
+                                ${scanArgs} --exclude-paths=.github/trufflehog-exclude.txt --fail
+                            """
+                        }
+                    }
+                }
+                stage('Workflow policy') {
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            bad=$(grep -RnE '^[[:space:]]*uses:' .github/ .gitea/ .forgejo/ 2>/dev/null | grep -vE '@[0-9a-f]{40}([[:space:]]|$)' || true)
+                            if [ -n "$bad" ]; then echo "unpinned actions found:"; echo "$bad"; exit 1; fi
+                        '''
+                    }
+                }
+                stage('Vulnerability scan') {
+                    when { expression { fileExists('go.sum') } }
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker run --rm \
+                                -v ${WORKSPACE}:/app \
+                                -v ${GO_CACHE}:/usr/local/share/go/pkg/mod \
+                                -v ${GO_BUILD}:/usr/local/share/go/cache \
+                                -w /app \
+                                casjaysdev/go:latest \
+                                govulncheck ./...
+                        '''
+                    }
+                }
+                stage('Image scan') {
+                    when { expression { fileExists('docker/Dockerfile') } }
+                    agent { label 'amd64' }
+                    steps {
+                        sh '''
+                            docker build -t local/scan-target:ci -f docker/Dockerfile .
+                            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock docker.io/aquasec/trivy@sha256:152250a00485c128eacf57a3ecb4b0402440bf8d19dceeb2302dc5e95a26adab image --exit-code 1 --severity CRITICAL,HIGH local/scan-target:ci
+                        '''
+                    }
+                    post {
+                        always {
+                            sh 'docker rmi local/scan-target:ci || true'
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Release: Stable') {
             agent { label 'amd64' }
             when {

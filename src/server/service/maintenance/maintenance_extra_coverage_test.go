@@ -118,6 +118,7 @@ func newMaintMgrWithTempDirs(t *testing.T) (*MaintenanceManager, string) {
 	}
 
 	m := NewMaintenanceManager(cfgDir, dataDir, "1.0.0")
+	setMaintenanceTestDiskSpace(m)
 	m.paths.Backup = backupDir
 	m.paths.SSL = sslDir
 	return m, tmp
@@ -620,6 +621,22 @@ func TestCheckDiskSpace_MultipleExistingBackups(t *testing.T) {
 	if err := m.checkDiskSpace(m.paths.Backup); err != nil {
 		t.Errorf("checkDiskSpace: unexpected error: %v", err)
 	}
+}
+
+func TestCheckDiskSpaceUsesConfiguredThreshold(t *testing.T) {
+	m, _ := newMaintMgrWithTempDirs(t)
+	m.diskSpaceFn = func(string) (uint64, uint64, error) { return 100, 9, nil }
+	if err := m.checkDiskSpace(m.paths.Backup); err == nil {
+		t.Fatal("checkDiskSpace accepted 91% disk usage above the default threshold")
+	}
+	m.SetDiskThreshold(95)
+	if err := m.checkDiskSpace(m.paths.Backup); err != nil {
+		t.Fatal("checkDiskSpace rejected 91% disk usage below the configured threshold:", err)
+	}
+}
+
+func setMaintenanceTestDiskSpace(m *MaintenanceManager) {
+	m.diskSpaceFn = func(string) (uint64, uint64, error) { return 1_000_000, 500_000, nil }
 }
 
 // ── RestoreWithPassword / loadRestoreArchive validation branches ──────────────

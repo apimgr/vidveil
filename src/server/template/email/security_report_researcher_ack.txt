@@ -1,0 +1,4 @@
+Subject: Security report received - {tracking_id}
+---
+Tracking ID: {tracking_id}
+Status URL: {report_status_url}

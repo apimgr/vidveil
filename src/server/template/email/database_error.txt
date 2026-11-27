@@ -1,0 +1,13 @@
+Subject: Database Connection Problem - {app_name}
+---
+DATABASE CONNECTION PROBLEM
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+The database probe has failed repeatedly since {since}.
+
+Error: {error}
+
+{app_name}
+{app_url}

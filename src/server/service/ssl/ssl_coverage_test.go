@@ -117,6 +117,23 @@ func TestLoadCertificateNonExistentFileReturnsError(t *testing.T) {
 	}
 }
 
+func TestLoadCertificateRejectsHostnameMismatch(t *testing.T) {
+	source := newEnabledSSLManager(t)
+	source.appConfig.Server.FQDN = "matching.example"
+	if err := source.generateSelfSigned(); err != nil {
+		t.Fatalf("generate certificate fixture: %v", err)
+	}
+	destination := newEnabledSSLManager(t)
+	destination.appConfig.Server.FQDN = "different.example"
+	err := destination.loadCertificate(
+		filepath.Join(source.certPath, "cert.pem"),
+		filepath.Join(source.certPath, "key.pem"),
+	)
+	if err == nil {
+		t.Fatal("loadCertificate accepted a certificate that does not match the configured FQDN")
+	}
+}
+
 // ---- loadCertificate (direct load, replaces copyLetsEncryptCerts tests) ----
 
 // loadCertificate loads valid PEM files — verifies the certificate is set in-memory.

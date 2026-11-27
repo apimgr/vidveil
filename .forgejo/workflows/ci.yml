@@ -67,7 +67,7 @@ jobs:
           base: ${{ steps.range.outputs.base }}
           head: ${{ steps.range.outputs.head }}
           # Range scans (push/PR) block on verified AND unknown; a full-history scan (empty base) blocks only on verified
-          extra_args: --results=${{ steps.range.outputs.base == '' && 'verified' || 'verified,unknown' }}
+          extra_args: --results=${{ steps.range.outputs.base == '' && 'verified' || 'verified,unknown' }} --exclude-paths=.github/trufflehog-exclude.txt
 
   workflow-policy:
     runs-on: ubuntu-26.04

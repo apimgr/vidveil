@@ -112,11 +112,11 @@ func TestResolveFQDN(t *testing.T) {
 		t.Errorf("x-original-host: got %q want orig.example.com", got)
 	}
 
-	// Fallthrough (no proxy headers, untrusted peer): must be non-empty.
+	// The request Host is used after proxy headers when it passes validation.
 	r4 := newResolver(t)
 	req4 := httptest.NewRequest(http.MethodGet, "/", nil)
 	req4.RemoteAddr = "8.8.8.8:1234" // not trusted
-	if got := r4.resolveFQDN(req4); got == "" {
-		t.Error("fallthrough resolveFQDN returned empty")
+	if got := r4.resolveFQDN(req4); got != "example.com" {
+		t.Errorf("request Host fallback = %q, want example.com", got)
 	}
 }

@@ -1,0 +1,11 @@
+Subject: Update Staged - {app_name}
+---
+UPDATE STAGED
+
+From: {app_name} ({fqdn})
+Time: {timestamp}
+
+Version {version} is staged and will be applied after the server restarts.
+
+{app_name}
+{app_url}

@@ -54,6 +54,7 @@ func BeginShutdown() {
 // ResetShutdown clears the draining state before a restored server restarts in-process.
 func ResetShutdown() {
 	shuttingDown.Store(false)
+	resetUpdateRestart()
 }
 
 // setupSignalHandler configures graceful shutdown per AI.md PART 8
@@ -81,6 +82,8 @@ func WaitForShutdown(ctx context.Context) os.Signal {
 		return sig
 	case <-ctx.Done():
 		return syscall.SIGTERM
+	case <-waitForUpdateRestart():
+		return updateRestartSignal{}
 	}
 }
 

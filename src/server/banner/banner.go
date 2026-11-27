@@ -8,8 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/term"
-
+	"github.com/apimgr/vidveil/src/common/display"
 	"github.com/apimgr/vidveil/src/common/i18n"
 	"github.com/apimgr/vidveil/src/common/terminal"
 )
@@ -31,7 +30,8 @@ type ServerBannerInfo struct {
 
 // PrintServerStartupBanner prints a banner sized from terminal columns only.
 func PrintServerStartupBanner(info ServerBannerInfo) {
-	width, _, _ := term.GetSize(int(os.Stdout.Fd()))
+	displayEnv := display.DetectDisplayEnv()
+	width := displayEnv.Cols
 	if width <= 0 {
 		width, _ = strconv.Atoi(os.Getenv("COLUMNS"))
 		if width <= 0 {

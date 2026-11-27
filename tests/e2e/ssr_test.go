@@ -101,6 +101,7 @@ func TestOwnerTokenFavoritesAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json")
 	request.Header.Set("X-CSRF-Token", csrf)
 	response, err := client.Do(request)
 	if err != nil {
@@ -140,6 +141,7 @@ func TestOwnerTokenFavoritesAPI(t *testing.T) {
 			t.Fatal(err)
 		}
 		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Accept", "application/json")
 		request.Header.Set("Authorization", "Bearer "+rawToken)
 		response, err := client.Do(request)
 		if err != nil {
@@ -155,10 +157,10 @@ func TestOwnerTokenFavoritesAPI(t *testing.T) {
 	status, apiBody := callJSON(http.MethodPost, "/api/v1/server/preferences/tokens", created.Data.OwnerToken, `{"name":"e2e automation","expires":"30d"}`)
 	var linked struct {
 		Data struct {
-			Token string `json:"token"`
+			Token string `json:"linked_token"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(apiBody, &linked); err != nil || status != http.StatusOK || linked.Data.Token == "" {
+	if err := json.Unmarshal(apiBody, &linked); err != nil || status != http.StatusCreated || linked.Data.Token == "" {
 		t.Fatalf("linked-token creation = %d %s", status, apiBody)
 	}
 	linkedList, body := get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + linked.Data.Token, "Accept": "application/json"})

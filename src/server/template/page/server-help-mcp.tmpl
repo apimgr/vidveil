@@ -5,7 +5,7 @@
 {{define "content"}}
 <div class="container container-md">
     <header class="page-header">
-        <nav class="breadcrumb" aria-label="{{ t "a11y.breadcrumb" }}"><a href="{{ path "/server/help" }}">{{ t "help.title" }}</a></nav>
+        <nav class="breadcrumb" aria-label="{{ t "a11y.breadcrumb" }}"><a href="{{ path "/server/help" }}">{{ t "nav.back_to_help" }}</a></nav>
         <h1 class="page-title">{{ t "mcp.title" }}</h1>
         <p class="page-lead">{{ t "mcp.overview_body" }}</p>
     </header>
@@ -35,10 +35,11 @@
         <section class="section-card" id="connect" aria-labelledby="mcp-connect-heading">
             <h2 id="mcp-connect-heading">{{ t "mcp.connect_title" }}</h2>
             <h3>{{ t "mcp.claude_heading" }}</h3>
-            <pre class="code-block"><code>claude mcp add --transport http {{.MCPProjectName}} {{.MCPURL}} --header "Authorization: Bearer $MCP_TOKEN"</code></pre>
-            <button type="button" class="copy-btn" aria-label="{{ t "action.copy" }}"><span class="copy-text" aria-live="polite">{{ t "action.copy" }}</span></button>
+            <div class="code-block"><pre><code>claude mcp add --transport http {{.MCPProjectName}} {{.MCPURL}} --header "Authorization: Bearer $MCP_TOKEN"</code></pre>
+                <button type="button" class="copy-btn" aria-label="{{ t "action.copy" }}"><span class="copy-icon">📋</span><span class="copy-text" aria-live="polite">{{ t "action.copy" }}</span></button>
+            </div>
             <h3>{{ t "mcp.json_heading" }}</h3>
-            <pre class="code-block"><code>{
+            <div class="code-block"><pre><code>{
   "mcpServers": {
     "{{.MCPProjectName}}": {
       "type": "http",
@@ -49,25 +50,28 @@
     }
   }
 }</code></pre>
-            <button type="button" class="copy-btn" aria-label="{{ t "action.copy" }}"><span class="copy-text" aria-live="polite">{{ t "action.copy" }}</span></button>
+                <button type="button" class="copy-btn" aria-label="{{ t "action.copy" }}"><span class="copy-icon">📋</span><span class="copy-text" aria-live="polite">{{ t "action.copy" }}</span></button>
+            </div>
             <h3>{{ t "mcp.curl_heading" }}</h3>
-            <pre class="code-block"><code>curl -q -LSsf -X POST '{{.MCPURL}}' \
+            <div class="code-block"><pre><code>curl -q -LSsf -X POST '{{.MCPURL}}' \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
   -H 'MCP-Protocol-Version: 2026-07-28' \
-  -H 'Mcp-Method: initialize' \
+  -H 'Mcp-Method: tools/list' \
   -H 'Authorization: Bearer '"$MCP_TOKEN" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"mcp-check","version":"1.0"}},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}'</code></pre>
-            <button type="button" class="copy-btn" aria-label="{{ t "action.copy" }}"><span class="copy-text" aria-live="polite">{{ t "action.copy" }}</span></button>
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"},"params":{}}'</code></pre>
+                <button type="button" class="copy-btn" aria-label="{{ t "action.copy" }}"><span class="copy-icon">📋</span><span class="copy-text" aria-live="polite">{{ t "action.copy" }}</span></button>
+            </div>
         </section>
 
         <section class="section-card" id="tools" aria-labelledby="mcp-tools-heading">
             <h2 id="mcp-tools-heading">{{ t "mcp.tools_title" }}</h2>
             <p>{{ t "mcp.tools_description" }}</p>
             {{if .MCPTools}}
-            <ul>
-                {{range .MCPTools}}<li><code>{{.Name}}</code> — {{.Description | markdownToHTML}}</li>{{end}}
-            </ul>
+            <div class="table-wrapper"><table class="data-table">
+                <thead><tr><th scope="col">{{ t "mcp.table_tool" }}</th><th scope="col">{{ t "mcp.table_description" }}</th></tr></thead>
+                <tbody>{{range .MCPTools}}<tr><td><code>{{.Name}}</code></td><td>{{.Description | markdownToHTML}}</td></tr>{{end}}</tbody>
+            </table></div>
             {{else}}
             <p>{{ t "mcp.no_tools" }}</p>
             {{end}}
@@ -91,7 +95,6 @@
                     <tr><td><code>400</code></td><td>{{ t "mcp.error400_cause" }}</td><td>{{ t "mcp.error400_action" }}</td></tr>
                     <tr><td><code>401</code></td><td>{{ t "mcp.error401_cause" }}</td><td>{{ t "mcp.error401_action" }} <a href="{{ path "/server/preferences/tokens" }}">{{ t "owner_tokens.title" }}</a>.</td></tr>
                     <tr><td><code>403</code></td><td>{{ t "mcp.error403_cause" }}</td><td>{{ t "mcp.error403_action" }}</td></tr>
-                    <tr><td><code>404</code></td><td>{{ t "mcp.error404_cause" }}</td><td>{{ t "mcp.error404_action" }}</td></tr>
                     <tr><td><code>405</code></td><td>{{ t "mcp.error405_cause" }}</td><td>{{ t "mcp.error405_action" }}</td></tr>
                 </tbody>
             </table></div>

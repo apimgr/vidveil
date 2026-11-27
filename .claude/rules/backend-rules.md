@@ -2,7 +2,7 @@
 
 ⚠️ **These rules are NON-NEGOTIABLE. Violations are bugs.** ⚠️
 
-<!-- Rule summary checked against AI.md on 2026-11-26; AI.md remains authoritative. -->
+<!-- Rule summary checked against AI.md on 2026-11-27; AI.md remains authoritative. -->
 
 ## CRITICAL - NEVER DO
 
@@ -79,6 +79,9 @@
 - Connection pooling via `SetMaxOpenConns`/`SetMaxIdleConns`/`SetConnMaxLifetime`/`SetConnMaxIdleTime` in `NewDB`, verified with `PingContext`. Sizing guide: Dev 5/2, Small 25/5, Medium 50/10, Large 100/20 (open/idle).
 - Query timeouts: simple SELECT 5s, complex SELECT/JOIN 15s, INSERT/UPDATE/DELETE 10s, bulk ops 60s, migrations 5m, reports 2m. `handleQueryError` maps `DeadlineExceeded`→TIMEOUT, `sql.ErrNoRows`→NOT_FOUND, `Canceled`→CANCELED, default→SERVER_ERROR.
 - Transaction patterns: basic `WithTransaction` (30s timeout), optimistic locking (version column + retry), serializable isolation with `WithSerializableRetry` (backoff on SQLITE_BUSY/"database is locked") for correctness-critical transfers.
+- SQLite files use separate handles: one immediate writer (pool 1, no connection lifetime) and a read-only pool (`query_only=1`, configured reader count). Every connection sets WAL, `synchronous=NORMAL`, `foreign_keys=1`, and `busy_timeout=10000`; refuse startup unless the journal mode reports `wal`.
+- SQLite writes go through one bounded store transaction with a 10s deadline; retry `SQLITE_BUSY`/`SQLITE_LOCKED` up to five times with exponential 25ms backoff and jitter. Reads use the read handle and a 5s deadline. Close rows before writing, keep transactions short, and flush per-request counters from memory every 30s rather than writing on each request.
+- Shutdown checkpoints WAL with `TRUNCATE`, then closes the read handle before the writer. Never drop a table/column or delete data in schema migrations; retain existing key types and add new columns in idempotent order.
 - Never `SELECT *` — name columns explicitly.
 
 ### Security & Logging (PART 11)

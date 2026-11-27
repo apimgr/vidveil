@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -633,6 +634,23 @@ func (r *URLResolver) GetWildcardDomain() string {
 	return r.wildcard
 }
 
+// GetLearnedDomains returns observed hosts that reached the configured sample threshold.
+func (r *URLResolver) GetLearnedDomains() []string {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	domains := make([]string, 0, len(r.observations))
+	for domain, observation := range r.observations {
+		if observation.count >= r.config.MinSamples {
+			domains = append(domains, domain)
+		}
+	}
+	sort.Strings(domains)
+	return domains
+}
+
 // GetAllDomains returns all domains from DOMAIN env var
 func GetAllDomains() []string {
 	domain := os.Getenv("DOMAIN")
@@ -648,6 +666,11 @@ func GetAllDomains() []string {
 		}
 	}
 	return domains
+}
+
+// GetLearnedDomains returns hosts learned by the process-wide URL resolver.
+func GetLearnedDomains() []string {
+	return GlobalResolver().GetLearnedDomains()
 }
 
 // Global resolver instance
@@ -747,6 +770,11 @@ func ResolveClientIP(req *http.Request) string {
 // the "tor" sentinel for the client IP when this returns true.
 func IsTorRequest(req *http.Request) bool {
 	return GlobalResolver().isTorRequest(req)
+}
+
+// IsI2PRequest reports whether req arrived through this application's I2P address.
+func IsI2PRequest(req *http.Request) bool {
+	return GlobalResolver().isI2PRequest(req)
 }
 
 // IsTorRequestForAddress classifies a request against an explicit configured

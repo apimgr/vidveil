@@ -170,7 +170,7 @@ test_body   "/api/healthz"   "application/json" "/api/healthz"   '"status"\|"ok"
 test_accept "/api/healthz"   "text/plain"        "/api/healthz"
 test_body   "/server/healthz" "application/json" "/server/healthz" '"status"\|"ok"'
 test_accept "/server/healthz" "text/plain"        "/server/healthz"
-test_body   "/api/autodiscover" "application/json" "/api/autodiscover" '"primary"\|"api_version"'
+test_body   "/api/autodiscover" "application/json" "/api/autodiscover" '"data"'
 test_accept "/api/autodiscover" "text/plain"         "/api/autodiscover"
 
 echo

@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,7 @@ type operatorVariablesContextKey struct{}
 
 var operatorWarnings sync.Map
 var contactHrefPattern = regexp.MustCompile(`(?i)href="/server/contact(?:[?#][^"]*)?"`)
+var operatorHeadingPattern = regexp.MustCompile(`(?i)(</?)h([1-6])(\b[^>]*)>`)
 var externalAnchorPattern = regexp.MustCompile(`(?is)<a\b[^>]*href=["']https?://[^"']*["'][^>]*>(.*?)</a>`)
 var protocolRelativeAnchorPattern = regexp.MustCompile(`(?is)<a\b[^>]*href=["']//[^"']*["'][^>]*>(.*?)</a>`)
 
@@ -90,6 +92,7 @@ func operatorHTML(r *http.Request, name string) template.HTML {
 	var rendered template.HTML
 	switch format {
 	case "html":
+		body = shiftOperatorHeadings(body)
 		if name == "header" || name == "footer" {
 			rendered = sanitize.HTML(body)
 		} else {
@@ -112,6 +115,19 @@ func operatorHTML(r *http.Request, name string) template.HTML {
 		clean = stripExternalAnchorLinks(clean)
 	}
 	return sanitize.Document(clean)
+}
+
+func shiftOperatorHeadings(markup string) string {
+	return operatorHeadingPattern.ReplaceAllStringFunc(markup, func(tag string) string {
+		parts := operatorHeadingPattern.FindStringSubmatch(tag)
+		level := int(parts[2][0] - '0')
+		if level > 4 {
+			level = 6
+		} else {
+			level += 2
+		}
+		return parts[1] + "h" + strconv.Itoa(level) + parts[3] + ">"
+	})
 }
 
 func stripExternalAnchorLinks(markup string) string {

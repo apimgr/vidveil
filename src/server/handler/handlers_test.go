@@ -15,7 +15,7 @@ import (
 // createTestConfig returns a test configuration
 func createTestConfig() *config.AppConfig {
 	return &config.AppConfig{
-		Server: config.ServerConfig{
+		Server: config.ServerSettings{
 			Branding: config.ServerBrandingConfig{
 				Title:       "Test Vidveil",
 				Description: "Test Description",

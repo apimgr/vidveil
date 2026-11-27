@@ -22,7 +22,7 @@ func TestBuildCSPHeaderUpgradesInsecureRequestsOnlyForHTTPS(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Server{appConfig: &config.AppConfig{Server: config.ServerConfig{
+			s := &Server{appConfig: &config.AppConfig{Server: config.ServerSettings{
 				SSL: config.SSLConfig{Enabled: tt.ssl},
 			}}}
 			policy := s.buildCSPHeader(httptest.NewRequest("GET", tt.request, nil))

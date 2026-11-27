@@ -1,7 +1,7 @@
 // Package markdown renders the small Markdown subset used by project and
 // operator-authored prose into sanitized HTML.
-// Only paragraphs, "-" bullet lists and **bold** are supported — the output is
-// always piped through sanitize.HTML, so no untrusted markup can escape.
+// Paragraphs, "-" bullet lists, shifted headings, and **bold** are supported —
+// output is always piped through the appropriate sanitizer.
 package markdown
 
 import (
@@ -15,15 +15,15 @@ import (
 // ToHTML converts the supported Markdown subset to sanitized HTML.
 // An empty input yields empty output so callers can branch on it in templates.
 func ToHTML(src string) template.HTML {
-	return render(src, false)
+	return render(src, false, false)
 }
 
 // ToDocumentHTML renders Markdown with the broader safe document allowlist.
 func ToDocumentHTML(src string) template.HTML {
-	return render(src, true)
+	return render(src, true, true)
 }
 
-func render(src string, document bool) template.HTML {
+func render(src string, document, shiftHeadings bool) template.HTML {
 	if strings.TrimSpace(src) == "" {
 		return template.HTML("")
 	}
@@ -68,6 +68,22 @@ func render(src string, document bool) template.HTML {
 		case strings.HasPrefix(trimmed, "- "):
 			flushPara()
 			list = append(list, strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
+		case shiftHeadings && markdownHeading(trimmed):
+			flushPara()
+			flushList()
+			level, text := markdownHeadingContent(trimmed)
+			if level > 4 {
+				level = 6
+			} else {
+				level += 2
+			}
+			b.WriteString("<h")
+			b.WriteByte(byte('0' + level))
+			b.WriteByte('>')
+			b.WriteString(inline(text))
+			b.WriteString("</h")
+			b.WriteByte(byte('0' + level))
+			b.WriteByte('>')
 		default:
 			flushList()
 			para = append(para, trimmed)
@@ -80,6 +96,22 @@ func render(src string, document bool) template.HTML {
 		return sanitize.Document(b.String())
 	}
 	return sanitize.HTML(b.String())
+}
+
+func markdownHeading(line string) bool {
+	level, _ := markdownHeadingContent(line)
+	return level > 0
+}
+
+func markdownHeadingContent(line string) (int, string) {
+	level := 0
+	for level < len(line) && line[level] == '#' {
+		level++
+	}
+	if level == 0 || level > 6 || level == len(line) || line[level] != ' ' {
+		return 0, ""
+	}
+	return level, strings.TrimSpace(line[level:])
 }
 
 // inline escapes a text run and applies **bold** emphasis.

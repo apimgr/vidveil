@@ -61,6 +61,9 @@ func DropPrivileges(username string, configDirs ...string) error {
 	if err != nil {
 		return fmt.Errorf("invalid gid for user %s: %w", username, err)
 	}
+	if err := validateExistingServiceAccount(u, uid, gid); err != nil {
+		return fmt.Errorf("service account %s conflict: %w", username, err)
+	}
 
 	// Drop supplementary groups first
 	if err := syscall.Setgroups([]int{gid}); err != nil {
@@ -83,6 +86,71 @@ func DropPrivileges(username string, configDirs ...string) error {
 	}
 
 	return nil
+}
+
+func validateExistingServiceAccount(account *user.User, uid, gid int) error {
+	if uid < 1 || uid > 999 {
+		return fmt.Errorf("uid %d is outside the system account range 1-999", uid)
+	}
+	if gid < 1 || gid > 999 {
+		return fmt.Errorf("primary gid %d is outside the system account range 1-999", gid)
+	}
+	shell, err := serviceAccountShell(account.Username)
+	if err != nil {
+		return fmt.Errorf("cannot verify account shell: %w", err)
+	}
+	if isNonLoginShell(shell) {
+		return nil
+	}
+	return fmt.Errorf("login shell %q is not nologin or false", shell)
+}
+
+func isNonLoginShell(shell string) bool {
+	switch filepath.Base(shell) {
+	case "nologin", "false":
+		return true
+	default:
+		return false
+	}
+}
+
+func serviceAccountShell(username string) (string, error) {
+	passwdPath := "/etc/passwd"
+	if runtime.GOOS == "freebsd" {
+		passwdPath = "/etc/master.passwd"
+	}
+	if runtime.GOOS == "linux" || runtime.GOOS == "freebsd" {
+		data, err := os.ReadFile(passwdPath)
+		if err != nil {
+			return "", err
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			fields := strings.Split(line, ":")
+			if len(fields) == 0 || fields[0] != username {
+				continue
+			}
+			if runtime.GOOS == "freebsd" && len(fields) >= 10 {
+				return fields[9], nil
+			}
+			if runtime.GOOS == "linux" && len(fields) >= 7 {
+				return fields[6], nil
+			}
+			return "", errors.New("account record is malformed")
+		}
+		return "", errors.New("account record was not found")
+	}
+	if runtime.GOOS == "darwin" {
+		output, err := exec.Command("dscl", ".", "-read", "/Users/"+username, "UserShell").Output()
+		if err != nil {
+			return "", err
+		}
+		fields := strings.Fields(string(output))
+		if len(fields) != 2 || fields[0] != "UserShell:" {
+			return "", errors.New("directory service returned a malformed shell record")
+		}
+		return fields[1], nil
+	}
+	return "", fmt.Errorf("account shell lookup is unsupported on %s", runtime.GOOS)
 }
 
 // createSystemUser creates a system user for the service

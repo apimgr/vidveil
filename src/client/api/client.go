@@ -143,6 +143,14 @@ type VersionResponse struct {
 
 // AutodiscoverResponse is the non-versioned client bootstrap response.
 type AutodiscoverResponse struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	API     struct {
+		CurrentVersion string `json:"current_version"`
+	} `json:"api"`
+	URLs          []string                  `json:"urls"`
+	Onion         string                    `json:"onion,omitempty"`
+	I2P           string                    `json:"i2p,omitempty"`
 	Primary       string                    `json:"primary"`
 	APIVersion    string                    `json:"api_version"`
 	Timeout       int                       `json:"timeout"`
@@ -292,9 +300,25 @@ func (c *APIClient) AutodiscoverChannel(channel string) (*AutodiscoverResponse, 
 		endpoint += "?channel=" + url.QueryEscape(channel)
 	}
 
-	var resp AutodiscoverResponse
-	if err := c.get(endpoint, &resp); err != nil {
+	var envelope struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := c.get(endpoint, &envelope); err != nil {
 		return nil, err
+	}
+	var resp AutodiscoverResponse
+	if len(envelope.Data) > 0 && string(envelope.Data) != "null" {
+		if err := json.Unmarshal(envelope.Data, &resp); err != nil {
+			return nil, fmt.Errorf("decoding autodiscover data: %w", err)
+		}
+	} else if err := c.get(endpoint, &resp); err != nil {
+		return nil, err
+	}
+	if resp.Primary == "" && len(resp.URLs) > 0 {
+		resp.Primary = resp.URLs[0]
+	}
+	if resp.APIVersion == "" {
+		resp.APIVersion = resp.API.CurrentVersion
 	}
 
 	return &resp, nil

@@ -7,6 +7,7 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/apimgr/vidveil/src/client/api"
@@ -271,21 +272,14 @@ func TestOutputShellCompletionScript_Fish_NoPanic(t *testing.T) {
 	}
 }
 
-func TestOutputShellCompletionScript_Sh_NoPanic(t *testing.T) {
-	if err := OutputShellCompletionScript("sh"); err != nil {
-		t.Errorf("OutputShellCompletionScript sh: %v", err)
-	}
-}
-
-func TestOutputShellCompletionScript_Dash_NoPanic(t *testing.T) {
-	if err := OutputShellCompletionScript("dash"); err != nil {
-		t.Errorf("OutputShellCompletionScript dash: %v", err)
-	}
-}
-
-func TestOutputShellCompletionScript_Ksh_NoPanic(t *testing.T) {
-	if err := OutputShellCompletionScript("ksh"); err != nil {
-		t.Errorf("OutputShellCompletionScript ksh: %v", err)
+func TestOutputShellCompletionScript_POSIXShells_ReturnUsageError(t *testing.T) {
+	for _, shell := range []string{"sh", "dash", "ksh"} {
+		t.Run(shell, func(t *testing.T) {
+			err := OutputShellCompletionScript(shell)
+			if ExitCodeForError(err) != 2 {
+				t.Fatalf("OutputShellCompletionScript(%q) exit code = %d, want 2; error: %v", shell, ExitCodeForError(err), err)
+			}
+		})
 	}
 }
 
@@ -332,20 +326,23 @@ func TestOutputShellInitSnippet_Fish_NoPanic(t *testing.T) {
 }
 
 func TestOutputShellInitSnippet_Sh_NoPanic(t *testing.T) {
-	if err := OutputShellInitSnippet("sh"); err != nil {
-		t.Errorf("OutputShellInitSnippet sh: %v", err)
+	out := captureStdoutForTest(t, func() error { return OutputShellInitSnippet("sh") })
+	if !strings.HasPrefix(out, "# ") || !strings.Contains(out, "sh has no programmable completion") {
+		t.Errorf("OutputShellInitSnippet sh = %q, want safe no-op comment", out)
 	}
 }
 
 func TestOutputShellInitSnippet_Dash_NoPanic(t *testing.T) {
-	if err := OutputShellInitSnippet("dash"); err != nil {
-		t.Errorf("OutputShellInitSnippet dash: %v", err)
+	out := captureStdoutForTest(t, func() error { return OutputShellInitSnippet("dash") })
+	if !strings.HasPrefix(out, "# ") || !strings.Contains(out, "dash has no programmable completion") {
+		t.Errorf("OutputShellInitSnippet dash = %q, want safe no-op comment", out)
 	}
 }
 
 func TestOutputShellInitSnippet_Ksh_NoPanic(t *testing.T) {
-	if err := OutputShellInitSnippet("ksh"); err != nil {
-		t.Errorf("OutputShellInitSnippet ksh: %v", err)
+	out := captureStdoutForTest(t, func() error { return OutputShellInitSnippet("ksh") })
+	if !strings.HasPrefix(out, "# ") || !strings.Contains(out, "ksh has no programmable completion") {
+		t.Errorf("OutputShellInitSnippet ksh = %q, want safe no-op comment", out)
 	}
 }
 

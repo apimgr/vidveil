@@ -73,7 +73,7 @@ VidVeil has no admin login, setup token, or admin web panel. Operators manage
 settings in `server.yml` and use the CLI. For configuration and service
 troubleshooting, see the [configuration guide](../configuration.md) and
 [CLI reference](../cli.md). Operator-protected API endpoints require the
-`server.token` value from the protected configuration file.
+`server.token` value from the protected `secrets.yml` file.
 
 ---
 

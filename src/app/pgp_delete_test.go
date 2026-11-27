@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Coverage tests for the pgp keypair delete flow (AI.md PART 12).
-package main
+package app
 
 import (
 	"os"

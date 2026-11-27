@@ -41,7 +41,7 @@ func TestCORSMiddlewareOriginPolicies(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Server{appConfig: &config.AppConfig{Server: config.ServerConfig{CORS: tt.cors}}}
+			s := &Server{appConfig: &config.AppConfig{Server: config.ServerSettings{CORS: tt.cors}}}
 			called := false
 			handler := s.corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				called = true
@@ -98,7 +98,7 @@ func TestAppendUniqueOriginRejectsUnsafeValues(t *testing.T) {
 
 func TestCORSMiddlewareLearnsDOMAINOrigins(t *testing.T) {
 	t.Setenv("DOMAIN", "one.example.com, two.example.com")
-	s := &Server{appConfig: &config.AppConfig{Server: config.ServerConfig{CORS: config.CORSConfig{
+	s := &Server{appConfig: &config.AppConfig{Server: config.ServerSettings{CORS: config.CORSConfig{
 		AllowedOrigins:   []string{},
 		AllowCredentials: true,
 		MaxAge:           86400,
@@ -119,7 +119,7 @@ func TestCORSMiddlewareLearnsDOMAINOrigins(t *testing.T) {
 
 func TestCORSMiddlewareRestrictsTorOrigins(t *testing.T) {
 	t.Setenv("DOMAIN", "clearnet.example.com")
-	s := &Server{appConfig: &config.AppConfig{Server: config.ServerConfig{
+	s := &Server{appConfig: &config.AppConfig{Server: config.ServerSettings{
 		CORS: config.CORSConfig{AllowedOrigins: []string{"https://clearnet.example.com"}, AllowCredentials: true, MaxAge: 86400},
 		Tor:  config.TorConfig{OnionAddress: "abc123.onion"},
 	}}}

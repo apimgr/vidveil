@@ -337,11 +337,16 @@ type AutodiscoverRequest struct {
 	Channel string `json:"channel,omitempty"`
 }
 type AutodiscoverResponse struct {
-	Primary       string         `json:"primary"`
-	APIVersion    string         `json:"api_version"`
-	Timeout       int            `json:"timeout"`
-	Retry         int            `json:"retry"`
-	RetryDelay    int            `json:"retry_delay"`
+	OK   bool             `json:"ok"`
+	Data AutodiscoverData `json:"data"`
+}
+type AutodiscoverData struct {
+	Name          string         `json:"name"`
+	Version       string         `json:"version"`
+	API           map[string]any `json:"api"`
+	URLs          []string       `json:"urls"`
+	Onion         string         `json:"onion,omitempty"`
+	I2P           string         `json:"i2p,omitempty"`
 	CLIMinVersion string         `json:"cli_min_version"`
 	CLIVersions   map[string]any `json:"cli_versions"`
 }

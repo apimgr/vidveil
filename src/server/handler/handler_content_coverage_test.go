@@ -980,8 +980,10 @@ func TestGetTorStatus_NormalizesProviderStates(t *testing.T) {
 // ── getTorHostname — covers lines 305-308 ────────────────────────────────────
 
 func TestGetTorHostname_FromOnionAddress_ReturnsIt(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Server.Tor.Expose = true
 	h := &SearchHandler{
-		appConfig: createTestConfig(),
+		appConfig: cfg,
 		torSvc:    &testTorChecker{enabled: true, running: true, info: map[string]interface{}{"onion_address": "abcdefghijklmnopabcdefghijklmnopabcdefghijklmnopabcdefgh.onion"}},
 	}
 	if got := h.getTorHostname(); got != "abcdefghijklmnopabcdefghijklmnopabcdefghijklmnopabcdefgh.onion" {

@@ -1159,3 +1159,18 @@ func TestGetPathPrefix_PackageLevel(t *testing.T) {
 		t.Error("GetPathPrefix (package-level): expected non-empty prefix")
 	}
 }
+
+func TestURLResolverGetLearnedDomainsRequiresSamplesAndSorts(t *testing.T) {
+	cfg := DefaultURLVarsConfig()
+	cfg.MinSamples = 2
+	cfg.LogChanges = false
+	r := NewURLResolver(cfg)
+	r.recordObservation("z.example.com")
+	r.recordObservation("a.example.com")
+	r.recordObservation("z.example.com")
+	r.recordObservation("a.example.com")
+	got := r.GetLearnedDomains()
+	if len(got) != 2 || got[0] != "a.example.com" || got[1] != "z.example.com" {
+		t.Fatalf("GetLearnedDomains() = %v, want [a.example.com z.example.com]", got)
+	}
+}

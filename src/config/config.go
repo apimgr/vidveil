@@ -32,9 +32,6 @@ import (
 
 // paths.ProjectOrg and paths.ProjectName are defined in paths package
 
-// Version is set at build time via ldflags
-var Version = "dev"
-
 // apiVersionPattern validates Server.APIVersion per AI.md PART 14 ({api_version}
 // examples: "v1", "v2"). Lowercase "v" followed by one or more digits.
 var apiVersionPattern = regexp.MustCompile(`^v[0-9]+$`)
@@ -42,12 +39,12 @@ var seoMetaNamePattern = regexp.MustCompile(`^[a-z0-9:_.-]+$`)
 var seoOpenGraphTypePattern = regexp.MustCompile(`^[a-z0-9_.-]{1,64}$`)
 
 // Config holds all application configuration per AI.md spec
-type AppConfig struct {
-	Server  ServerConfig  `yaml:"server"`
-	CLI     CLIConfig     `yaml:"cli"`
-	Web     WebConfig     `yaml:"web"`
-	Search  SearchConfig  `yaml:"search"`
-	Engines EnginesConfig `yaml:"engines"`
+type ServerConfig struct {
+	Server  ServerSettings `yaml:"server"`
+	CLI     CLIConfig      `yaml:"cli"`
+	Web     WebConfig      `yaml:"web"`
+	Search  SearchConfig   `yaml:"search"`
+	Engines EnginesConfig  `yaml:"engines"`
 
 	// Runtime-only state (never serialised to YAML)
 	// Set by ConfigWatcher when port/address changes require a restart.
@@ -56,6 +53,43 @@ type AppConfig struct {
 	GeneratedSecretKeys  []string          `yaml:"-" json:"-"`
 	GeneratedServerToken bool              `yaml:"-" json:"-"`
 	LegacyAppSecrets     map[string]string `yaml:"-" json:"-"`
+	Runtime              RuntimeConfig     `yaml:"-" json:"-"`
+	Version              string            `yaml:"-" json:"-"`
+	CommitID             string            `yaml:"-" json:"-"`
+	BuildEpoch           string            `yaml:"-" json:"-"`
+	OfficialSite         string            `yaml:"-" json:"-"`
+}
+
+type AppConfig = ServerConfig
+
+type RuntimeConfig struct {
+	ConfigPath    string
+	ConfigDir     string
+	DataDir       string
+	CacheDir      string
+	LogDir        string
+	BackupDir     string
+	PIDFile       string
+	Address       string
+	Port          string
+	BaseURL       string
+	Mode          string
+	Color         string
+	Language      string
+	Debug         bool
+	DebugSet      bool
+	I2P           bool
+	I2PSet        bool
+	Daemon        bool
+	PIDFileSet    bool
+	PeekDaemonize bool
+	Arguments     []string
+	Command       []string
+	Help          bool
+	Version       bool
+	Listener      net.Listener
+	Ready         chan struct{}
+	TestMode      bool
 }
 
 // CLIConfig holds server-side companion CLI download settings per AI.md PART 32.
@@ -187,8 +221,8 @@ func (body LocalizedContentBody) Resolve(language string) string {
 	return body.Values["default"]
 }
 
-// ServerConfig holds server-related settings per AI.md
-type ServerConfig struct {
+// ServerSettings holds the server section of the aggregate runtime configuration.
+type ServerSettings struct {
 	// Port: single (HTTP) or dual (HTTP,HTTPS) e.g., "8090" or "8090,64453"
 	Port    string `yaml:"port"`
 	FQDN    string `yaml:"fqdn"`
@@ -541,6 +575,7 @@ type HealthzRootConfig struct {
 type TorConfig struct {
 	// Binary path (empty = auto-detect from PATH)
 	Binary string `yaml:"binary"`
+	Expose bool   `yaml:"expose"`
 
 	// --- Outbound Network Settings ---
 	// Use Tor network for outbound connections (engine queries)
@@ -607,6 +642,7 @@ type TorConfig struct {
 // I2PConfig configures the I2P eepsite provider per AI.md PART 31.2.
 type I2PConfig struct {
 	Enabled          bool   `yaml:"enabled"`
+	Expose           bool   `yaml:"expose"`
 	Binary           string `yaml:"binary"`
 	SAMAddress       string `yaml:"sam_address"`
 	VirtualPort      int    `yaml:"virtual_port"`
@@ -1225,6 +1261,7 @@ type BackupConfig struct {
 	Retention          BackupRetentionConfig  `yaml:"retention"`
 	Encryption         BackupEncryptionConfig `yaml:"encryption"`
 	EncryptionPassword string                 `yaml:"encryption_password,omitempty" json:"-"`
+	PasswordUnreadable bool                   `yaml:"-" json:"-"`
 }
 
 // MaintenanceConfig controls automatic recovery and disk-pressure cleanup.
@@ -1947,7 +1984,7 @@ func DefaultAppConfig() *AppConfig {
 	defaultAPIBase := "/api/" + defaultAPIVersion
 
 	return &AppConfig{
-		Server: ServerConfig{
+		Server: ServerSettings{
 			Port:       defaultPort,
 			FQDN:       fqdn,
 			Address:    "[::]",
@@ -2532,6 +2569,9 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 		clearGeneratedSecretDefaults(cfg)
 	}
 	cfg.LegacyAppSecrets = legacySecrets
+	if cfg.Server.Backup.EncryptionPassword == "********" {
+		cfg.Server.Backup.EncryptionPassword = ""
+	}
 	if len(cfg.LegacyAppSecrets) == 0 {
 		cfg.LegacyAppSecrets = readLegacySecretsFromBackup(configPath)
 	}
@@ -2542,8 +2582,8 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 	if _, err := os.Stat(filepath.Join(paths.Config, "secrets.yml")); err == nil {
 		credentialFiles = append(credentialFiles, filepath.Join(paths.Config, "secrets.yml"))
 	}
-	if err := persistDNSCredentials(credentialFiles, cfg.Server.Security.EncryptionKey); err != nil {
-		return nil, "", fmt.Errorf("protect DNS credentials: %w", err)
+	if err := persistEncryptedCredentials(credentialFiles, cfg.Server.Security.EncryptionKey); err != nil {
+		return nil, "", fmt.Errorf("protect encrypted credentials: %w", err)
 	}
 	for name, value := range cfg.Server.SSL.LetsEncrypt.DNSCredentials {
 		plain, decryptErr := decryptDNSCredential(value, cfg.Server.Security.EncryptionKey)
@@ -2551,6 +2591,14 @@ func LoadAppConfig(configDir, dataDir string) (*AppConfig, string, error) {
 			return nil, "", fmt.Errorf("decrypt DNS credential %s: %w", name, decryptErr)
 		}
 		cfg.Server.SSL.LetsEncrypt.DNSCredentials[name] = plain
+	}
+	backupPassword, backupPasswordErr := decryptDNSCredential(cfg.Server.Backup.EncryptionPassword, cfg.Server.Security.EncryptionKey)
+	if backupPasswordErr != nil {
+		fmt.Fprintln(os.Stderr, "WARN: backup.password_unreadable: scheduled backups are disabled until the configured encryption key is restored")
+		cfg.Server.Backup.EncryptionPassword = ""
+		cfg.Server.Backup.PasswordUnreadable = true
+	} else {
+		cfg.Server.Backup.EncryptionPassword = backupPassword
 	}
 
 	// Validate and fix invalid config values per AI.md PART 12
@@ -3295,7 +3343,7 @@ func decryptDNSCredential(value, key string) (string, error) {
 	return string(plain), nil
 }
 
-func persistDNSCredentials(files []string, key string) error {
+func persistEncryptedCredentials(files []string, key string) error {
 	if len(files) == 0 {
 		return nil
 	}
@@ -3341,6 +3389,17 @@ func persistDNSCredentials(files []string, key string) error {
 				}
 				value.Value, value.Tag, changed = encrypted, "!!str", true
 			}
+		}
+		backup := yamlMapValue(server, "backup")
+		password := yamlMapValue(backup, "encryption_password")
+		if password != nil && password.Kind == yaml.ScalarNode && password.Value == "********" {
+			password.Value, password.Tag, changed = "", "!!str", true
+		} else if password != nil && password.Kind == yaml.ScalarNode && password.Value != "" && !strings.HasPrefix(password.Value, "enc:v1:") {
+			encrypted, err := encryptDNSCredential(password.Value, key)
+			if err != nil {
+				return fmt.Errorf("%s: encrypt backup password: %w", file, err)
+			}
+			password.Value, password.Tag, changed = encrypted, "!!str", true
 		}
 		if !changed {
 			continue
@@ -3532,7 +3591,7 @@ func sparseLogsConfig(logs LogsConfig) LogsConfig {
 
 func SaveAppConfig(cfg *AppConfig, path string) (saveErr error) {
 	configToSave := *cfg
-	if len(configToSave.Server.SSL.LetsEncrypt.DNSCredentials) > 0 && configToSave.Server.Security.EncryptionKey == "" {
+	if (len(configToSave.Server.SSL.LetsEncrypt.DNSCredentials) > 0 || configToSave.Server.Backup.EncryptionPassword != "") && configToSave.Server.Security.EncryptionKey == "" {
 		configToSave.Server.Security.EncryptionKey = generateToken(32)
 		configToSave.Server.Security.EncryptionKeyVersion = 1
 		cfg.Server.Security.EncryptionKey = configToSave.Server.Security.EncryptionKey
@@ -3546,6 +3605,13 @@ func SaveAppConfig(cfg *AppConfig, path string) (saveErr error) {
 			return fmt.Errorf("encrypt DNS credential %s: %w", name, encryptErr)
 		}
 		configToSave.Server.SSL.LetsEncrypt.DNSCredentials[name] = encrypted
+	}
+	if configToSave.Server.Backup.EncryptionPassword != "" {
+		encrypted, encryptErr := encryptDNSCredential(configToSave.Server.Backup.EncryptionPassword, cfg.Server.Security.EncryptionKey)
+		if encryptErr != nil {
+			return fmt.Errorf("encrypt backup password: %w", encryptErr)
+		}
+		configToSave.Server.Backup.EncryptionPassword = encrypted
 	}
 	configToSave.Server.Logs = sparseLogsConfig(configToSave.Server.Logs)
 	return saveConfigLayout(&configToSave, path)

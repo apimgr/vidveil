@@ -61,6 +61,13 @@ DOCKER_CONTAINER_REGISTRY="${DOCKER_TEMP_DIR}/containers"
 touch "${DOCKER_CONTAINER_REGISTRY}"
 mkdir -p "${DOCKER_TEMP_DIR}/config" "${DOCKER_TEMP_DIR}/data"
 chmod 0700 "${DOCKER_TEMP_DIR}/config" "${DOCKER_TEMP_DIR}/data"
+cat >"${DOCKER_TEMP_DIR}/config/server.yml" <<'EOF'
+server:
+  tor:
+    expose: true
+  i2p:
+    expose: true
+EOF
 DOCKER_GO_CACHE="${GO_CACHE:-${HOME}/go/pkg/mod}"
 DOCKER_GO_BUILD="${GO_BUILD:-${HOME}/.cache/go-build/${DOCKER_PROJECT_NAME}}"
 mkdir -p "${DOCKER_GO_CACHE}" "${DOCKER_GO_BUILD}"
@@ -206,19 +213,32 @@ __check_overlay_health() {
     fi
 
     health_check="$(__health_json | __docker_exec -i "${DOCKER_TEST_CONTAINER}" jq -r ".checks.${overlay} // empty")"
-    [ "${health_check}" = ok ] && __pass "checks.${overlay} is ok" || __fail "checks.${overlay} is ${health_check:-missing}"
+    if [ "${health_check}" = ok ]; then
+        __pass "checks.${overlay} is ok"
+    else
+        __fail "checks.${overlay} is ${health_check:-missing}"
+    fi
     if [ "${overlay}" = tor ]; then
-        [ "$(__overlay_value tor running)" = true ] && __pass "Tor is running" || __fail "Tor is not running"
+        if [ "$(__overlay_value tor running)" = true ]; then
+            __pass "Tor is running"
+        else
+            __fail "Tor is not running"
+        fi
         address="$(__overlay_value tor hostname)"
         if [[ "${address}" =~ ^[a-z2-7]{56}\.onion$ ]]; then
             __pass "Tor hostname is a v3 onion address"
         else
             __fail "Tor hostname is invalid (${address:-missing})"
         fi
-        __docker_exec "${DOCKER_TEST_CONTAINER}" sh -c \
-            'test -s /data/tor/site/hostname && test "$(stat -c %a /config/tor)" = 700 && test "$(stat -c %a /data/tor)" = 700 && test "$(stat -c %a /data/tor/site)" = 700' \
-            && __pass "Tor hostname persisted and directories are mode 0700" \
-            || __fail "Tor hostname or private directory contract failed"
+        # The command must expand inside the test container, not on the host.
+        # shellcheck disable=SC2016
+        if __docker_exec "${DOCKER_TEST_CONTAINER}" sh -c \
+            'test -s /data/tor/site/hostname && test "$(stat -c %a /config/tor)" = 700 && test "$(stat -c %a /data/tor)" = 700 && test "$(stat -c %a /data/tor/site)" = 700'
+        then
+            __pass "Tor hostname persisted and directories are mode 0700"
+        else
+            __fail "Tor hostname or private directory contract failed"
+        fi
     else
         address="$(__overlay_value i2p hostname)"
         if [[ "${address}" =~ ^[a-z2-7]{52}\.b32\.i2p$ ]]; then
@@ -226,10 +246,16 @@ __check_overlay_health() {
         else
             __fail "I2P hostname is invalid (${address:-missing})"
         fi
-        [ "$(__overlay_value i2p running)" = true ] && __pass "I2P is running" || __fail "I2P is not running"
-        __docker_exec "${DOCKER_TEST_CONTAINER}" sh -c 'find /data/i2p -type f -size +0 | grep . >/dev/null' \
-            && __pass "I2P destination key persisted" \
-            || __fail "I2P destination key was not persisted"
+        if [ "$(__overlay_value i2p running)" = true ]; then
+            __pass "I2P is running"
+        else
+            __fail "I2P is not running"
+        fi
+        if __docker_exec "${DOCKER_TEST_CONTAINER}" sh -c 'find /data/i2p -type f -size +0 | grep . >/dev/null'; then
+            __pass "I2P destination key persisted"
+        else
+            __fail "I2P destination key was not persisted"
+        fi
     fi
 }
 
@@ -393,11 +419,23 @@ else
     __fail "Operator token is missing or malformed in secrets.yml"
 fi
 AUTH_MISSING_STATUS=$(__docker_exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs -o /dev/null -w "%{http_code}" "http://localhost:8080/api/v1/server/auth/check" 2>/dev/null || echo "000")
-[ "${AUTH_MISSING_STATUS}" = 401 ] && __pass "Auth check rejects missing bearer token" || __fail "Auth check missing-token status was ${AUTH_MISSING_STATUS}"
+if [ "${AUTH_MISSING_STATUS}" = 401 ]; then
+    __pass "Auth check rejects missing bearer token"
+else
+    __fail "Auth check missing-token status was ${AUTH_MISSING_STATUS}"
+fi
 AUTH_INVALID_STATUS=$(__docker_exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs -o /dev/null -w "%{http_code}" -H 'Authorization: Bearer invalid-token' "http://localhost:8080/api/v1/server/auth/check" 2>/dev/null || echo "000")
-[ "${AUTH_INVALID_STATUS}" = 401 ] && __pass "Auth check rejects invalid bearer token" || __fail "Auth check invalid-token status was ${AUTH_INVALID_STATUS}"
+if [ "${AUTH_INVALID_STATUS}" = 401 ]; then
+    __pass "Auth check rejects invalid bearer token"
+else
+    __fail "Auth check invalid-token status was ${AUTH_INVALID_STATUS}"
+fi
 AUTH_OPERATOR_KIND=$(__docker_exec "${DOCKER_TEST_CONTAINER}" curl -q -LSsf -H 'Accept: application/json' -H "Authorization: Bearer ${OPERATOR_TOKEN}" "http://localhost:8080/api/v1/server/auth/check" | __docker_exec -i "${DOCKER_TEST_CONTAINER}" jq -r '.data.kind // empty' 2>/dev/null || true)
-[ "${AUTH_OPERATOR_KIND}" = operator ] && __pass "Auth check accepts server.token" || __fail "Auth check did not accept server.token"
+if [ "${AUTH_OPERATOR_KIND}" = operator ]; then
+    __pass "Auth check accepts server.token"
+else
+    __fail "Auth check did not accept server.token"
+fi
 
 # Issue one isolated owner token through the documented public endpoint for
 # authenticated CLI coverage; keep it out of stdout and never persist it.
@@ -411,18 +449,42 @@ else
     __fail "Primary owner-token issuance did not return a valid token"
 fi
 AUTH_OWNER_KIND=$(__docker_exec "${DOCKER_TEST_CONTAINER}" curl -q -LSsf -H 'Accept: application/json' -H "Authorization: Bearer ${OWNER_TOKEN}" "http://localhost:8080/api/v1/server/auth/check" | __docker_exec -i "${DOCKER_TEST_CONTAINER}" jq -r '.data.kind // empty' 2>/dev/null || true)
-[ "${AUTH_OWNER_KIND}" = owner ] && __pass "Auth check accepts primary owner token" || __fail "Auth check did not accept the primary owner token"
+if [ "${AUTH_OWNER_KIND}" = owner ]; then
+    __pass "Auth check accepts primary owner token"
+else
+    __fail "Auth check did not accept the primary owner token"
+fi
 OPERATOR_ROUTE="http://localhost:8080/api/v1/status"
 OPERATOR_NO_TOKEN_STATUS=$(__docker_exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs --max-time 10 -o /dev/null -w "%{http_code}" "${OPERATOR_ROUTE}" 2>/dev/null || echo 000)
-[ "${OPERATOR_NO_TOKEN_STATUS}" = 401 ] && __pass "Operator route rejects a missing token" || __fail "Operator route missing-token status was ${OPERATOR_NO_TOKEN_STATUS}"
+if [ "${OPERATOR_NO_TOKEN_STATUS}" = 401 ]; then
+    __pass "Operator route rejects a missing token"
+else
+    __fail "Operator route missing-token status was ${OPERATOR_NO_TOKEN_STATUS}"
+fi
 OPERATOR_WRONG_TOKEN_STATUS=$(__docker_exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs --max-time 10 -o /dev/null -w "%{http_code}" -H 'Authorization: Bearer invalid-token' "${OPERATOR_ROUTE}" 2>/dev/null || echo 000)
-[ "${OPERATOR_WRONG_TOKEN_STATUS}" = 401 ] && __pass "Operator route rejects a wrong token" || __fail "Operator route wrong-token status was ${OPERATOR_WRONG_TOKEN_STATUS}"
+if [ "${OPERATOR_WRONG_TOKEN_STATUS}" = 401 ]; then
+    __pass "Operator route rejects a wrong token"
+else
+    __fail "Operator route wrong-token status was ${OPERATOR_WRONG_TOKEN_STATUS}"
+fi
 OPERATOR_OWNER_TOKEN_STATUS=$(__docker_exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs --max-time 10 -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${OWNER_TOKEN}" "${OPERATOR_ROUTE}" 2>/dev/null || echo 000)
-[ "${OPERATOR_OWNER_TOKEN_STATUS}" = 403 ] && __pass "Operator route rejects an owner token" || __fail "Operator route owner-token status was ${OPERATOR_OWNER_TOKEN_STATUS}"
+if [ "${OPERATOR_OWNER_TOKEN_STATUS}" = 403 ]; then
+    __pass "Operator route rejects an owner token"
+else
+    __fail "Operator route owner-token status was ${OPERATOR_OWNER_TOKEN_STATUS}"
+fi
 OPERATOR_VALID_TOKEN_STATUS=$(__docker_exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs --max-time 10 -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${OPERATOR_TOKEN}" "${OPERATOR_ROUTE}" 2>/dev/null || echo 000)
-[ "${OPERATOR_VALID_TOKEN_STATUS}" = 200 ] && __pass "Operator route accepts server.token" || __fail "Operator route valid-token status was ${OPERATOR_VALID_TOKEN_STATUS}"
+if [ "${OPERATOR_VALID_TOKEN_STATUS}" = 200 ]; then
+    __pass "Operator route accepts server.token"
+else
+    __fail "Operator route valid-token status was ${OPERATOR_VALID_TOKEN_STATUS}"
+fi
 OPERATOR_QUERY_TOKEN_STATUS=$(__docker_exec "${DOCKER_TEST_CONTAINER}" curl -q -LSs --max-time 10 -o /dev/null -w "%{http_code}" "${OPERATOR_ROUTE}?token=${OPERATOR_TOKEN}" 2>/dev/null || echo 000)
-[ "${OPERATOR_QUERY_TOKEN_STATUS}" = 401 ] && __pass "Operator route rejects a query-string token" || __fail "Operator route query-token status was ${OPERATOR_QUERY_TOKEN_STATUS}"
+if [ "${OPERATOR_QUERY_TOKEN_STATUS}" = 401 ]; then
+    __pass "Operator route rejects a query-string token"
+else
+    __fail "Operator route query-token status was ${OPERATOR_QUERY_TOKEN_STATUS}"
+fi
 
 CLI_BIN="/app/${DOCKER_PROJECT_NAME}-cli"
 if __docker_exec "${DOCKER_TEST_CONTAINER}" "${CLI_BIN}" --server http://localhost:8080 --token "${OWNER_TOKEN}" health 2>&1 | grep -q 'Server is healthy'; then

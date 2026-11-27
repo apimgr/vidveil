@@ -5,7 +5,7 @@
 // (AI.md PART 31 "CLI-to-running-server control channel") instead of
 // touching Tor state directly, so each is exercised both against a fake
 // control-channel HTTP server and via its "no running server" error path.
-package main
+package app
 
 import (
 	"encoding/json"

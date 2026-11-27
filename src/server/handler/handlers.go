@@ -43,6 +43,7 @@ import (
 	"github.com/apimgr/vidveil/src/common/theme"
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/paths"
 	"github.com/apimgr/vidveil/src/server/model"
 	"github.com/apimgr/vidveil/src/server/service/alertcheck"
 	"github.com/apimgr/vidveil/src/server/service/apitoken"
@@ -530,7 +531,7 @@ func (h *SearchHandler) i2pState() string {
 }
 
 func (h *SearchHandler) i2pAddress() string {
-	if h.i2pSvc == nil {
+	if h.i2pSvc == nil || h.appConfig == nil || !h.appConfig.Server.I2P.Expose {
 		return ""
 	}
 	return h.i2pSvc.Address()
@@ -721,7 +722,7 @@ func (h *SearchHandler) getTorState() string {
 
 // getTorHostname returns Tor .onion address per PART 31
 func (h *SearchHandler) getTorHostname() string {
-	if h.torSvc == nil {
+	if h.torSvc == nil || h.appConfig == nil || !h.appConfig.Server.Tor.Expose {
 		return ""
 	}
 	info := h.torSvc.GetInfo()
@@ -3253,14 +3254,12 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 	if h.torSvc != nil && h.torSvc.IsEnabled() && h.torSvc.IsRunning() {
 		data.TorEnabled = true
 		data.TorRunning = true
-		if addr, ok := h.torSvc.GetInfo()["onion_address"].(string); ok {
-			data.OnionAddress = addr
-		}
+		data.OnionAddress = h.getTorHostname()
 	}
 	if h.i2pSvc != nil && h.i2pSvc.Enabled() && h.i2pSvc.IsRunning() {
 		data.I2PEnabled = true
 		data.I2PRunning = true
-		data.I2PAddress = h.i2pSvc.Address()
+		data.I2PAddress = h.i2pAddress()
 	}
 	operatorData := map[string]interface{}{"OnionAddress": data.OnionAddress, "I2PAddress": data.I2PAddress}
 	r = withOperatorVariables(r, operatorData)
@@ -3273,9 +3272,7 @@ func (h *SearchHandler) renderHealthzHTML(w http.ResponseWriter, r *http.Request
 			data.Features.TorStarting = h.getTorStatus() == "starting"
 			data.Features.TorStatus = h.getTorStatus()
 			if h.torSvc.IsRunning() {
-				if addr, ok := h.torSvc.GetInfo()["onion_address"].(string); ok {
-					data.Features.TorOnionAddr = addr
-				}
+				data.Features.TorOnionAddr = h.getTorHostname()
 			}
 		}
 		data.Features.GeoIP = h.appConfig.Server.GeoIP.Enabled
@@ -5026,14 +5023,12 @@ func (h *SearchHandler) renderTemplate(w http.ResponseWriter, r *http.Request, n
 	if h.torSvc != nil && h.torSvc.IsEnabled() && h.torSvc.IsRunning() {
 		data["TorEnabled"] = true
 		data["TorRunning"] = true
-		if addr, ok := h.torSvc.GetInfo()["onion_address"].(string); ok {
-			data["OnionAddress"] = addr
-		}
+		data["OnionAddress"] = h.getTorHostname()
 	}
 	if h.i2pSvc != nil && h.i2pSvc.Enabled() && h.i2pSvc.IsRunning() {
 		data["I2PEnabled"] = true
 		data["I2PRunning"] = true
-		data["I2PAddress"] = h.i2pSvc.Address()
+		data["I2PAddress"] = h.i2pAddress()
 	}
 
 	// Browser-chrome theme color uses the shared Go palette, never a hardcoded hex.
@@ -5693,24 +5688,19 @@ func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 		SendNegotiatedError(w, r, "BAD_REQUEST", "invalid update channel")
 		return
 	}
-	// Build response per AI.md PART 14
-	// "primary" resolved per request via BuildURL (AI.md PART 12) — never
-	// frozen at startup/config, so autodiscover advertises the Host/proto the
-	// client actually used, including behind a reverse proxy.
+	urls := autodiscoverURLs(r)
 	response := map[string]interface{}{
-		"primary": urlvar.BuildURL(r, ""),
-		// Per AI.md PART 14: versioned API
-		"api_version": h.appConfig.Server.APIVersion,
-		// Default timeout in seconds
-		"timeout": 30,
-		// Default retry attempts
-		"retry": 3,
-		// Default seconds between retries
-		"retry_delay": 1,
-		// Empty disables forced updates; otherwise the operator-configured floor
-		// is advertised verbatim per AI.md PART 22 and PART 32.
+		"name": paths.ProjectName, "version": version.GetVersion(),
+		"api":             map[string]string{"current_version": h.appConfig.Server.APIVersion},
+		"urls":            urls,
 		"cli_min_version": h.appConfig.Server.Update.CLIMinVersion,
 		"cli_versions":    map[string]cliVersionMetadata{},
+	}
+	if h.appConfig.Server.Tor.Expose && h.appConfig.Server.Tor.OnionAddress != "" {
+		response["onion"] = h.appConfig.Server.Tor.OnionAddress
+	}
+	if h.appConfig.Server.I2P.Enabled && h.appConfig.Server.I2P.Expose && h.appConfig.Server.I2P.Address != "" {
+		response["i2p"] = h.appConfig.Server.I2P.Address
 	}
 	if release, err := getCLIReleaseMetadata(r.Context(), channel); err == nil {
 		response["cli_versions"] = release.Versions
@@ -5718,7 +5708,48 @@ func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 
 	// NEVER include secrets, internal IPs, or sensitive data.
 
-	WriteJSON(w, http.StatusOK, response)
+	WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "data": response})
+}
+
+func autodiscoverURLs(r *http.Request) []string {
+	if urlvar.IsTorRequest(r) || urlvar.IsI2PRequest(r) {
+		return []string{}
+	}
+	origin := func(raw string) string {
+		parsed, err := url.Parse(raw)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return ""
+		}
+		host := strings.ToLower(parsed.Hostname())
+		if strings.HasSuffix(host, ".onion") || strings.HasSuffix(host, ".b32.i2p") {
+			return ""
+		}
+		return parsed.Scheme + "://" + parsed.Host
+	}
+	seen := make(map[string]struct{})
+	configuredDomains := urlvar.GetAllDomains()
+	learnedDomains := urlvar.GetLearnedDomains()
+	result := make([]string, 0, 1+len(configuredDomains)+len(learnedDomains))
+	add := func(value string) {
+		if value == "" {
+			return
+		}
+		if _, exists := seen[value]; exists {
+			return
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	add(origin(urlvar.BuildURL(r, "")))
+	proto, _, _ := urlvar.GetURLVars(r)
+	for _, domain := range append(configuredDomains, learnedDomains...) {
+		if strings.Contains(domain, "://") {
+			add(origin(domain))
+		} else {
+			add(origin(proto + "://" + domain))
+		}
+	}
+	return result
 }
 
 // ---- RSS / Atom / CSV helpers ----

@@ -2,7 +2,7 @@
 // Coverage tests for pure helper functions in main.go.
 // Functions that call os.Exit are NOT tested here; only pure
 // or stdout-writing functions are exercised.
-package main
+package app
 
 import (
 	"bytes"
@@ -10,6 +10,8 @@ import (
 	"database/sql"
 	"errors"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -17,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/database"
 	"github.com/apimgr/vidveil/src/server/service/pgp"
@@ -67,6 +70,102 @@ func TestApplySchedulerConfig(t *testing.T) {
 	}
 	if got := configured.NextRun.Location().String(); got != "Asia/Tokyo" {
 		t.Fatalf("timezone = %q, want Asia/Tokyo", got)
+	}
+}
+
+func TestRunServesAndShutsDownWithContext(t *testing.T) {
+	root := t.TempDir()
+	configDir := filepath.Join(root, "config")
+	dataDir := filepath.Join(root, "data")
+	for _, key := range []string{"CONFIG_DIR", "DATA_DIR", "CACHE_DIR", "LOG_DIR", "BACKUP_DIR", "BASEURL", "LANG"} {
+		t.Setenv(key, "")
+	}
+	cfg, err := config.Load([]string{"--config", configDir, "--data", dataDir, "--address", "127.0.0.1", "--port", "0"})
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	outputReader, outputWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("capture app output: %v", err)
+	}
+	stdout, stderr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = outputWriter, outputWriter
+	outputDrained := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(io.Discard, outputReader)
+		close(outputDrained)
+	}()
+	defer func() {
+		os.Stdout, os.Stderr = stdout, stderr
+		_ = outputWriter.Close()
+		<-outputDrained
+		_ = outputReader.Close()
+	}()
+	ready := make(chan struct{})
+	cfg.Runtime.TestMode = true
+	cfg.Runtime.Listener = listener
+	cfg.Runtime.Ready = ready
+	ctx, cancel := context.WithCancel(context.Background())
+	runResult := make(chan error, 1)
+	runReturned := false
+	go func() {
+		runResult <- Run(ctx, cfg)
+	}()
+	defer func() {
+		cancel()
+		if runReturned {
+			return
+		}
+		select {
+		case err := <-runResult:
+			if err != nil {
+				t.Errorf("app.Run shutdown: %v", err)
+			}
+		case <-time.After(35 * time.Second):
+			t.Error("app.Run did not shut down after context cancellation")
+		}
+	}()
+
+	select {
+	case <-ready:
+	case <-time.After(30 * time.Second):
+		t.Fatal("server did not signal readiness")
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	response, err := client.Get("http://" + listener.Addr().String() + "/api/v1/server/healthz")
+	if err != nil {
+		t.Fatalf("health request: %v", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("health status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	cancel()
+	select {
+	case err := <-runResult:
+		runReturned = true
+		if err != nil {
+			t.Fatalf("app.Run: %v", err)
+		}
+	case <-time.After(35 * time.Second):
+		t.Fatal("app.Run did not return after cancellation")
+	}
+}
+
+func TestRunReturnsExitCodeInsteadOfExitingProcess(t *testing.T) {
+	cfg := *config.DefaultAppConfig()
+	cfg.Runtime.Command = []string{"tor", "unsupported"}
+	err := Run(context.Background(), cfg)
+	var exitErr ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("Run error = %v, want ExitError", err)
+	}
+	if exitErr.Code != 1 {
+		t.Fatalf("exit code = %d, want 1", exitErr.Code)
 	}
 }
 
@@ -648,58 +747,65 @@ func TestPrintPowerShellCompletions_ContainsRegisterArgCompleter(t *testing.T) {
 // ── printCompletions ──────────────────────────────────────────────────────────
 
 func TestPrintCompletions_Bash(t *testing.T) {
-	out := captureStdout(func() { printCompletions("bash", "vidveil") })
+	out := captureStdout(func() {
+		if err := printCompletions("bash", "vidveil"); err != nil {
+			t.Fatal(err)
+		}
+	})
 	if !strings.Contains(out, "compgen") {
 		t.Error("printCompletions bash: output does not contain bash-specific 'compgen'")
 	}
 }
 
 func TestPrintCompletions_Zsh(t *testing.T) {
-	out := captureStdout(func() { printCompletions("zsh", "vidveil") })
+	out := captureStdout(func() {
+		if err := printCompletions("zsh", "vidveil"); err != nil {
+			t.Fatal(err)
+		}
+	})
 	if !strings.Contains(out, "#compdef") {
 		t.Error("printCompletions zsh: output does not contain '#compdef'")
 	}
 }
 
 func TestPrintCompletions_Fish(t *testing.T) {
-	out := captureStdout(func() { printCompletions("fish", "vidveil") })
+	out := captureStdout(func() {
+		if err := printCompletions("fish", "vidveil"); err != nil {
+			t.Fatal(err)
+		}
+	})
 	if !strings.Contains(out, "complete -c") {
 		t.Error("printCompletions fish: output does not contain fish 'complete -c'")
 	}
 }
 
 func TestPrintCompletions_Powershell(t *testing.T) {
-	out := captureStdout(func() { printCompletions("powershell", "vidveil") })
+	out := captureStdout(func() {
+		if err := printCompletions("powershell", "vidveil"); err != nil {
+			t.Fatal(err)
+		}
+	})
 	if !strings.Contains(out, "Register-ArgumentCompleter") {
 		t.Error("printCompletions powershell: output does not contain 'Register-ArgumentCompleter'")
 	}
 }
 
 func TestPrintCompletions_Pwsh(t *testing.T) {
-	out := captureStdout(func() { printCompletions("pwsh", "vidveil") })
+	out := captureStdout(func() {
+		if err := printCompletions("pwsh", "vidveil"); err != nil {
+			t.Fatal(err)
+		}
+	})
 	if !strings.Contains(out, "Register-ArgumentCompleter") {
 		t.Error("printCompletions pwsh: output does not contain 'Register-ArgumentCompleter'")
 	}
 }
 
-func TestPrintCompletions_Sh(t *testing.T) {
-	out := captureStdout(func() { printCompletions("sh", "vidveil") })
-	if !strings.Contains(out, "compgen") {
-		t.Error("printCompletions sh: output should use bash completions (contains 'compgen')")
-	}
-}
-
-func TestPrintCompletions_Dash(t *testing.T) {
-	out := captureStdout(func() { printCompletions("dash", "vidveil") })
-	if !strings.Contains(out, "compgen") {
-		t.Error("printCompletions dash: output should use bash completions (contains 'compgen')")
-	}
-}
-
-func TestPrintCompletions_Ksh(t *testing.T) {
-	out := captureStdout(func() { printCompletions("ksh", "vidveil") })
-	if !strings.Contains(out, "compgen") {
-		t.Error("printCompletions ksh: output should use bash completions (contains 'compgen')")
+func TestPrintCompletionsRejectsPOSIXShells(t *testing.T) {
+	for _, shell := range []string{"sh", "dash", "ksh", "unknown"} {
+		if err := printCompletions(shell, "vidveil"); err == nil {
+			t.Errorf("printCompletions(%q) error = nil, want usage error", shell)
+		}
 	}
 }
 
@@ -728,22 +834,22 @@ func TestPrintInit_Fish(t *testing.T) {
 
 func TestPrintInit_Sh(t *testing.T) {
 	out := captureStdout(func() { printInit("sh", "vidveil") })
-	if !strings.Contains(out, "eval") {
-		t.Errorf("printInit sh: expected 'eval' in output, got %q", out)
+	if !strings.HasPrefix(out, "# vidveil: sh has no programmable completion") {
+		t.Errorf("printInit sh: expected safe no-op comment, got %q", out)
 	}
 }
 
 func TestPrintInit_Dash(t *testing.T) {
 	out := captureStdout(func() { printInit("dash", "vidveil") })
-	if !strings.Contains(out, "eval") {
-		t.Errorf("printInit dash: expected 'eval' in output, got %q", out)
+	if !strings.HasPrefix(out, "# vidveil: dash has no programmable completion") {
+		t.Errorf("printInit dash: expected safe no-op comment, got %q", out)
 	}
 }
 
 func TestPrintInit_Ksh(t *testing.T) {
 	out := captureStdout(func() { printInit("ksh", "vidveil") })
-	if !strings.Contains(out, "eval") {
-		t.Errorf("printInit ksh: expected 'eval' in output, got %q", out)
+	if !strings.HasPrefix(out, "# vidveil: ksh has no programmable completion") {
+		t.Errorf("printInit ksh: expected safe no-op comment, got %q", out)
 	}
 }
 
@@ -1129,8 +1235,8 @@ func TestHandleShellCommand_NoSHELL_DefaultsBash(t *testing.T) {
 
 func TestPrintVersion_ContainsVersionString(t *testing.T) {
 	out := captureStdout(printVersion)
-	if !strings.Contains(out, Version) {
-		t.Errorf("printVersion: output should contain Version %q, got %q", Version, out)
+	if !strings.Contains(out, version.GetVersion()) {
+		t.Errorf("printVersion: output should contain Version %q, got %q", version.GetVersion(), out)
 	}
 }
 
@@ -1142,9 +1248,9 @@ func TestPrintVersion_ContainsCommit(t *testing.T) {
 }
 
 func TestPrintVersion_WithOfficialSite(t *testing.T) {
-	origSite := OfficialSite
-	OfficialSite = "https://example.com"
-	defer func() { OfficialSite = origSite }()
+	origSite := version.OfficialSite
+	version.OfficialSite = "https://example.com"
+	defer func() { version.OfficialSite = origSite }()
 
 	out := captureStdout(printVersion)
 	if !strings.Contains(out, "Site:") {

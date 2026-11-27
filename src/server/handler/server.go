@@ -367,15 +367,19 @@ func (h *ServerHandler) renderServerTemplate(w http.ResponseWriter, r *http.Requ
 	if h.torSvc != nil && h.torSvc.IsEnabled() && h.torSvc.IsRunning() {
 		data["TorEnabled"] = true
 		data["TorRunning"] = true
-		if addr, ok := h.torSvc.GetInfo()["onion_address"].(string); ok {
-			data["OnionAddress"] = addr
-			data["TorOnionAddr"] = addr
+		if h.appConfig.Server.Tor.Expose {
+			if addr, ok := h.torSvc.GetInfo()["onion_address"].(string); ok {
+				data["OnionAddress"] = addr
+				data["TorOnionAddr"] = addr
+			}
 		}
 	}
 	if h.i2pSvc != nil && h.i2pSvc.Enabled() && h.i2pSvc.IsRunning() {
 		data["I2PEnabled"] = true
 		data["I2PRunning"] = true
-		data["I2PAddress"] = h.i2pSvc.Address()
+		if h.appConfig.Server.I2P.Expose {
+			data["I2PAddress"] = h.i2pSvc.Address()
+		}
 	}
 
 	// Merge extra data

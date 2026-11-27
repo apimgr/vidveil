@@ -2,7 +2,7 @@
 // AI.md compliance "Data export" / "Right to delete" CLI commands, and the
 // "Right to erasure vs Retention Requirements" rule that governs what delete
 // actually does.
-package main
+package app
 
 import (
 	"context"

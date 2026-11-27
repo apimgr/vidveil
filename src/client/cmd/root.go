@@ -449,7 +449,7 @@ func ParseCLIGlobalFlags(args []string) []string {
 			}
 			if err := RunShellCommand(shellCommandArgs); err != nil {
 				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
+				os.Exit(ExitCodeForError(err))
 			}
 			os.Exit(0)
 		case "--server":
@@ -1187,7 +1187,7 @@ Commands:
   favorites                         List and manage private favorites
   login                             Save API token for future use
 
-Shells: bash, zsh, fish, sh, dash, ksh, powershell, pwsh
+Completions: bash, zsh, fish, powershell, pwsh; init also accepts sh, dash, and ksh
 
 Environment Variables:
   VIDVEIL_SERVER_PRIMARY            Server address (canonical)

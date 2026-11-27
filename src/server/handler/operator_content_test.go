@@ -19,3 +19,12 @@ func TestStripExternalAnchorLinks(t *testing.T) {
 		}
 	}
 }
+
+func TestShiftOperatorHeadings(t *testing.T) {
+	got := shiftOperatorHeadings(`<h1 id="main">Main</h1><h2>Section</h2><h5>Small</h5>`)
+	for _, want := range []string{`<h3 id="main">Main</h3>`, `<h4>Section</h4>`, `<h6>Small</h6>`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("shifted markup %q does not contain %q", got, want)
+		}
+	}
+}

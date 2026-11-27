@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 11: operator maintenance for coordinated security reports.
-package main
+package app
 
 import (
 	"context"

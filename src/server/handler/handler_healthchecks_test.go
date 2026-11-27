@@ -397,6 +397,7 @@ func TestHealthRoutes_I2PLifecycleContract(t *testing.T) {
 func TestHealthCheckHTML_ShowsEnabledI2PAddressAndCopyControl(t *testing.T) {
 	setRealTemplatesFS(t)
 	h := NewSearchHandler(nil, nil)
+	h.appConfig.Server.I2P.Expose = true
 	h.SetI2PService(fakeI2PChecker{enabled: true, status: "healthy", address: "example.b32.i2p"})
 	req := httptest.NewRequest(http.MethodGet, "/server/healthz", nil)
 	req.Header.Set("Accept", "text/html")
@@ -406,5 +407,18 @@ func TestHealthCheckHTML_ShowsEnabledI2PAddressAndCopyControl(t *testing.T) {
 	body := rr.Body.String()
 	if rr.Code != http.StatusOK || !strings.Contains(body, "example.b32.i2p") || !strings.Contains(body, `data-copy="example.b32.i2p"`) {
 		t.Fatalf("HealthCheck HTML I2P feature = %d %s", rr.Code, body)
+	}
+}
+
+func TestHealthCheckHTMLHidesI2PAddressUnlessExposed(t *testing.T) {
+	setRealTemplatesFS(t)
+	h := NewSearchHandler(nil, nil)
+	h.SetI2PService(fakeI2PChecker{enabled: true, status: "healthy", address: "private.b32.i2p"})
+	req := httptest.NewRequest(http.MethodGet, "/server/healthz", nil)
+	req.Header.Set("Accept", "text/html")
+	rr := httptest.NewRecorder()
+	h.HealthCheck(rr, req)
+	if strings.Contains(rr.Body.String(), "private.b32.i2p") {
+		t.Fatalf("health page published an unexposed I2P address: %s", rr.Body.String())
 	}
 }

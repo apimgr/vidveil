@@ -43,18 +43,17 @@ Usage:
   %s --shell [completions|init|--help] [shell]
 
 Commands:
-  completions [shell]    Output shell completion script
+  completions [shell]    Output shell completion script (bash, zsh, fish, powershell, pwsh)
   init [shell]           Output shell initialization snippet
 
-Supported shells:
+Completion shells:
   bash       Bash shell
   zsh        Zsh shell
   fish       Fish shell
-  sh         POSIX shell
-  dash       POSIX shell
-  ksh        Korn shell
   powershell PowerShell
   pwsh       PowerShell Core
+
+Init also accepts sh, dash, and ksh; these shells have no programmable completion.
 
 Examples:
   # Auto-detect from $SHELL
@@ -90,12 +89,10 @@ func OutputShellCompletionScript(shellType string) error {
 		return OutputZshCompletionScript()
 	case "fish":
 		return OutputFishCompletionScript()
-	case "sh", "dash", "ksh":
-		return outputBashCompletionScript()
 	case "powershell", "pwsh":
 		return OutputPowershellCompletionScript()
 	default:
-		return fmt.Errorf("unsupported shell: %s (use bash, zsh, fish, sh, dash, ksh, powershell, or pwsh)", shellType)
+		return NewExitError(2, fmt.Errorf("unsupported completion shell: %s (use bash, zsh, fish, powershell, or pwsh)", shellType))
 	}
 }
 
@@ -116,7 +113,7 @@ func OutputShellInitSnippet(shellType string) error {
 	case "fish":
 		fmt.Printf("%s --shell completions fish | source\n", binaryName)
 	case "sh", "dash", "ksh":
-		fmt.Printf("eval \"$(%s --shell completions %s)\"\n", binaryName, shellType)
+		fmt.Printf("# %s: %s has no programmable completion\n", binaryName, shellType)
 	case "powershell", "pwsh":
 		fmt.Printf("Invoke-Expression (& %s --shell completions powershell)\n", binaryName)
 	default:
@@ -170,7 +167,7 @@ _%s_completions() {
             return 0
             ;;
         completions|init)
-            COMPREPLY=( $(compgen -W "bash zsh fish sh dash ksh powershell pwsh" -- "${cur}") )
+            COMPREPLY=( $(compgen -W "bash zsh fish powershell pwsh" -- "${cur}") )
             return 0
             ;;
     esac
@@ -236,7 +233,7 @@ __%s() {
         args)
             case "$words[1]" in
                 --shell)
-                    _values 'shell type' bash zsh fish sh dash ksh powershell pwsh
+                    _values 'shell type' bash zsh fish powershell pwsh
                     ;;
             esac
             ;;
@@ -280,10 +277,11 @@ complete -c %s -s h -l help -d "Show help"
 complete -c %s -s v -l version -d "Show version"
 
 # Shell types
-complete -c %s -n "__fish_seen_argument -l shell; and __fish_prev_arg_in completions init" -a "bash zsh fish sh dash ksh powershell pwsh"
+complete -c %s -n "__fish_seen_argument -l shell; and __fish_prev_arg_in completions" -a "bash zsh fish powershell pwsh"
+complete -c %s -n "__fish_seen_argument -l shell; and __fish_prev_arg_in init" -a "bash zsh fish sh dash ksh powershell pwsh"
 `, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName,
 		BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName,
-		BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName)
+		BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName, BinaryName)
 	return nil
 }
 

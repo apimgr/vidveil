@@ -6,11 +6,13 @@
 package maintenance
 
 import (
+	"archive/tar"
 	"bytes"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1022,4 +1024,46 @@ func TestBackupDailyFull_FullBackupErrorPropagates(t *testing.T) {
 	if err == nil {
 		t.Fatal("BackupDailyFull: expected error for invalid full-backup filename, got nil")
 	}
+}
+
+func TestBackupArchiveMasksConfigSecrets(t *testing.T) {
+	m, configDir, _ := newManagerWithDirs(t)
+	secretData := []byte("server:\n  token: adm_private-token\n  security:\n    encryption_key: 0123456789abcdef\n  backup:\n    encryption_password: enc:v1:private-ciphertext\n")
+	if err := os.WriteFile(filepath.Join(configDir, "secrets.yml"), secretData, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var archive bytes.Buffer
+	tarWriter := tar.NewWriter(&archive)
+	if _, _, err := m.addDirToTar(tarWriter, configDir, "config", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	tarReader := tar.NewReader(&archive)
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if header.Name != "config/secrets.yml" {
+			continue
+		}
+		data, err := io.ReadAll(tarReader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		if strings.Contains(text, "adm_private-token") || strings.Contains(text, "private-ciphertext") {
+			t.Fatalf("backup secrets leaked a credential: %s", text)
+		}
+		if !strings.Contains(text, `token: ""`) || !strings.Contains(text, `encryption_password: "********"`) {
+			t.Fatalf("backup secrets do not contain required masked values: %s", text)
+		}
+		return
+	}
+	t.Fatal("backup archive omitted config/secrets.yml")
 }

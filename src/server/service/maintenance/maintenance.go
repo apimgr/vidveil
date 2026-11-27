@@ -39,6 +39,7 @@ import (
 	"github.com/apimgr/vidveil/src/server/service/logging"
 	"github.com/apimgr/vidveil/src/server/service/pgp"
 	"golang.org/x/crypto/argon2"
+	"gopkg.in/yaml.v3"
 	_ "modernc.org/sqlite"
 )
 
@@ -2804,20 +2805,40 @@ func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string, 
 		var fileSHA string
 		var fileEntry BackupFile
 		unchanged := false
+		var sanitizedConfig []byte
+		sanitizedConfigFile := false
 		if info.Mode().IsRegular() {
-			file, err := os.Open(sourcePath)
-			if err != nil {
-				return err
+			if prefix == "config" && (strings.HasSuffix(strings.ToLower(relPath), ".yml") || strings.HasSuffix(strings.ToLower(relPath), ".yaml")) {
+				original, readErr := os.ReadFile(sourcePath)
+				if readErr != nil {
+					return readErr
+				}
+				sanitizedConfig, err = sanitizeBackupConfigYAML(original)
+				if err != nil {
+					return fmt.Errorf("sanitize config file %s for backup: %w", relPath, err)
+				}
+				sanitizedConfigFile = true
+				hash := sha256.Sum256(sanitizedConfig)
+				fileSHA = hex.EncodeToString(hash[:])
+			} else {
+				file, openErr := os.Open(sourcePath)
+				if openErr != nil {
+					return openErr
+				}
+				hasher := sha256.New()
+				if _, err := io.Copy(hasher, file); err != nil {
+					return errors.Join(err, file.Close())
+				}
+				if err := file.Close(); err != nil {
+					return err
+				}
+				fileSHA = hex.EncodeToString(hasher.Sum(nil))
 			}
-			hasher := sha256.New()
-			if _, err := io.Copy(hasher, file); err != nil {
-				return errors.Join(err, file.Close())
+			fileSize := info.Size()
+			if sanitizedConfigFile {
+				fileSize = int64(len(sanitizedConfig))
 			}
-			if err := file.Close(); err != nil {
-				return err
-			}
-			fileSHA = hex.EncodeToString(hasher.Sum(nil))
-			fileEntry = BackupFile{Path: tarPath, Size: info.Size(), MTime: info.ModTime().Unix(), SHA256: fileSHA}
+			fileEntry = BackupFile{Path: tarPath, Size: fileSize, MTime: info.ModTime().Unix(), SHA256: fileSHA}
 			currentFiles = append(currentFiles, fileEntry)
 			if previous, exists := base[tarPath]; exists && previous.Size == fileEntry.Size && previous.MTime == fileEntry.MTime && previous.SHA256 == fileEntry.SHA256 {
 				unchanged = true
@@ -2830,6 +2851,9 @@ func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string, 
 		}
 		header.Name = tarPath
 		header.ModTime = time.Unix(info.ModTime().Unix(), 0).UTC()
+		if sanitizedConfigFile {
+			header.Size = int64(len(sanitizedConfig))
+		}
 		if unchanged {
 			return nil
 		}
@@ -2842,21 +2866,27 @@ func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string, 
 		if info.Mode().IsRegular() {
 			fileEntry.MTime = header.ModTime.Unix()
 			files = append(files, fileEntry)
-			file, err := os.Open(sourcePath)
-			if err != nil {
-				return err
-			}
 			var writer io.Writer = tw
 			if contentHash != nil {
 				_, _ = contentHash.Write([]byte(tarPath))
 				_, _ = contentHash.Write([]byte{0})
 				writer = io.MultiWriter(tw, contentHash)
 			}
-			if _, err := io.Copy(writer, file); err != nil {
-				return errors.Join(err, file.Close())
-			}
-			if err := file.Close(); err != nil {
-				return err
+			if sanitizedConfigFile {
+				if _, err := writer.Write(sanitizedConfig); err != nil {
+					return err
+				}
+			} else {
+				file, err := os.Open(sourcePath)
+				if err != nil {
+					return err
+				}
+				if _, err := io.Copy(writer, file); err != nil {
+					return errors.Join(err, file.Close())
+				}
+				if err := file.Close(); err != nil {
+					return err
+				}
 			}
 			if contentHash != nil {
 				_, _ = contentHash.Write([]byte{0})
@@ -2867,6 +2897,51 @@ func (m *MaintenanceManager) addDirToTar(tw *tar.Writer, srcDir, prefix string, 
 		return nil
 	})
 	return files, currentFiles, err
+}
+
+func sanitizeBackupConfigYAML(data []byte) ([]byte, error) {
+	var document yaml.Node
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		return nil, err
+	}
+	if len(document.Content) == 0 {
+		return data, nil
+	}
+	root := document.Content[0]
+	server := yamlMappingValue(root, "server")
+	if server == nil {
+		return data, nil
+	}
+	if token := yamlMappingValue(server, "token"); token != nil && token.Kind == yaml.ScalarNode {
+		token.Value, token.Tag = "", "!!str"
+	}
+	if backup := yamlMappingValue(server, "backup"); backup != nil {
+		if password := yamlMappingValue(backup, "encryption_password"); password != nil && password.Kind == yaml.ScalarNode && password.Value != "" {
+			password.Value, password.Tag, password.Style = "********", "!!str", yaml.DoubleQuotedStyle
+		}
+	}
+	var output bytes.Buffer
+	encoder := yaml.NewEncoder(&output)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(&document); err != nil {
+		return nil, err
+	}
+	if err := encoder.Close(); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
+func yamlMappingValue(node *yaml.Node, key string) *yaml.Node {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		if node.Content[index].Value == key {
+			return node.Content[index+1]
+		}
+	}
+	return nil
 }
 
 func addSnapshotFileToTar(tw *tar.Writer, sourcePath, tarPath string, base map[string]BackupFile, contentHash hash.Hash) (*BackupFile, BackupFile, error) {

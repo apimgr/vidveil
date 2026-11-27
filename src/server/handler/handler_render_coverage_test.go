@@ -16,6 +16,7 @@ import (
 	"github.com/apimgr/vidveil/src/config"
 	"github.com/apimgr/vidveil/src/server/service/engine"
 	"github.com/apimgr/vidveil/src/server/service/geoip"
+	"github.com/apimgr/vidveil/src/server/service/urlvar"
 )
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -335,6 +336,43 @@ func TestAutodiscover_ReturnsJSON(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), `"cli_min_version": "1.2.3"`) && !strings.Contains(rr.Body.String(), `"cli_min_version":"1.2.3"`) {
 		t.Errorf("Autodiscover body = %s, want configured minimum CLI version", rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"ok": true`) || !strings.Contains(rr.Body.String(), `"current_version"`) || !strings.Contains(rr.Body.String(), `"urls"`) {
+		t.Errorf("Autodiscover response does not match the standard discovery envelope: %s", rr.Body.String())
+	}
+}
+
+func TestAutodiscoverTorKeepsOverlayOutOfURLs(t *testing.T) {
+	h := newRenderTestHandler()
+	h.appConfig.Server.Tor.OnionAddress = "vidveiltest.onion"
+	h.appConfig.Server.Tor.Expose = true
+	urlvar.GlobalResolver().SetAppConfig(h.appConfig)
+	t.Cleanup(func() { urlvar.GlobalResolver().SetAppConfig(nil) })
+	req := httptest.NewRequest(http.MethodGet, "http://vidveiltest.onion/api/autodiscover", nil)
+	rr := httptest.NewRecorder()
+	h.Autodiscover(rr, req)
+	if !strings.Contains(rr.Body.String(), `"urls": []`) || !strings.Contains(rr.Body.String(), `"onion": "vidveiltest.onion"`) {
+		t.Fatalf("Tor autodiscover response leaked an overlay into urls or omitted its dedicated onion field: %s", rr.Body.String())
+	}
+}
+
+func TestAutodiscoverOmitsOverlayDomainsFromClearnetURLs(t *testing.T) {
+	originalFetcher := cliReleaseMetadataFetcher
+	cliReleaseMetadataFetcher = func(context.Context, string) (cliReleaseMetadata, error) {
+		return cliReleaseMetadata{Versions: map[string]cliVersionMetadata{}, Assets: map[string]string{}}, nil
+	}
+	t.Cleanup(func() { cliReleaseMetadataFetcher = originalFetcher })
+	t.Setenv("DOMAIN", "current.example,clearnet.example,private.onion,private.b32.i2p")
+	h := newRenderTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "https://current.example/api/autodiscover", nil)
+	rr := httptest.NewRecorder()
+	h.Autodiscover(rr, req)
+	body := rr.Body.String()
+	if !strings.Contains(body, "https://current.example") || !strings.Contains(body, "https://clearnet.example") {
+		t.Fatalf("autodiscover omitted public origins: %s", body)
+	}
+	if strings.Contains(body, "private.onion") || strings.Contains(body, "private.b32.i2p") {
+		t.Fatalf("autodiscover exposed an overlay origin in urls: %s", body)
 	}
 }
 

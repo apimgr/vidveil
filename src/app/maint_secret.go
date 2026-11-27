@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // AI.md PART 11: sensitive project-secret rotation.
-package main
+package app
 
 import (
 	"context"

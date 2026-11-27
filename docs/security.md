@@ -117,7 +117,7 @@ When operating VidVeil, follow this minimum baseline:
 
 - Run behind HTTPS (Let's Encrypt or your own CA).
 - Configure `server.fqdn` to your real domain so emitted links match.
-- Keep the operator token in `server.yml` private and use it only for
+- Keep the operator token in `secrets.yml` private and use it only for
   operator-protected API and maintenance actions.
 - Enable rate limiting (defaults are sane; tighten for high-risk surfaces).
 - Configure GeoIP / blocklist updates (defaults run via the internal

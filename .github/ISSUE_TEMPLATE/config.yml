@@ -2,7 +2,7 @@ blank_issues_enabled: false
 
 contact_links:
   - name: Documentation
-    url: https://apimgr-vidveil.readthedocs.io
+    url: https://github.com/apimgr/vidveil/tree/main/docs
     about: User and admin guides for self-hosting and configuring VidVeil.
 
   - name: Public health & contact

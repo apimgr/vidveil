@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // AI.md "API Tokens (server-generated resource owner tokens)" -> "Operator
 // revocation": token lifecycle is operator-only through the CLI.
-package main
+package app
 
 import (
 	"context"

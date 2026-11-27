@@ -25,7 +25,7 @@ func newPolicy() *bluemonday.Policy {
 	// Allowed tags (text formatting only).
 	p.AllowElements("p", "br", "span", "div")
 	p.AllowElements("strong", "b", "em", "i", "u", "s", "small")
-	p.AllowElements("h1", "h2", "h3", "h4", "h5", "h6")
+	p.AllowElements("h2", "h3", "h4", "h5", "h6")
 	p.AllowElements("ul", "ol", "li")
 
 	// Allowed: links with safe attributes; force rel="noopener noreferrer".

@@ -61,39 +61,59 @@
               "application/json": {
                 "schema": {
                   "properties": {
-                    "api_version": {
-                      "type": "string"
-                    },
-                    "cli_min_version": {
-                      "type": "string"
-                    },
-                    "cli_versions": {
-                      "additionalProperties": {
-                        "type": "object"
+                    "data": {
+                      "properties": {
+                        "api": {
+                          "additionalProperties": {
+                            "type": "object"
+                          },
+                          "type": "object"
+                        },
+                        "cli_min_version": {
+                          "type": "string"
+                        },
+                        "cli_versions": {
+                          "additionalProperties": {
+                            "type": "object"
+                          },
+                          "type": "object"
+                        },
+                        "i2p": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "onion": {
+                          "type": "string"
+                        },
+                        "urls": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "version": {
+                          "type": "string"
+                        }
                       },
+                      "required": [
+                        "name",
+                        "version",
+                        "api",
+                        "urls",
+                        "cli_min_version",
+                        "cli_versions"
+                      ],
                       "type": "object"
                     },
-                    "primary": {
-                      "type": "string"
-                    },
-                    "retry": {
-                      "type": "integer"
-                    },
-                    "retry_delay": {
-                      "type": "integer"
-                    },
-                    "timeout": {
-                      "type": "integer"
+                    "ok": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
-                    "primary",
-                    "api_version",
-                    "timeout",
-                    "retry",
-                    "retry_delay",
-                    "cli_min_version",
-                    "cli_versions"
+                    "ok",
+                    "data"
                   ],
                   "type": "object"
                 }

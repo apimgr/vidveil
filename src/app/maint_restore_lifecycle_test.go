@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-package main
+package app
 
 import (
 	"errors"

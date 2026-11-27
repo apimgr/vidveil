@@ -362,8 +362,8 @@ func TestBackupPasswordIsStoredInSecretsFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(serverData), "private-backup-password") || !strings.Contains(string(secretsData), "private-backup-password") {
-		t.Fatal("backup password was not kept in secrets.yml")
+	if strings.Contains(string(serverData), "private-backup-password") || strings.Contains(string(secretsData), "private-backup-password") || !strings.Contains(string(secretsData), "enc:v1:") {
+		t.Fatal("backup password was not encrypted in secrets.yml")
 	}
 	secretInfo, err := os.Stat(filepath.Join(configDir, "secrets.yml"))
 	if err != nil {
@@ -385,6 +385,63 @@ func TestBackupPasswordIsStoredInSecretsFile(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), "private-backup-password") {
 		t.Fatal("backup password appeared in JSON serialization")
+	}
+}
+
+func TestUnreadableEncryptedBackupPasswordFailsClosed(t *testing.T) {
+	configDir := t.TempDir()
+	dataDir := t.TempDir()
+	cfg := DefaultAppConfig()
+	cfg.Server.Backup.EncryptionPassword = "private-backup-password"
+	configPath := filepath.Join(configDir, "server.yml")
+	if err := SaveAppConfig(cfg, configPath); err != nil {
+		t.Fatal(err)
+	}
+	secretsPath := filepath.Join(configDir, "secrets.yml")
+	data, err := os.ReadFile(secretsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := strings.Replace(string(data), cfg.Server.Security.EncryptionKey, strings.Repeat("0", 64), 1)
+	if updated == string(data) {
+		t.Fatal("could not locate encryption key in secrets.yml")
+	}
+	if err := os.WriteFile(secretsPath, []byte(updated), 0600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, _, err := LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.Server.Backup.PasswordUnreadable || loaded.Server.Backup.EncryptionPassword != "" {
+		t.Fatalf("unreadable backup password state = (%v, %q), want fail-closed unreadable with no usable password", loaded.Server.Backup.PasswordUnreadable, loaded.Server.Backup.EncryptionPassword)
+	}
+}
+
+func TestMaskedBackupPasswordRestoresAsUnset(t *testing.T) {
+	configDir := t.TempDir()
+	dataDir := t.TempDir()
+	configPath := filepath.Join(configDir, "server.yml")
+	if err := SaveAppConfig(DefaultAppConfig(), configPath); err != nil {
+		t.Fatal(err)
+	}
+	secretsPath := filepath.Join(configDir, "secrets.yml")
+	if err := os.WriteFile(secretsPath, []byte("server:\n  backup:\n    encryption_password: \"********\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, _, err := LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Server.Backup.EncryptionPassword != "" || loaded.Server.Backup.PasswordUnreadable {
+		t.Fatalf("masked backup password loaded as (%q, unreadable=%v), want empty and readable", loaded.Server.Backup.EncryptionPassword, loaded.Server.Backup.PasswordUnreadable)
+	}
+	data, err := os.ReadFile(secretsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "********") {
+		t.Fatalf("masked bundle value was not cleared during restore: %s", data)
 	}
 }
 

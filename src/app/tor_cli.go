@@ -6,7 +6,7 @@
 // /server/tor/* (src/server/tor_control.go) — never by touching Tor state
 // directly, since the running server binary is the sole owner of that
 // process.
-package main
+package app
 
 import (
 	"bytes"

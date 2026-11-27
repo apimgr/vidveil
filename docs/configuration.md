@@ -213,6 +213,10 @@ never include results, IP addresses, users, or sessions. Configure
 ## Tor
 
 Vidveil auto-enables the built-in Tor hidden service when a compatible `tor` binary is available. The server manages its own Tor data under the Vidveil data directory.
+The onion address is private by default. Set `server.tor.expose: true` to
+publish it in autodiscovery and health/help surfaces. Autodiscovery requests
+received over Tor return an empty `urls` list and put the onion address only in
+the dedicated `onion` field.
 
 ## I2P
 
@@ -221,7 +225,9 @@ by default on bare-metal, VM, and system-container installs. An explicit
 `server.i2p.enabled`, `I2P_ENABLED`, or `--i2p` setting overrides that default.
 The server prefers a dedicated `i2pd` process and falls back to a reachable
 SAM bridge. Its destination key is stored under the data directory and the
-backend listener is loopback-only.
+backend listener is loopback-only. The `.b32.i2p` address is private by default;
+set `server.i2p.expose: true` to publish it in autodiscovery and health/help
+surfaces.
 
 ```yaml
 server:
@@ -229,6 +235,7 @@ server:
     # This example explicitly disables I2P; omit this key to use the
     # container-aware default (on in app containers, off elsewhere).
     enabled: false
+    expose: false
     binary: ""
     sam_address: "127.0.0.1:7656"
     virtual_port: 80

@@ -101,7 +101,7 @@ disclosure: fix, advisory, release notes, version bump.
 | Rate limiting    | Per-IP and per-endpoint, configurable in `server.yml`.             |
 | Country blocking | `deny_countries` / `allow_countries` via GeoIP (PART 19).          |
 | Blocklists       | Domain and IP blocklists, refreshed by the internal scheduler.     |
-| Argon2id         | Hashing for protected configuration and backup passwords.          |
+| Argon2id         | Password hashing and backup archive key derivation. Backup passwords stored in `secrets.yml` use AES-256-GCM encryption at rest. |
 | Tor              | Auto-enabled hidden service when `tor` is present.                 |
 | Logging          | Structured logs; secrets and tokens are never logged plaintext.    |
 

@@ -20,8 +20,10 @@ Backups include the server configuration and database, and may include custom
 templates, themes, SSL certificates, and data according to the configured
 backup options. Archives contain a manifest and checksums. Encryption uses
 AES-256-GCM with an Argon2id-derived key. The password is stored in
-`secrets.yml`, never in `server.yml`, a manifest, an archive, or a command-line
-argument. When an encrypted archive is tested or restored, the operator enters
+`secrets.yml` encrypted at rest with the server encryption key, never in
+`server.yml`, a manifest, an archive, or a command-line argument. If that key
+is lost and the password cannot be decrypted, scheduled backups fail closed
+with `backup.password_unreadable`. When an encrypted archive is tested or restored, the operator enters
 its password interactively. Without a terminal, those commands report that an
 interactive password is required.
 

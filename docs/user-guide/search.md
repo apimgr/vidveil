@@ -18,7 +18,13 @@ Use duration filters: any, under 10 minutes, 10–30 minutes, or over 30 minutes
 
 ### By Quality
 
-Filter by quality: HD, 4K
+Filter by quality: any, 720p, 1080p, or 4K. Available values depend on metadata
+returned by each source.
+
+### Sorting
+
+Sort by relevance, duration, views, or quality. A source may omit metadata used
+by a filter or sort option.
 
 ## Search Operators
 

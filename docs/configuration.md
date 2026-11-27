@@ -29,12 +29,16 @@ use the existing Bearer authentication rules. The discovery document includes
 endpoint metadata from OpenAPI and omits metrics and operator-only actions.
 
 ```yaml
+output:
+  color: false  # Optional; CLI --color takes precedence, then NO_COLOR and terminal detection
+  emoji: true   # Optional; overrides NO_COLOR, but TERM=dumb always disables emoji output
 server:
+  branding:
+    content:
+      about: ""
+      privacy: ""
+      terms: ""
   pages:
-    about:
-      content: ""
-    privacy:
-      content: ""
     contact:
       enabled: true
       captcha: simple

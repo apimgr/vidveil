@@ -12,7 +12,11 @@ Type `!` followed by the bang code and your query:
 
 Short and full engine names are both supported for many engines, such as `!ph` and `!pornhub`, or `!xn` and `!xnxx`.
 
-## Available Bangs
+## Example Bangs
+
+Bang shortcuts are available only while their engines are enabled and
+available. This table shows examples; the service's bang endpoint returns the
+current complete list.
 
 | Bang | Site |
 |------|------|
@@ -28,4 +32,5 @@ Short and full engine names are both supported for many engines, such as `!ph` a
 
 ## List All Bangs
 
-View all available bangs at `https://x.scour.li/api/v1/bangs`
+View all available bangs at `https://x.scour.li/api/v1/bangs` or use the
+autocomplete endpoint described in the [API overview](../api.md).

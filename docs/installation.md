@@ -12,10 +12,8 @@ docker compose up -d
 ### Docker Run
 
 ```bash
-CONTAINER_NAME="vidveil-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)"
 docker run -d \
-  --rm \
-  --name "$CONTAINER_NAME" \
+  --name vidveil \
   -p 172.17.0.1:64580:80 \
   -v ./volumes/config:/config:z \
   -v ./volumes/data:/data:z \

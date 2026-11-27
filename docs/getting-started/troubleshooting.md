@@ -159,7 +159,7 @@ troubleshooting, see the [configuration guide](../configuration.md) and
 
 2. **Renew certificate:**
    - Review the SSL settings in `server.yml` and the service logs.
-   - Click "Renew Now"
+   - Certificates managed under `{config_dir}/ssl/letsencrypt/{fqdn}/` renew automatically when they enter the renewal window. Certificates under `/etc/letsencrypt/` and `{config_dir}/ssl/local/{fqdn}/` are managed outside Vidveil and must be renewed by their owner.
 
 3. **Check DNS:**
    ```bash
@@ -220,8 +220,7 @@ troubleshooting, see the [configuration guide](../configuration.md) and
 **Solutions:**
 
 1. **Clear cache:**
-   - Use the CLI maintenance commands.
-   - Use **Clear Search Cache** or **Clear All Caches**
+   - Search results use the configured cache and expire according to its TTL. Review the cache settings in `server.yml`; this release does not provide a web button to clear caches.
 
 2. **Reduce cache size:**
    - Review the relevant settings in `server.yml`.
@@ -287,10 +286,8 @@ docker compose logs vidveil
 
 ```bash
 # Use volumes for persistence
-CONTAINER_NAME="vidveil-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)"
 docker run -d \
-  --rm \
-  --name "$CONTAINER_NAME" \
+  --name vidveil \
   -p 172.17.0.1:64580:80 \
   -v ./volumes/config:/config:z \
   -v ./volumes/data:/data:z \
@@ -387,13 +384,28 @@ Available only when the server is started with `--debug` (or `DEBUG=true` in con
 ```bash
 # CPU profile
 curl -q -LSsf http://127.0.0.1:64893/debug/pprof/profile > cpu.prof
-go tool pprof cpu.prof
 
 # Memory profile
 curl -q -LSsf http://127.0.0.1:64893/debug/pprof/heap > heap.prof
 
 # Goroutines
 curl -q -LSsf http://127.0.0.1:64893/debug/pprof/goroutine?debug=2
+```
+
+Run Go tools in the Docker toolchain container. To inspect a saved CPU profile
+from the current directory:
+
+```bash
+GO_CACHE="${GO_CACHE:-${HOME}/go/pkg/mod}"
+GO_BUILD="${GO_BUILD:-${HOME}/.cache/go-build/vidveil}"
+mkdir -p "$GO_CACHE" "$GO_BUILD"
+timeout -k 30 3600 docker run --rm --no-healthcheck \
+  --name "vidveil-$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')" \
+  --memory=4g --cpus=2 --cpu-shares=256 \
+  -v "$PWD:/app:ro" \
+  -v "$GO_CACHE:/usr/local/share/go/pkg/mod" \
+  -v "$GO_BUILD:/usr/local/share/go/cache" \
+  -w /app casjaysdev/go:latest go tool pprof -top cpu.prof
 ```
 
 ---

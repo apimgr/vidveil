@@ -299,7 +299,7 @@ non-empty, as explicitly documented by the startup contract:
 | Variable | Description |
 |---|---|
 | `SMTP_HOST` | SMTP server host |
-| `SMTP_PORT` | SMTP server port; invalid or non-positive values are ignored |
+| `SMTP_PORT` | SMTP server port; invalid or non-positive values log a warning and fall back to the configured port, or 587 if unset |
 | `SMTP_USERNAME` | SMTP authentication username |
 | `SMTP_PASSWORD` | SMTP authentication password |
 | `SMTP_TLS` | SMTP TLS mode |

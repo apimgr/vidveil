@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/apimgr/vidveil/src/common/version"
 	"github.com/apimgr/vidveil/src/config"
@@ -60,7 +61,6 @@ func newTestServer(t *testing.T) *Server {
 	// The scheduler is ALWAYS running in production (AI.md PART 18); start it so
 	// the /server/healthz scheduler check reports healthy, mirroring runtime.
 	sched.Start(context.Background())
-	t.Cleanup(sched.Stop)
 
 	var logger *logging.AppLogger
 	logger, err = logging.NewAppLogger(cfg)
@@ -68,7 +68,19 @@ func newTestServer(t *testing.T) *Server {
 		logger = nil
 	}
 
-	return NewServer(cfg, tmp, tmp, engineMgr, &stubMigrationManager{}, sched, logger)
+	server := NewServer(cfg, tmp, tmp, engineMgr, &stubMigrationManager{}, sched, logger)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			t.Errorf("shutdown test server: %v", err)
+		}
+		sched.Stop()
+		if logger != nil {
+			logger.Close()
+		}
+	})
+	return server
 }
 
 // ── NewServer / setupMiddleware / setupRoutes ─────────────────────────────────

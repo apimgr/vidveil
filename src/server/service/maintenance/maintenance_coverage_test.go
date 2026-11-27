@@ -845,7 +845,7 @@ func TestBackupDailyFull_CreatesBothFiles(t *testing.T) {
 		t.Fatalf("BackupDailyFull: %v", err)
 	}
 
-	dateStr := time.Now().Format("2006-01-02")
+	dateStr := time.Now().UTC().Format("2006-01-02")
 	fullFile := filepath.Join(backupDir, "vidveil_backup_"+dateStr+".tar.gz")
 	if _, err := os.Stat(fullFile); err != nil {
 		t.Errorf("BackupDailyFull: expected full backup file %s: %v", fullFile, err)
@@ -878,7 +878,7 @@ func TestBackupDailyFull_EncryptedNamesUseEncExtension(t *testing.T) {
 		t.Fatalf("BackupDailyFull encrypted: %v", err)
 	}
 
-	dateStr := time.Now().Format("2006-01-02")
+	dateStr := time.Now().UTC().Format("2006-01-02")
 	fullFile := filepath.Join(backupDir, "vidveil_backup_"+dateStr+".tar.gz.enc")
 	if _, err := os.Stat(fullFile); err != nil {
 		t.Errorf("BackupDailyFull encrypted: expected full backup file %s: %v", fullFile, err)

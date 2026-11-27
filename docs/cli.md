@@ -280,7 +280,7 @@ vidveil-cli --shell init [shell]
 
 If `shell` is omitted, the CLI auto-detects it from `$SHELL` and falls back to `bash`.
 
-Supported shells: `bash`, `zsh`, `fish`, `sh`, `dash`, `ksh`, `powershell`, `pwsh`
+Completion scripts are available for `bash`, `zsh`, `fish`, `powershell`, and `pwsh`. Requests for `sh`, `dash`, or `ksh` return a usage error (exit code 2) because these shells do not support programmable completion. Their `init` snippets print a comment line, so evaluating the snippet is a safe no-op.
 
 **Examples:**
 

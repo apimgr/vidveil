@@ -7,7 +7,7 @@ Most search and engine endpoints are public and don't require authentication.
 ## Operator-Protected API
 
 Operator endpoints require the server-wide operator token configured in
-`server.yml` as `server.token`. Public search endpoints do not require a token.
+`secrets.yml` as `server.token`. Public search endpoints do not require a token.
 Anonymous owner tokens are separate from the operator token. A primary token
 manages its owner's linked tokens; linked tokens are intended for automation
 and cannot manage tokens. API token-management routes accept Bearer credentials
@@ -33,8 +33,8 @@ Authorization: Bearer YOUR_API_TOKEN
 
 ### Using the Operator Token
 
-Read the operator token from the protected server configuration and provide it
-as a bearer credential. The server does not provide an admin web login. Use
+Read the operator token from the protected secrets file and provide it as a
+bearer credential. The server does not provide an admin web login. Use
 the CLI maintenance commands for operator token listing and revocation and
 secret operations; see the [CLI reference](../cli.md).
 

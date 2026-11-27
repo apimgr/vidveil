@@ -103,7 +103,9 @@ locally and do not require the visitor's browser to contact a third-party CDN.
   and `/mcp`. Every request requires a valid API Bearer token, including calls
   to public API tools. Use a separately linked owner token for each MCP client.
   Use the operator token only when that client needs operator-only tools; never
-  give an MCP client the primary owner token. MCP is always enabled.
+  give an MCP client the primary owner token. A `read`-scoped linked token
+  lists only read tools and cannot call mutating tools; use `read-write` when
+  the client must change owner resources. MCP is always enabled.
 - `/server/help/mcp` explains how to connect and lists public API operations;
   `/api/{api_version}/server/help/mcp` returns its JSON metadata.
 - The generated endpoint guide is available at `/.well-known/llms.txt` and

@@ -52,9 +52,14 @@ revoke operations. Linked tokens receive `403` on token-management routes.
 List responses contain masked values only. Reveal and rotation responses use
 `Cache-Control: no-store` and return a raw token only for that explicit action.
 Use a separately named linked token for each automation or MCP client; linked
-tokens can access their owner's resources but cannot manage tokens. Native API
-credentials are accepted only through `Authorization: Bearer …`; alternate
-credential headers, cookies, and `?token=` are ignored.
+tokens can access their owner's resources but cannot manage tokens. A linked
+token has an immutable `read` or `read-write` scope (`read-write` by default);
+`read` permits resource reads and rejects mutations with `403` and an
+`insufficient_scope` Bearer challenge. Choose an expiry of `never`, `7d`,
+`30d`, `90d`, `1y`, or a UTC calendar date. A date remains valid through that
+day and expires at midnight UTC on the following day. Native API credentials
+are accepted only through `Authorization: Bearer …`; alternate credential
+headers, cookies, and `?token=` are ignored.
 
 ## Rate Limiting
 

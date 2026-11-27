@@ -214,7 +214,14 @@ available only when the primary owner cookie is valid. API management routes
 require the primary token in `Authorization: Bearer …`; linked tokens cannot
 manage tokens. The first anonymous favorite created through the API returns a
 new primary token once in `data.owner_token`. Save it securely and use the
-token page to create client-specific linked tokens.
+token page to create client-specific linked tokens. Create them with `scope`
+`read` or `read-write` (default `read-write`) and either a relative expiry
+(`never`, `7d`, `30d`, `90d`, or `1y`) or `expires_on` in `YYYY-MM-DD` format.
+The date is interpreted in UTC, remains valid through that day, and expires at
+midnight UTC on the next day. A `read` token can read the owner's resources but
+cannot mutate them; rejected writes return `403` with an
+`insufficient_scope` Bearer challenge. Token scope cannot be changed after
+creation; revoke and replace the token to change it.
 
 ## Favorites
 

@@ -25,7 +25,7 @@ make build
 # Run unit tests
 make test
 
-# Build and push the multi-architecture container image
+# Build and check the host-platform container image locally; CI publishes images
 make docker
 ```
 

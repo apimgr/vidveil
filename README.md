@@ -3,6 +3,7 @@
 [![CI](https://github.com/apimgr/vidveil/actions/workflows/ci.yml/badge.svg)](https://github.com/apimgr/vidveil/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/apimgr/vidveil)](https://github.com/apimgr/vidveil/releases)
 [![License](https://img.shields.io/github/license/apimgr/vidveil)](LICENSE.md)
+[![Docs](https://readthedocs.org/projects/vidveil/badge/?version=latest)](https://vidveil.readthedocs.io/)
 
 ## About
 
@@ -76,6 +77,18 @@ curl -q -LSsfO https://github.com/apimgr/vidveil/releases/latest/download/vidvei
 chmod +x vidveil-linux-amd64
 ./vidveil-linux-amd64
 ```
+
+### systemd
+
+Install the downloaded Linux binary as a system service:
+
+```bash
+sudo install -m 0755 vidveil-linux-amd64 /usr/local/bin/vidveil
+sudo /usr/local/bin/vidveil --service --install
+```
+
+The service manager starts VidVeil after installation. Its configuration and
+data paths are created on first run; see the [installation guide](docs/installation.md#service-installation).
 
 ---
 

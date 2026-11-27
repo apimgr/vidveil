@@ -43,7 +43,7 @@ do not receive backports unless explicitly noted.
 
 - Vulnerabilities that require physical access to a privately operated instance.
 - Bugs in third-party dependencies — please report those upstream first; we
-  will track them via Dependabot.
+  track dependency updates through Renovate.
 - "Self-XSS" requiring the victim to paste attacker-controlled JavaScript into
   the browser console.
 

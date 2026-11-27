@@ -39,7 +39,7 @@ workflows.
 | `make build`      | Native-platform server/CLI plus cross-platform server/CLI release binaries (8 targets) into `binaries/`. |
 | `make test`       | Run unit tests and coverage checks in `casjaysdev/go:latest`.         |
 | `make release`    | Build, stage, and publish a stable release.                           |
-| `make docker`     | Build and push the container image.                                 |
+| `make docker`     | Build and check the host-platform container image locally; CI publishes images. |
 
 To run integration tests:
 
@@ -51,10 +51,12 @@ To run integration tests:
 
 ## Branching and PRs
 
-1. Create a topic branch off `main` (`feat/...`, `fix/...`, `docs/...`).
+1. Fork the repository and create a topic branch off `main` in your fork
+   (`feat/...`, `fix/...`, `docs/...`). Maintainers work on `main` directly;
+   local temporary branches are not pushed to the upstream repository.
 2. Keep commits small and focused — one logical change per commit.
-3. Open a pull request to `main`. The PR template will prompt you for the
-   summary, motivation, test evidence, and security/privacy impact.
+3. Open a pull request from your fork to `main`. The PR template will prompt
+   you for the summary, motivation, test evidence, and security/privacy impact.
 4. The configured git provider's CI workflow must pass before merge. GitHub CI runs
    lint, tests with coverage, build, vulnerability scanning, secret scanning,
    image scanning, and workflow policy checks; the Docker workflow builds and

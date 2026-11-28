@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	cfg, err := config.Load(os.Args[1:])
+	cfg, err := config.ParseRuntime(os.Args[1:])
 	if err != nil {
 		var flagErr config.FlagError
 		if errors.As(err, &flagErr) {

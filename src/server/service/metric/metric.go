@@ -845,7 +845,7 @@ func buildGrafanaDashboard() map[string]interface{} {
 		panels = append(panels, grafanaPanel{
 			ID:         i + 1,
 			Title:      s.title,
-			Type:       "timeseries",
+			Type:       grafanaPanelType(s.title),
 			Datasource: map[string]string{"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
 			Targets: []grafanaTarget{
 				{Expr: s.expr, LegendFormat: s.title, RefID: "A"},
@@ -867,7 +867,7 @@ func buildGrafanaDashboard() map[string]interface{} {
 		},
 		"title":         "vidveil",
 		"uid":           "vidveil-metrics",
-		"schemaVersion": 39,
+		"schemaVersion": 42,
 		"version":       1,
 		"timezone":      "browser",
 		"editable":      true,
@@ -878,6 +878,17 @@ func buildGrafanaDashboard() map[string]interface{} {
 			"from": "now-6h",
 			"to":   "now",
 		},
+	}
+}
+
+func grafanaPanelType(title string) string {
+	switch title {
+	case "Application Uptime", "HTTP Requests Total", "Database Queries Total", "Scheduler Tasks Total", "Active Owner Tokens", "Search Queries Total":
+		return "stat"
+	case "Active HTTP Requests", "Database Connections Open", "Database Connections In Use", "Cache Size", "Cache Bytes", "Scheduler Tasks Running", "System CPU Usage", "System Memory Usage", "System Disk Usage", "Go Goroutines", "Go Heap Allocation", "Tor State":
+		return "gauge"
+	default:
+		return "timeseries"
 	}
 }
 

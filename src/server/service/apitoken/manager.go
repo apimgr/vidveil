@@ -614,27 +614,64 @@ func (m *Manager) PurgeIdleOwners(ctx context.Context, idleDays int) (int64, err
 		return 0, fmt.Errorf("idle owner purge period is too large")
 	}
 	cutoff := time.Now().Unix() - days*secondsPerDay
-	const idleOwners = `SELECT o.id FROM owners o WHERE o.id <> 'system' AND o.last_seen_at <= ?
-		AND NOT EXISTS (SELECT 1 FROM favorites f WHERE f.owner_id = o.id)`
+	const batchSize = 250
 	var removed int64
-	err := m.db.Write(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM api_tokens WHERE owner_id IN (`+idleOwners+`)`, cutoff); err != nil {
-			return fmt.Errorf("delete idle owner tokens: %w", err)
-		}
-		result, err := tx.ExecContext(ctx, `DELETE FROM owners WHERE id IN (`+idleOwners+`)`, cutoff)
+	for {
+		var ownersRemoved, rowsRemoved int64
+		err := m.db.Write(ctx, func(tx *sql.Tx) error {
+			ownersRemoved, rowsRemoved = 0, 0
+			tokens, err := tx.ExecContext(ctx, `DELETE FROM api_tokens WHERE `+m.idColumn+` IN (
+				SELECT t.`+m.idColumn+` FROM api_tokens t JOIN owners o ON o.id = t.owner_id
+				WHERE o.id <> 'system' AND o.last_seen_at <= ?
+				AND NOT EXISTS (SELECT 1 FROM favorites f WHERE f.owner_id = o.id)
+				LIMIT ?
+			)`, cutoff, batchSize)
+			if err != nil {
+				return fmt.Errorf("delete idle owner tokens: %w", err)
+			}
+			tokenRows, err := tokens.RowsAffected()
+			if err != nil {
+				return fmt.Errorf("count deleted idle owner tokens: %w", err)
+			}
+			owners, err := tx.ExecContext(ctx, `DELETE FROM owners WHERE id IN (
+				SELECT o.id FROM owners o
+				WHERE o.id <> 'system' AND o.last_seen_at <= ?
+				AND NOT EXISTS (SELECT 1 FROM favorites f WHERE f.owner_id = o.id)
+				AND NOT EXISTS (SELECT 1 FROM api_tokens t WHERE t.owner_id = o.id)
+				LIMIT ?
+			)`, cutoff, batchSize)
+			if err != nil {
+				return fmt.Errorf("delete idle owners: %w", err)
+			}
+			ownersRemoved, err = owners.RowsAffected()
+			if err != nil {
+				return fmt.Errorf("count purged idle owners: %w", err)
+			}
+			rowsRemoved = tokenRows + ownersRemoved
+			return nil
+		})
 		if err != nil {
-			return fmt.Errorf("delete idle owners: %w", err)
+			return 0, fmt.Errorf("purge idle owners: %w", err)
 		}
-		removed, err = result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("count purged idle owners: %w", err)
+		removed += ownersRemoved
+		if rowsRemoved == 0 {
+			return removed, nil
 		}
-		return nil
-	})
-	if err != nil {
-		return 0, fmt.Errorf("purge idle owners: %w", err)
+		if err := yieldPurgeBatch(ctx); err != nil {
+			return 0, fmt.Errorf("purge idle owners: %w", err)
+		}
 	}
-	return removed, nil
+}
+
+func yieldPurgeBatch(ctx context.Context) error {
+	timer := time.NewTimer(10 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // RevokeLinked permanently revokes one linked token belonging to the owner.

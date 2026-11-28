@@ -3,17 +3,20 @@ set -eo pipefail
 
 # Check if incus is available
 if ! command -v incus &>/dev/null; then
-    echo "ERROR: incus not found. Install incus or use tests/docker.sh" >&2
-    exit 69
+  echo "ERROR: incus not found. Install incus or use tests/docker.sh" >&2
+  exit 69
 fi
 
 # Usage: tests/incus.sh [systemd|openrc|all]   (default: all)
 # systemd runs in a Debian container, openrc in an Alpine container; each gets the full test run
 MODE="${1:-all}"
 case "$MODE" in
-    systemd|openrc) MODES="$MODE" ;;
-    all) MODES="systemd openrc" ;;
-    *) echo "Usage: $0 [systemd|openrc|all]" >&2; exit 2 ;;
+  systemd | openrc) MODES="$MODE" ;;
+  all) MODES="systemd openrc" ;;
+  *)
+    echo "Usage: $0 [systemd|openrc|all]" >&2
+    exit 2
+    ;;
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -49,39 +52,39 @@ INCUS_RUN_TIMEOUT="${INCUS_RUN_TIMEOUT:-3600}"
 INCUS_OPERATION_TIMEOUT="${INCUS_OPERATION_TIMEOUT:-600}"
 INCUS_BOOT_WAIT="${INCUS_BOOT_WAIT:-180}"
 incus_op() {
-	timeout -k 30 "${INCUS_OPERATION_TIMEOUT}" incus "$@"
+  timeout -k 30 "${INCUS_OPERATION_TIMEOUT}" incus "$@"
 }
 iexec() {
-	local secs="$1" container="$2"
-	shift 2
-	timeout "$secs" incus exec "$container" -- "$@"
+  local secs="$1" container="$2"
+  shift 2
+  timeout "$secs" incus exec "$container" -- "$@"
 }
 incus_probe() {
-	iexec 5 "$@"
+  iexec 5 "$@"
 }
 
 cleanup() {
-    local c failed=0
-    local -a remaining=()
-    for c in "${CONTAINER_CANDIDATES[@]}"; do
-        if [ "$(incus_op config get "$c" user.vidveil.test-run 2>/dev/null || true)" = "$CONTAINER_PREFIX" ]; then
-            CONTAINERS+=("$c")
-        fi
-    done
-    for c in "${CONTAINERS[@]}"; do
-        incus_op delete "$c" --force 2>/dev/null || true
-        if incus_op info "$c" >/dev/null 2>&1; then
-            echo "ERROR: Incus instance remains after cleanup: ${c}" >&2
-            failed=1
-            remaining+=("$c")
-        fi
-    done
-    CONTAINERS=("${remaining[@]}")
-    if [ -n "${INCUS_TEMP_DIR:-}" ]; then
-        rm -rf "${INCUS_TEMP_DIR}"
-        INCUS_TEMP_DIR=""
+  local c failed=0
+  local -a remaining=()
+  for c in "${CONTAINER_CANDIDATES[@]}"; do
+    if [ "$(incus_op config get "$c" user.vidveil.test-run 2>/dev/null || true)" = "$CONTAINER_PREFIX" ]; then
+      CONTAINERS+=("$c")
     fi
-    return "$failed"
+  done
+  for c in "${CONTAINERS[@]}"; do
+    incus_op delete "$c" --force 2>/dev/null || true
+    if incus_op info "$c" >/dev/null 2>&1; then
+      echo "ERROR: Incus instance remains after cleanup: ${c}" >&2
+      failed=1
+      remaining+=("$c")
+    fi
+  done
+  CONTAINERS=("${remaining[@]}")
+  if [ -n "${INCUS_TEMP_DIR:-}" ]; then
+    rm -rf "${INCUS_TEMP_DIR}"
+    INCUS_TEMP_DIR=""
+  fi
+  return "$failed"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -89,21 +92,22 @@ trap 'exit 143' TERM
 
 # make build begins with clean, so never let its default target overwrite project binaries.
 if [ -n "${BINDIR:-}" ] && { [ -e "${BIN_DIR}" ] || [ -L "${BIN_DIR}" ]; }; then
-    echo "ERROR: refusing to replace existing BINDIR ${BIN_DIR}" >&2
-    exit 73
+  echo "ERROR: refusing to replace existing BINDIR ${BIN_DIR}" >&2
+  exit 73
 fi
 
 if [ ! -f "${PROJECT_ROOT}/Makefile" ]; then
-    echo "ERROR: tests/incus.sh requires the project's Makefile build target" >&2
-    exit 69
+  echo "ERROR: tests/incus.sh requires the project's Makefile build target" >&2
+  exit 69
 fi
 echo "Building with make build..."
 make -C "$PROJECT_ROOT" build \
-    BINDIR="$BIN_DIR" RELDIR="$INCUS_TEMP_DIR/releases" \
-    GO_CACHE="$INCUS_GO_CACHE" GO_BUILD="$INCUS_GO_BUILD" \
-    _GO_OPTS="timeout -k 30 3600 docker run --rm --name ${INCUS_BUILD_NAME} --memory=4g --cpus=2 -v ${PROJECT_ROOT}:/app -v ${INCUS_GO_CACHE}:/usr/local/share/go/pkg/mod -v ${INCUS_GO_BUILD}:/usr/local/share/go/cache -v ${INCUS_TEMP_DIR}:${INCUS_TEMP_DIR} -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false"
+  BINDIR="$BIN_DIR" RELDIR="$INCUS_TEMP_DIR/releases" \
+  GO_CACHE="$INCUS_GO_CACHE" GO_BUILD="$INCUS_GO_BUILD" \
+  _GO_OPTS="timeout -k 30 3600 docker run --rm --name ${INCUS_BUILD_NAME} --memory=4g --cpus=2 -v ${PROJECT_ROOT}:/app -v ${INCUS_GO_CACHE}:/usr/local/share/go/pkg/mod -v ${INCUS_GO_BUILD}:/usr/local/share/go/cache -v ${INCUS_TEMP_DIR}:${INCUS_TEMP_DIR} -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false"
 
-REMOTE_LIB=$(cat <<'REMOTE_LIB_EOF'
+REMOTE_LIB=$(
+  cat <<'REMOTE_LIB_EOF'
 INTERNAL_NAME="${INTERNAL_NAME:-$PROJECT_NAME}"
 INTERNAL_ORG="${INTERNAL_ORG:-$PROJECT_ORG}"
 FAILURES=0
@@ -144,7 +148,8 @@ svc_stopped() { ! svc_active; }
 REMOTE_LIB_EOF
 )
 
-REMOTE_MAIN=$(cat <<'REMOTE_MAIN_EOF'
+REMOTE_MAIN=$(
+  cat <<'REMOTE_MAIN_EOF'
 echo "=== [$INIT_MODE] Init system identity ==="
 if [ "$INIT_MODE" = "systemd" ]; then
     check "PID 1 is systemd" test "$(cat /proc/1/comm)" = "systemd"
@@ -416,7 +421,8 @@ echo "=== [$INIT_MODE] Main tests passed ==="
 REMOTE_MAIN_EOF
 )
 
-REMOTE_AFTER=$(cat <<'REMOTE_AFTER_EOF'
+REMOTE_AFTER=$(
+  cat <<'REMOTE_AFTER_EOF'
 echo "=== [$INIT_MODE] Boot persistence (container was restarted) ==="
 check "service still enabled after reboot" svc_enabled
 check "service came back after reboot" wait_for 120 svc_active
@@ -453,100 +459,109 @@ REMOTE_AFTER_EOF
 # Run a script inside the container with the init mode and project names
 # Every script fragment is its own argument: printf puts a newline after each one, because $(cat <<EOF) strips the trailing newline of a heredoc
 remote() {
-    local container="$1" init="$2"
-    shift 2
-    printf '%s\n' "$@" | iexec "$INCUS_RUN_TIMEOUT" "$container" env INIT_MODE="$init" PROJECT_NAME="$PROJECT_NAME" PROJECT_ORG="$PROJECT_ORG" \
-        INTERNAL_NAME="$INTERNAL_NAME" INTERNAL_ORG="$INTERNAL_ORG" REQUIRE_OVERLAY="${REQUIRE_OVERLAY:-0}" \
-        TOR_WAIT="${TOR_WAIT:-300}" I2P_WAIT="${I2P_WAIT:-600}" bash -s
+  local container="$1" init="$2"
+  shift 2
+  printf '%s\n' "$@" | iexec "$INCUS_RUN_TIMEOUT" "$container" env INIT_MODE="$init" PROJECT_NAME="$PROJECT_NAME" PROJECT_ORG="$PROJECT_ORG" \
+    INTERNAL_NAME="$INTERNAL_NAME" INTERNAL_ORG="$INTERNAL_ORG" REQUIRE_OVERLAY="${REQUIRE_OVERLAY:-0}" \
+    TOR_WAIT="${TOR_WAIT:-300}" I2P_WAIT="${I2P_WAIT:-600}" bash -s
 }
 
 # Wait until the container accepts commands, its init system finished booting and the network is up
 wait_boot() {
-    local container="$1" init="$2" state deadline=$((SECONDS + INCUS_BOOT_WAIT)) ready=false init_ready=false
-    while (( SECONDS < deadline )); do
-        if incus_probe "$container" true 2>/dev/null; then ready=true; break; fi
-        sleep 1
-    done
-    if [ "$ready" != true ]; then
-        echo "ERROR: Incus container did not accept commands within ${INCUS_BOOT_WAIT}s: ${container}" >&2
-        return 1
+  local container="$1" init="$2" state deadline=$((SECONDS + INCUS_BOOT_WAIT)) ready=false init_ready=false
+  while ((SECONDS < deadline)); do
+    if incus_probe "$container" true 2>/dev/null; then
+      ready=true
+      break
     fi
-    if [ "$init" = "systemd" ]; then
-        # "degraded" is normal in a container; only "starting" means boot is unfinished
-        while (( SECONDS < deadline )); do
-            state=$(incus_probe "$container" systemctl is-system-running 2>/dev/null || true)
-            if [ -n "$state" ] && [ "$state" != starting ]; then init_ready=true; break; fi
-            sleep 1
-        done
-    else
-        while (( SECONDS < deadline )); do
-            if incus_probe "$container" test -d /run/openrc 2>/dev/null; then init_ready=true; break; fi
-            sleep 1
-        done
-    fi
-    if [ "$init_ready" != true ]; then
-        echo "ERROR: Incus init system did not become ready within ${INCUS_BOOT_WAIT}s: ${container}" >&2
-        return 1
-    fi
-    while (( SECONDS < deadline )); do
-        if incus_probe "$container" sh -c 'ip route | grep "^default" >/dev/null' 2>/dev/null; then return 0; fi
-        sleep 1
-    done
-    echo "ERROR: Incus container init or network did not become ready within ${INCUS_BOOT_WAIT}s: ${container}" >&2
+    sleep 1
+  done
+  if [ "$ready" != true ]; then
+    echo "ERROR: Incus container did not accept commands within ${INCUS_BOOT_WAIT}s: ${container}" >&2
     return 1
+  fi
+  if [ "$init" = "systemd" ]; then
+    # "degraded" is normal in a container; only "starting" means boot is unfinished
+    while ((SECONDS < deadline)); do
+      state=$(incus_probe "$container" systemctl is-system-running 2>/dev/null || true)
+      if [ -n "$state" ] && [ "$state" != starting ]; then
+        init_ready=true
+        break
+      fi
+      sleep 1
+    done
+  else
+    while ((SECONDS < deadline)); do
+      if incus_probe "$container" test -d /run/openrc 2>/dev/null; then
+        init_ready=true
+        break
+      fi
+      sleep 1
+    done
+  fi
+  if [ "$init_ready" != true ]; then
+    echo "ERROR: Incus init system did not become ready within ${INCUS_BOOT_WAIT}s: ${container}" >&2
+    return 1
+  fi
+  while ((SECONDS < deadline)); do
+    if incus_probe "$container" sh -c 'ip route | grep "^default" >/dev/null' 2>/dev/null; then return 0; fi
+    sleep 1
+  done
+  echo "ERROR: Incus container init or network did not become ready within ${INCUS_BOOT_WAIT}s: ${container}" >&2
+  return 1
 }
 
 run_mode() {
-    local init="$1" image container
-    if [ "$init" = "systemd" ]; then image="$INCUS_IMAGE_SYSTEMD"; else image="$INCUS_IMAGE_OPENRC"; fi
-    container="${CONTAINER_PREFIX}-${init}"
-    if incus_op info "$container" >/dev/null 2>&1; then
-        echo "ERROR: refusing to replace existing Incus instance ${container}" >&2
-        return 73
-    fi
-    CONTAINER_CANDIDATES+=("$container")
+  local init="$1" image container
+  if [ "$init" = "systemd" ]; then image="$INCUS_IMAGE_SYSTEMD"; else image="$INCUS_IMAGE_OPENRC"; fi
+  container="${CONTAINER_PREFIX}-${init}"
+  if incus_op info "$container" >/dev/null 2>&1; then
+    echo "ERROR: refusing to replace existing Incus instance ${container}" >&2
+    return 73
+  fi
+  CONTAINER_CANDIDATES+=("$container")
 
-    echo "=== [$init] Launching Incus container ($image) ==="
-    incus_op launch "$image" "$container" \
-        -c user.vidveil.test-run="$CONTAINER_PREFIX" \
-        -c limits.cpu="$INCUS_CPUS" -c limits.memory="$INCUS_MEM" -c limits.cpu.priority="$INCUS_CPU_PRIORITY"
-    wait_boot "$container" "$init"
+  echo "=== [$init] Launching Incus container ($image) ==="
+  incus_op launch "$image" "$container" \
+    -c user.vidveil.test-run="$CONTAINER_PREFIX" \
+    -c limits.cpu="$INCUS_CPUS" -c limits.memory="$INCUS_MEM" -c limits.cpu.priority="$INCUS_CPU_PRIORITY"
+  wait_boot "$container" "$init"
 
-    echo "=== [$init] Installing test tools, tor and i2pd ==="
-    if [ "$init" = "systemd" ]; then
-        iexec "$INCUS_INSTALL_TIMEOUT" "$container" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl jq file tor i2pd' >/dev/null
-        # The distro tor/i2pd services are NOT what is tested: the server runs its own dedicated, isolated instances (PART 31)
-        iexec "$INCUS_OP_TIMEOUT" "$container" systemctl disable --now tor.service tor@default.service i2pd.service 2>/dev/null || true
-    else
-        iexec "$INCUS_INSTALL_TIMEOUT" "$container" sh -c 'apk add --no-cache bash curl jq file tor i2pd tzdata ca-certificates' >/dev/null
-        iexec "$INCUS_OP_TIMEOUT" "$container" sh -c 'rc-service tor stop; rc-service i2pd stop; rc-update del tor; rc-update del i2pd' 2>/dev/null || true
-    fi
+  echo "=== [$init] Installing test tools, tor and i2pd ==="
+  if [ "$init" = "systemd" ]; then
+    iexec "$INCUS_INSTALL_TIMEOUT" "$container" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl jq file tor i2pd' >/dev/null
+    # The distro tor/i2pd services are NOT what is tested: the server runs its own dedicated, isolated instances (PART 31)
+    iexec "$INCUS_OP_TIMEOUT" "$container" systemctl disable --now tor.service tor@default.service i2pd.service 2>/dev/null || true
+  else
+    iexec "$INCUS_INSTALL_TIMEOUT" "$container" sh -c 'apk add --no-cache bash curl jq file tor i2pd tzdata ca-certificates' >/dev/null
+    iexec "$INCUS_OP_TIMEOUT" "$container" sh -c 'rc-service tor stop; rc-service i2pd stop; rc-update del tor; rc-update del i2pd' 2>/dev/null || true
+  fi
 
-    echo "=== [$init] Copying binaries to container ==="
-    incus_op file push "${BIN_DIR}/${PROJECT_NAME}" "$container/usr/local/bin/"
-    iexec "$INCUS_OP_TIMEOUT" "$container" chmod +x "/usr/local/bin/${PROJECT_NAME}"
-    if [ -f "${BIN_DIR}/${PROJECT_NAME}-cli" ]; then
-        incus_op file push "${BIN_DIR}/${PROJECT_NAME}-cli" "$container/usr/local/bin/"
-        iexec "$INCUS_OP_TIMEOUT" "$container" chmod +x "/usr/local/bin/${PROJECT_NAME}-cli"
-    fi
-    incus_op file push "${SCRIPT_DIR}/test_content_negotiation.sh" "$container/tmp/test_content_negotiation.sh"
-    iexec "$INCUS_OP_TIMEOUT" "$container" chmod 0600 /tmp/test_content_negotiation.sh
+  echo "=== [$init] Copying binaries to container ==="
+  incus_op file push "${BIN_DIR}/${PROJECT_NAME}" "$container/usr/local/bin/"
+  iexec "$INCUS_OP_TIMEOUT" "$container" chmod +x "/usr/local/bin/${PROJECT_NAME}"
+  if [ -f "${BIN_DIR}/${PROJECT_NAME}-cli" ]; then
+    incus_op file push "${BIN_DIR}/${PROJECT_NAME}-cli" "$container/usr/local/bin/"
+    iexec "$INCUS_OP_TIMEOUT" "$container" chmod +x "/usr/local/bin/${PROJECT_NAME}-cli"
+  fi
+  incus_op file push "${SCRIPT_DIR}/test_content_negotiation.sh" "$container/tmp/test_content_negotiation.sh"
+  iexec "$INCUS_OP_TIMEOUT" "$container" chmod 0600 /tmp/test_content_negotiation.sh
 
-    echo "=== [$init] Running tests in Incus ==="
-    remote "$container" "$init" "$REMOTE_LIB" "$REMOTE_MAIN"
+  echo "=== [$init] Running tests in Incus ==="
+  remote "$container" "$init" "$REMOTE_LIB" "$REMOTE_MAIN"
 
-    echo "=== [$init] Restarting the container (boot persistence) ==="
-    incus_op restart "$container"
-    wait_boot "$container" "$init"
-    remote "$container" "$init" "$REMOTE_LIB" "$REMOTE_AFTER"
+  echo "=== [$init] Restarting the container (boot persistence) ==="
+  incus_op restart "$container"
+  wait_boot "$container" "$init"
+  remote "$container" "$init" "$REMOTE_LIB" "$REMOTE_AFTER"
 }
 
 # One container per init system, run one after the other (never in parallel)
 run_mode_list() {
-    local init
-    for init in $MODES; do
-        run_mode "$init"
-    done
+  local init
+  for init in $MODES; do
+    run_mode "$init"
+  done
 }
 run_mode_list
 

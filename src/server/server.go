@@ -585,6 +585,9 @@ func (s *Server) setupMiddleware() {
 
 	// URL Normalization per AI.md PART 16 — MUST be first to execute.
 	s.router.Use(URLNormalizeMiddleware)
+	s.router.Use(middleware.RequestID)
+	s.router.Use(paths.PathSecurityMiddleware)
+	s.router.Use(s.securityHeadersMiddleware)
 	s.router.Use(requestStatsMiddleware(s.metrics))
 
 	if s.appConfig != nil && s.appConfig.Server.SEO.NoIndex {
@@ -611,12 +614,6 @@ func (s *Server) setupMiddleware() {
 	// URL Variables resolution per AI.md PART 8 (reverse proxy headers)
 	s.router.Use(urlvar.GlobalResolver().Middleware)
 
-	// 2. Request ID per AI.md PART 5 — must run before Logging so logs carry the ID
-	s.router.Use(middleware.RequestID)
-
-	// 3. Path Security per AI.md PART 5 — validate paths, block traversal
-	s.router.Use(paths.PathSecurityMiddleware)
-
 	// Recoverer — recover panics in any downstream middleware or handler.
 	// guaranteedRecoverer replaces chi's stock middleware.Recoverer (which
 	// leaves an empty 500 body) with one that always renders a minimal,
@@ -625,93 +622,6 @@ func (s *Server) setupMiddleware() {
 
 	// CORS
 	s.router.Use(s.corsMiddleware)
-
-	// Security headers per AI.md PART 11 (NON-NEGOTIABLE)
-	s.router.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			targetWriter := w
-			// Required security headers per PART 11
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-			w.Header().Set("X-XSS-Protection", "1; mode=block")
-			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-			w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
-			w.Header().Set("Origin-Agent-Cluster", "?1")
-			// Cross-Origin headers per PART 11 — defaults per "everyone" tier
-			w.Header().Set("Cross-Origin-Opener-Policy", "unsafe-none")
-			w.Header().Set("Cross-Origin-Embedder-Policy", "unsafe-none")
-			w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
-			// CSP per PART 11 "Content Security Policy" — fixed default directives,
-			// extended (never replaced) via web.csp.*_extra config keys.
-			if s.appConfig.Web.CSP.Enabled {
-				headerName := "Content-Security-Policy"
-				if s.appConfig.Web.CSP.Mode == "report-only" {
-					headerName = "Content-Security-Policy-Report-Only"
-				}
-				w.Header().Set(headerName, s.buildCSPHeader(r))
-			}
-			w.Header().Set("Permissions-Policy", permissionsPolicyHeader())
-			// HSTS per PART 11 — max-age=63072000 (2 years), includeSubDomains, preload
-			if s.appConfig.Server.SSL.Enabled && !urlvar.GlobalResolver().IsOverlayRequest(r) {
-				w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
-			}
-			// Reporting-Endpoints + legacy Report-To + NEL per AI.md PART 11
-			// Both modern (Reporting-Endpoints) and legacy (Report-To) formats are required.
-			reportsBase := urlvar.BuildURL(r, s.appConfig.APIBasePath()+"/server/reports")
-			if reportsBase != "" {
-				defaultReportsURL := reportsBase + "/default"
-				nelReportsURL := reportsBase + "/nel"
-				w.Header().Set("Reporting-Endpoints", `default="`+defaultReportsURL+`", nel="`+nelReportsURL+`"`)
-				w.Header().Set("Report-To", `{"group":"default","max_age":10886400,"endpoints":[{"url":"`+defaultReportsURL+`"}]}, {"group":"nel","max_age":10886400,"endpoints":[{"url":"`+nelReportsURL+`"}]}`)
-				w.Header().Set("NEL", `{"report_to":"nel","max_age":2592000,"include_subdomains":true}`)
-			}
-			// Add Request ID to response headers per AI.md PART 14
-			if reqID := middleware.GetReqID(r.Context()); reqID != "" {
-				w.Header().Set("X-Request-ID", reqID)
-			}
-			// Cache-Control headers per AI.md PART 9
-			path := r.URL.Path
-			if strings.HasPrefix(path, "/static/") {
-				// Static assets per PART 9 asset version-busting: immutable ONLY
-				// when the ?v= stamp matches the running build; missing or
-				// mismatched stamp gets no-cache + a build-stamp ETag instead.
-				if r.URL.Query().Get("v") == version.AssetStamp() {
-					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-				} else {
-					w.Header().Set("Cache-Control", "no-cache")
-					w.Header().Set("ETag", `"`+version.AssetStamp()+`"`)
-				}
-			} else if strings.HasPrefix(path, "/api/") {
-				// Public read-only API responses may be cached briefly. Requests
-				// carrying credentials or changing state are always private.
-				if (r.Method == http.MethodGet || r.Method == http.MethodHead) && r.Header.Get("Authorization") == "" {
-					w.Header().Set("Cache-Control", "public, max-age=60")
-				} else {
-					w.Header().Set("Cache-Control", "private, no-store")
-				}
-			} else {
-				// HTML pages per PART 9: no-store plus a build-stamp ETag so any
-				// intermediary that ignores no-store still revalidates.
-				w.Header().Set("Cache-Control", "no-store, must-revalidate")
-				w.Header().Set("ETag", `"`+version.AssetStamp()+`"`)
-				// The build cookie is refreshed on every HTML response. Only a
-				// successful top-level navigation may trigger the stale-client purge.
-				stamp := version.AssetStamp()
-				if c, err := r.Cookie("vidveil_build"); err == nil && c.Value != stamp && isTopLevelDocumentNavigation(r) {
-					targetWriter = &versionPurgeWriter{ResponseWriter: w}
-				}
-				http.SetCookie(w, &http.Cookie{
-					Name:     "vidveil_build",
-					Value:    stamp,
-					Path:     "/",
-					MaxAge:   31536000,
-					Secure:   s.appConfig.Server.SSL.Enabled && !urlvar.GlobalResolver().IsOverlayRequest(r),
-					SameSite: http.SameSiteLaxMode,
-				})
-			}
-			next.ServeHTTP(targetWriter, r)
-		})
-	})
 
 	// Allowlist middleware per AI.md PART 11 — sets trusted-IP context flag so
 	// downstream blocklist / rate-limit / geoip middleware can skip enforcement.
@@ -791,6 +701,74 @@ func (s *Server) setupMiddleware() {
 
 // writeResponseTimingMiddleware pads state-changing requests to the common
 // timing floor so success and failure paths do not expose internal state.
+func (s *Server) securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetWriter := w
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
+		w.Header().Set("Origin-Agent-Cluster", "?1")
+		w.Header().Set("Cross-Origin-Opener-Policy", "unsafe-none")
+		w.Header().Set("Cross-Origin-Embedder-Policy", "unsafe-none")
+		w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
+		if s.appConfig.Web.CSP.Enabled {
+			headerName := "Content-Security-Policy"
+			if s.appConfig.Web.CSP.Mode == "report-only" {
+				headerName = "Content-Security-Policy-Report-Only"
+			}
+			w.Header().Set(headerName, s.buildCSPHeader(r))
+		}
+		w.Header().Set("Permissions-Policy", permissionsPolicyHeader())
+		if s.appConfig.Server.SSL.Enabled && !urlvar.GlobalResolver().IsOverlayRequest(r) {
+			w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+		}
+		reportsBase := urlvar.BuildURL(r, s.appConfig.APIBasePath()+"/server/reports")
+		if reportsBase != "" {
+			defaultReportsURL := reportsBase + "/default"
+			nelReportsURL := reportsBase + "/nel"
+			w.Header().Set("Reporting-Endpoints", `default="`+defaultReportsURL+`", nel="`+nelReportsURL+`"`)
+			w.Header().Set("Report-To", `{"group":"default","max_age":10886400,"endpoints":[{"url":"`+defaultReportsURL+`"}]}, {"group":"nel","max_age":10886400,"endpoints":[{"url":"`+nelReportsURL+`"}]}`)
+			w.Header().Set("NEL", `{"report_to":"nel","max_age":2592000,"include_subdomains":true}`)
+		}
+		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
+			w.Header().Set("X-Request-ID", reqID)
+		}
+		requestPath := r.URL.Path
+		if strings.HasPrefix(requestPath, "/static/") {
+			if r.URL.Query().Get("v") == version.AssetStamp() {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			} else {
+				w.Header().Set("Cache-Control", "no-cache")
+				w.Header().Set("ETag", `"`+version.AssetStamp()+`"`)
+			}
+		} else if strings.HasPrefix(requestPath, "/api/") {
+			if (r.Method == http.MethodGet || r.Method == http.MethodHead) && r.Header.Get("Authorization") == "" {
+				w.Header().Set("Cache-Control", "public, max-age=60")
+			} else {
+				w.Header().Set("Cache-Control", "private, no-store")
+			}
+		} else {
+			w.Header().Set("Cache-Control", "no-store, must-revalidate")
+			w.Header().Set("ETag", `"`+version.AssetStamp()+`"`)
+			stamp := version.AssetStamp()
+			staleBuild := false
+			if cookie, err := r.Cookie("vidveil_build"); err == nil && cookie.Value != stamp {
+				staleBuild = true
+			}
+			targetWriter = &buildStampWriter{
+				ResponseWriter: w,
+				request:        r,
+				stamp:          stamp,
+				secure:         s.appConfig.Server.SSL.Enabled && !urlvar.GlobalResolver().IsOverlayRequest(r),
+				purge:          staleBuild,
+			}
+		}
+		next.ServeHTTP(targetWriter, r)
+	})
+}
+
 func writeResponseTimingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

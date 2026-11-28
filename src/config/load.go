@@ -8,9 +8,11 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	pathsecurity "github.com/apimgr/vidveil/src/paths"
 )
 
-func Load(args []string) (ServerConfig, error) {
+func ParseRuntime(args []string) (ServerConfig, error) {
 	globalArgs, command := splitRuntimeCommand(args)
 	fs := flag.NewFlagSet("vidveil", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -78,6 +80,21 @@ func Load(args []string) (ServerConfig, error) {
 	if !*debug && !parsedFlags["debug"] && truthyRuntimeEnv(os.Getenv("DEBUG")) {
 		*debug = true
 	}
+	for _, directory := range []struct {
+		name  string
+		value *string
+	}{
+		{"config", configDir}, {"data", dataDir}, {"cache", cacheDir}, {"log", logDir}, {"backup", backupDir},
+	} {
+		if *directory.value == "" {
+			continue
+		}
+		safe, err := pathsecurity.SafeDirPath(*directory.value)
+		if err != nil {
+			return ServerConfig{}, fmt.Errorf("invalid --%s directory: %w", directory.name, err)
+		}
+		*directory.value = safe
+	}
 	setRuntimePathEnv("CONFIG_DIR", *configDir)
 	setRuntimePathEnv("DATA_DIR", *dataDir)
 	setRuntimePathEnv("CACHE_DIR", *cacheDir)
@@ -110,29 +127,38 @@ func Load(args []string) (ServerConfig, error) {
 		Help:       *showHelp,
 		Version:    *showVersion,
 	}
-	loadConfig := !runtime.Help && !runtime.Version && !runtimeCommandSkipsConfig(command)
-	if !loadConfig {
-		cfg := *DefaultAppConfig()
-		cfg.Runtime = runtime
-		return cfg, nil
-	}
-	cfg, configPath, err := LoadAppConfig(*configDir, *dataDir)
+	// Configuration files and directories are loaded only after startup path
+	// resolution and the privileged staged-update check in app.run.
+	cfg := *DefaultAppConfig()
+	cfg.Runtime = runtime
+	return cfg, nil
+}
+
+func Load(args []string) (ServerConfig, error) {
+	cfg, err := ParseRuntime(args)
 	if err != nil {
 		return ServerConfig{}, err
 	}
-	cfg.Runtime = runtime
-	cfg.Runtime.ConfigPath = configPath
-	if cfg.Runtime.Address == "" {
-		cfg.Runtime.Address = cfg.Server.Address
+	if cfg.Runtime.Help || cfg.Runtime.Version || runtimeCommandSkipsConfig(cfg.Runtime.Command) {
+		return cfg, nil
 	}
-	if cfg.Runtime.Port == "" {
-		cfg.Runtime.Port = cfg.Server.Port
+	appConfig, configPath, err := LoadAppConfig(cfg.Runtime.ConfigDir, cfg.Runtime.DataDir)
+	if err != nil {
+		return ServerConfig{}, err
 	}
-	if cfg.Runtime.Mode == "" {
-		cfg.Runtime.Mode = cfg.Server.Mode
+	appConfig.Runtime = cfg.Runtime
+	appConfig.Runtime.ConfigPath = configPath
+	if appConfig.Runtime.Address == "" {
+		appConfig.Runtime.Address = appConfig.Server.Address
 	}
-	_, _, cfg.Runtime.PeekDaemonize = PeekServerStartupConfig(configPath)
-	return *cfg, nil
+	if appConfig.Runtime.Port == "" {
+		appConfig.Runtime.Port = appConfig.Server.Port
+	}
+	if appConfig.Runtime.Mode == "" {
+		appConfig.Runtime.Mode = appConfig.Server.Mode
+	}
+	_, _, appConfig.Runtime.PeekDaemonize = PeekServerStartupConfig(configPath)
+	return *appConfig, nil
 }
 
 // FlagError distinguishes command-line usage errors from configuration and

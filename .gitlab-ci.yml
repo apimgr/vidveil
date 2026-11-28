@@ -613,6 +613,7 @@ docker:build:
         --push \
         -f docker/Dockerfile \
         ${TAGS} .
+    - ./tests/check-image.sh "${CI_REGISTRY_IMAGE}:$(git rev-parse --short=7 HEAD)"
   rules:
     - if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+/
     # The standard image never builds on the scheduled pipeline - that slot belongs to docker:devel
@@ -676,6 +677,7 @@ docker:devel:
         --push \
         -f docker/Dockerfile.dev \
         -t ${CI_REGISTRY_IMAGE}:devel .
+    - ./tests/check-image.sh "${CI_REGISTRY_IMAGE}:devel"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "main"'

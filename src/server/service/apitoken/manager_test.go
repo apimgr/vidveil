@@ -4,6 +4,7 @@ package apitoken
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/apimgr/vidveil/src/common/dbstore"
 	"path/filepath"
 	"strings"
@@ -315,6 +316,42 @@ func TestPurgeIdleOwnersKeepsOwnersWithResources(t *testing.T) {
 	}
 	if systemOwnerCount != 1 {
 		t.Fatalf("reserved system owner count = %d, want 1 after idle purge", systemOwnerCount)
+	}
+}
+
+func TestPurgeIdleOwnersDeletesLargeSetsInBoundedBatches(t *testing.T) {
+	schema, err := database.NewSchemaManager(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = schema.Close() }()
+	if err := schema.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewManager(schema.GetAppDatabase(), strings.Repeat("ab", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	old := time.Now().Add(-60 * 24 * time.Hour).Unix()
+	const ownerCount = 501
+	if err := schema.GetAppDatabase().Write(ctx, func(tx *sql.Tx) error {
+		for i := 0; i < ownerCount; i++ {
+			id := fmt.Sprintf("idle-owner-%04d", i)
+			if _, err := tx.ExecContext(ctx, `INSERT INTO owners (id, last_seen_at) VALUES (?, ?)`, id, old); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO api_tokens (id, owner_id, kind, scope, token_hash, token_prefix, token_last4, token_enc) VALUES (?, ?, 'primary', 'global', ?, 'own_test', 'XXXX', X'00')`, "token-"+id, id, "hash-"+id); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := manager.PurgeIdleOwners(ctx, 30)
+	if err != nil || removed != ownerCount {
+		t.Fatalf("PurgeIdleOwners() = %d, %v; want %d owners purged", removed, err, ownerCount)
 	}
 }
 

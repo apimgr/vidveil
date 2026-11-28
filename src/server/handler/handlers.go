@@ -399,10 +399,10 @@ func (h *SearchHandler) maintenanceRetryAfterSeconds() int {
 }
 
 // SchedulerHealth is the minimal scheduler interface the /server/healthz check
-// needs (AI.md PART 13). *scheduler.Scheduler satisfies it via IsRunning; the
-// interface keeps the handler package free of a scheduler import.
+// needs (AI.md PART 13). The interface keeps the handler package free of a
+// scheduler import.
 type SchedulerHealth interface {
-	IsRunning() bool
+	HeartbeatFresh() bool
 }
 
 type OwnerTokenAuditLogger interface {
@@ -560,8 +560,19 @@ func (h *SearchHandler) SetDatabase(db *database.AppDatabase) {
 func (h *SearchHandler) SetHealthRegistry(registry *health.Registry) {
 	h.healthRegistry = registry
 	if registry != nil {
-		if err := registry.Register("cache", false, h.probeCache); err != nil {
-			log.Printf("health: failed to register cache check: %v", err)
+		checks := []struct {
+			key   string
+			check health.CheckFunc
+		}{
+			{"database", func() string { return h.checkDatabase(context.Background()) }},
+			{"cache", h.probeCache},
+			{"disk", h.checkDisk},
+			{"scheduler", h.checkScheduler},
+		}
+		for _, item := range checks {
+			if err := registry.Register(item.key, true, item.check); err != nil {
+				log.Printf("health: failed to register %s check: %v", item.key, err)
+			}
 		}
 	}
 	h.registerProjectHealthStats()
@@ -591,15 +602,15 @@ func (h *SearchHandler) registeredHealthStats() []health.StatResult {
 
 func (h *SearchHandler) probeCache() string {
 	if h.cacheDegraded {
-		return health.StatusDegraded
+		return health.StatusError
 	}
 	if h.searchCache == nil {
 		return health.StatusOK
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if err := h.searchCache.Check(ctx); err != nil {
-		return health.StatusDegraded
+		return health.StatusError
 	}
 	return health.StatusOK
 }
@@ -2565,6 +2576,8 @@ func (h *SearchHandler) checkDatabase(ctx context.Context) string {
 	if h.store == nil {
 		return "ok"
 	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	if err := h.store.PingContext(ctx); err != nil {
 		return "error"
 	}
@@ -2577,17 +2590,7 @@ func (h *SearchHandler) checkDatabase(ctx context.Context) string {
 // that can report unhealthy, so this is always "ok" — the meaningful failure
 // probes are database, disk, and scheduler.
 func (h *SearchHandler) checkCache() string {
-	if h.healthRegistry != nil {
-		for _, item := range h.healthRegistry.Snapshot() {
-			if item.Key == "cache" {
-				return item.Status
-			}
-		}
-	}
-	if h.cacheDegraded {
-		return health.StatusDegraded
-	}
-	return health.StatusOK
+	return h.probeCache()
 }
 
 // checkDisk verifies the data directory's filesystem is reachable and not
@@ -2597,31 +2600,46 @@ func (h *SearchHandler) checkCache() string {
 func (h *SearchHandler) checkDisk() string {
 	path := h.dataDir
 	if path == "" {
-		path = h.configDir
+		return health.StatusError
 	}
-	if path == "" {
-		path = os.TempDir()
+	probe, err := os.CreateTemp(path, ".vidveil-health-probe-*")
+	if err != nil {
+		return health.StatusError
+	}
+	probePath := probe.Name()
+	closeErr := probe.Close()
+	removeErr := os.Remove(probePath)
+	if closeErr != nil || removeErr != nil {
+		return health.StatusError
 	}
 	total, free, err := maintenance.DiskSpace(path)
 	if err != nil {
-		return "ok"
+		return health.StatusError
 	}
-	if total > 0 {
-		used := total - free
-		if float64(used)/float64(total) >= 0.99 {
-			return "error"
+	if total <= 0 || free < 64*1024*1024 {
+		return health.StatusError
+	}
+	return health.StatusOK
+}
+
+func (h *SearchHandler) cachedCoreCheck(key string, fallback func() string) string {
+	if h.healthRegistry != nil {
+		for _, item := range h.healthRegistry.Snapshot() {
+			if item.Key == key {
+				return item.Status
+			}
 		}
 	}
-	return "ok"
+	return fallback()
 }
 
 // checkScheduler reports whether the background scheduler loop is active per
 // AI.md PART 13/18. A nil scheduler (not wired, e.g. in tests) reports "ok".
 func (h *SearchHandler) checkScheduler() string {
 	if h.sched == nil {
-		return "ok"
+		return health.StatusError
 	}
-	if h.sched.IsRunning() {
+	if h.sched.HeartbeatFresh() {
 		return "ok"
 	}
 	return "error"
@@ -2687,7 +2705,7 @@ func (h *SearchHandler) cachedDatasetChecks() ([]health.CheckResult, map[string]
 		return datasets, keys, critical
 	}
 	for _, item := range h.healthRegistry.Snapshot() {
-		if item.Key == "cache" {
+		if item.Key == "database" || item.Key == "cache" || item.Key == "disk" || item.Key == "scheduler" {
 			continue
 		}
 		datasets = append(datasets, item)
@@ -2849,10 +2867,10 @@ func (h *SearchHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Build checks object - MUST be simple "ok"/"error" strings
 	// Per AI.md PART 13: each value comes from a real probe, never hardcoded.
 	checks := map[string]string{
-		"database":  h.checkDatabase(r.Context()),
-		"cache":     h.checkCache(),
-		"disk":      h.checkDisk(),
-		"scheduler": h.checkScheduler(),
+		"database":  h.cachedCoreCheck("database", func() string { return h.checkDatabase(r.Context()) }),
+		"cache":     h.cachedCoreCheck("cache", h.checkCache),
+		"disk":      h.cachedCoreCheck("disk", h.checkDisk),
+		"scheduler": h.cachedCoreCheck("scheduler", h.checkScheduler),
 	}
 
 	// Overlay checks follow PART 13: bootstrapping is ok and unavailable is degraded.
@@ -4680,16 +4698,16 @@ func (h *SearchHandler) APIHealthCheck(w http.ResponseWriter, r *http.Request) {
 	// (this handler backs the /api/{api_version}/server/healthz alias,
 	// which per AI.md PART 13/14 must return the same data as /healthz)
 	checks := map[string]string{
-		"database": h.checkDatabase(r.Context()),
-		"cache":    h.checkCache(),
-		"disk":     h.checkDisk(),
+		"database": h.cachedCoreCheck("database", func() string { return h.checkDatabase(r.Context()) }),
+		"cache":    h.cachedCoreCheck("cache", h.checkCache),
+		"disk":     h.cachedCoreCheck("disk", h.checkDisk),
 	}
 
 	// Detect response format per AI.md PART 14
 	format := getAPIResponseFormat(r)
 
 	// Add scheduler check - per AI.md PART 13: real probe, must match HealthCheck
-	checks["scheduler"] = h.checkScheduler()
+	checks["scheduler"] = h.cachedCoreCheck("scheduler", h.checkScheduler)
 	// Tor and I2P checks are optional and degraded overlays keep the server ready.
 	torEnabled := h.torSvc != nil && h.torSvc.IsEnabled()
 	torRunning := h.torSvc != nil && h.torSvc.IsRunning()

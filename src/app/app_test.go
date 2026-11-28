@@ -133,9 +133,13 @@ func TestRunServesAndShutsDownWithContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("health request: %v", err)
 	}
+	body, readErr := io.ReadAll(response.Body)
 	_ = response.Body.Close()
+	if readErr != nil {
+		t.Fatalf("read health response: %v", readErr)
+	}
 	if response.StatusCode != http.StatusOK {
-		t.Fatalf("health status = %d, want %d", response.StatusCode, http.StatusOK)
+		t.Fatalf("health status = %d, want %d; response: %s", response.StatusCode, http.StatusOK, body)
 	}
 	cancel()
 	select {
@@ -1024,6 +1028,7 @@ func TestHandleMaintenanceCommand_Backup_NoPanic(t *testing.T) {
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		t.Fatal(err)
 	}
+	initializeAppSecretsForBackupTest(t, dataDir)
 	t.Setenv("BACKUP_DIR", base+"/backup")
 	if err := os.MkdirAll(base+"/backup", 0755); err != nil {
 		t.Fatal(err)
@@ -1048,6 +1053,7 @@ func TestHandleMaintenanceCommand_Backup_WithPassword_NoPanic(t *testing.T) {
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		t.Fatal(err)
 	}
+	initializeAppSecretsForBackupTest(t, dataDir)
 	t.Setenv("BACKUP_DIR", base+"/backup")
 	if err := os.MkdirAll(base+"/backup", 0755); err != nil {
 		t.Fatal(err)
@@ -1139,6 +1145,7 @@ func TestHandleMaintenanceCommand_Restore_NoPanic(t *testing.T) {
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		t.Fatal(err)
 	}
+	initializeAppSecretsForBackupTest(t, dataDir)
 	t.Setenv("BACKUP_DIR", base+"/backup")
 	if err := os.MkdirAll(base+"/backup", 0755); err != nil {
 		t.Fatal(err)
@@ -1158,9 +1165,31 @@ func setBackupTestDiskThreshold(t *testing.T) {
 	t.Helper()
 	previous := loadedServerConfig
 	appConfig := config.DefaultAppConfig()
-	appConfig.Server.Maintenance.Cleanup.DiskThreshold = 99
+	appConfig.Server.Maintenance.Cleanup.DiskThreshold = 100
 	loadedServerConfig = appConfig
 	t.Cleanup(func() { loadedServerConfig = previous })
+}
+
+func initializeAppSecretsForBackupTest(t *testing.T, dataDir string) {
+	t.Helper()
+	schema, err := database.NewSchemaManager(filepath.Join(dataDir, "db", "server.db"))
+	if err != nil {
+		t.Fatalf("open backup test database: %v", err)
+	}
+	if err := schema.EnsureSchema(); err != nil {
+		_ = schema.Close()
+		t.Fatalf("initialize backup test database: %v", err)
+	}
+	if err := schema.GetAppDatabase().Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO app_secrets (key, value) VALUES ('installation_secret', 'dGVzdCBzZWNyZXQ=')`)
+		return err
+	}); err != nil {
+		_ = schema.Close()
+		t.Fatalf("seed backup test installation secret: %v", err)
+	}
+	if err := schema.Close(); err != nil {
+		t.Fatalf("close backup test database: %v", err)
+	}
 }
 
 // ── isDBFirstRun ──────────────────────────────────────────────────────────────

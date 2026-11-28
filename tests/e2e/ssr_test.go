@@ -10,6 +10,9 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
+
+	"golang.org/x/net/html"
 )
 
 // Tier 1 - Server-side rendering. Plain net/http, no browser at all.
@@ -43,6 +46,92 @@ func TestSSRHomePage(t *testing.T) {
 	if !strings.Contains(body, `id="main-content"`) {
 		t.Error("home page has no #main-content skip-link target")
 	}
+}
+
+func TestServerPageAccessibilityMarkup(t *testing.T) {
+	client := httpClient(t)
+	paths := []string{
+		"/", "/search?q=accessibility", "/favorites", "/age-verify",
+		"/content-restricted", "/server/about", "/server/privacy",
+		"/server/contact", "/server/help", "/server/help/mcp",
+		"/server/preferences", "/server/preferences/tokens", "/server/terms",
+		"/server/dpo", "/server/security", "/server/security/policy",
+		"/server/docs/swagger", "/server/docs/graphql", "/server/healthz",
+	}
+	for _, pagePath := range paths {
+		t.Run(pagePath, func(t *testing.T) {
+			resp, body := get(t, client, pagePath, map[string]string{"Accept": "text/html", "User-Agent": "Mozilla/5.0"})
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("GET %s: status=%d body=%s", pagePath, resp.StatusCode, body)
+			}
+			doc, err := html.Parse(strings.NewReader(body))
+			if err != nil {
+				t.Fatalf("parse %s: %v", pagePath, err)
+			}
+			labelTargets := make(map[string]bool)
+			var controls []map[string]string
+			var headings []int
+			walkHTML(doc, func(node *html.Node) {
+				if node.Type != html.ElementNode {
+					return
+				}
+				attrs := htmlAttrs(node)
+				if node.Data == "img" && !hasHTMLAttr(node, "alt") {
+					t.Errorf("%s has an image without alt text", pagePath)
+				}
+				if node.Data == "label" && attrs["for"] != "" {
+					labelTargets[attrs["for"]] = true
+				}
+				if node.Data == "input" || node.Data == "select" || node.Data == "textarea" {
+					typeValue := strings.ToLower(attrs["type"])
+					if node.Data == "input" && (typeValue == "hidden" || typeValue == "submit" || typeValue == "button" || typeValue == "reset") {
+						return
+					}
+					controls = append(controls, attrs)
+				}
+				if len(node.Data) == 2 && node.Data[0] == 'h' && node.Data[1] >= '1' && node.Data[1] <= '6' {
+					headings = append(headings, int(node.Data[1]-'0'))
+				}
+			})
+			if len(headings) == 0 || headings[0] != 1 {
+				t.Errorf("%s must begin its heading hierarchy with h1, got %v", pagePath, headings)
+			}
+			for i := 1; i < len(headings); i++ {
+				if headings[i] > headings[i-1]+1 {
+					t.Errorf("%s skips from h%d to h%d", pagePath, headings[i-1], headings[i])
+				}
+			}
+			for _, control := range controls {
+				if control["aria-label"] == "" && control["aria-labelledby"] == "" && (control["id"] == "" || !labelTargets[control["id"]]) {
+					t.Errorf("%s has an unlabelled %s control (id=%q)", pagePath, control["name"], control["id"])
+				}
+			}
+		})
+	}
+}
+
+func walkHTML(node *html.Node, visit func(*html.Node)) {
+	visit(node)
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		walkHTML(child, visit)
+	}
+}
+
+func htmlAttrs(node *html.Node) map[string]string {
+	attrs := make(map[string]string, len(node.Attr))
+	for _, attr := range node.Attr {
+		attrs[attr.Key] = attr.Val
+	}
+	return attrs
+}
+
+func hasHTMLAttr(node *html.Node, name string) bool {
+	for _, attr := range node.Attr {
+		if attr.Key == name {
+			return true
+		}
+	}
+	return false
 }
 
 func TestSSRSearchPage(t *testing.T) {
@@ -130,6 +219,38 @@ func TestOwnerTokenFavoritesAPI(t *testing.T) {
 	if ownedList.StatusCode != http.StatusOK || !strings.Contains(body, "Owner-scoped favorite") {
 		t.Fatalf("owner bearer list = %d %s", ownedList.StatusCode, body)
 	}
+	mcpCall := func(rawToken string) (int, string) {
+		t.Helper()
+		payload := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"listFavorites","arguments":{},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}`
+		request, err := http.NewRequest(http.MethodPost, s.localBase+"/api/v1/server/mcp", strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Accept", "application/json")
+		request.Header.Set("MCP-Protocol-Version", "2026-07-28")
+		request.Header.Set("Mcp-Method", "tools/call")
+		request.Header.Set("Mcp-Name", "listFavorites")
+		if rawToken != "" {
+			request.Header.Set("Authorization", "Bearer "+rawToken)
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		result, err := io.ReadAll(response.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response.StatusCode, string(result)
+	}
+	if status, result := mcpCall(""); status != http.StatusUnauthorized {
+		t.Fatalf("anonymous MCP tools/call = %d %s, want 401", status, result)
+	}
+	if status, result := mcpCall(created.Data.OwnerToken); status != http.StatusOK || !strings.Contains(result, "Owner-scoped favorite") {
+		t.Fatalf("owner-token MCP tools/call = %d %s", status, result)
+	}
 	unauthorized, body := get(t, client, "/api/v1/favorites", map[string]string{"Accept": "application/json"})
 	if unauthorized.StatusCode != http.StatusUnauthorized || strings.Contains(body, "Owner-scoped favorite") {
 		t.Fatalf("cookie-authenticated API list = %d %s", unauthorized.StatusCode, body)
@@ -157,19 +278,42 @@ func TestOwnerTokenFavoritesAPI(t *testing.T) {
 	status, apiBody := callJSON(http.MethodPost, "/api/v1/server/preferences/tokens", created.Data.OwnerToken, `{"name":"e2e automation","expires":"30d"}`)
 	var linked struct {
 		Data struct {
+			ID    string `json:"id"`
 			Token string `json:"linked_token"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(apiBody, &linked); err != nil || status != http.StatusCreated || linked.Data.Token == "" {
+	if err := json.Unmarshal(apiBody, &linked); err != nil || status != http.StatusCreated || linked.Data.Token == "" || linked.Data.ID == "" {
 		t.Fatalf("linked-token creation = %d %s", status, apiBody)
+	}
+	status, apiBody = callJSON(http.MethodPatch, "/api/v1/server/preferences/tokens/"+linked.Data.ID, created.Data.OwnerToken, `{"name":"renamed e2e client","expires":"30d"}`)
+	if status != http.StatusOK || !strings.Contains(string(apiBody), "renamed e2e client") {
+		t.Fatalf("linked-token rename and expiry update = %d %s", status, apiBody)
 	}
 	linkedList, body := get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + linked.Data.Token, "Accept": "application/json"})
 	if linkedList.StatusCode != http.StatusOK || !strings.Contains(body, "Owner-scoped favorite") {
 		t.Fatalf("linked-token resource access = %d %s", linkedList.StatusCode, body)
 	}
+	if status, result := mcpCall(linked.Data.Token); status != http.StatusOK || !strings.Contains(result, "Owner-scoped favorite") {
+		t.Fatalf("linked-token MCP tools/call = %d %s", status, result)
+	}
 	status, apiBody = callJSON(http.MethodGet, "/api/v1/server/preferences/tokens", linked.Data.Token, "")
 	if status != http.StatusForbidden {
 		t.Fatalf("linked-token management status = %d, want 403: %s", status, apiBody)
+	}
+	status, apiBody = callJSON(http.MethodPost, "/api/v1/server/preferences/tokens/"+linked.Data.ID+"/rotate", created.Data.OwnerToken, "")
+	var linkedRotated struct {
+		Data struct {
+			Token string `json:"linked_token"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(apiBody, &linkedRotated); err != nil || status != http.StatusOK || linkedRotated.Data.Token == "" {
+		t.Fatalf("linked-token rotation = %d %s", status, apiBody)
+	}
+	if response, body := get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + linked.Data.Token, "Accept": "application/json"}); response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("old linked token after rotation = %d %s", response.StatusCode, body)
+	}
+	if response, body := get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + linkedRotated.Data.Token, "Accept": "application/json"}); response.StatusCode != http.StatusOK || !strings.Contains(body, "Owner-scoped favorite") {
+		t.Fatalf("rotated linked token access = %d %s", response.StatusCode, body)
 	}
 	status, apiBody = callJSON(http.MethodPost, "/api/v1/server/preferences/tokens/primary/rotate", created.Data.OwnerToken, "")
 	var rotated struct {
@@ -187,6 +331,21 @@ func TestOwnerTokenFavoritesAPI(t *testing.T) {
 	ownedList, body = get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + rotated.Data.Token, "Accept": "application/json"})
 	if ownedList.StatusCode != http.StatusOK || !strings.Contains(body, "Owner-scoped favorite") {
 		t.Fatalf("rotated primary resource access = %d %s", ownedList.StatusCode, body)
+	}
+	if linkedList, body = get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + linkedRotated.Data.Token, "Accept": "application/json"}); linkedList.StatusCode != http.StatusOK || !strings.Contains(body, "Owner-scoped favorite") {
+		t.Fatalf("linked token after primary rotation = %d %s", linkedList.StatusCode, body)
+	}
+	expiredDate := time.Now().UTC().Add(-24 * time.Hour).Format("2006-01-02")
+	status, apiBody = callJSON(http.MethodPatch, "/api/v1/server/preferences/tokens/"+linked.Data.ID, rotated.Data.Token, `{"expires_on":"`+expiredDate+`"}`)
+	if status != http.StatusOK {
+		t.Fatalf("linked-token expiry = %d %s", status, apiBody)
+	}
+	if response, body := get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + linkedRotated.Data.Token, "Accept": "application/json"}); response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expired linked token = %d %s", response.StatusCode, body)
+	}
+	status, apiBody = callJSON(http.MethodDelete, "/api/v1/server/preferences/tokens/"+linked.Data.ID, rotated.Data.Token, "")
+	if status != http.StatusOK {
+		t.Fatalf("linked-token revoke = %d %s", status, apiBody)
 	}
 }
 

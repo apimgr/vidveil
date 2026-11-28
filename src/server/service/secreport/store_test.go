@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"github.com/apimgr/vidveil/src/common/dbstore"
 	"os"
 	"path/filepath"
@@ -251,3 +252,23 @@ func TestDisclosureCreatesPersistentThanksAndForwardOnlyLifecycle(t *testing.T) 
 }
 
 func ptrStatus(value string) *string { return &value }
+
+func TestCleanupClosedReportsDeletesInBoundedBatches(t *testing.T) {
+	db := setupTestDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 11, 27, 0, 0, 0, 0, time.UTC)
+	const reportCount = 1001
+	for i := 0; i < reportCount; i++ {
+		_, err := db.ExecContext(ctx, `INSERT INTO security_reports
+			(tracking_id, id_window, severity, component, body_enc, body_alg, token_hash, created_at, updated_at, closed_at)
+			VALUES (?, 1, 'low', 'test', X'00', 'aes-256-gcm', ?, ?, ?, ?)`,
+			fmt.Sprintf("report-%04d", i), fmt.Sprintf("hash-%04d", i), now.AddDate(0, 0, -400), now.AddDate(0, 0, -400), now.AddDate(0, 0, -400))
+		if err != nil {
+			t.Fatalf("insert report %d: %v", i, err)
+		}
+	}
+	deleted, err := CleanupClosedReports(ctx, reportTestStore(db), 365, now)
+	if err != nil || deleted != reportCount {
+		t.Fatalf("CleanupClosedReports() = %d, %v; want %d reports deleted", deleted, err, reportCount)
+	}
+}

@@ -495,6 +495,27 @@ func TestIsRunning_FalseBeforeStart(t *testing.T) {
 	}
 }
 
+func TestHeartbeatFreshRequiresRunningScheduler(t *testing.T) {
+	s := NewScheduler()
+	if s.HeartbeatFresh() {
+		t.Fatal("HeartbeatFresh() should be false before Start")
+	}
+	if err := s.RegisterTask("test", "test", "test task", "@every 1m", func(context.Context) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	s.Start(context.Background())
+	defer s.Stop()
+	if !s.HeartbeatFresh() {
+		t.Fatal("HeartbeatFresh() should be true after Start")
+	}
+	s.mu.Lock()
+	s.heartbeat = time.Now().Add(-3 * time.Minute)
+	s.mu.Unlock()
+	if s.HeartbeatFresh() {
+		t.Fatal("HeartbeatFresh() should be false for a stale heartbeat")
+	}
+}
+
 // --- Stats ---
 
 // TestStats_Keys verifies that Stats returns a map containing the expected keys.

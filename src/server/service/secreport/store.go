@@ -546,19 +546,39 @@ func CleanupClosedReports(ctx context.Context, db Store, retentionDays int, now 
 		retentionDays = 365
 	}
 	cutoff := now.UTC().AddDate(0, 0, -retentionDays)
-	var count int64
-	err := db.Write(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, `DELETE FROM security_reports WHERE closed_at IS NOT NULL AND closed_at <= ?`, cutoff)
+	const batchSize = 500
+	var total int64
+	for {
+		var batchCount int64
+		err := db.Write(ctx, func(tx *sql.Tx) error {
+			batchCount = 0
+			result, err := tx.ExecContext(ctx, `DELETE FROM security_reports WHERE tracking_id IN (
+				SELECT tracking_id FROM security_reports WHERE closed_at IS NOT NULL AND closed_at <= ? LIMIT ?
+			)`, cutoff, batchSize)
+			if err != nil {
+				return fmt.Errorf("delete expired security reports: %w", err)
+			}
+			batchCount, err = result.RowsAffected()
+			if err != nil {
+				return fmt.Errorf("count deleted security reports: %w", err)
+			}
+			return nil
+		})
 		if err != nil {
-			return fmt.Errorf("delete expired security reports: %w", err)
+			return 0, err
 		}
-		count, err = result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("count deleted security reports: %w", err)
+		total += batchCount
+		if batchCount < batchSize {
+			return total, nil
 		}
-		return nil
-	})
-	return count, err
+		timer := time.NewTimer(10 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return 0, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 func statusMayAdvance(oldStatus, newStatus string) bool {

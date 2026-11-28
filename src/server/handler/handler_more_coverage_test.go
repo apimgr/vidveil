@@ -182,6 +182,8 @@ func TestRenderSearchAtom_WithResults(t *testing.T) {
 func TestHealthCheck_JSONFormat(t *testing.T) {
 	cfg := createTestConfig()
 	h := &SearchHandler{appConfig: cfg}
+	h.SetDataDir(t.TempDir())
+	h.SetScheduler(fakeScheduler{fresh: true})
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
@@ -206,6 +208,8 @@ func TestHealthCheck_JSONFormat(t *testing.T) {
 func TestHealthCheck_PlainTextFormat(t *testing.T) {
 	cfg := createTestConfig()
 	h := &SearchHandler{appConfig: cfg}
+	h.SetDataDir(t.TempDir())
+	h.SetScheduler(fakeScheduler{fresh: true})
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	req.Header.Set("Accept", "text/plain")
 	rr := httptest.NewRecorder()
@@ -230,6 +234,8 @@ func TestHealthCheck_PlainTextFormat(t *testing.T) {
 func TestHealthCheck_JSONContainsProject(t *testing.T) {
 	cfg := createTestConfig()
 	h := &SearchHandler{appConfig: cfg}
+	h.SetDataDir(t.TempDir())
+	h.SetScheduler(fakeScheduler{fresh: true})
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
@@ -246,6 +252,8 @@ func TestHealthCheck_PendingRestart(t *testing.T) {
 	cfg.PendingRestart = true
 	cfg.RestartReasons = []string{"config changed"}
 	h := &SearchHandler{appConfig: cfg}
+	h.SetDataDir(t.TempDir())
+	h.SetScheduler(fakeScheduler{fresh: true})
 
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	req.Header.Set("Accept", "application/json")
@@ -263,6 +271,8 @@ func TestHealthCheck_PendingRestart_PlainText(t *testing.T) {
 	cfg.PendingRestart = true
 	cfg.RestartReasons = []string{"cert renewed"}
 	h := &SearchHandler{appConfig: cfg}
+	h.SetDataDir(t.TempDir())
+	h.SetScheduler(fakeScheduler{fresh: true})
 
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	req.Header.Set("Accept", "text/plain")

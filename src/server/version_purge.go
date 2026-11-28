@@ -2,6 +2,7 @@
 package server
 
 import (
+	"mime"
 	"net/http"
 )
 
@@ -14,34 +15,54 @@ func isTopLevelDocumentNavigation(r *http.Request) bool {
 	return (dest == "" || dest == "document") && (mode == "" || mode == "navigate")
 }
 
-type versionPurgeWriter struct {
+type buildStampWriter struct {
 	http.ResponseWriter
+	request     *http.Request
+	stamp       string
+	secure      bool
+	purge       bool
 	wroteHeader bool
 }
 
-func (w *versionPurgeWriter) Unwrap() http.ResponseWriter {
+func (w *buildStampWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
-func (w *versionPurgeWriter) WriteHeader(status int) {
+func (w *buildStampWriter) WriteHeader(status int) {
 	if w.wroteHeader {
 		return
 	}
 	w.wroteHeader = true
-	if status >= http.StatusOK && status < http.StatusMultipleChoices {
-		w.Header().Set("Clear-Site-Data", `"cache", "storage"`)
+	contentType := w.Header().Get("Content-Type")
+	mediaType, _, _ := mime.ParseMediaType(contentType)
+	if status >= http.StatusOK && status < http.StatusMultipleChoices &&
+		mediaType == "text/html" && isTopLevelDocumentNavigation(w.request) {
+		if w.purge {
+			w.Header().Set("Clear-Site-Data", `"cache", "storage"`)
+		}
+		http.SetCookie(w.ResponseWriter, &http.Cookie{
+			Name:     "vidveil_build",
+			Value:    w.stamp,
+			Path:     "/",
+			MaxAge:   31536000,
+			Secure:   w.secure,
+			SameSite: http.SameSiteLaxMode,
+		})
 	}
 	w.ResponseWriter.WriteHeader(status)
 }
 
-func (w *versionPurgeWriter) Write(data []byte) (int, error) {
+func (w *buildStampWriter) Write(data []byte) (int, error) {
 	if !w.wroteHeader {
+		if w.Header().Get("Content-Type") == "" {
+			w.Header().Set("Content-Type", http.DetectContentType(data))
+		}
 		w.WriteHeader(http.StatusOK)
 	}
 	return w.ResponseWriter.Write(data)
 }
 
-func (w *versionPurgeWriter) Flush() {
+func (w *buildStampWriter) Flush() {
 	if !w.wroteHeader {
 		w.WriteHeader(http.StatusOK)
 	}
@@ -50,7 +71,7 @@ func (w *versionPurgeWriter) Flush() {
 	}
 }
 
-func (w *versionPurgeWriter) FlushError() error {
+func (w *buildStampWriter) FlushError() error {
 	if !w.wroteHeader {
 		w.WriteHeader(http.StatusOK)
 	}

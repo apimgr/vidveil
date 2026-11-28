@@ -509,9 +509,8 @@ func Run(ctx context.Context, serverConfig config.ServerConfig) (runErr error) {
 func run(ctx context.Context) error {
 	signalpkg.ResetShutdown()
 	startTime := time.Now()
-	svcmetrics.InitMetricsAppInfo(version.GetVersion(), version.CommitID, version.BuildTime, runtime.Version())
 	if loadedServerConfig == nil {
-		return errors.New("app.Run requires a configuration returned by config.Load")
+		return errors.New("app.Run requires parsed runtime configuration")
 	}
 	serverConfig := loadedServerConfig
 	runtimeConfig := loadedServerConfig.Runtime
@@ -580,25 +579,6 @@ func run(ctx context.Context) error {
 	if address == "" && os.Getenv("LISTEN") != "" {
 		address = os.Getenv("LISTEN")
 	}
-	peekConfigDir := configDir
-	if peekConfigDir == "" {
-		peekConfigDir = pathpkg.GetDefaultConfigDir(pathpkg.IsPrivilegedMode())
-	}
-	peekAddress, peekPort := "", ""
-	peekDaemonize := runtimeConfig.PeekDaemonize
-	if loadedServerConfig.Runtime.ConfigPath == "" {
-		peekAddress, peekPort, peekDaemonize = config.PeekServerStartupConfig(filepath.Join(peekConfigDir, "server.yml"))
-	}
-	if address == "" {
-		address = peekAddress
-	}
-	if address == "" {
-		address = "[::]"
-	}
-	if port == "" {
-		port = peekPort
-	}
-
 	// Per AI.md PART 8: --baseurl PATH (URL path prefix, default "/").
 	// Env var fallback: BASEURL.
 	if baseURL == "" && os.Getenv("BASEURL") != "" {
@@ -724,13 +704,25 @@ func run(ctx context.Context) error {
 		}
 	}
 
-	// Initialize mode and debug per AI.md PART 6
-	// This must happen before starting the server
-	mode.InitializeAppModeWithDebugOverride(modeStr, debug, runtimeConfig.DebugSet)
+	peekConfigDir := configDir
+	if peekConfigDir == "" {
+		peekConfigDir = pathpkg.GetDefaultConfigDir(pathpkg.IsPrivilegedMode())
+	}
+	peekAddress, peekPort, peekDaemonize := config.PeekServerStartupConfig(filepath.Join(peekConfigDir, "server.yml"))
+	if address == "" {
+		address = peekAddress
+	}
+	if address == "" {
+		address = "[::]"
+	}
+	if port == "" {
+		port = peekPort
+	}
+	runtimeConfig.PeekDaemonize = peekDaemonize
 
 	// Manual daemonization happens before privileged sockets are bound. Service
 	// commands return above, and container runtimes must supervise the process.
-	testMode := loadedServerConfig != nil && loadedServerConfig.Runtime.TestMode
+	testMode := runtimeConfig.TestMode
 	if !testMode && !system.IsRunningInContainer() && system.ShouldDaemonize(false, daemon, peekDaemonize) {
 		if err := daemonpkg.Daemonize(); err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Failed to daemonize: %v\n", err)
@@ -740,17 +732,35 @@ func run(ctx context.Context) error {
 	}
 
 	// Load configuration
-	appConfig := loadedServerConfig
-	configPath := ""
-	if appConfig == nil {
-		var err error
-		appConfig, configPath, err = config.LoadAppConfig(configDir, dataDir)
-		if err != nil {
-			return fmt.Errorf("failed to load configuration: %w", err)
-		}
-	} else {
-		configPath = appConfig.Runtime.ConfigPath
+	appConfig, configPath, err := config.LoadAppConfig(configDir, dataDir)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
+	appConfig.Runtime = runtimeConfig
+	appConfig.Runtime.ConfigPath = configPath
+	if appConfig.Runtime.Address == "" {
+		appConfig.Runtime.Address = appConfig.Server.Address
+	}
+	if appConfig.Runtime.Port == "" {
+		appConfig.Runtime.Port = appConfig.Server.Port
+	}
+	if appConfig.Runtime.Mode == "" {
+		appConfig.Runtime.Mode = appConfig.Server.Mode
+	}
+	if testMode {
+		appConfig.Server.Tor.UseNetwork = false
+		appConfig.Server.Tor.Expose = false
+		appConfig.Server.I2P.Enabled = false
+		appConfig.Server.GeoIP.Enabled = false
+		appConfig.Server.SSL.Enabled = false
+		appConfig.Server.Notifications.Email.Enabled = false
+	}
+	loadedServerConfig = appConfig
+	if modeStr == "" {
+		modeStr = appConfig.Server.Mode
+	}
+	mode.InitializeAppModeWithDebugOverride(modeStr, debug, runtimeConfig.DebugSet)
+	svcmetrics.InitMetricsAppInfo(version.GetVersion(), version.CommitID, version.BuildTime, runtime.Version())
 	if err := svcmetrics.ConfigureHTTPBuckets(appConfig.Server.Metrics.DurationBuckets, appConfig.Server.Metrics.SizeBuckets); err != nil {
 		return fmt.Errorf("configure Prometheus histogram buckets: %w", err)
 	}
@@ -1096,26 +1106,48 @@ func run(ctx context.Context) error {
 		TokenCleanup: func(ctx context.Context) error {
 			cleanupCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
-			var removed, removedChallenges int64
-			err := store.Write(cleanupCtx, func(tx *sql.Tx) error {
-				result, err := tx.ExecContext(cleanupCtx, `DELETE FROM api_tokens WHERE expires_at IS NOT NULL AND expires_at <= ?`, time.Now().Unix())
-				if err != nil {
-					return fmt.Errorf("remove expired API tokens: %w", err)
+			cleanupExpired := func(query, label string, cutoff any) (int64, error) {
+				const batchSize = 500
+				var total int64
+				for {
+					var batchCount int64
+					err := store.Write(cleanupCtx, func(tx *sql.Tx) error {
+						batchCount = 0
+						result, err := tx.ExecContext(cleanupCtx, query, cutoff, batchSize)
+						if err != nil {
+							return fmt.Errorf("remove expired %s: %w", label, err)
+						}
+						batchCount, err = result.RowsAffected()
+						if err != nil {
+							return fmt.Errorf("count removed expired %s: %w", label, err)
+						}
+						return nil
+					})
+					if err != nil {
+						return 0, err
+					}
+					total += batchCount
+					if batchCount < batchSize {
+						return total, nil
+					}
+					timer := time.NewTimer(10 * time.Millisecond)
+					select {
+					case <-cleanupCtx.Done():
+						timer.Stop()
+						return 0, cleanupCtx.Err()
+					case <-timer.C:
+					}
 				}
-				removed, err = result.RowsAffected()
-				if err != nil {
-					return fmt.Errorf("count removed API tokens: %w", err)
-				}
-				captchaCleanup, err := tx.ExecContext(cleanupCtx, `DELETE FROM captcha_challenges WHERE expires_at <= ?`, time.Now())
-				if err != nil {
-					return fmt.Errorf("remove expired CAPTCHA challenges: %w", err)
-				}
-				removedChallenges, err = captchaCleanup.RowsAffected()
-				if err != nil {
-					return fmt.Errorf("count removed CAPTCHA challenges: %w", err)
-				}
-				return nil
-			})
+			}
+			removed, err := cleanupExpired(`DELETE FROM api_tokens WHERE id IN (
+				SELECT id FROM api_tokens WHERE expires_at IS NOT NULL AND expires_at <= ? LIMIT ?
+			)`, "API tokens", time.Now().Unix())
+			if err != nil {
+				return err
+			}
+			removedChallenges, err := cleanupExpired(`DELETE FROM captcha_challenges WHERE id IN (
+				SELECT id FROM captcha_challenges WHERE expires_at <= ? LIMIT ?
+			)`, "CAPTCHA challenges", time.Now())
 			if err != nil {
 				return err
 			}
@@ -1139,6 +1171,7 @@ func run(ctx context.Context) error {
 				return errors.New("backup.password_unreadable")
 			}
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
+			maint.SetDatabase(store)
 			maint.SetDiskThreshold(appConfig.Server.Maintenance.Cleanup.DiskThreshold)
 			maint.SetLogger(logger)
 			maint.SetLogger(logger)
@@ -1160,6 +1193,7 @@ func run(ctx context.Context) error {
 				return errors.New("backup.password_unreadable")
 			}
 			maint := maintenance.NewMaintenanceManager(paths.Config, paths.Data, version.GetVersion())
+			maint.SetDatabase(store)
 			maint.SetDiskThreshold(appConfig.Server.Maintenance.Cleanup.DiskThreshold)
 			maint.SetLogger(logger)
 			return maint.BackupIncrementalWithPassword("", appConfig.Server.Backup.EncryptionPassword)
@@ -1292,6 +1326,7 @@ func run(ctx context.Context) error {
 	// Start the scheduler only after server handlers and failure notifications
 	// are wired, so startup catch-up runs cannot miss their configured channels.
 	sched.Start(context.Background())
+	healthRegistry.Refresh()
 	defer sched.Stop()
 
 	// Register the process-wide active config for the Output Sanitization
@@ -1663,6 +1698,7 @@ func run(ctx context.Context) error {
 	// Maintenance mode triggers ONLY for DB connection failure or file-write failure.
 	// Self-heals continuously (retry every 30s) — no human intervention required.
 	maintMgr := maintenance.NewMaintenanceManager(configDir, dataDir, version.GetVersion())
+	maintMgr.SetDatabase(store)
 	if !testMode {
 		go func() {
 			healInterval, parseErr := time.ParseDuration(appConfig.Server.Maintenance.SelfHealing.RetryInterval)
@@ -2523,6 +2559,20 @@ func promptLine(prompt string) string {
 func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 	binaryName := filepath.Base(os.Args[0])
 	maint := maintenance.NewMaintenanceManager(configDir, dataDir, version.GetVersion())
+	if cmd == "backup" {
+		appConfig, _, err := config.LoadAppConfig(configDir, dataDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "load backup configuration: %v\n", err)
+			requestExit(1)
+		}
+		dbManager, err := openAuditMirrorDatabase(appConfig, configDir, dataDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "open backup database: %v\n", err)
+			requestExit(1)
+		}
+		defer dbManager.Close()
+		maint.SetDatabase(dbManager.GetAppDatabase())
+	}
 	if loadedServerConfig != nil {
 		maint.SetDiskThreshold(loadedServerConfig.Server.Maintenance.Cleanup.DiskThreshold)
 	}
@@ -2535,24 +2585,35 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 				fmt.Fprintln(os.Stderr, "Usage: vidveil --maintenance backup test [file]")
 				requestExit(2)
 			}
-			result, err := maint.TestBackup(backupFile, "")
-			if err != nil && strings.Contains(err.Error(), "password required") {
-				if !term.IsTerminal(int(os.Stdin.Fd())) {
-					fmt.Fprintln(os.Stderr, "Backup test requires an interactive terminal to enter the backup password.")
+			backupFiles := []string{backupFile}
+			if backupFile == "" {
+				var listErr error
+				backupFiles, listErr = maint.DefaultBackupTestFiles()
+				if listErr != nil {
+					fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Backup test failed: %v\n", listErr)
 					requestExit(1)
 				}
-				result, err = maint.TestBackup(backupFile, promptPassword("Enter backup password: "))
 			}
-			fmt.Printf("Backup: %s\n", result.Filename)
-			fmt.Printf("Archive checksum: %t\n", result.ChecksumVerified)
-			fmt.Printf("Manifest and content: %t\n", result.ManifestVerified)
-			fmt.Printf("SQLite database: %t\n", result.DatabaseVerified)
-			fmt.Printf("PGP keypair: %t\n", result.PGPKeypairVerified)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Backup test failed: %v\n", err)
-				requestExit(1)
+			for _, file := range backupFiles {
+				result, testErr := maint.TestBackup(file, "")
+				if testErr != nil && strings.Contains(testErr.Error(), "password required") {
+					if !term.IsTerminal(int(os.Stdin.Fd())) {
+						fmt.Fprintln(os.Stderr, "Backup test requires an interactive terminal to enter the backup password.")
+						requestExit(1)
+					}
+					result, testErr = maint.TestBackup(file, promptPassword("Enter backup password: "))
+				}
+				fmt.Printf("Backup: %s\n", result.Filename)
+				fmt.Printf("Archive checksum: %t\n", result.ChecksumVerified)
+				fmt.Printf("Manifest and content: %t\n", result.ManifestVerified)
+				fmt.Printf("SQLite database present and verified: %t\n", result.DatabaseVerified)
+				fmt.Printf("PGP keypair: %t\n", result.PGPKeypairVerified)
+				if testErr != nil {
+					fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Backup test failed: %v\n", testErr)
+					requestExit(1)
+				}
+				fmt.Println(terminal.StatusIcon(true) + " Backup test passed.")
 			}
-			fmt.Println(terminal.StatusIcon(true) + " Backup test passed.")
 			return
 		}
 		// Per AI.md PART 21, backups use only the configured secret value and
@@ -2618,6 +2679,22 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 		if err := maint.ConfigureRestore(appConfig.Server.Restore); err != nil {
 			fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Invalid restore limits: %v\n", err)
 			requestExit(1)
+		}
+		restoreLogger, loggerErr := logging.NewAppLogger(appConfig)
+		if loggerErr != nil {
+			fmt.Fprintf(os.Stderr, terminal.WarningIcon()+" Restore audit logger unavailable: %v\n", loggerErr)
+		} else {
+			maint.SetLogger(restoreLogger)
+			defer restoreLogger.Close()
+		}
+		if driver := strings.ToLower(strings.TrimSpace(appConfig.Server.Database.Driver)); driver == "libsql" || driver == "turso" {
+			dbManager, dbErr := openAuditMirrorDatabase(appConfig, configDir, dataDir)
+			if dbErr != nil {
+				fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Open remote database for restore: %v\n", dbErr)
+				requestExit(1)
+			}
+			defer dbManager.Close()
+			maint.SetDatabase(dbManager.GetAppDatabase())
 		}
 
 		if arg == "" {

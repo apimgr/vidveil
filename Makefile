@@ -60,6 +60,8 @@ BINDIR_MOUNT := $(if $(filter /%,$(BINDIR)),-v "$(abspath $(BINDIR)):$(abspath $
 # Go cache directories (bind-mounted from host for persistence across builds)
 GO_CACHE ?= $(HOME)/go/pkg/mod
 GO_BUILD ?= $(HOME)/.cache/go-build/$(PROJECT_NAME)
+GO_TMPDIR_IN_CONTAINER := /tmp/$(PROJECT_ORG)/$(INTERNAL_NAME)-$(shell od -An -N4 -tx1 /dev/urandom | tr -d ' \n')
+DOCKER_TMPFS_SIZE ?= 16g
 
 # Build targets — all 8 platforms (space-separated for for-loop)
 PLATFORMS ?= linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,windows/arm64,freebsd/amd64,freebsd/arm64
@@ -79,12 +81,14 @@ DOCKER_TIMEOUT ?= 3600
 # (e.g. cross-compile with -e GOOS/-e GOARCH, or temp-dir mounts for test/dev).
 GO_DOCKER_RUN = timeout -k 30 $(DOCKER_TIMEOUT) docker run --rm --no-healthcheck \
 	--name $(PROJECT_NAME)-$$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n') \
+	--tmpfs $(GO_TMPDIR_IN_CONTAINER):rw,exec,size=$(DOCKER_TMPFS_SIZE) \
 	--memory=$(DOCKER_MEM) --cpus=$(DOCKER_CPUS) --cpu-shares=$(DOCKER_CPU_SHARES) \
 	-v $(PWD):/app \
 	-v $(GO_CACHE):/usr/local/share/go/pkg/mod \
 	-v $(GO_BUILD):/usr/local/share/go/cache \
 	-w /app \
 	-e CGO_ENABLED=0 \
+	-e TMPDIR=$(GO_TMPDIR_IN_CONTAINER) \
 	-e GOFLAGS=-buildvcs=false
 
 # Standard Go Docker command (per AI.md PART 25 — includes image for simple go commands)
@@ -232,10 +236,10 @@ docker:
 		created=true; \
 		wait_seconds=180; \
 		outbound=true; \
-		if ! timeout -k 5 10 docker exec "$$container" curl -q -fsS --connect-timeout 3 --max-time 5 https://check.torproject.org/ -o /dev/null >/dev/null 2>&1; then outbound=false; fi; \
+		if ! timeout -k 5 10 docker exec "$$container" curl -q -LSsf --connect-timeout 3 --max-time 5 https://check.torproject.org/ -o /dev/null >/dev/null 2>&1; then outbound=false; fi; \
 		tor_status=""; \
 		while [ "$$wait_seconds" -gt 0 ]; do \
-			health_json=$$(timeout -k 5 15 docker exec "$$container" curl -q -sS --max-time 10 http://localhost/server/healthz 2>/dev/null || true); \
+			health_json=$$(timeout -k 5 15 docker exec "$$container" curl -q -LSsf --max-time 10 http://localhost/server/healthz 2>/dev/null || true); \
 			tor_status=$$(printf '%s\n' "$$health_json" | awk '/"tor"[[:space:]]*:[[:space:]]*[{]/ { inside=1 } inside && /"status"[[:space:]]*:/ { sub(/^.*"status"[[:space:]]*:[[:space:]]*"/, ""); sub(/".*$$/, ""); print; exit } inside && /[}]/ { inside=0 }'); \
 			if [ "$$tor_status" = healthy ]; then break; fi; \
 			if [ "$$tor_status" = error ]; then echo "ERROR: shipped image reports Tor status error" >&2; exit 1; fi; \
@@ -260,7 +264,7 @@ test:
 	@mkdir -p "$${TMPDIR:-/tmp}/$(PROJECT_ORG)" $(GO_CACHE) $(GO_BUILD)
 	@COVDIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECT_ORG)/$(INTERNAL_NAME)-XXXXXX") && \
 	trap 'rm -rf "$$COVDIR"' EXIT && \
-	$(GO_DOCKER_RUN) -v "$$COVDIR:/coverage" casjaysdev/go:latest sh -c 'set -eu; go mod download; go generate ./src/swagger; go vet ./...; staticcheck ./...; govulncheck ./...; \
+	$(GO_DOCKER_RUN) -v "$$COVDIR:/coverage" casjaysdev/go:latest sh -c 'set -eu; go mod download; go generate ./src/swagger; go vet ./...; staticcheck ./...; govulncheck ./...; shellcheck tests/*.sh; shfmt -d -i 2 -ci tests/*.sh; \
 		mkdir -p /coverage/data; \
 		go test -cover ./... -args -test.gocoverdir=/coverage/data; \
 		go tool covdata textfmt -i=/coverage/data -o=/coverage/coverage.out; \

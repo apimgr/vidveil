@@ -727,23 +727,45 @@ func TestSafeFilePathRejectsSymlinkEscape(t *testing.T) {
 
 func TestSafeFilePathBlocksInvalidSegment(t *testing.T) {
 	tmp := t.TempDir()
-	_, err := SafeFilePath(tmp, "INVALID/path")
-	if err == nil {
-		t.Error("SafeFilePath(INVALID) = nil error, want an error")
+	got, err := SafeFilePath(tmp, "Reports/Report_2024.pdf")
+	if err != nil {
+		t.Fatalf("SafeFilePath should allow case and extensions: %v", err)
+	}
+	if want := filepath.Join(tmp, "Reports", "Report_2024.pdf"); got != want {
+		t.Errorf("SafeFilePath = %q, want %q", got, want)
 	}
 }
 
 func TestSafeFilePathEmptyUserPath(t *testing.T) {
-	// Empty user path: SafePath("") = ("", nil), filepath.Join(base, "") = base.
-	// The result should equal the base dir (absPath == absBase branch).
 	tmp := t.TempDir()
-	got, err := SafeFilePath(tmp, "")
-	if err != nil {
-		t.Fatalf("SafeFilePath(base, '') = error %v, want nil", err)
+	if _, err := SafeFilePath(tmp, ""); err == nil {
+		t.Fatal("SafeFilePath accepted an empty resource name")
 	}
-	abs, _ := filepath.Abs(tmp)
-	if got != abs {
-		t.Errorf("SafeFilePath(base, '') = %q, want %q", got, abs)
+}
+
+func TestSafeResourcePathPreservesNamesAndRejectsTraversal(t *testing.T) {
+	for input, want := range map[string]string{"/static/css/main.css": "static/css/main.css", "Reports/Report_2024.pdf": "Reports/Report_2024.pdf", "report..pdf": "report..pdf"} {
+		got, err := SafeResourcePath(input)
+		if err != nil || got != want {
+			t.Errorf("SafeResourcePath(%q) = %q, %v; want %q", input, got, err, want)
+		}
+	}
+	for _, input := range []string{"", "../secret", "folder/..", ".hidden", `folder\\secret`, "bad name"} {
+		if _, err := SafeResourcePath(input); err == nil {
+			t.Errorf("SafeResourcePath(%q) accepted invalid input", input)
+		}
+	}
+}
+
+func TestSafeDirPathPreservesAbsolutePathAndRejectsTraversal(t *testing.T) {
+	got, err := SafeDirPath("/var/lib/vidveil")
+	if err != nil || got != filepath.Clean("/var/lib/vidveil") {
+		t.Fatalf("SafeDirPath absolute = %q, %v", got, err)
+	}
+	for _, input := range []string{"", "../outside", "/var/../tmp", "bad\x00path", "bad\npath"} {
+		if _, err := SafeDirPath(input); err == nil {
+			t.Errorf("SafeDirPath(%q) accepted invalid input", input)
+		}
 	}
 }
 

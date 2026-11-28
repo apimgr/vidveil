@@ -1,0 +1,2 @@
+# Module SPDX-ID review record
+modernc.org/mathutil BSD-3-Clause apimgr reviewed the v1.7.1 LICENSE file on 2026-11-27

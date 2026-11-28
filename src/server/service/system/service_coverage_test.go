@@ -237,6 +237,13 @@ func TestFindAvailableUID_SmallRange(t *testing.T) {
 
 // ── EnsureSystemUser ─────────────────────────────────────────────────────────
 
+func TestStartupServiceHomeDirUsesResolvedDataDirectory(t *testing.T) {
+	got := startupServiceHomeDir("vidveil", []string{"/etc/apimgr/vidveil", "/var/lib/apimgr/vidveil"})
+	if got != "/var/lib/apimgr/vidveil" {
+		t.Fatalf("service account home = %q, want resolved data directory", got)
+	}
+}
+
 // TestEnsureSystemUser_NoPanic runs EnsureSystemUser with a nonexistent user
 // name; on Docker (root) it will attempt user creation — errors ignored.
 func TestEnsureSystemUser_NoPanic(t *testing.T) {

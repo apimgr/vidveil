@@ -27,6 +27,12 @@ import (
 // "config/server.yml"). Mirrors the layout loadRestoreArchive expects.
 func buildTestBackupArchive(t *testing.T, manifest BackupManifest, files map[string]string) []byte {
 	t.Helper()
+	if files == nil {
+		files = make(map[string]string)
+	}
+	if _, exists := files["app_secrets.json"]; !exists {
+		files["app_secrets.json"] = `{"installation_secret":"dGVzdC1pbnN0YWxsYXRpb24tc2VjcmV0"}`
+	}
 	missingSHA := manifest.Type == "missing-sha256"
 	if missingSHA {
 		manifest.Type = "full"
@@ -118,6 +124,7 @@ func newMaintMgrWithTempDirs(t *testing.T) (*MaintenanceManager, string) {
 	}
 
 	m := NewMaintenanceManager(cfgDir, dataDir, "1.0.0")
+	attachTestApplicationSecrets(t, m)
 	setMaintenanceTestDiskSpace(m)
 	m.paths.Backup = backupDir
 	m.paths.SSL = sslDir
@@ -744,7 +751,7 @@ func TestRestoreWithPassword_NoBackupFileFound(t *testing.T) {
 	m, _ := newMaintMgrWithTempDirs(t)
 
 	err := m.RestoreWithPassword("", "")
-	if err == nil || !strings.Contains(err.Error(), "no backup files found") {
+	if err == nil || !strings.Contains(err.Error(), "no dated full backup files found") {
 		t.Errorf("expected no-backup-files error, got: %v", err)
 	}
 }

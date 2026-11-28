@@ -137,7 +137,7 @@ jobs:
           docker run -d --name "vidveil-${GITHUB_RUN_ID}-health" -e VIDVEIL_SERVER_I2P_BOOTSTRAP_TIMEOUT=10m -p 127.0.0.1:18080:80 "$IMAGE_REF"
           trap 'docker rm -f "vidveil-${GITHUB_RUN_ID}-health" >/dev/null 2>&1 || true' EXIT
           for attempt in $(seq 1 600); do
-            health_json=$(curl -q -sS -H 'Accept: application/json' http://127.0.0.1:18080/server/healthz 2>/dev/null | tr -d '[:space:]' || true)
+            health_json=$(curl -q -LSsf -H 'Accept: application/json' http://127.0.0.1:18080/server/healthz 2>/dev/null | tr -d '[:space:]' || true)
             tor_status=$(printf '%s' "$health_json" | grep -Eo '"tor":\{[^}]*\}' | grep -Eo '"status":"[^"]+"' | cut -d '"' -f4 || true)
             i2p_status=$(printf '%s' "$health_json" | grep -Eo '"i2p":\{[^}]*\}' | grep -Eo '"status":"[^"]+"' | cut -d '"' -f4 || true)
             if [ "$tor_status" = healthy ] && [ "$i2p_status" = healthy ]; then
@@ -217,7 +217,7 @@ jobs:
           docker run -d --name "vidveil-${GITHUB_RUN_ID}-health" -e VIDVEIL_SERVER_I2P_BOOTSTRAP_TIMEOUT=10m -p 127.0.0.1:18080:80 "$IMAGE_REF"
           trap 'docker rm -f "vidveil-${GITHUB_RUN_ID}-health" >/dev/null 2>&1 || true' EXIT
           for attempt in $(seq 1 600); do
-            health_json=$(curl -q -sS -H 'Accept: application/json' http://127.0.0.1:18080/server/healthz 2>/dev/null | tr -d '[:space:]' || true)
+            health_json=$(curl -q -LSsf -H 'Accept: application/json' http://127.0.0.1:18080/server/healthz 2>/dev/null | tr -d '[:space:]' || true)
             tor_status=$(printf '%s' "$health_json" | grep -Eo '"tor":\{[^}]*\}' | grep -Eo '"status":"[^"]+"' | cut -d '"' -f4 || true)
             i2p_status=$(printf '%s' "$health_json" | grep -Eo '"i2p":\{[^}]*\}' | grep -Eo '"status":"[^"]+"' | cut -d '"' -f4 || true)
             if [ "$tor_status" = healthy ] && [ "$i2p_status" = healthy ]; then
@@ -317,7 +317,7 @@ jobs:
           docker run -d --name "vidveil-${GITHUB_RUN_ID}-health" -e VIDVEIL_SERVER_I2P_BOOTSTRAP_TIMEOUT=10m -p 127.0.0.1:18080:80 "$IMAGE_REF"
           trap 'docker rm -f "vidveil-${GITHUB_RUN_ID}-health" >/dev/null 2>&1 || true' EXIT
           for attempt in $(seq 1 600); do
-            health_json=$(curl -q -sS -H 'Accept: application/json' http://127.0.0.1:18080/server/healthz 2>/dev/null | tr -d '[:space:]' || true)
+            health_json=$(curl -q -LSsf -H 'Accept: application/json' http://127.0.0.1:18080/server/healthz 2>/dev/null | tr -d '[:space:]' || true)
             tor_status=$(printf '%s' "$health_json" | grep -Eo '"tor":\{[^}]*\}' | grep -Eo '"status":"[^"]+"' | cut -d '"' -f4 || true)
             i2p_status=$(printf '%s' "$health_json" | grep -Eo '"i2p":\{[^}]*\}' | grep -Eo '"status":"[^"]+"' | cut -d '"' -f4 || true)
             if [ "$tor_status" = healthy ] && [ "$i2p_status" = healthy ]; then

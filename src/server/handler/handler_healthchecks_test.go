@@ -18,9 +18,17 @@ import (
 
 // fakeScheduler is a minimal SchedulerHealth for exercising the healthz
 // scheduler check without spinning up the real scheduler.
-type fakeScheduler struct{ running bool }
+type fakeScheduler struct{ fresh bool }
 
-func (f fakeScheduler) IsRunning() bool { return f.running }
+func (f fakeScheduler) HeartbeatFresh() bool { return f.fresh }
+
+func newHealthyHealthHandler(t *testing.T) *SearchHandler {
+	t.Helper()
+	h := NewSearchHandler(nil, nil)
+	h.SetDataDir(t.TempDir())
+	h.SetScheduler(fakeScheduler{fresh: true})
+	return h
+}
 
 type fakeI2PChecker struct {
 	enabled bool
@@ -57,9 +65,8 @@ func TestCheckDatabase_NilHandle_OK(t *testing.T) {
 	}
 }
 
-// checkCache always reports "ok": the search cache is process-local with no
-// external backend, so it cannot report unhealthy.
-func TestCheckCache_ReportsFallbackAsDegraded(t *testing.T) {
+// checkCache reports only the core check values allowed by PART 13.
+func TestCheckCache_ReportsFallbackAsError(t *testing.T) {
 	h := &SearchHandler{}
 	if got := h.checkCache(); got != "ok" {
 		t.Errorf("checkCache(nil) = %q, want ok", got)
@@ -69,24 +76,24 @@ func TestCheckCache_ReportsFallbackAsDegraded(t *testing.T) {
 		t.Errorf("checkCache(initialized) = %q, want ok", got)
 	}
 	h2.cacheDegraded = true
-	if got := h2.checkCache(); got != "degraded" {
-		t.Errorf("checkCache(external backend fallback) = %q, want degraded", got)
+	if got := h2.checkCache(); got != health.StatusError {
+		t.Errorf("checkCache(external backend fallback) = %q, want error", got)
 	}
 }
 
-// checkScheduler mirrors the scheduler running state; nil is treated as ok.
-func TestCheckScheduler_ReflectsRunningState(t *testing.T) {
+// checkScheduler reports an unavailable scheduler and stale heartbeats.
+func TestCheckScheduler_ReflectsHeartbeatFreshness(t *testing.T) {
 	h := &SearchHandler{}
-	if got := h.checkScheduler(); got != "ok" {
-		t.Errorf("checkScheduler(nil) = %q, want ok", got)
-	}
-	h.sched = fakeScheduler{running: true}
-	if got := h.checkScheduler(); got != "ok" {
-		t.Errorf("checkScheduler(running) = %q, want ok", got)
-	}
-	h.sched = fakeScheduler{running: false}
 	if got := h.checkScheduler(); got != "error" {
-		t.Errorf("checkScheduler(stopped) = %q, want error", got)
+		t.Errorf("checkScheduler(nil) = %q, want error", got)
+	}
+	h.sched = fakeScheduler{fresh: true}
+	if got := h.checkScheduler(); got != "ok" {
+		t.Errorf("checkScheduler(fresh) = %q, want ok", got)
+	}
+	h.sched = fakeScheduler{fresh: false}
+	if got := h.checkScheduler(); got != "error" {
+		t.Errorf("checkScheduler(stale) = %q, want error", got)
 	}
 }
 
@@ -101,8 +108,8 @@ func TestCheckDisk_TempDir_OK(t *testing.T) {
 // A stopped scheduler must drive the overall healthz status to unhealthy (503),
 // proving the checks are no longer hardcoded to "ok".
 func TestHealthCheck_StoppedScheduler_Unhealthy(t *testing.T) {
-	h := NewSearchHandler(nil, nil)
-	h.SetScheduler(fakeScheduler{running: false})
+	h := newHealthyHealthHandler(t)
+	h.SetScheduler(fakeScheduler{fresh: false})
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
@@ -163,7 +170,7 @@ func TestHealthEndpoints_ReportMaintenanceStatus(t *testing.T) {
 }
 
 func TestHealthJSONIncludesRegisteredStatsAfterCoreStats(t *testing.T) {
-	h := NewSearchHandler(nil, nil)
+	h := newHealthyHealthHandler(t)
 	metrics := NewMetrics(config.DefaultAppConfig(), nil)
 	metrics.IncrementSearches()
 	h.SetMetrics(metrics)
@@ -191,7 +198,7 @@ func TestHealthJSONIncludesRegisteredStatsAfterCoreStats(t *testing.T) {
 }
 
 func TestAPIHealthTextIncludesRegisteredStats(t *testing.T) {
-	h := NewSearchHandler(nil, nil)
+	h := newHealthyHealthHandler(t)
 	registry := health.NewRegistry()
 	if err := registry.RegisterStat("engines_healthy", func() uint64 { return 2 }); err != nil {
 		t.Fatal(err)
@@ -207,7 +214,7 @@ func TestAPIHealthTextIncludesRegisteredStats(t *testing.T) {
 }
 
 func TestOperatorStatusIncludesMaintenanceDiagnosticAndFixInstructions(t *testing.T) {
-	h := NewSearchHandler(nil, nil)
+	h := newHealthyHealthHandler(t)
 	h.SetMaintenanceStatus(&maintenance.MaintenanceStatus{
 		Reason: "database_connection", Diagnostic: "connection refused at private-db:5432", Since: time.Now().UTC(),
 		SelfHealing: maintenance.SelfHealingStatus{Enabled: true, Attempts: 1},
@@ -235,7 +242,7 @@ func TestOperatorStatusIncludesMaintenanceDiagnosticAndFixInstructions(t *testin
 }
 
 func TestHealthCheck_EnabledI2PFailureIsDegraded(t *testing.T) {
-	h := NewSearchHandler(nil, nil)
+	h := newHealthyHealthHandler(t)
 	h.SetI2PService(fakeI2PChecker{enabled: true, err: errors.New("probe failed")})
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	req.Header.Set("Accept", "application/json")
@@ -268,7 +275,7 @@ func TestHealthCheck_EnabledI2PFailureIsDegraded(t *testing.T) {
 }
 
 func TestHealthCheck_StartingI2PIsHealthy(t *testing.T) {
-	h := NewSearchHandler(nil, nil)
+	h := newHealthyHealthHandler(t)
 	h.SetI2PService(fakeI2PChecker{enabled: true, state: "starting", status: "starting", err: errors.New("not ready")})
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -308,7 +315,7 @@ func TestHealthRoutes_DatasetChecksAreCachedOrderedAndAggregated(t *testing.T) {
 				handle func(*SearchHandler, http.ResponseWriter, *http.Request)
 			}{{"frontend", (*SearchHandler).HealthCheck}, {"api", (*SearchHandler).APIHealthCheck}} {
 				t.Run(route.name, func(t *testing.T) {
-					h := NewSearchHandler(nil, nil)
+					h := newHealthyHealthHandler(t)
 					h.SetHealthRegistry(registry)
 					req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 					req.Header.Set("Accept", "application/json")
@@ -359,7 +366,7 @@ func TestHealthRoutes_TorLifecycleContract(t *testing.T) {
 				handle func(*SearchHandler, http.ResponseWriter, *http.Request)
 			}{{"frontend", (*SearchHandler).HealthCheck}, {"api", (*SearchHandler).APIHealthCheck}} {
 				t.Run(route.name, func(t *testing.T) {
-					h := NewSearchHandler(nil, nil)
+					h := newHealthyHealthHandler(t)
 					h.SetTorService(&testTorChecker{enabled: test.enabled, running: test.running, starting: test.starting})
 					req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 					req.Header.Set("Accept", "application/json")
@@ -412,7 +419,7 @@ func TestHealthRoutes_I2PLifecycleContract(t *testing.T) {
 				handle func(*SearchHandler, http.ResponseWriter, *http.Request)
 			}{{"frontend", (*SearchHandler).HealthCheck}, {"api", (*SearchHandler).APIHealthCheck}} {
 				t.Run(route.name, func(t *testing.T) {
-					h := NewSearchHandler(nil, nil)
+					h := newHealthyHealthHandler(t)
 					h.SetI2PService(fakeI2PChecker{enabled: test.enabled, state: test.state, status: test.status, err: test.err})
 					req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 					req.Header.Set("Accept", "application/json")
@@ -445,7 +452,7 @@ func TestHealthRoutes_I2PLifecycleContract(t *testing.T) {
 
 func TestHealthCheckHTML_ShowsEnabledI2PAddressAndCopyControl(t *testing.T) {
 	setRealTemplatesFS(t)
-	h := NewSearchHandler(nil, nil)
+	h := newHealthyHealthHandler(t)
 	h.appConfig.Server.I2P.Expose = true
 	h.SetI2PService(fakeI2PChecker{enabled: true, status: "healthy", address: "example.b32.i2p"})
 	req := httptest.NewRequest(http.MethodGet, "/server/healthz", nil)
@@ -461,7 +468,7 @@ func TestHealthCheckHTML_ShowsEnabledI2PAddressAndCopyControl(t *testing.T) {
 
 func TestHealthCheckHTMLHidesI2PAddressUnlessExposed(t *testing.T) {
 	setRealTemplatesFS(t)
-	h := NewSearchHandler(nil, nil)
+	h := newHealthyHealthHandler(t)
 	h.SetI2PService(fakeI2PChecker{enabled: true, status: "healthy", address: "private.b32.i2p"})
 	req := httptest.NewRequest(http.MethodGet, "/server/healthz", nil)
 	req.Header.Set("Accept", "text/html")

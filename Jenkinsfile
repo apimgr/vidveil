@@ -423,10 +423,14 @@ pipeline {
                     agent { label 'amd64' }
                     steps {
                         script {
-                            // Scheduled and manually started jobs scan all
-                            // history; change and branch builds scan a range.
-                            def fullHistory = !currentBuild.getBuildCauses('hudson.triggers.TimerTrigger$TimerTriggerCause').isEmpty() ||
-                                !currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').isEmpty()
+                            // New branches, schedules, and manually started
+                            // jobs scan history; changes to an existing branch
+                            // scan the latest commit range.
+                            def timerBuild = !currentBuild.getBuildCauses('hudson.triggers.TimerTrigger$TimerTriggerCause').isEmpty()
+                            def manualBuild = !currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').isEmpty()
+                            def previousCommit = env.GIT_PREVIOUS_COMMIT
+                            def newBranchBuild = !env.CHANGE_ID && (!previousCommit || previousCommit ==~ /0+/)
+                            def fullHistory = timerBuild || manualBuild || newBranchBuild
                             def scanArgs = fullHistory
                                 ? 'git file://. --results=verified'
                                 : 'git file://. --since-commit HEAD~1 --results=verified,unknown'
@@ -644,6 +648,7 @@ pipeline {
                             ${tags} \
                             --push \
                             .
+                        ./tests/check-image.sh "${REGISTRY}:${COMMIT_ID}"
                     """
                 }
             }
@@ -697,6 +702,7 @@ pipeline {
                             -t ${REGISTRY}:devel \
                             --push \
                             .
+                        ./tests/check-image.sh "${REGISTRY}:devel"
                     """
                 }
             }

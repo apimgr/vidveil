@@ -108,6 +108,7 @@ type Scheduler struct {
 	running    bool
 	stopping   bool
 	maxHist    int
+	heartbeat  time.Time
 	// Optional database for persistence per AI.md PART 18
 	db              *database.AppDatabase
 	logger          *logging.AppLogger
@@ -714,6 +715,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 	s.taskCtx, s.taskCancel = context.WithCancel(context.Background())
 	s.stopping = false
 	s.running = true
+	s.heartbeat = s.now()
 	catchUpWindow := s.catchUpWindow
 	s.mu.Unlock()
 
@@ -722,6 +724,9 @@ func (s *Scheduler) Start(ctx context.Context) {
 	if catchUpWindow > 0 {
 		s.runMissedTasks(catchUpWindow)
 	}
+	s.mu.Lock()
+	s.heartbeat = s.now()
+	s.mu.Unlock()
 
 	go s.run()
 }
@@ -829,9 +834,44 @@ func (s *Scheduler) run() {
 		case <-s.ctx.Done():
 			return
 		case <-ticker.C:
+			s.mu.Lock()
+			s.heartbeat = s.now()
+			s.mu.Unlock()
 			s.checkAndRunTasks()
 		}
 	}
+}
+
+// HeartbeatFresh reports whether the scheduler loop has checked in within
+// twice the shortest enabled task interval, as required by AI.md PART 13.
+func (s *Scheduler) HeartbeatFresh() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if !s.running || s.heartbeat.IsZero() {
+		return false
+	}
+
+	shortest := time.Duration(0)
+	for _, task := range s.tasks {
+		if !task.Enabled {
+			continue
+		}
+		interval := task.Interval
+		if interval <= 0 && task.cronSched != nil {
+			first := task.cronSched.Next(s.heartbeat)
+			second := task.cronSched.Next(first)
+			if !first.IsZero() && !second.IsZero() {
+				interval = second.Sub(first)
+			}
+		}
+		if interval > 0 && (shortest == 0 || interval < shortest) {
+			shortest = interval
+		}
+	}
+	if shortest == 0 {
+		shortest = time.Minute
+	}
+	return s.now().Sub(s.heartbeat) <= 2*shortest
 }
 
 // checkAndRunTasks checks all tasks and runs any that are due

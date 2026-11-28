@@ -2016,10 +2016,7 @@ func createStartupSystemUser(appName string, dirs []string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	homeDir := "/var/lib/apimgr/" + appName
-	if len(dirs) > 0 && dirs[0] != "" {
-		homeDir = dirs[0]
-	}
+	homeDir := startupServiceHomeDir(appName, dirs)
 	for _, dir := range dirs {
 		if dir != "" {
 			if err := os.MkdirAll(dir, 0755); err != nil {
@@ -2063,6 +2060,16 @@ func createStartupSystemUser(appName string, dirs []string) (int, error) {
 		return 0, fmt.Errorf("automatic service user creation is unsupported on %s", runtime.GOOS)
 	}
 	return id, nil
+}
+
+func startupServiceHomeDir(appName string, dirs []string) string {
+	if len(dirs) > 1 && dirs[1] != "" {
+		return dirs[1]
+	}
+	if len(dirs) == 1 && dirs[0] != "" {
+		return dirs[0]
+	}
+	return "/var/lib/apimgr/" + appName
 }
 
 func chownServiceTree(root string, uid, gid int) error {

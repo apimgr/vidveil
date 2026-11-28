@@ -8,6 +8,7 @@ package maintenance
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
@@ -29,6 +30,7 @@ func newManagerWithDirs(t *testing.T) (*MaintenanceManager, string, string) {
 	configDir := t.TempDir()
 	dataDir := t.TempDir()
 	m := NewMaintenanceManager(configDir, dataDir, "1.0.0")
+	attachTestApplicationSecrets(t, m)
 	setMaintenanceTestDiskSpace(m)
 	return m, configDir, dataDir
 }
@@ -327,18 +329,13 @@ func TestBackupAlwaysSnapshotsSQLiteDatabase(t *testing.T) {
 	if err := os.MkdirAll(databaseDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	databasePath := filepath.Join(databaseDir, "server.db")
-	db, err := sql.Open("sqlite", databasePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec("CREATE TABLE snapshot_test (value TEXT)"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec("INSERT INTO snapshot_test(value) VALUES ('captured')"); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
+	if err := m.appDB.Write(context.Background(), func(tx *sql.Tx) error {
+		if _, err := tx.Exec("CREATE TABLE snapshot_test (value TEXT)"); err != nil {
+			return err
+		}
+		_, err := tx.Exec("INSERT INTO snapshot_test(value) VALUES ('captured')")
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	backupFile := filepath.Join(backupDir, "database.tar.gz")
@@ -367,7 +364,7 @@ func TestBackupAlwaysSnapshotsSQLiteDatabase(t *testing.T) {
 func TestTestBackupVerifiesArchivedPGPKeypair(t *testing.T) {
 	backupDir := t.TempDir()
 	t.Setenv("BACKUP_DIR", backupDir)
-	m, configDir, dataDir := newManagerWithDirs(t)
+	m, configDir, _ := newManagerWithDirs(t)
 	secret := []byte("test installation secret with enough entropy")
 	keypair, err := pgp.GenerateKeypair("VidVeil Security", "security@example.test", 0)
 	if err != nil {
@@ -387,21 +384,10 @@ func TestTestBackupVerifiesArchivedPGPKeypair(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(securityDir, pgp.PrivateKeyFile), encryptedPrivate, 0600); err != nil {
 		t.Fatal(err)
 	}
-	databaseDir := filepath.Join(dataDir, "db")
-	if err := os.MkdirAll(databaseDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	db, err := sql.Open("sqlite", filepath.Join(databaseDir, "server.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec("CREATE TABLE app_secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL)"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec("INSERT INTO app_secrets(key,value) VALUES (?,?)", "installation_secret", base64.StdEncoding.EncodeToString(secret)); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
+	if err := m.appDB.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec("UPDATE app_secrets SET value = ? WHERE key = ?", base64.StdEncoding.EncodeToString(secret), "installation_secret")
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	backupFile := filepath.Join(backupDir, "operator-test.tar.gz")
@@ -431,6 +417,46 @@ func TestBackupIncremental_CreatesFile(t *testing.T) {
 	}
 	if _, err := os.Stat(outFile); err != nil {
 		t.Error("BackupIncremental: output file missing")
+	}
+}
+
+func TestDefaultBackupTestFilesSelectsLatestFullAndIncrementals(t *testing.T) {
+	backupDir := t.TempDir()
+	t.Setenv("BACKUP_DIR", backupDir)
+	m, _, _ := newManagerWithDirs(t)
+	files := map[string]time.Time{
+		"vidveil_backup_2026-01-02.tar.gz":        time.Date(2026, 1, 2, 8, 0, 0, 0, time.UTC),
+		"vidveil_backup_2026-01-03.tar.gz.enc":    time.Date(2026, 1, 3, 8, 0, 0, 0, time.UTC),
+		"vidveil_backup_2026-01-03_120000.tar.gz": time.Date(2026, 1, 3, 12, 0, 0, 0, time.UTC),
+		"vidveil-daily.tar.gz.enc":                time.Date(2026, 1, 3, 13, 0, 0, 0, time.UTC),
+		"vidveil-hourly.tar.gz":                   time.Date(2026, 1, 3, 14, 0, 0, 0, time.UTC),
+		"vidveil_backup_2026-01-04.tar.gz":        time.Date(2026, 1, 4, 8, 0, 0, 0, time.UTC),
+	}
+	for name, modified := range files {
+		file := filepath.Join(backupDir, name)
+		if err := os.WriteFile(file, []byte("archive"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(file, modified, modified); err != nil {
+			t.Fatal(err)
+		}
+	}
+	selected, err := m.DefaultBackupTestFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		filepath.Join(backupDir, "vidveil_backup_2026-01-04.tar.gz"),
+		filepath.Join(backupDir, "vidveil-daily.tar.gz.enc"),
+		filepath.Join(backupDir, "vidveil-hourly.tar.gz"),
+	}
+	if len(selected) != len(want) {
+		t.Fatalf("selected %v, want %v", selected, want)
+	}
+	for i := range want {
+		if selected[i] != want[i] {
+			t.Errorf("selected[%d] = %q, want %q", i, selected[i], want[i])
+		}
 	}
 }
 

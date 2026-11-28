@@ -140,6 +140,11 @@ jobs:
             manifest:org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
             manifest:org.opencontainers.image.licenses=MIT
 
+      - name: Verify standard image runtime contract
+        env:
+          REQUIRE_OVERLAY: "${{ vars.REQUIRE_OVERLAY || '0' }}"
+        run: ./tests/check-image.sh "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.COMMIT_ID }}"
+
   build-devel:
     runs-on: ubuntu-26.04
     if: (gitea.event_name == 'schedule' || gitea.event_name == 'workflow_dispatch' || gitea.event_name == 'push') && gitea.ref == 'refs/heads/main'
@@ -221,3 +226,8 @@ jobs:
             manifest:org.opencontainers.image.source=${{ gitea.server_url }}/${{ gitea.repository }}
             manifest:org.opencontainers.image.documentation=${{ gitea.server_url }}/${{ gitea.repository }}
             manifest:org.opencontainers.image.licenses=MIT
+
+      - name: Verify development image runtime contract
+        env:
+          REQUIRE_OVERLAY: "${{ vars.REQUIRE_OVERLAY || '0' }}"
+        run: ./tests/check-image.sh "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:devel"

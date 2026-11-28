@@ -92,7 +92,7 @@ func TestAgeVerifySubmit_SameSiteRedirect_Preserved(t *testing.T) {
 }
 
 func TestAgeVerifyPage_AlreadyVerified_ProtocolRelativeRedirect_FallsBackHome(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	r := httptest.NewRequest(http.MethodGet, "/age-verify?redirect=%2F%2Fevil.example%2Fphish", nil)
 	r.AddCookie(&http.Cookie{Name: ageVerifyCookieName, Value: "1"})
 	w := httptest.NewRecorder()

@@ -126,7 +126,19 @@ func (c *SearchCache) Close() error {
 }
 
 // Check reports an in-process cache as healthy.
-func (c *SearchCache) Check(context.Context) error { return nil }
+func (c *SearchCache) Check(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	want := &model.SearchResponse{Ok: true, Message: "healthz:probe"}
+	c.Set("healthz:probe", want)
+	got, ok := c.Get("healthz:probe")
+	c.Delete("healthz:probe")
+	if !ok || got == nil || got.Ok != want.Ok || got.Message != want.Message {
+		return fmt.Errorf("in-process cache probe value mismatch")
+	}
+	return ctx.Err()
+}
 
 // Get retrieves a cached search response
 func (c *SearchCache) Get(key string) (*model.SearchResponse, bool) {
@@ -513,7 +525,20 @@ func (v *ValkeyCache) Check(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return v.client.Ping(ctx).Err()
+	key := v.prefix + "healthz:probe"
+	value := `{"ok":true,"message":"healthz:probe"}`
+	if err := v.client.Set(ctx, key, value, time.Second).Err(); err != nil {
+		return err
+	}
+	defer v.client.Del(context.Background(), key)
+	got, err := v.client.Get(ctx, key).Result()
+	if err != nil {
+		return err
+	}
+	if got != value {
+		return fmt.Errorf("configured cache probe value mismatch")
+	}
+	return v.client.Del(ctx, key).Err()
 }
 
 // Compile-time interface check

@@ -30,6 +30,13 @@ type SchemaManager struct {
 	driver Driver
 }
 
+func (sm *SchemaManager) writeExec(ctx context.Context, query string, args ...any) error {
+	return sm.appDB.Write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, query, args...)
+		return err
+	})
+}
+
 // NewSchemaManager creates a new schema manager for SQLite (backward compatibility)
 func NewSchemaManager(dbPath string) (*SchemaManager, error) {
 	// Ensure directory exists
@@ -77,7 +84,7 @@ func (sm *SchemaManager) EnsureSchema() error {
 			deferredSchedulerIndexes = append(deferredSchedulerIndexes, ddl)
 			continue
 		}
-		if _, err := sm.db.ExecContext(ctx, ddl); err != nil {
+		if err := sm.writeExec(ctx, ddl); err != nil {
 			return fmt.Errorf("failed to create table: %w", err)
 		}
 	}
@@ -85,11 +92,11 @@ func (sm *SchemaManager) EnsureSchema() error {
 		return err
 	}
 	for _, ddl := range deferredSchedulerIndexes {
-		if _, err := sm.db.ExecContext(ctx, ddl); err != nil {
+		if err := sm.writeExec(ctx, ddl); err != nil {
 			return fmt.Errorf("create scheduler history index: %w", err)
 		}
 	}
-	if _, err := sm.db.ExecContext(ctx, `INSERT OR IGNORE INTO owners(id) VALUES ('system')`); err != nil {
+	if err := sm.writeExec(ctx, `INSERT OR IGNORE INTO owners(id) VALUES ('system')`); err != nil {
 		return fmt.Errorf("create reserved system owner: %w", err)
 	}
 	if err := sm.ensureOwnerTokenColumns(ctx); err != nil {
@@ -111,14 +118,14 @@ func (sm *SchemaManager) ensureFavoriteOwnerColumn(ctx context.Context) error {
 		return fmt.Errorf("inspect favorites ownership schema: %w", err)
 	}
 	if count == 0 {
-		if _, err := sm.db.ExecContext(ctx, `ALTER TABLE favorites ADD COLUMN owner_id TEXT REFERENCES owners(id)`); err != nil {
+		if err := sm.writeExec(ctx, `ALTER TABLE favorites ADD COLUMN owner_id TEXT REFERENCES owners(id)`); err != nil {
 			return fmt.Errorf("add favorites owner_id column: %w", err)
 		}
 	}
-	if _, err := sm.db.ExecContext(ctx, `UPDATE favorites SET owner_id = 'system' WHERE owner_id IS NULL`); err != nil {
+	if err := sm.writeExec(ctx, `UPDATE favorites SET owner_id = 'system' WHERE owner_id IS NULL`); err != nil {
 		return fmt.Errorf("assign legacy favorites to system owner: %w", err)
 	}
-	if _, err := sm.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_favorites_owner_id ON favorites(owner_id)`); err != nil {
+	if err := sm.writeExec(ctx, `CREATE INDEX IF NOT EXISTS idx_favorites_owner_id ON favorites(owner_id)`); err != nil {
 		return fmt.Errorf("index favorite owners: %w", err)
 	}
 	return nil
@@ -160,7 +167,7 @@ func (sm *SchemaManager) ensureAuditMirrorColumns(ctx context.Context) error {
 		if known[name] {
 			continue
 		}
-		if _, err := sm.db.ExecContext(ctx, "ALTER TABLE "+table+" ADD COLUMN "+name+" "+definition); err != nil {
+		if err := sm.writeExec(ctx, "ALTER TABLE "+table+" ADD COLUMN "+name+" "+definition); err != nil {
 			return fmt.Errorf("add audit mirror column %s: %w", name, err)
 		}
 	}
@@ -205,7 +212,7 @@ func (sm *SchemaManager) InsertAuditMirror(ctx context.Context, entry logging.Au
 		actorIP = entry.Actor.IP
 	}
 	query := "INSERT INTO " + sm.auditTableName() + " (timestamp, level, category, action, actor_ip, target_type, target_id, details, success) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-	if _, err := sm.db.ExecContext(writeCtx, query, timestamp.Unix(), entry.Severity, entry.Category, entry.Event, actorIP, targetType, targetID, string(encodedDetails), success); err != nil {
+	if err := sm.writeExec(writeCtx, query, timestamp.Unix(), entry.Severity, entry.Category, entry.Event, actorIP, targetType, targetID, string(encodedDetails), success); err != nil {
 		return fmt.Errorf("insert audit mirror: %w", err)
 	}
 	return nil
@@ -246,7 +253,7 @@ func (sm *SchemaManager) ensureOwnerTokenColumns(ctx context.Context) error {
 		if columns[name] {
 			continue
 		}
-		if _, err := sm.db.ExecContext(ctx, `ALTER TABLE api_tokens ADD COLUMN "`+name+`" `+definition); err != nil {
+		if err := sm.writeExec(ctx, `ALTER TABLE api_tokens ADD COLUMN "`+name+`" `+definition); err != nil {
 			return fmt.Errorf("add API-token column %s: %w", name, err)
 		}
 		columns[name] = true
@@ -256,7 +263,7 @@ func (sm *SchemaManager) ensureOwnerTokenColumns(ctx context.Context) error {
 			return err
 		}
 	}
-	if _, err := sm.db.ExecContext(ctx, `UPDATE api_tokens SET scope = 'global' WHERE kind = 'primary' AND scope <> 'global'`); err != nil {
+	if err := sm.writeExec(ctx, `UPDATE api_tokens SET scope = 'global' WHERE kind = 'primary' AND scope <> 'global'`); err != nil {
 		return fmt.Errorf("set primary API-token scope: %w", err)
 	}
 	indexes := []string{
@@ -270,7 +277,7 @@ func (sm *SchemaManager) ensureOwnerTokenColumns(ctx context.Context) error {
 		indexes = append(indexes, `CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_public_id ON api_tokens(public_id) WHERE public_id IS NOT NULL`)
 	}
 	for _, ddl := range indexes {
-		if _, err := sm.db.ExecContext(ctx, ddl); err != nil {
+		if err := sm.writeExec(ctx, ddl); err != nil {
 			return fmt.Errorf("create owner-token index: %w", err)
 		}
 	}
@@ -321,10 +328,10 @@ func (sm *SchemaManager) populateLegacyTokenColumns(ctx context.Context, columns
 			}
 			ownerID = id.String()
 		}
-		if _, err := sm.db.ExecContext(ctx, `INSERT OR IGNORE INTO owners(id) VALUES (?)`, ownerID); err != nil {
+		if err := sm.writeExec(ctx, `INSERT OR IGNORE INTO owners(id) VALUES (?)`, ownerID); err != nil {
 			return fmt.Errorf("preserve owner for legacy API token %q: %w", item.id, err)
 		}
-		if _, err := sm.db.ExecContext(ctx, `UPDATE api_tokens SET public_id = ?, owner_id = ?, token_last4 = COALESCE(NULLIF(token_last4, ''), ?) WHERE id = ?`, publicID, ownerID, item.last4, item.id); err != nil {
+		if err := sm.writeExec(ctx, `UPDATE api_tokens SET public_id = ?, owner_id = ?, token_last4 = COALESCE(NULLIF(token_last4, ''), ?) WHERE id = ?`, publicID, ownerID, item.last4, item.id); err != nil {
 			return fmt.Errorf("preserve legacy API token %q: %w", item.id, err)
 		}
 	}
@@ -631,7 +638,7 @@ func (sm *SchemaManager) migrateSchedulerSchema(ctx context.Context) error {
 		{"scheduler_tasks", "last_run"}, {"scheduler_tasks", "next_run"},
 		{"scheduler_history", "started_at"}, {"scheduler_history", "finished_at"},
 	} {
-		if _, err := sm.db.ExecContext(ctx, `UPDATE "`+column.table+`" SET "`+column.name+`" = CAST(strftime('%s', "`+column.name+`") AS INTEGER) WHERE "`+column.name+`" IS NOT NULL AND typeof("`+column.name+`") != 'integer'`); err != nil {
+		if err := sm.writeExec(ctx, `UPDATE "`+column.table+`" SET "`+column.name+`" = CAST(strftime('%s', "`+column.name+`") AS INTEGER) WHERE "`+column.name+`" IS NOT NULL AND typeof("`+column.name+`") != 'integer'`); err != nil {
 			return fmt.Errorf("normalize scheduler timestamp %s.%s: %w", column.table, column.name, err)
 		}
 	}
@@ -640,7 +647,7 @@ func (sm *SchemaManager) migrateSchedulerSchema(ctx context.Context) error {
 		if table == "scheduler_history" {
 			column = "status"
 		}
-		if _, err := sm.db.ExecContext(ctx, `UPDATE "`+table+`" SET "`+column+`" = 'failed' WHERE lower("`+column+`") = 'failure'`); err != nil {
+		if err := sm.writeExec(ctx, `UPDATE "`+table+`" SET "`+column+`" = 'failed' WHERE lower("`+column+`") = 'failure'`); err != nil {
 			return fmt.Errorf("normalize scheduler status %s.%s: %w", table, column, err)
 		}
 	}
@@ -677,7 +684,7 @@ func (sm *SchemaManager) ensureSchedulerColumns(ctx context.Context) error {
 			if columns[name] {
 				continue
 			}
-			if _, err := sm.db.ExecContext(ctx, `ALTER TABLE "`+table+`" ADD COLUMN "`+name+`" `+definition); err != nil {
+			if err := sm.writeExec(ctx, `ALTER TABLE "`+table+`" ADD COLUMN "`+name+`" `+definition); err != nil {
 				return fmt.Errorf("add scheduler column %s.%s: %w", table, name, err)
 			}
 		}
@@ -696,7 +703,7 @@ func (sm *SchemaManager) renameSchedulerColumns(ctx context.Context, table strin
 	}
 	for oldName, newName := range renames {
 		if columns[oldName] && !columns[newName] {
-			if _, err := sm.db.ExecContext(ctx, `ALTER TABLE "`+table+`" RENAME COLUMN "`+oldName+`" TO "`+newName+`"`); err != nil {
+			if err := sm.writeExec(ctx, `ALTER TABLE "`+table+`" RENAME COLUMN "`+oldName+`" TO "`+newName+`"`); err != nil {
 				return fmt.Errorf("rename scheduler column %s.%s to %s: %w", table, oldName, newName, err)
 			}
 			columns[newName] = true
@@ -753,50 +760,44 @@ func (sm *SchemaManager) copyLegacySchedulerTables(ctx context.Context) error {
 			return err
 		}
 	}
-	tx, err := sm.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin scheduler schema migration: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	if legacyTasks {
-		lastRun := legacyUnixColumn(taskColumns, "last_run")
-		nextRun := legacyUnixColumn(taskColumns, "next_run")
-		lastStatus := legacyColumn(taskColumns, "last_result", "NULL")
-		lastError := legacyColumn(taskColumns, "last_error", "NULL")
-		runCount := legacyColumn(taskColumns, "run_count", "0")
-		failCount := legacyColumn(taskColumns, "fail_count", "0")
-		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO scheduler_tasks
+	return sm.appDB.Write(ctx, func(tx *sql.Tx) error {
+		if legacyTasks {
+			lastRun := legacyUnixColumn(taskColumns, "last_run")
+			nextRun := legacyUnixColumn(taskColumns, "next_run")
+			lastStatus := legacyColumn(taskColumns, "last_result", "NULL")
+			lastError := legacyColumn(taskColumns, "last_error", "NULL")
+			runCount := legacyColumn(taskColumns, "run_count", "0")
+			failCount := legacyColumn(taskColumns, "fail_count", "0")
+			if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO scheduler_tasks
 			(id, name, enabled, schedule, last_run, last_status, last_error, next_run, run_count, fail_count)
 			SELECT id, name, COALESCE(enabled, 1), schedule, `+lastRun+`,
 			CASE lower(COALESCE(`+lastStatus+`, '')) WHEN 'failure' THEN 'failed' ELSE `+lastStatus+` END,
 			`+lastError+`, `+nextRun+`, COALESCE(`+runCount+`, 0), COALESCE(`+failCount+`, 0)
 			FROM scheduled_tasks`); err != nil {
-			return fmt.Errorf("copy legacy scheduler tasks: %w", err)
+				return fmt.Errorf("copy legacy scheduler tasks: %w", err)
+			}
 		}
-	}
-	if legacyHistory {
-		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO scheduler_tasks(id, name, enabled, schedule)
+		if legacyHistory {
+			if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO scheduler_tasks(id, name, enabled, schedule)
 			SELECT DISTINCT h.task_id, h.task_id, 0, '' FROM task_history h
 			WHERE NOT EXISTS (SELECT 1 FROM scheduler_tasks t WHERE t.id = h.task_id)`); err != nil {
-			return fmt.Errorf("preserve scheduler history task references: %w", err)
-		}
-		startedAt := legacyUnixColumn(historyColumns, "start_time")
-		finishedAt := legacyUnixColumn(historyColumns, "end_time")
-		status := legacyColumn(historyColumns, "result", "'failed'")
-		errorText := legacyColumn(historyColumns, "error", "NULL")
-		duration := legacyColumn(historyColumns, "duration_ms", "NULL")
-		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO scheduler_history
+				return fmt.Errorf("preserve scheduler history task references: %w", err)
+			}
+			startedAt := legacyUnixColumn(historyColumns, "start_time")
+			finishedAt := legacyUnixColumn(historyColumns, "end_time")
+			status := legacyColumn(historyColumns, "result", "'failed'")
+			errorText := legacyColumn(historyColumns, "error", "NULL")
+			duration := legacyColumn(historyColumns, "duration_ms", "NULL")
+			if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO scheduler_history
 			(id, task_id, started_at, finished_at, status, error, duration_ms)
 			SELECT id, task_id, `+startedAt+`, `+finishedAt+`,
 			CASE lower(COALESCE(`+status+`, 'failed')) WHEN 'failure' THEN 'failed' ELSE `+status+` END,
 			`+errorText+`, `+duration+` FROM task_history`); err != nil {
-			return fmt.Errorf("copy legacy scheduler history: %w", err)
+				return fmt.Errorf("copy legacy scheduler history: %w", err)
+			}
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit scheduler schema migration: %w", err)
-	}
-	return nil
+		return nil
+	})
 }
 
 func legacyColumn(columns map[string]bool, name, fallback string) string {

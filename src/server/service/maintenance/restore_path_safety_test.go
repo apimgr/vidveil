@@ -150,10 +150,19 @@ func TestLoadRestoreArchiveToTempSpoolsRegularFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadRestoreArchiveToTemp: %v", err)
 	}
-	if len(archive.files) != 1 {
-		t.Fatalf("parsed %d files, want 1", len(archive.files))
+	if len(archive.files) != 2 {
+		t.Fatalf("parsed %d files, want server.yml and app_secrets.json", len(archive.files))
 	}
-	file := archive.files[0]
+	var file restoreFileEntry
+	for _, entry := range archive.files {
+		if entry.name == "config/server.yml" {
+			file = entry
+			break
+		}
+	}
+	if file.name == "" {
+		t.Fatal("spooled config/server.yml entry not found")
+	}
 	if len(file.content) != 0 || file.contentPath == "" {
 		t.Fatalf("spooled entry = %#v, want a path and no in-memory content", file)
 	}

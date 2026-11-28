@@ -681,6 +681,18 @@ func TestBuildGrafanaDashboardNotEmpty(t *testing.T) {
 	if len(list) == 0 {
 		t.Error("buildGrafanaDashboard produced zero panels")
 	}
+	if dashboard["schemaVersion"] != 42 {
+		t.Errorf("Grafana schemaVersion = %v, want 42", dashboard["schemaVersion"])
+	}
+	types := make(map[string]bool)
+	for _, panel := range list {
+		types[panel.Type] = true
+	}
+	for _, panelType := range []string{"timeseries", "stat", "gauge"} {
+		if !types[panelType] {
+			t.Errorf("Grafana dashboard has no %q panel", panelType)
+		}
+	}
 }
 
 // ---- serveGrafanaDashboard ----

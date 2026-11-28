@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/apimgr/vidveil/src/common/i18n"
 )
@@ -21,6 +22,8 @@ var (
 
 	// Valid path segment: lowercase alphanumeric, hyphens, underscores
 	validPathSegment = regexp.MustCompile(`^[a-z0-9_-]+$`)
+	// Resource names retain case and extensions while excluding hidden files.
+	validResourceSegment = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 )
 
 // normalizePath cleans a path for safe use per AI.md PART 5
@@ -97,9 +100,50 @@ func SafePath(input string) (string, error) {
 	return normalizePath(input), nil
 }
 
+// SafeResourcePath validates relative file and resource names without
+// rewriting their case or extension.
+func SafeResourcePath(input string) (string, error) {
+	if len(input) > 2048 || strings.Contains(input, "\\") {
+		return "", ErrPathTraversal
+	}
+	var segments []string
+	for _, segment := range strings.Split(strings.Trim(input, "/"), "/") {
+		if segment == "" {
+			continue
+		}
+		if len(segment) > 255 || !validResourceSegment.MatchString(segment) {
+			return "", ErrInvalidPath
+		}
+		segments = append(segments, segment)
+	}
+	if len(segments) == 0 {
+		return "", ErrInvalidPath
+	}
+	return strings.Join(segments, "/"), nil
+}
+
+// SafeDirPath validates a filesystem directory override and preserves
+// absolute paths rather than applying URL path normalization.
+func SafeDirPath(input string) (string, error) {
+	if input == "" {
+		return "", ErrInvalidPath
+	}
+	for _, character := range input {
+		if unicode.IsControl(character) {
+			return "", ErrInvalidPath
+		}
+	}
+	for _, segment := range strings.Split(filepath.ToSlash(input), "/") {
+		if segment == ".." {
+			return "", ErrPathTraversal
+		}
+	}
+	return filepath.Clean(input), nil
+}
+
 // SafeFilePath ensures path stays within base directory per AI.md PART 5
 func SafeFilePath(baseDir, userPath string) (string, error) {
-	safe, err := SafePath(userPath)
+	safe, err := SafeResourcePath(userPath)
 	if err != nil {
 		return "", err
 	}

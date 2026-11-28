@@ -32,20 +32,24 @@ func setEmptyTemplatesFS(t *testing.T) {
 }
 
 // newMiscTestHandler returns a SearchHandler with empty EngineManager and no metrics.
-func newMiscTestHandler() *SearchHandler {
+func newMiscTestHandler(t *testing.T) *SearchHandler {
+	t.Helper()
 	cfg := config.DefaultAppConfig()
 	mgr := engine.NewEngineManager(cfg)
-	return &SearchHandler{
+	handler := &SearchHandler{
 		appConfig: cfg,
 		engineMgr: mgr,
 	}
+	handler.SetDataDir(t.TempDir())
+	handler.SetScheduler(fakeScheduler{fresh: true})
+	return handler
 }
 
 // ── AgeVerifyPage ─────────────────────────────────────────────────────────────
 
 // When the age-verify cookie is already set, AgeVerifyPage redirects immediately.
 func TestAgeVerifyPage_AlreadyVerified_Redirects(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/age-verify", nil)
 	req.AddCookie(&http.Cookie{Name: ageVerifyCookieName, Value: "1"})
@@ -63,7 +67,7 @@ func TestAgeVerifyPage_AlreadyVerified_Redirects(t *testing.T) {
 
 // When already verified and a valid redirect is given, it uses that redirect.
 func TestAgeVerifyPage_AlreadyVerified_WithRedirect_UsesParam(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/age-verify?redirect=/search", nil)
 	req.AddCookie(&http.Cookie{Name: ageVerifyCookieName, Value: "1"})
@@ -81,7 +85,7 @@ func TestAgeVerifyPage_AlreadyVerified_WithRedirect_UsesParam(t *testing.T) {
 
 // Bad (non-slash) redirect defaults to /.
 func TestAgeVerifyPage_AlreadyVerified_BadRedirect_FallsBackToHome(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/age-verify?redirect=http://evil.com", nil)
 	req.AddCookie(&http.Cookie{Name: ageVerifyCookieName, Value: "1"})
@@ -99,7 +103,7 @@ func TestAgeVerifyPage_AlreadyVerified_BadRedirect_FallsBackToHome(t *testing.T)
 
 // No cookie present — curl UA means renderResponse returns plain text 200.
 func TestAgeVerifyPage_NotVerified_CurlUA_ReturnsText(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/age-verify", nil)
 	req.Header.Set("User-Agent", "curl/7.68.0")
@@ -117,7 +121,7 @@ func TestAgeVerifyPage_NotVerified_CurlUA_ReturnsText(t *testing.T) {
 // empty templatesFS causes a 500 (covers the html branch code path regardless).
 func TestSearchPage_BrowserUA_HitsHTMLPath(t *testing.T) {
 	setEmptyTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
@@ -132,7 +136,7 @@ func TestSearchPage_BrowserUA_HitsHTMLPath(t *testing.T) {
 
 // Curl UA triggers text/plain format (non-browser path) in SearchPage.
 func TestSearchPage_CurlUA_ReturnsText(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/search?q=test", nil)
 	req.Header.Set("User-Agent", "curl/7.68.0")
@@ -150,7 +154,7 @@ func TestSearchPage_CurlUA_ReturnsText(t *testing.T) {
 
 // JSON format with engines param populates engineNames from the URL param.
 func TestSearchPage_JSONFormat_EnginesParam_ReturnsJSON(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/search?q=test&engines=ph,xv", nil)
 	req.Header.Set("Accept", "application/json")
@@ -166,7 +170,7 @@ func TestSearchPage_JSONFormat_EnginesParam_ReturnsJSON(t *testing.T) {
 // empty templatesFS → 500 (still exercises the default switch case code path).
 func TestSearchPage_DefaultFormat_HitsDefaultCase(t *testing.T) {
 	setEmptyTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/search?q=amateur", nil)
 	req.Header.Set("Accept", "*/*")
@@ -184,7 +188,7 @@ func TestSearchPage_DefaultFormat_HitsDefaultCase(t *testing.T) {
 
 // Text/plain format for APIEngines (curl UA) exercises the text branch.
 func TestAPIEngines_PlainTextFormat_ReturnsText(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/engines", nil)
 	req.Header.Set("User-Agent", "curl/7.68.0")
@@ -202,7 +206,7 @@ func TestAPIEngines_PlainTextFormat_ReturnsText(t *testing.T) {
 
 // JSON format for APIEngines.
 func TestAPIEngines_JSONFormat_ReturnsJSON(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/engines", nil)
 	req.Header.Set("Accept", "application/json")
@@ -218,7 +222,7 @@ func TestAPIEngines_JSONFormat_ReturnsJSON(t *testing.T) {
 
 // Text format via curl UA exercises the full text output branch.
 func TestAPIHealthCheck_TextFormat_ReturnsText(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/healthz", nil)
 	req.Header.Set("User-Agent", "curl/7.68.0")
@@ -236,7 +240,7 @@ func TestAPIHealthCheck_TextFormat_ReturnsText(t *testing.T) {
 
 // JSON format for APIHealthCheck (default path).
 func TestAPIHealthCheck_JSONFormat_ReturnsJSON(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/healthz", nil)
 	req.Header.Set("Accept", "application/json")
@@ -251,7 +255,7 @@ func TestAPIHealthCheck_JSONFormat_ReturnsJSON(t *testing.T) {
 // ── APIStats ──────────────────────────────────────────────────────────────────
 
 func TestAPIStats_TextFormat_ReturnsText(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil)
 	req.Header.Set("User-Agent", "curl/7.68.0")
@@ -264,7 +268,7 @@ func TestAPIStats_TextFormat_ReturnsText(t *testing.T) {
 }
 
 func TestAPIStats_JSONFormat_ReturnsJSON(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil)
 	req.Header.Set("Accept", "application/json")
@@ -279,7 +283,7 @@ func TestAPIStats_JSONFormat_ReturnsJSON(t *testing.T) {
 // ── APIVersion ────────────────────────────────────────────────────────────────
 
 func TestAPIVersion_ReturnsJSON(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/version", nil)
 
@@ -293,7 +297,7 @@ func TestAPIVersion_ReturnsJSON(t *testing.T) {
 // ── APIEngineHealth ───────────────────────────────────────────────────────────
 
 func TestAPIEngineHealth_EmptyManager_ReturnsJSON(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/engines/health", nil)
 
@@ -308,7 +312,7 @@ func TestAPIEngineHealth_EmptyManager_ReturnsJSON(t *testing.T) {
 
 // NotFoundHandler uses empty templatesFS → falls back to plain text 404.
 func TestNotFoundHandler_ReturnsPlainText404(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/missing", nil)
 
@@ -323,7 +327,7 @@ func TestNotFoundHandler_ReturnsPlainText404(t *testing.T) {
 // User-Agent) with no Accept header must return the canonical JSON error
 // envelope per AI.md PART 14, not the HTML error page.
 func TestNotFoundHandler_APIPath_ReturnsJSON(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/does-not-exist", nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/128.0")
@@ -346,7 +350,7 @@ func TestNotFoundHandler_APIPath_ReturnsJSON(t *testing.T) {
 // NotFoundHandler on an /api/** path with Accept: text/plain must return
 // plain text per AI.md PART 14 content negotiation rules.
 func TestNotFoundHandler_APIPath_AcceptTextPlain_ReturnsText(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/does-not-exist", nil)
 	req.Header.Set("Accept", "text/plain")
@@ -368,7 +372,7 @@ func TestNotFoundHandler_APIPath_AcceptTextPlain_ReturnsText(t *testing.T) {
 // NotFoundHandler on an /api/** path with a .txt extension must return
 // plain text regardless of Accept header, per AI.md PART 14 priority order.
 func TestNotFoundHandler_APIPath_TxtExtension_ReturnsText(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/does-not-exist.txt", nil)
 
@@ -385,7 +389,7 @@ func TestNotFoundHandler_APIPath_TxtExtension_ReturnsText(t *testing.T) {
 
 // InternalErrorHandler uses empty templatesFS → falls back to plain text 500.
 func TestInternalErrorHandler_ReturnsPlainText500(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
@@ -649,7 +653,7 @@ func TestSlidingWindowCounter_RotatePartial_MiscCoverage(t *testing.T) {
 
 // HealthCheck with JSON Accept returns JSON 200.
 func TestHealthCheck_JSONFormat_ReturnsJSON(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	req.Header.Set("Accept", "application/json")
@@ -663,7 +667,7 @@ func TestHealthCheck_JSONFormat_ReturnsJSON(t *testing.T) {
 
 // HealthCheck with curl UA returns plain text.
 func TestHealthCheck_TextFormat_ReturnsText(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	req.Header.Set("User-Agent", "curl/7.68.0")
@@ -690,7 +694,7 @@ func TestHealthCheck_TextFormat_ReturnsText(t *testing.T) {
 
 // HealthCheck with browser UA exercises the default case (HTML via renderHealthzHTML).
 func TestHealthCheck_BrowserUA_HitsHTMLPath(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
@@ -710,6 +714,8 @@ func TestHealthCheck_PendingRestart_JSONIncludesPendingRestart(t *testing.T) {
 	cfg.RestartReasons = []string{"config changed"}
 	mgr := engine.NewEngineManager(cfg)
 	h := &SearchHandler{appConfig: cfg, engineMgr: mgr}
+	h.SetDataDir(t.TempDir())
+	h.SetScheduler(fakeScheduler{fresh: true})
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -729,20 +735,24 @@ func TestHealthCheck_PendingRestart_JSONIncludesPendingRestart(t *testing.T) {
 // ── Handler with metrics ──────────────────────────────────────────────────────
 
 // newMetricsTestHandler creates a handler with metrics wired up.
-func newMetricsTestHandler() *SearchHandler {
+func newMetricsTestHandler(t *testing.T) *SearchHandler {
+	t.Helper()
 	cfg := config.DefaultAppConfig()
 	mgr := engine.NewEngineManager(cfg)
 	m := NewMetrics(cfg, mgr)
-	return &SearchHandler{
+	handler := &SearchHandler{
 		appConfig: cfg,
 		engineMgr: mgr,
 		metrics:   m,
 	}
+	handler.SetDataDir(t.TempDir())
+	handler.SetScheduler(fakeScheduler{fresh: true})
+	return handler
 }
 
 // APIHealthCheck with metrics present exercises the metrics getter branches.
 func TestAPIHealthCheck_WithMetrics_ReturnsJSON(t *testing.T) {
-	h := newMetricsTestHandler()
+	h := newMetricsTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/healthz", nil)
 	req.Header.Set("Accept", "application/json")
@@ -756,7 +766,7 @@ func TestAPIHealthCheck_WithMetrics_ReturnsJSON(t *testing.T) {
 
 // HealthCheck with metrics present exercises getRequestsTotal / getRequests24h / etc.
 func TestHealthCheck_WithMetrics_JSONReturns200(t *testing.T) {
-	h := newMetricsTestHandler()
+	h := newMetricsTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	req.Header.Set("Accept", "application/json")
@@ -776,6 +786,8 @@ func TestAPIHealthCheck_PendingRestart_IncludesField(t *testing.T) {
 	cfg.RestartReasons = []string{"test"}
 	mgr := engine.NewEngineManager(cfg)
 	h := &SearchHandler{appConfig: cfg, engineMgr: mgr}
+	h.SetDataDir(t.TempDir())
+	h.SetScheduler(fakeScheduler{fresh: true})
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/healthz", nil)
@@ -800,6 +812,8 @@ func TestHealthCheck_TextFormat_PendingRestart(t *testing.T) {
 	cfg.RestartReasons = []string{"cfg"}
 	mgr := engine.NewEngineManager(cfg)
 	h := &SearchHandler{appConfig: cfg, engineMgr: mgr}
+	h.SetDataDir(t.TempDir())
+	h.SetScheduler(fakeScheduler{fresh: true})
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -824,6 +838,8 @@ func TestAPIHealthCheck_TextFormat_PendingRestart(t *testing.T) {
 	cfg.RestartReasons = []string{"cfg"}
 	mgr := engine.NewEngineManager(cfg)
 	h := &SearchHandler{appConfig: cfg, engineMgr: mgr}
+	h.SetDataDir(t.TempDir())
+	h.SetScheduler(fakeScheduler{fresh: true})
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/healthz", nil)
@@ -845,7 +861,7 @@ func TestAPIHealthCheck_TextFormat_PendingRestart(t *testing.T) {
 // Each named template exercises the switch case and hits the parse error (empty FS).
 func TestRenderTemplate_SearchName_Covered(t *testing.T) {
 	setEmptyTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, httptest.NewRequest(http.MethodGet, "/", nil), "search", map[string]interface{}{})
 	if rr.Code != http.StatusInternalServerError {
@@ -855,7 +871,7 @@ func TestRenderTemplate_SearchName_Covered(t *testing.T) {
 
 func TestRenderTemplate_PreferencesName_Covered(t *testing.T) {
 	setEmptyTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, httptest.NewRequest(http.MethodGet, "/", nil), "preferences", map[string]interface{}{})
 	if rr.Code != http.StatusInternalServerError {
@@ -865,7 +881,7 @@ func TestRenderTemplate_PreferencesName_Covered(t *testing.T) {
 
 func TestRenderTemplate_AgeVerifyName_Covered(t *testing.T) {
 	setEmptyTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, httptest.NewRequest(http.MethodGet, "/", nil), "age-verify", map[string]interface{}{})
 	if rr.Code != http.StatusInternalServerError {
@@ -875,7 +891,7 @@ func TestRenderTemplate_AgeVerifyName_Covered(t *testing.T) {
 
 func TestRenderTemplate_ContentRestrictedName_Covered(t *testing.T) {
 	setEmptyTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, httptest.NewRequest(http.MethodGet, "/", nil), "content-restricted", map[string]interface{}{})
 	if rr.Code != http.StatusInternalServerError {
@@ -885,7 +901,7 @@ func TestRenderTemplate_ContentRestrictedName_Covered(t *testing.T) {
 
 func TestRenderTemplate_ContentBlockedName_Covered(t *testing.T) {
 	setEmptyTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, httptest.NewRequest(http.MethodGet, "/", nil), "content-blocked", map[string]interface{}{})
 	if rr.Code != http.StatusInternalServerError {
@@ -895,7 +911,7 @@ func TestRenderTemplate_ContentBlockedName_Covered(t *testing.T) {
 
 func TestRenderTemplate_PrivacyName_Covered(t *testing.T) {
 	setEmptyTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, httptest.NewRequest(http.MethodGet, "/", nil), "privacy", map[string]interface{}{})
 	if rr.Code != http.StatusInternalServerError {
@@ -905,7 +921,7 @@ func TestRenderTemplate_PrivacyName_Covered(t *testing.T) {
 
 func TestRenderTemplate_NojsHomeName_Covered(t *testing.T) {
 	setEmptyTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, httptest.NewRequest(http.MethodGet, "/", nil), "nojs/home", map[string]interface{}{})
 	if rr.Code != http.StatusInternalServerError {
@@ -915,7 +931,7 @@ func TestRenderTemplate_NojsHomeName_Covered(t *testing.T) {
 
 func TestRenderTemplate_NojsSearchName_Covered(t *testing.T) {
 	setEmptyTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	h.renderTemplate(rr, httptest.NewRequest(http.MethodGet, "/", nil), "nojs/search", map[string]interface{}{})
 	if rr.Code != http.StatusInternalServerError {
@@ -1107,7 +1123,7 @@ func TestAPIHealthCheck_HTMLDefault_CoversLine1220(t *testing.T) {
 // ── SecurityTxt — expires set + contact with mailto path ─────────────────────
 
 func TestSecurityTxt_WithExistingExpires_NoPanic(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/security.txt", nil)
@@ -1122,7 +1138,7 @@ func TestSecurityTxt_WithExistingExpires_NoPanic(t *testing.T) {
 
 // FavoritesPage with Accept: application/json returns 200 JSON.
 func TestFavoritesPage_JSON(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/favorites", nil)
 	req.Header.Set("Accept", "application/json")
@@ -1143,7 +1159,7 @@ func TestFavoritesPage_JSON(t *testing.T) {
 
 // FavoritesPage with Accept: text/plain returns 200 plain text.
 func TestFavoritesPage_PlainText(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/favorites", nil)
 	req.Header.Set("Accept", "text/plain")
@@ -1170,7 +1186,7 @@ func TestFavoritesPage_PlainText(t *testing.T) {
 // (not short-circuited by the json/text branches).
 func TestFavoritesPage_DefaultBranch_TriggersRender(t *testing.T) {
 	setEmptyTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/favorites", nil)
 
@@ -1185,7 +1201,7 @@ func TestFavoritesPage_DefaultBranch_TriggersRender(t *testing.T) {
 
 // PGPKeyAsc returns 404 when no PGP key file exists.
 func TestPGPKeyAsc_NoFile_Returns404(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	h.dataDir = t.TempDir()
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/pgp-key.asc", nil)
@@ -1209,7 +1225,7 @@ func TestPGPKeyAsc_FileExists_Returns200(t *testing.T) {
 		t.Fatalf("write pgp.pub.asc: %v", err)
 	}
 
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	h.configDir = tmp
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/pgp-key.asc", nil)
@@ -1232,7 +1248,7 @@ func TestPGPKeyAsc_FileExists_Returns200(t *testing.T) {
 
 // HealthCheck with Tor enabled and running adds "tor": "ok" to checks (lines 1169–1171).
 func TestHealthCheck_WithTorRunning_JSON(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	h.torSvc = &testTorChecker{enabled: true, running: true}
 
 	rr := httptest.NewRecorder()
@@ -1251,7 +1267,7 @@ func TestHealthCheck_WithTorRunning_JSON(t *testing.T) {
 
 // An enabled Tor provider that is not running is degraded, per PART 13.
 func TestHealthCheck_WithTorUnavailable_Degraded_JSON(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	h.torSvc = &testTorChecker{enabled: true, running: false}
 
 	rr := httptest.NewRecorder()
@@ -1270,7 +1286,7 @@ func TestHealthCheck_WithTorUnavailable_Degraded_JSON(t *testing.T) {
 
 // HealthCheck plain-text with Tor running covers the torRunning branch (lines 1289–1290).
 func TestHealthCheck_TextFormat_WithTorRunning(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	h.torSvc = &testTorChecker{enabled: true, running: true}
 
 	rr := httptest.NewRecorder()
@@ -1288,7 +1304,7 @@ func TestHealthCheck_TextFormat_WithTorRunning(t *testing.T) {
 // HealthCheck plain-text with Tor unavailable covers checks.tor
 // output branch (lines 1298–1299).
 func TestHealthCheck_TextFormat_WithTorNotRunning(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	h.torSvc = &testTorChecker{enabled: true, running: false}
 
 	rr := httptest.NewRecorder()
@@ -1308,7 +1324,7 @@ func TestHealthCheck_TextFormat_WithTorNotRunning(t *testing.T) {
 // so 500 is expected — but all data-building lines execute and gain coverage.
 func TestHealthCheck_HTML_RealTemplates_Success(t *testing.T) {
 	setRealTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -1325,7 +1341,7 @@ func TestHealthCheck_HTML_RealTemplates_Success(t *testing.T) {
 // inside renderHealthzHTML (lines 1491–1494).
 func TestHealthCheck_HTML_RealTemplates_WithTorRunning(t *testing.T) {
 	setRealTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	h.torSvc = &testTorChecker{enabled: true, running: true}
 
 	rr := httptest.NewRecorder()
@@ -1341,7 +1357,7 @@ func TestHealthCheck_HTML_RealTemplates_WithTorRunning(t *testing.T) {
 // HealthCheck HTML with Tor starting covers the IsStarting branch (lines 1499–1502).
 func TestHealthCheck_HTML_RealTemplates_WithTorStarting(t *testing.T) {
 	setRealTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	h.torSvc = &testTorChecker{enabled: true, running: false, starting: true}
 
 	rr := httptest.NewRecorder()
@@ -1361,7 +1377,7 @@ func TestHealthCheck_HTML_RealTemplates_WithTorStarting(t *testing.T) {
 // (line 916). Uses real templates so renderResponse succeeds.
 func TestFavoritesPage_AcceptHTML_HitsDefault(t *testing.T) {
 	setRealTemplatesFS(t)
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/favorites", nil)
@@ -1380,7 +1396,7 @@ func TestFavoritesPage_AcceptHTML_HitsDefault(t *testing.T) {
 
 // SecurityTxt with PGPKeyURL set includes the Encryption field (lines 1587–1588).
 func TestSecurityTxt_WithPGPKeyURL_IncludesEncryptionField(t *testing.T) {
-	h := newMiscTestHandler()
+	h := newMiscTestHandler(t)
 	h.appConfig.Web.Security.PGPKeyURL = "https://example.com/pgp-key.asc"
 
 	rr := httptest.NewRecorder()

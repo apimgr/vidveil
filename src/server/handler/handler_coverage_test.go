@@ -1074,7 +1074,10 @@ func newTestSearchHandler(t *testing.T) *SearchHandler {
 	t.Helper()
 	cfg := createTestConfig()
 	mgr := engine.NewEngineManager(config.DefaultAppConfig())
-	return NewSearchHandler(cfg, mgr)
+	handler := NewSearchHandler(cfg, mgr)
+	handler.SetDataDir(t.TempDir())
+	handler.SetScheduler(fakeScheduler{fresh: true})
+	return handler
 }
 
 // ── SetTemplatesFS ────────────────────────────────────────────────────────────
@@ -1167,6 +1170,8 @@ func TestAPIHealthCheck_DevelopmentMode(t *testing.T) {
 	cfg := createTestConfig()
 	mgr := engine.NewEngineManager(config.DefaultAppConfig())
 	h := NewSearchHandler(cfg, mgr)
+	h.SetDataDir(t.TempDir())
+	h.SetScheduler(fakeScheduler{fresh: true})
 	req := httptest.NewRequest("GET", "/api/v1/healthz", nil)
 	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()

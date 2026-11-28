@@ -255,6 +255,14 @@ func partitionConfig(root map[string]interface{}, source string) (map[string]map
 				}
 				parts[file]["web"].(map[string]interface{})[name] = child
 			}
+		case "cli":
+			if canonicalSource != "maintenance.yml" {
+				moved = true
+			}
+			if parts["maintenance.yml"] == nil {
+				parts["maintenance.yml"] = make(map[string]interface{})
+			}
+			parts["maintenance.yml"][key] = value
 		default:
 			file := "app.yml"
 			if key == "data" {

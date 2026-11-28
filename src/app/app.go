@@ -2694,6 +2694,10 @@ func handleMaintenanceCommand(cmd, arg, configDir, dataDir string) {
 				requestExit(1)
 			}
 			defer dbManager.Close()
+			if err := dbManager.EnsureSchema(); err != nil {
+				fmt.Fprintf(os.Stderr, terminal.StatusIcon(false)+" Initialize remote database schema for restore: %v\n", err)
+				requestExit(1)
+			}
 			maint.SetDatabase(dbManager.GetAppDatabase())
 		}
 

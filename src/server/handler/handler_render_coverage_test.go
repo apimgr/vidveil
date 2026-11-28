@@ -6,7 +6,6 @@
 package handler
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -315,11 +314,6 @@ func TestRenderHealthzHTML_EmptyFS_Returns500(t *testing.T) {
 // ── Autodiscover ──────────────────────────────────────────────────────────────
 
 func TestAutodiscover_ReturnsJSON(t *testing.T) {
-	originalFetcher := cliReleaseMetadataFetcher
-	cliReleaseMetadataFetcher = func(context.Context, string) (cliReleaseMetadata, error) {
-		return cliReleaseMetadata{Versions: map[string]cliVersionMetadata{}, Assets: map[string]string{}}, nil
-	}
-	t.Cleanup(func() { cliReleaseMetadataFetcher = originalFetcher })
 	h := newRenderTestHandler()
 	h.appConfig.Server.Update.CLIMinVersion = "1.2.3"
 	rr := httptest.NewRecorder()
@@ -357,11 +351,6 @@ func TestAutodiscoverTorKeepsOverlayOutOfURLs(t *testing.T) {
 }
 
 func TestAutodiscoverOmitsOverlayDomainsFromClearnetURLs(t *testing.T) {
-	originalFetcher := cliReleaseMetadataFetcher
-	cliReleaseMetadataFetcher = func(context.Context, string) (cliReleaseMetadata, error) {
-		return cliReleaseMetadata{Versions: map[string]cliVersionMetadata{}, Assets: map[string]string{}}, nil
-	}
-	t.Cleanup(func() { cliReleaseMetadataFetcher = originalFetcher })
 	t.Setenv("DOMAIN", "current.example,clearnet.example,private.onion,private.b32.i2p")
 	h := newRenderTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "https://current.example/api/autodiscover", nil)

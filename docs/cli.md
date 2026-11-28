@@ -20,7 +20,7 @@ The CLI client is built alongside the server. Download the artifact for your OS 
 Or build from source:
 
 ```bash
-make local  # Builds both server and CLI client
+make build  # Builds debug server and CLI binaries for all 8 OS/architecture pairs
 ```
 
 ## Quick Start

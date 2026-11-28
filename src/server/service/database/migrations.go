@@ -444,6 +444,12 @@ func (sm *SchemaManager) getSQLiteDDL() []string {
 			expires_at DATETIME,
 			previous_value TEXT
 		)`,
+		// Remote snapshot restore uses this lease to pause ordinary writes while
+		// it copies the archive in bounded transactions.
+		`CREATE TABLE IF NOT EXISTS restore_seed_locks (
+			lock_id TEXT PRIMARY KEY,
+			lease_until DATETIME NOT NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS captcha_challenges (
 			id VARCHAR(32) PRIMARY KEY,
 			answer_hash VARCHAR(64) NOT NULL,

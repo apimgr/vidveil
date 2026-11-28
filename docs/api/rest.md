@@ -260,7 +260,7 @@ POST https://x.scour.li/api/v1/server/reports/nel
 POST https://x.scour.li/api/v1/server/reports/csp
 GET  https://x.scour.li/api/v1/version
 GET  https://x.scour.li/api/autodiscover
-GET  https://x.scour.li/cli/binaries/{filename}
+GET  https://x.scour.li/api/v1/cli/binaries/{filename}
 ```
 
 `GET /api/{api_version}/server/help` returns `{title, content, format, pages}`.

@@ -154,6 +154,7 @@ The service must limit the risk of correlating visitors with searches, leaking v
 - `GET /api/{api_version}/version`: No authentication; returns the running service version information.
 - `GET /api/{api_version}/proxy/thumbnails`: No authentication; accepts a validated upstream thumbnail URL and returns the proxied image bytes.
 - `GET /api/{api_version}/proxy/videos`: No authentication; accepts a validated supported preview URL and returns proxied media when available.
+- `GET /api/{api_version}/cli/binaries/{filename}`: Public by default, or operator Bearer token when `cli.binary_download.require_auth` is enabled; streams the locally provisioned, SHA-256-verified CLI release binary.
 - `GET /api/{api_version}/favorites`: Bearer owner token required; returns the authenticated owner's private favorites.
 - `POST /api/{api_version}/favorites`: Bearer owner token when an owner already exists; accepts a favorite and returns the saved favorite, issuing a primary owner token once when creating a new anonymous owner.
 - `DELETE /api/{api_version}/favorites/{id}`: Bearer owner token required; removes the identified favorite belonging to that owner.

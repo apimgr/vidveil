@@ -149,18 +149,24 @@ The value is returned by `/api/autodiscover`; an empty value disables the
 minimum-version check.
 
 The companion CLI updater checks `/api/autodiscover` and downloads platform
-binaries through the server. By default downloads are public; private
-deployments can require the configured operator token:
+binaries from the server's local release directory. The operator or package
+must provision the CLI binaries, `version.txt`, and `sha256.txt` in
+`{data_dir}/cli/`; the server verifies each checksum before advertising or
+serving a binary. By default downloads are public; private deployments can
+require the configured operator token:
 
 ```yaml
+# yaml.d/maintenance.yml
 cli:
   binary_download:
+    dir: "{data_dir}/cli"
     require_auth: false
 ```
 
-When `require_auth` is `true`, the download endpoint accepts the configured
-`server.token` only as `Authorization: Bearer {token}`. Tokens in query
-parameters or alternate headers are ignored.
+When `require_auth` is `true`, `GET /api/{api_version}/cli/binaries/{filename}`
+accepts the configured `server.token` only as `Authorization: Bearer {token}`.
+Tokens in query parameters or alternate headers are ignored. No unversioned
+download route is available.
 
 ## Branding and SEO Images
 
@@ -816,9 +822,6 @@ server:
         description_suffix_sold: This data may be shared with third parties.
     third_party:
       services: []
-cli:
-  binary_download:
-    require_auth: false
 web:
   ui:
     theme: dark

@@ -363,10 +363,12 @@ Options:
 ### Build
 
 ```bash
-make dev            # Quick build to temp directory
-make local          # Build with version to binaries/
-make build          # Local binaries plus server and CLI for all 8 platforms
-make test           # Run unit tests, vulnerability checks, and coverage
+make build          # Debug server and CLI binaries for all 8 OS/architecture pairs
+make test           # Run lint, vulnerability, unit, coverage, and binary checks
+make release        # Create local production artifacts and checksums; no tag or publish
+make docker         # Build and check the host-platform image locally
+make clean          # Remove binaries and release artifacts
+make help           # List the supported targets
 ```
 
 ### Test

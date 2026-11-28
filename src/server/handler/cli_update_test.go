@@ -2,114 +2,164 @@
 package handler
 
 import (
-	"context"
-	"io"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/apimgr/vidveil/src/config"
+	"github.com/apimgr/vidveil/src/paths"
+	"github.com/go-chi/chi/v5"
 )
 
-type cliUpdateRoundTripper func(*http.Request) (*http.Response, error)
-
-func (roundTripper cliUpdateRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	return roundTripper(request)
+type cliAuditCapture struct {
+	event   string
+	actorID string
+	actorIP string
+	result  string
+	details map[string]interface{}
 }
 
-func TestFetchCLIReleaseMetadataGitHub404MeansNoUpdates(t *testing.T) {
-	previousClient := cliReleaseHTTPClient
-	cliReleaseHTTPClient = &http.Client{Transport: cliUpdateRoundTripper(func(*http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusNotFound,
-			Body:       io.NopCloser(strings.NewReader("not found")),
-			Header:     make(http.Header),
-		}, nil
-	})}
-	t.Cleanup(func() { cliReleaseHTTPClient = previousClient })
-
-	metadata, err := fetchCLIReleaseMetadata(context.Background(), "stable")
-	if err != nil {
-		t.Fatalf("fetchCLIReleaseMetadata() error = %v, want no update", err)
-	}
-	if len(metadata.Versions) != 0 || len(metadata.Assets) != 0 {
-		t.Fatalf("404 metadata = %+v, want no releases", metadata)
-	}
+func (capture *cliAuditCapture) Audit(event, actorID, actorType, actorIP, result string, details map[string]interface{}) {
+	capture.event = event
+	capture.actorID = actorID
+	capture.actorIP = actorIP
+	capture.result = result
+	capture.details = details
 }
 
-func TestCLIReleaseVersionUsesDevelReleaseIdentity(t *testing.T) {
-	tests := []struct {
-		name    string
-		release cliRelease
-		want    string
-		wantErr bool
-	}{
-		{
-			name:    "canonical devel release name",
-			release: cliRelease{TagName: "devel", Name: "Devel Build a1b2c3d"},
-			want:    "a1b2c3d",
-		},
-		{
-			name:    "canonical devel release body fallback",
-			release: cliRelease{TagName: "devel", Body: "Devel build: a1b2c3d"},
-			want:    "a1b2c3d",
-		},
-		{
-			name:    "legacy devel release name",
-			release: cliRelease{TagName: "devel", Name: "Daily Build a1b2c3d"},
-			want:    "a1b2c3d",
-		},
-		{
-			name:    "legacy devel release body fallback",
-			release: cliRelease{TagName: "devel", Body: "Daily build: a1b2c3d"},
-			want:    "a1b2c3d",
-		},
-		{
-			name:    "stable tag",
-			release: cliRelease{TagName: "v1.2.3", Name: "Release 1.2.3"},
-			want:    "1.2.3",
-		},
-		{
-			name:    "missing devel identity",
-			release: cliRelease{TagName: "devel"},
-			wantErr: true,
-		},
+func writeCLITestAssets(t *testing.T, dir string, binary []byte, checksum string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			got, err := cliReleaseVersion(test.release)
-			if (err != nil) != test.wantErr {
-				t.Fatalf("cliReleaseVersion() error = %v, wantErr %t", err, test.wantErr)
-			}
-			if got != test.want {
-				t.Errorf("cliReleaseVersion() = %q, want %q", got, test.want)
-			}
-		})
+	name := cliAssetName("linux-amd64")
+	if err := os.WriteFile(filepath.Join(dir, name), binary, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "version.txt"), []byte("1.2.3\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sha256.txt"), []byte(fmt.Sprintf("%s  %s\n", checksum, name)), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestCLIUpdateChannelNormalizesAliases(t *testing.T) {
-	tests := map[string]string{
-		"":            "stable",
-		"stable":      "stable",
-		"beta":        "beta",
-		"devel":       "devel",
-		"daily":       "devel",
-		"rolling":     "devel",
-		"dev":         "devel",
-		"development": "devel",
-		"invalid":     "",
+func TestCLIVersionsRequireMatchingLocalChecksum(t *testing.T) {
+	dir := t.TempDir()
+	binary := []byte("local cli release")
+	digest := sha256.Sum256(binary)
+	writeCLITestAssets(t, dir, binary, hex.EncodeToString(digest[:]))
+	versions := cliVersionsInDirectory(dir)
+	entry, ok := versions["linux-amd64"]
+	if !ok || entry.Version != "1.2.3" || entry.SHA256 != hex.EncodeToString(digest[:]) {
+		t.Fatalf("verified metadata = %+v, want local version and checksum", versions)
 	}
-	for input, want := range tests {
-		if got := cliUpdateChannel(input); got != want {
-			t.Errorf("cliUpdateChannel(%q) = %q, want %q", input, got, want)
+	writeCLITestAssets(t, dir, binary, strings.Repeat("0", sha256.Size*2))
+	if got := cliVersionsInDirectory(dir); len(got) != 0 {
+		t.Fatalf("mismatched checksum published metadata: %+v", got)
+	}
+}
+
+func TestCLIVersionsMissingDirectoryIsEmpty(t *testing.T) {
+	if got := cliVersionsInDirectory(filepath.Join(t.TempDir(), "missing")); len(got) != 0 {
+		t.Fatalf("missing directory metadata = %+v, want empty", got)
+	}
+}
+
+func TestCLIVersionsRefreshWhenProvisionedDirectoryChanges(t *testing.T) {
+	dir := t.TempDir()
+	binary := []byte("local cli release")
+	digest := sha256.Sum256(binary)
+	writeCLITestAssets(t, dir, binary, hex.EncodeToString(digest[:]))
+	cfg := config.DefaultAppConfig()
+	cfg.CLI.BinaryDownload.Dir = dir
+	h := NewSearchHandler(cfg, nil)
+	audit := &cliAuditCapture{}
+	h.SetOwnerTokenAuditLogger(audit)
+	if got := h.cliVersions()["linux-amd64"].Version; got != "1.2.3" {
+		t.Fatalf("initial version = %q, want 1.2.3", got)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "version.txt"), []byte("2.0.0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.cliVersions()["linux-amd64"].Version; got != "2.0.0" {
+		t.Fatalf("refreshed version = %q, want 2.0.0", got)
+	}
+}
+
+func TestCLIVersionsRejectMalformedVersionAndChecksum(t *testing.T) {
+	dir := t.TempDir()
+	binary := []byte("local cli release")
+	digest := sha256.Sum256(binary)
+	writeCLITestAssets(t, dir, binary, hex.EncodeToString(digest[:]))
+	if err := os.WriteFile(filepath.Join(dir, "version.txt"), []byte("1.2.3 extra\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := cliVersionsInDirectory(dir); len(got) != 0 {
+		t.Fatalf("malformed version published metadata: %+v", got)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "version.txt"), []byte("1.2.3\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sha256.txt"), []byte(strings.Repeat("z", 64)+"  "+cliAssetName("linux-amd64")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := cliVersionsInDirectory(dir); len(got) != 0 {
+		t.Fatalf("malformed checksum published metadata: %+v", got)
+	}
+}
+
+func TestCLIBinaryDownloadServesOnlyVerifiedLocalAssets(t *testing.T) {
+	dir := t.TempDir()
+	binary := []byte("verified executable bytes")
+	digest := sha256.Sum256(binary)
+	writeCLITestAssets(t, dir, binary, hex.EncodeToString(digest[:]))
+	cfg := config.DefaultAppConfig()
+	cfg.CLI.BinaryDownload.Dir = dir
+	h := NewSearchHandler(cfg, nil)
+	audit := &cliAuditCapture{}
+	h.SetOwnerTokenAuditLogger(audit)
+
+	router := chi.NewRouter()
+	router.Get("/api/v1/cli/binaries/{filename}", h.CLIBinaryDownload)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/cli/binaries/"+cliAssetName("linux-amd64"), nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != string(binary) {
+		t.Fatalf("verified download = %d %q, want local binary", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Content-Type") != "application/octet-stream" {
+		t.Errorf("Content-Type = %q, want application/octet-stream", response.Header().Get("Content-Type"))
+	}
+	if audit.event != "cli.update_started" || audit.result != "success" || audit.details["os_arch"] != "linux-amd64" || audit.details["version"] != "1.2.3" {
+		t.Errorf("download audit = %+v, want cli.update_started with platform and version", audit)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/cli/binaries/../../outside", nil)
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("invalid download status = %d, want 404", response.Code)
+	}
+}
+
+func TestCLIAssetNamesCoverSupportedPlatforms(t *testing.T) {
+	if len(cliPlatforms) != 8 {
+		t.Fatalf("supported platform count = %d, want all 8", len(cliPlatforms))
+	}
+	for _, platform := range cliPlatforms {
+		name := cliAssetName(platform)
+		if _, ok := cliPlatformFromRouteName(name); !ok {
+			t.Errorf("platform asset %q is not recognized", name)
 		}
 	}
-}
-
-func TestCLIReleaseMatchesCanonicalDevelChannel(t *testing.T) {
-	if !cliReleaseMatchesChannel(cliRelease{TagName: "devel"}, "devel") {
-		t.Fatal("canonical devel release was not selected for devel channel")
-	}
-	if cliReleaseMatchesChannel(cliRelease{TagName: "20251205143022"}, "devel") {
-		t.Fatal("timestamp release was incorrectly selected for devel channel")
+	if _, ok := cliPlatformFromRouteName(paths.ProjectName + "-cli-linux-riscv64"); ok {
+		t.Fatal("unsupported architecture was accepted")
 	}
 }

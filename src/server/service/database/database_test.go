@@ -28,6 +28,49 @@ func newSQLiteDB(t *testing.T) *AppDatabase {
 	return db
 }
 
+func TestRemoteRestoreSeedLeaseBlocksOrdinaryWrites(t *testing.T) {
+	sm, err := NewSchemaManagerWithConfig(DatabaseConfig{Driver: DriverSQLite, Path: filepath.Join(t.TempDir(), "server.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sm.Close() }()
+	if err := sm.EnsureSchema(); err != nil {
+		t.Fatal(err)
+	}
+	db := sm.GetAppDatabase()
+	db.driver = DriverLibSQL
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO restore_seed_locks (lock_id, lease_until) VALUES ('remote_seed', datetime('now', '+30 minutes'))`)
+		return err
+	}); err != nil {
+		t.Fatalf("create restore seed lease: %v", err)
+	}
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO settings (key, value) VALUES ('blocked', 'write')`)
+		return err
+	}); !errors.Is(err, ErrRestoreSeedInProgress) {
+		t.Fatalf("ordinary write error = %v, want restore-seed lock", err)
+	}
+	if err := db.WriteRestoreSeedBatch(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO settings (key, value) VALUES ('archive', 'seeded')`)
+		return err
+	}); err != nil {
+		t.Fatalf("restore seed batch write: %v", err)
+	}
+	if err := db.WriteRestoreSeedBatch(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`DELETE FROM restore_seed_locks WHERE lock_id = 'remote_seed'`)
+		return err
+	}); err != nil {
+		t.Fatalf("release restore seed lease: %v", err)
+	}
+	if err := db.Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO settings (key, value) VALUES ('unblocked', 'write')`)
+		return err
+	}); err != nil {
+		t.Fatalf("write after restore lease release: %v", err)
+	}
+}
+
 func TestInsertAuditMirrorStoresAuditIDAndQueryableFields(t *testing.T) {
 	sm, err := NewSchemaManagerWithConfig(DatabaseConfig{Driver: DriverSQLite, Path: filepath.Join(t.TempDir(), "server.db")})
 	if err != nil {

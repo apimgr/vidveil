@@ -3,14 +3,15 @@ package handler
 
 import (
 	"bufio"
-	"context"
-	"encoding/json"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
-	"regexp"
+	"os"
+	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/apimgr/vidveil/src/config"
@@ -18,266 +19,34 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const cliReleaseMetadataCacheTTL = 5 * time.Minute
-
-var stableCLITagPattern = regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+$`)
-
-type cliReleaseAsset struct {
-	Name               string `json:"name"`
-	BrowserDownloadURL string `json:"browser_download_url"`
-}
-
-type cliRelease struct {
-	TagName    string            `json:"tag_name"`
-	Name       string            `json:"name"`
-	Body       string            `json:"body"`
-	Prerelease bool              `json:"prerelease"`
-	Assets     []cliReleaseAsset `json:"assets"`
-}
-
 type cliVersionMetadata struct {
 	Version string `json:"version"`
 	SHA256  string `json:"sha256"`
 }
 
-type cliReleaseMetadata struct {
-	Versions map[string]cliVersionMetadata
-	Assets   map[string]string
+type cliBinarySnapshot struct {
+	Metadata cliVersionMetadata
+	Size     int64
+	ModTime  time.Time
 }
 
-type cachedCLIReleaseMetadata struct {
-	metadata  cliReleaseMetadata
-	expiresAt time.Time
+var cliPlatforms = []string{
+	"linux-amd64", "linux-arm64", "darwin-amd64", "darwin-arm64",
+	"windows-amd64", "windows-arm64", "freebsd-amd64", "freebsd-arm64",
 }
 
-var cliReleaseMetadataCache = struct {
-	sync.Mutex
-	byChannel map[string]cachedCLIReleaseMetadata
-}{byChannel: make(map[string]cachedCLIReleaseMetadata)}
-
-var cliReleaseHTTPClient = &http.Client{Timeout: 30 * time.Second}
-var cliReleaseMetadataFetcher = fetchCLIReleaseMetadata
-
-// CLIBinaryDownload streams a published CLI release asset. The release and
-// its checksum are selected from trusted project release metadata, never from
-// a caller-supplied URL.
-func (h *SearchHandler) CLIBinaryDownload(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		SendNegotiatedError(w, r, "BAD_REQUEST", "GET is required")
-		return
+func (h *SearchHandler) cliBinaryDir() string {
+	dataDir := h.dataDir
+	if dataDir == "" {
+		dataDir = config.GetAppPaths("", "").Data
 	}
-	filename := chi.URLParam(r, "filename")
-	platform, ok := cliPlatformFromRouteName(filename)
-	if !ok {
-		SendNegotiatedError(w, r, "NOT_FOUND", "CLI binary not found")
-		return
+	dir := strings.TrimSpace(h.appConfig.CLI.BinaryDownload.Dir)
+	if dir == "" {
+		dir = filepath.Join(dataDir, "cli")
+	} else {
+		dir = strings.ReplaceAll(dir, "{data_dir}", dataDir)
 	}
-	channel := cliUpdateChannel(r.URL.Query().Get("channel"))
-	if channel == "" {
-		SendNegotiatedError(w, r, "BAD_REQUEST", "invalid update channel")
-		return
-	}
-	metadata, err := getCLIReleaseMetadata(r.Context(), channel)
-	if err != nil {
-		SendNegotiatedError(w, r, "SERVER_ERROR", "CLI release metadata is unavailable")
-		return
-	}
-	assetURL := metadata.Assets[platform]
-	if assetURL == "" {
-		SendNegotiatedError(w, r, "NOT_FOUND", "CLI binary is not available for this platform")
-		return
-	}
-	request, err := http.NewRequestWithContext(r.Context(), http.MethodGet, assetURL, nil)
-	if err != nil {
-		SendNegotiatedError(w, r, "SERVER_ERROR", "failed to prepare CLI download")
-		return
-	}
-	request.Header.Set("User-Agent", "vidveil-cli-release-proxy")
-	response, err := cliReleaseHTTPClient.Do(request)
-	if err != nil {
-		SendNegotiatedError(w, r, "SERVER_ERROR", "failed to download CLI binary")
-		return
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode == http.StatusNotFound {
-		return
-	}
-	if response.StatusCode != http.StatusOK {
-		SendNegotiatedError(w, r, "SERVER_ERROR", "upstream CLI download failed")
-		return
-	}
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
-	if response.ContentLength >= 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
-	if _, err := io.Copy(w, response.Body); err != nil {
-		return
-	}
-}
-
-func cliUpdateChannel(value string) string {
-	channel, valid := config.NormalizeUpdateChannel(value)
-	if !valid {
-		return ""
-	}
-	return channel
-}
-
-func cliPlatformFromRouteName(filename string) (string, bool) {
-	for _, platform := range []string{
-		"linux-amd64", "linux-arm64", "darwin-amd64", "darwin-arm64",
-		"windows-amd64", "windows-arm64", "freebsd-amd64", "freebsd-arm64",
-	} {
-		if filename == paths.ProjectName+"-cli-"+platform {
-			return platform, true
-		}
-	}
-	return "", false
-}
-
-func getCLIReleaseMetadata(ctx context.Context, channel string) (cliReleaseMetadata, error) {
-	if channel = cliUpdateChannel(channel); channel == "" {
-		return cliReleaseMetadata{}, fmt.Errorf("invalid CLI update channel")
-	}
-	cliReleaseMetadataCache.Lock()
-	defer cliReleaseMetadataCache.Unlock()
-	if cached, ok := cliReleaseMetadataCache.byChannel[channel]; ok && time.Now().Before(cached.expiresAt) {
-		return cached.metadata, nil
-	}
-	metadata, err := cliReleaseMetadataFetcher(ctx, channel)
-	if err != nil {
-		return cliReleaseMetadata{}, err
-	}
-	cliReleaseMetadataCache.byChannel[channel] = cachedCLIReleaseMetadata{
-		metadata: metadata, expiresAt: time.Now().Add(cliReleaseMetadataCacheTTL),
-	}
-	return metadata, nil
-}
-
-func fetchCLIReleaseMetadata(ctx context.Context, channel string) (cliReleaseMetadata, error) {
-	endpoint := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", paths.ProjectOrg, paths.ProjectName)
-	if channel != "stable" {
-		endpoint = fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=100", paths.ProjectOrg, paths.ProjectName)
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return cliReleaseMetadata{}, err
-	}
-	request.Header.Set("Accept", "application/vnd.github+json")
-	request.Header.Set("User-Agent", "vidveil-cli-release-metadata")
-	response, err := cliReleaseHTTPClient.Do(request)
-	if err != nil {
-		return cliReleaseMetadata{}, fmt.Errorf("fetching CLI release metadata: %w", err)
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode == http.StatusNotFound {
-		return cliReleaseMetadata{
-			Versions: map[string]cliVersionMetadata{},
-			Assets:   map[string]string{},
-		}, nil
-	}
-	if response.StatusCode != http.StatusOK {
-		return cliReleaseMetadata{}, fmt.Errorf("GitHub release API returned status %d", response.StatusCode)
-	}
-	var releases []cliRelease
-	if channel == "stable" {
-		var release cliRelease
-		if err := json.NewDecoder(response.Body).Decode(&release); err != nil {
-			return cliReleaseMetadata{}, fmt.Errorf("decoding stable CLI release: %w", err)
-		}
-		releases = []cliRelease{release}
-	} else if err := json.NewDecoder(response.Body).Decode(&releases); err != nil {
-		return cliReleaseMetadata{}, fmt.Errorf("decoding CLI releases: %w", err)
-	}
-	var selected *cliRelease
-	for index := range releases {
-		if cliReleaseMatchesChannel(releases[index], channel) {
-			selected = &releases[index]
-			break
-		}
-	}
-	if selected == nil {
-		return cliReleaseMetadata{
-			Versions: map[string]cliVersionMetadata{},
-			Assets:   map[string]string{},
-		}, nil
-	}
-	assets := make(map[string]string)
-	var checksumURL string
-	for _, asset := range selected.Assets {
-		if asset.Name == "sha256.txt" {
-			checksumURL = asset.BrowserDownloadURL
-		}
-		if platform, ok := cliPlatformFromAssetName(asset.Name); ok {
-			assets[platform] = asset.BrowserDownloadURL
-		}
-	}
-	if checksumURL == "" {
-		return cliReleaseMetadata{}, fmt.Errorf("CLI release has no sha256.txt asset")
-	}
-	checksums, err := fetchCLIReleaseChecksums(ctx, checksumURL)
-	if err != nil {
-		return cliReleaseMetadata{}, err
-	}
-	versions := make(map[string]cliVersionMetadata, len(assets))
-	version, err := cliReleaseVersion(*selected)
-	if err != nil {
-		return cliReleaseMetadata{}, err
-	}
-	for platform := range assets {
-		assetName := cliAssetName(platform)
-		checksum := checksums[assetName]
-		if checksum == "" {
-			delete(assets, platform)
-			continue
-		}
-		versions[platform] = cliVersionMetadata{Version: version, SHA256: checksum}
-	}
-	if len(versions) == 0 {
-		return cliReleaseMetadata{}, fmt.Errorf("CLI release has no supported platform assets")
-	}
-	return cliReleaseMetadata{Versions: versions, Assets: assets}, nil
-}
-
-func cliReleaseVersion(release cliRelease) (string, error) {
-	if release.TagName != "devel" {
-		return strings.TrimPrefix(release.TagName, "v"), nil
-	}
-	for _, candidate := range []struct {
-		text   string
-		prefix string
-	}{
-		{text: release.Name, prefix: "Devel Build "},
-		{text: release.Body, prefix: "Devel build: "},
-		{text: release.Name, prefix: "Daily Build "},
-		{text: release.Body, prefix: "Daily build: "},
-	} {
-		if !strings.HasPrefix(candidate.text, candidate.prefix) {
-			continue
-		}
-		version := strings.TrimSpace(strings.TrimPrefix(candidate.text, candidate.prefix))
-		if version != "" && !strings.ContainsAny(version, " \t\r\n") {
-			return version, nil
-		}
-	}
-	return "", fmt.Errorf("devel CLI release has no commit version in its release name or body")
-}
-
-func cliReleaseMatchesChannel(release cliRelease, channel string) bool {
-	stable := stableCLITagPattern.MatchString(release.TagName)
-	beta := strings.HasSuffix(release.TagName, "-beta")
-	devel := release.TagName == "devel"
-	switch channel {
-	case "stable":
-		return stable && !release.Prerelease
-	case "beta":
-		return stable || beta
-	case "devel":
-		return stable || beta || devel
-	default:
-		return false
-	}
+	return filepath.Clean(dir)
 }
 
 func cliAssetName(platform string) string {
@@ -288,42 +57,188 @@ func cliAssetName(platform string) string {
 	return name
 }
 
-func cliPlatformFromAssetName(assetName string) (string, bool) {
-	for _, platform := range []string{
-		"linux-amd64", "linux-arm64", "darwin-amd64", "darwin-arm64",
-		"windows-amd64", "windows-arm64", "freebsd-amd64", "freebsd-arm64",
-	} {
-		if assetName == cliAssetName(platform) {
+func cliPlatformFromRouteName(filename string) (string, bool) {
+	for _, platform := range cliPlatforms {
+		if filename == cliAssetName(platform) {
 			return platform, true
 		}
 	}
 	return "", false
 }
 
-func fetchCLIReleaseChecksums(ctx context.Context, checksumURL string) (map[string]string, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumURL, nil)
+func cliDirectorySignature(dir string) (string, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, err
+		if os.IsNotExist(err) {
+			return "missing", nil
+		}
+		return "", err
 	}
-	request.Header.Set("User-Agent", "vidveil-cli-release-metadata")
-	response, err := cliReleaseHTTPClient.Do(request)
+	var signature strings.Builder
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&signature, "%s:%d:%d:%d|", entry.Name(), info.Size(), info.ModTime().UnixNano(), info.Mode())
+	}
+	return signature.String(), nil
+}
+
+func scanCLIVersionsInDirectory(dir string) map[string]cliBinarySnapshot {
+	versions := make(map[string]cliBinarySnapshot)
+	versionBytes, err := os.ReadFile(filepath.Join(dir, "version.txt"))
 	if err != nil {
-		return nil, fmt.Errorf("fetching CLI checksums: %w", err)
+		return versions
 	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("CLI checksum download returned status %d", response.StatusCode)
+	versionName := strings.TrimSpace(string(versionBytes))
+	if versionName == "" || strings.ContainsAny(versionName, " \t\r\n") {
+		return versions
 	}
+	checksumsFile, err := os.Open(filepath.Join(dir, "sha256.txt"))
+	if err != nil {
+		return versions
+	}
+	defer func() { _ = checksumsFile.Close() }()
 	checksums := make(map[string]string)
-	scanner := bufio.NewScanner(io.LimitReader(response.Body, 1<<20))
+	scanner := bufio.NewScanner(io.LimitReader(checksumsFile, 1<<20))
 	for scanner.Scan() {
 		fields := strings.Fields(scanner.Text())
-		if len(fields) == 2 && len(fields[0]) == 64 {
-			checksums[fields[1]] = strings.ToLower(fields[0])
+		if len(fields) != 2 || len(fields[0]) != sha256.Size*2 {
+			continue
+		}
+		decoded, err := hex.DecodeString(fields[0])
+		if err != nil || len(decoded) != sha256.Size {
+			continue
+		}
+		if _, ok := cliPlatformFromRouteName(filepath.Base(fields[1])); ok {
+			checksums[filepath.Base(fields[1])] = strings.ToLower(fields[0])
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("reading CLI checksums: %w", err)
+	if scanner.Err() != nil {
+		return versions
 	}
-	return checksums, nil
+	for _, platform := range cliPlatforms {
+		filename := cliAssetName(platform)
+		path := filepath.Join(dir, filename)
+		file, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		hash := sha256.New()
+		_, copyErr := io.Copy(hash, file)
+		closeErr := file.Close()
+		if copyErr != nil || closeErr != nil {
+			continue
+		}
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		actual := hex.EncodeToString(hash.Sum(nil))
+		if expected := checksums[filename]; expected != "" && actual == expected {
+			versions[platform] = cliBinarySnapshot{
+				Metadata: cliVersionMetadata{Version: versionName, SHA256: actual},
+				Size:     info.Size(),
+				ModTime:  info.ModTime(),
+			}
+		} else if expected != "" {
+			log.Printf("WARN cli binary checksum mismatch: %s", filename)
+		}
+	}
+	return versions
+}
+
+func cliVersionsInDirectory(dir string) map[string]cliVersionMetadata {
+	snapshots := scanCLIVersionsInDirectory(dir)
+	versions := make(map[string]cliVersionMetadata, len(snapshots))
+	for platform, snapshot := range snapshots {
+		versions[platform] = snapshot.Metadata
+	}
+	return versions
+}
+
+func (h *SearchHandler) refreshCLIVersions(force bool) {
+	dir := h.cliBinaryDir()
+	signature, err := cliDirectorySignature(dir)
+	if err != nil {
+		log.Printf("WARN cli binary directory could not be inspected: %v", err)
+		h.cliVersionsMu.Lock()
+		h.cliVersionsCache = make(map[string]cliBinarySnapshot)
+		h.cliVersionsSig = ""
+		h.cliVersionsMu.Unlock()
+		return
+	}
+	h.cliVersionsMu.Lock()
+	defer h.cliVersionsMu.Unlock()
+	if !force && h.cliVersionsCache != nil && signature == h.cliVersionsSig {
+		return
+	}
+	h.cliVersionsCache = scanCLIVersionsInDirectory(dir)
+	h.cliVersionsSig = signature
+}
+
+func (h *SearchHandler) cliVersionSnapshot(platform string) (cliBinarySnapshot, bool) {
+	h.refreshCLIVersions(false)
+	h.cliVersionsMu.Lock()
+	defer h.cliVersionsMu.Unlock()
+	snapshot, ok := h.cliVersionsCache[platform]
+	return snapshot, ok
+}
+
+func (h *SearchHandler) cliVersions() map[string]cliVersionMetadata {
+	h.refreshCLIVersions(false)
+	h.cliVersionsMu.Lock()
+	defer h.cliVersionsMu.Unlock()
+	versions := make(map[string]cliVersionMetadata, len(h.cliVersionsCache))
+	for platform, snapshot := range h.cliVersionsCache {
+		versions[platform] = snapshot.Metadata
+	}
+	return versions
+}
+
+// CLIBinaryDownload streams an operator-provisioned, checksum-verified CLI release file.
+func (h *SearchHandler) CLIBinaryDownload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		SendNegotiatedError(w, r, "BAD_REQUEST", "GET is required")
+		return
+	}
+	filename := chi.URLParam(r, "filename")
+	if _, ok := cliPlatformFromRouteName(filename); !ok {
+		SendNegotiatedError(w, r, "NOT_FOUND", "CLI binary not found")
+		return
+	}
+	platform, _ := cliPlatformFromRouteName(filename)
+	snapshot, ok := h.cliVersionSnapshot(platform)
+	if !ok {
+		SendNegotiatedError(w, r, "NOT_FOUND", "CLI binary is not available for this platform")
+		return
+	}
+	path := filepath.Join(h.cliBinaryDir(), filename)
+	file, err := os.Open(path)
+	if err != nil {
+		SendNegotiatedError(w, r, "NOT_FOUND", "CLI binary is not available for this platform")
+		return
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		SendNegotiatedError(w, r, "NOT_FOUND", "CLI binary is not available for this platform")
+		return
+	}
+	if info.Size() != snapshot.Size || !info.ModTime().Equal(snapshot.ModTime) {
+		h.refreshCLIVersions(true)
+		SendNegotiatedError(w, r, "NOT_FOUND", "CLI binary is not available for this platform")
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, filename))
+	w.Header().Set("Content-Length", fmt.Sprint(info.Size()))
+	if h.ownerAudit != nil {
+		clientIP := getClientIP(r)
+		h.ownerAudit.Audit("cli.update_started", "cli", "client", clientIP, "success", map[string]interface{}{
+			"os_arch": platform, "version": snapshot.Metadata.Version, "client_ip": clientIP,
+		})
+	}
+	http.ServeContent(w, r, filename, info.ModTime(), file)
 }

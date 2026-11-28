@@ -32,14 +32,14 @@ Gitea Actions (`.gitea/workflows/`), Forgejo Actions (`.forgejo/workflows/`),
 and Jenkins (`Jenkinsfile`). Only the provider configured for a given mirror runs its
 workflows.
 
-| Command           | What it does                                                        |
-|-------------------|---------------------------------------------------------------------|
-| `make dev`        | Quick development build into `${TMPDIR}/${PROJECT_ORG}/${INTERNAL_NAME}-XXXXXX/`. |
-| `make local`      | Production-style build with version info into `binaries/`.          |
-| `make build`      | Native-platform server/CLI plus cross-platform server/CLI release binaries (8 targets) into `binaries/`. |
-| `make test`       | Run unit tests and coverage checks in `casjaysdev/go:latest`.         |
-| `make release`    | Build, stage, and publish a stable release.                           |
-| `make docker`     | Build and check the host-platform container image locally; CI publishes images. |
+| Command          | What it does                                                           |
+|------------------|------------------------------------------------------------------------|
+| `make build`     | Build debug server and CLI binaries for all 8 OS/architecture pairs.   |
+| `make test`      | Run lint, vulnerability, unit, coverage, and binary checks in Docker.  |
+| `make release`   | Build local production binaries, source archive, and checksum files.  |
+| `make docker`    | Build and check the host-platform container image locally.            |
+| `make clean`     | Remove local build and release artifacts.                              |
+| `make help`      | List the supported targets.                                            |
 
 To run integration tests:
 

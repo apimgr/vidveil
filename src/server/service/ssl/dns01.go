@@ -5,16 +5,15 @@
 package ssl
 
 import (
+	"context"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -107,33 +106,21 @@ func (m *SSLManager) requestDNS01(domain string) error {
 		return fmt.Errorf("DNS-01: certificate obtain failed: %w", err)
 	}
 
-	// Write certificate and key to {config_dir}/ssl/letsencrypt/{domain}/ per AI.md PART 15.
-	// This is the app-managed path; the scheduler renews it when 30 days or fewer remain.
-	leDir := filepath.Join(m.configDir, "ssl", "letsencrypt", domain)
-	if err := os.MkdirAll(leDir, 0o700); err != nil {
-		return fmt.Errorf("DNS-01: failed to create cert dir: %w", err)
-	}
-	certFile := filepath.Join(leDir, "fullchain.pem")
-	keyFile := filepath.Join(leDir, "privkey.pem")
-
-	if err := os.WriteFile(certFile, certs.Certificate, 0o600); err != nil {
-		return fmt.Errorf("DNS-01: failed to write cert: %w", err)
-	}
-	if err := os.WriteFile(keyFile, certs.PrivateKey, 0o600); err != nil {
-		return fmt.Errorf("DNS-01: failed to write key: %w", err)
-	}
-
-	// Parse and store the certificate
 	tlsCert, err := tls.X509KeyPair(certs.Certificate, certs.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("DNS-01: failed to parse certificate: %w", err)
 	}
-
-	leaf, err := x509.ParseCertificate(tlsCert.Certificate[0])
+	leaf, err := validateCertificate(&tlsCert, domain)
 	if err != nil {
-		return fmt.Errorf("DNS-01: failed to parse leaf certificate: %w", err)
+		return fmt.Errorf("DNS-01: invalid issued certificate: %w", err)
 	}
-	tlsCert.Leaf = leaf
+	// Managed certificates use the same staged pair replacement and rollback
+	// behavior as autocert so a failed renewal cannot leave mismatched files.
+	cache := newManagedACMECache(m.configDir, domain)
+	cacheValue := append(append([]byte(nil), certs.PrivateKey...), certs.Certificate...)
+	if err := cache.Put(context.Background(), domain, cacheValue); err != nil {
+		return fmt.Errorf("DNS-01: failed to persist managed certificate pair: %w", err)
+	}
 
 	m.mu.Lock()
 	m.certificate = &tlsCert

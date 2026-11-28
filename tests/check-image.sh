@@ -23,8 +23,8 @@ docker pull "$CHECK_IMAGE_REF"
 docker run --rm --name "$CHECK_PACKAGE_CONTAINER" --entrypoint sh "$CHECK_IMAGE_REF" -c \
   'for c in bash curl tor i2pd tini; do command -v "$c" >/dev/null || exit 1; done; test -s /etc/ssl/certs/ca-certificates.crt; test -f /usr/share/zoneinfo/America/New_York'
 
-docker run -d --name "$CHECK_HEALTH_CONTAINER" -p '127.0.0.1::80' "$CHECK_IMAGE_REF" >/dev/null
 trap 'docker rm -f "$CHECK_HEALTH_CONTAINER" >/dev/null 2>&1 || true' EXIT
+docker run -d --name "$CHECK_HEALTH_CONTAINER" -p '127.0.0.1::80' "$CHECK_IMAGE_REF" >/dev/null
 CHECK_HEALTH_PORT="$(docker port "$CHECK_HEALTH_CONTAINER" 80/tcp | sed 's/.*://')"
 trap 'exit 130' INT
 trap 'exit 143' TERM

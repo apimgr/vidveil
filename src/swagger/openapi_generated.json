@@ -606,6 +606,26 @@
         "x-listed": true
       }
     },
+    "/api/v1/cli/binaries/{filename}": {
+      "get": {
+        "operationId": "downloadCLIBinary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Download a CLI binary"
+          }
+        },
+        "summary": "Download a CLI binary",
+        "x-listed": false
+      }
+    },
     "/api/v1/engines": {
       "get": {
         "description": "Get all search engines with status and privacy scores",

@@ -262,29 +262,35 @@ func (m *SSLManager) loadCertificate(certFile, keyFile string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load certificate: %w", err)
 	}
-	if len(cert.Certificate) == 0 {
-		return fmt.Errorf("failed to load certificate: empty certificate chain")
+	if _, err := validateCertificate(&cert, m.appConfig.Server.FQDN); err != nil {
+		return err
 	}
-	leaf, err := x509.ParseCertificate(cert.Certificate[0])
-	if err != nil {
-		return fmt.Errorf("failed to parse certificate: %w", err)
-	}
-	now := time.Now()
-	if now.Before(leaf.NotBefore) || !now.Before(leaf.NotAfter) {
-		return fmt.Errorf("certificate is not currently valid")
-	}
-	if hostname := strings.TrimSpace(m.appConfig.Server.FQDN); hostname != "" {
-		if err := leaf.VerifyHostname(hostname); err != nil && !certificateCommonNameMatches(leaf.Subject.CommonName, hostname) {
-			return fmt.Errorf("certificate does not match configured hostname")
-		}
-	}
-	cert.Leaf = leaf
-
 	m.mu.Lock()
 	m.certificate = &cert
 	m.mu.Unlock()
 
 	return nil
+}
+
+func validateCertificate(cert *tls.Certificate, hostname string) (*x509.Certificate, error) {
+	if cert == nil || len(cert.Certificate) == 0 {
+		return nil, fmt.Errorf("failed to load certificate: empty certificate chain")
+	}
+	leaf, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse certificate: %w", err)
+	}
+	now := time.Now()
+	if now.Before(leaf.NotBefore) || !now.Before(leaf.NotAfter) {
+		return nil, fmt.Errorf("certificate is not currently valid")
+	}
+	if hostname = strings.TrimSpace(hostname); hostname != "" {
+		if err := leaf.VerifyHostname(hostname); err != nil && !certificateCommonNameMatches(leaf.Subject.CommonName, hostname) {
+			return nil, fmt.Errorf("certificate does not match configured hostname")
+		}
+	}
+	cert.Leaf = leaf
+	return leaf, nil
 }
 
 func certificateCommonNameMatches(commonName, hostname string) bool {

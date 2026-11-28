@@ -33,6 +33,9 @@ const (
 	DriverLibSQL Driver = "libsql"
 )
 
+// ErrRestoreSeedInProgress is returned when a remote restore pauses writes.
+var ErrRestoreSeedInProgress = errors.New("remote database restore seed is in progress")
+
 // DatabaseConfig holds database connection configuration per AI.md PART 10.
 // Supported drivers: sqlite (aliases sqlite2/sqlite3/file) and libsql (alias turso).
 type DatabaseConfig struct {
@@ -653,6 +656,16 @@ func (d *AppDatabase) Read(ctx context.Context, fn func(context.Context, dbstore
 // Write runs one bounded transaction on the writer handle and retries only
 // transient SQLite lock errors while the context deadline remains active.
 func (d *AppDatabase) Write(ctx context.Context, fn func(*sql.Tx) error) error {
+	return d.write(ctx, fn, false)
+}
+
+// WriteRestoreSeedBatch renews the remote restore lease and writes one bounded
+// archive batch while ordinary remote writes are paused.
+func (d *AppDatabase) WriteRestoreSeedBatch(ctx context.Context, fn func(*sql.Tx) error) error {
+	return d.write(ctx, fn, true)
+}
+
+func (d *AppDatabase) write(ctx context.Context, fn func(*sql.Tx) error, restoreSeedBatch bool) error {
 	if d == nil || d.db == nil {
 		return errors.New("database write handle is unavailable")
 	}
@@ -666,7 +679,24 @@ func (d *AppDatabase) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 			metric.DBWriteWaitSeconds.Observe(time.Since(attemptStart).Seconds())
 		}
 		if err == nil {
-			err = fn(tx)
+			if d.driver == DriverLibSQL {
+				if restoreSeedBatch {
+					var result sql.Result
+					result, err = tx.ExecContext(writeCtx, `UPDATE restore_seed_locks SET lease_until = datetime('now', '+30 minutes') WHERE lock_id = 'remote_seed' AND lease_until > CURRENT_TIMESTAMP`)
+					if err == nil {
+						var affected int64
+						affected, err = result.RowsAffected()
+						if err == nil && affected != 1 {
+							err = ErrRestoreSeedInProgress
+						}
+					}
+				} else {
+					err = checkRemoteRestoreSeedLock(tx)
+				}
+			}
+			if err == nil {
+				err = fn(tx)
+			}
 			if err != nil {
 				_ = tx.Rollback()
 			} else {
@@ -692,6 +722,24 @@ func (d *AppDatabase) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 		}
 	}
 	return lastErr
+}
+
+func checkRemoteRestoreSeedLock(tx *sql.Tx) error {
+	var lockTableExists int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'restore_seed_locks'`).Scan(&lockTableExists); err != nil {
+		return err
+	}
+	if lockTableExists == 0 {
+		return nil
+	}
+	var active int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM restore_seed_locks WHERE lock_id = 'remote_seed' AND lease_until > CURRENT_TIMESTAMP`).Scan(&active); err != nil {
+		return err
+	}
+	if active != 0 {
+		return ErrRestoreSeedInProgress
+	}
+	return nil
 }
 
 // VacuumInto performs a SQLite online snapshot outside a transaction through

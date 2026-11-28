@@ -52,6 +52,31 @@ func TestMigrateConfigLayoutSplitsAreasAndSecrets(t *testing.T) {
 	}
 }
 
+func TestMigrateConfigLayoutPlacesCLISettingsInMaintenanceArea(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "server.yml")
+	if err := os.WriteFile(configPath, []byte("cli:\n  binary_download:\n    dir: '{data_dir}/cli'\n    require_auth: true\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrateConfigLayout(configPath); err != nil {
+		t.Fatalf("migrateConfigLayout: %v", err)
+	}
+	serverData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(serverData), "binary_download") {
+		t.Fatalf("server.yml retained CLI download settings: %s", serverData)
+	}
+	maintenanceData, err := os.ReadFile(filepath.Join(configDir, "yaml.d", "maintenance.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(maintenanceData), "require_auth: true") {
+		t.Fatalf("maintenance area missing CLI download settings: %s", maintenanceData)
+	}
+}
+
 func TestMigrateConfigLayoutDoesNotCreateDropInWithoutChanges(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "server.yml")

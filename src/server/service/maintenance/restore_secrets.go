@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/apimgr/vidveil/src/common/dbstore"
 	"github.com/apimgr/vidveil/src/config"
@@ -59,15 +60,40 @@ func (m *MaintenanceManager) prepareRestoredSecrets(files []restoreFileEntry, te
 	}
 
 	if m.appDB != nil && m.appDB.Driver() != database.DriverSQLite {
+		var snapshot *restoreFileEntry
+		remoteFiles := make([]restoreFileEntry, 0, len(filtered))
+		for i := range filtered {
+			if filtered[i].name == "data/db/server.db" || filtered[i].name == "config/server.db" {
+				snapshot = &filtered[i]
+				continue
+			}
+			remoteFiles = append(remoteFiles, filtered[i])
+		}
+		filtered = remoteFiles
 		currentSecrets, err := readApplicationSecrets(m.appDB)
 		if err != nil {
 			return nil, nil, fmt.Errorf("read live remote application secrets: %w", err)
 		}
-		if len(currentSecrets) == 0 {
+		empty, err := remoteDatabaseIsEmpty(m.appDB)
+		if err != nil {
+			return nil, nil, fmt.Errorf("check live remote database before restore: %w", err)
+		}
+		if empty {
 			return filtered, func() error {
+				if snapshot != nil {
+					if err := seedRemoteDatabaseFromSQLite(m.appDB, snapshot.contentPath); err != nil {
+						return err
+					}
+				}
 				_, err := writeApplicationSecrets(m.appDB, secrets, true)
 				return err
 			}, nil
+		}
+		if len(currentSecrets) == 0 {
+			// The remote database has rows but no app_secrets. Keep it authoritative
+			// rather than importing an archive into an already-used database.
+			filtered = filterRestoreKeyMaterial(filtered)
+			return filtered, func() error { return nil }, nil
 		}
 		currentMeta, err := pgp.GetKeypairMeta(m.appDB)
 		if err != nil {
@@ -131,6 +157,209 @@ func (m *MaintenanceManager) prepareRestoredSecrets(files []restoreFileEntry, te
 		_, err = writeApplicationSecrets(targetDB, secrets, targetDB.Driver() != database.DriverSQLite)
 		return err
 	}, nil
+}
+
+const restoreDatabaseBatchSize = 500
+
+var restoreDatabaseTables = []string{
+	"owners", "settings", "scheduler_tasks", "scheduler_history", "captcha_challenges",
+	"notifications", "pgp_keypair", "security_reports", "security_thanks", "favorites",
+	"api_tokens", "health_stats", "health_request_buckets", "audit_log",
+}
+
+func remoteDatabaseIsEmpty(db *database.AppDatabase) (bool, error) {
+	for _, table := range restoreDatabaseTables {
+		remoteTable := restoreRemoteTableName(db.Driver(), table)
+		var count int
+		err := db.Read(context.Background(), func(ctx context.Context, reader dbstore.Reader) error {
+			query := "SELECT COUNT(*) FROM " + remoteTable
+			if table == "owners" {
+				query += " WHERE id <> 'system'"
+			}
+			return reader.QueryRowContext(ctx, query).Scan(&count)
+		})
+		if err != nil {
+			return false, err
+		}
+		if count != 0 {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func restoreRemoteTableName(driver database.Driver, table string) string {
+	if driver != database.DriverSQLite && table == "audit_log" {
+		return "srv_audit_log"
+	}
+	return table
+}
+
+func seedRemoteDatabaseFromSQLite(target *database.AppDatabase, snapshotPath string) (retErr error) {
+	if snapshotPath == "" {
+		return fmt.Errorf("remote database seed snapshot has no content path")
+	}
+	if err := claimRemoteDatabaseForRestoreSeed(target); err != nil {
+		return err
+	}
+	defer func() {
+		retErr = errors.Join(retErr, target.WriteRestoreSeedBatch(context.Background(), func(tx *sql.Tx) error {
+			_, err := tx.Exec(`DELETE FROM restore_seed_locks WHERE lock_id = 'remote_seed'`)
+			return err
+		}))
+	}()
+	source, err := database.NewAppDatabase(database.DatabaseConfig{
+		Driver: database.DriverSQLite, Path: snapshotPath, JournalMode: "WAL",
+	})
+	if err != nil {
+		return fmt.Errorf("open archived SQLite database for remote seed: %w", err)
+	}
+	defer func() {
+		retErr = errors.Join(retErr, source.Close())
+	}()
+
+	for _, table := range restoreDatabaseTables {
+		columns, err := restoreTableColumns(source, table)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
+			return fmt.Errorf("inspect archived %s table: %w", table, err)
+		}
+		targetTable := restoreRemoteTableName(target.Driver(), table)
+		targetColumns, err := restoreTableColumns(target, targetTable)
+		if err != nil {
+			return fmt.Errorf("inspect remote %s table: %w", targetTable, err)
+		}
+		columns = intersectRestoreColumns(columns, targetColumns)
+		if len(columns) == 0 {
+			continue
+		}
+		if err := copyRestoreTable(source, target, table, targetTable, columns); err != nil {
+			return fmt.Errorf("seed remote %s table: %w", table, err)
+		}
+	}
+	return nil
+}
+
+func claimRemoteDatabaseForRestoreSeed(target *database.AppDatabase) error {
+	return target.Write(context.Background(), func(tx *sql.Tx) error {
+		var active int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM restore_seed_locks WHERE lock_id = 'remote_seed' AND lease_until > CURRENT_TIMESTAMP`).Scan(&active); err != nil {
+			return err
+		}
+		if active != 0 {
+			return database.ErrRestoreSeedInProgress
+		}
+		for _, table := range restoreDatabaseTables {
+			remoteTable := restoreRemoteTableName(target.Driver(), table)
+			query := "SELECT COUNT(*) FROM " + remoteTable
+			if table == "owners" {
+				query += " WHERE id <> 'system'"
+			}
+			var count int
+			if err := tx.QueryRow(query).Scan(&count); err != nil {
+				return err
+			}
+			if count != 0 {
+				return fmt.Errorf("remote database became populated before restore seeding")
+			}
+		}
+		_, err := tx.Exec(`INSERT INTO restore_seed_locks (lock_id, lease_until) VALUES ('remote_seed', datetime('now', '+30 minutes')) ON CONFLICT(lock_id) DO UPDATE SET lease_until = excluded.lease_until`)
+		return err
+	})
+}
+
+func restoreTableColumns(db *database.AppDatabase, table string) ([]string, error) {
+	columns := make([]string, 0)
+	err := db.Read(context.Background(), func(ctx context.Context, reader dbstore.Reader) error {
+		rows, err := reader.QueryContext(ctx, "SELECT name FROM pragma_table_info(?) ORDER BY cid", table)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				return err
+			}
+			columns = append(columns, name)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(columns) == 0 {
+		return nil, sql.ErrNoRows
+	}
+	return columns, nil
+}
+
+func intersectRestoreColumns(source, target []string) []string {
+	targetSet := make(map[string]struct{}, len(target))
+	for _, column := range target {
+		targetSet[column] = struct{}{}
+	}
+	columns := make([]string, 0, len(source))
+	for _, column := range source {
+		if _, ok := targetSet[column]; ok {
+			columns = append(columns, column)
+		}
+	}
+	return columns
+}
+
+func copyRestoreTable(source, target *database.AppDatabase, sourceTable, targetTable string, columns []string) error {
+	quotedColumns := make([]string, len(columns))
+	placeholders := make([]string, len(columns))
+	for i, column := range columns {
+		quotedColumns[i] = `"` + strings.ReplaceAll(column, `"`, `""`) + `"`
+		placeholders[i] = "?"
+	}
+	insert := "INSERT OR IGNORE INTO " + targetTable + " (" + strings.Join(quotedColumns, ",") + ") VALUES (" + strings.Join(placeholders, ",") + ")"
+	for offset := 0; ; offset += restoreDatabaseBatchSize {
+		batch := make([][]interface{}, 0, restoreDatabaseBatchSize)
+		err := source.Read(context.Background(), func(ctx context.Context, reader dbstore.Reader) error {
+			rows, err := reader.QueryContext(ctx, "SELECT "+strings.Join(quotedColumns, ",")+" FROM "+sourceTable+" ORDER BY rowid LIMIT ? OFFSET ?", restoreDatabaseBatchSize, offset)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				values := make([]interface{}, len(columns))
+				pointers := make([]interface{}, len(columns))
+				for i := range values {
+					pointers[i] = &values[i]
+				}
+				if err := rows.Scan(pointers...); err != nil {
+					return err
+				}
+				batch = append(batch, values)
+			}
+			return rows.Err()
+		})
+		if err != nil {
+			return err
+		}
+		if len(batch) == 0 {
+			return nil
+		}
+		if err := target.WriteRestoreSeedBatch(context.Background(), func(tx *sql.Tx) error {
+			for _, values := range batch {
+				if _, err := tx.Exec(insert, values...); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		if len(batch) < restoreDatabaseBatchSize {
+			return nil
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func restoreEntryBytes(file restoreFileEntry) ([]byte, error) {

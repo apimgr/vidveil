@@ -98,6 +98,108 @@ func TestWriteApplicationSecretsPreservesExistingRowsWhenOnlyIfEmpty(t *testing.
 	}
 }
 
+func TestSeedRemoteDatabaseCopiesNonSecretRowsFromSQLiteSnapshot(t *testing.T) {
+	tempRoot := filepath.Join(os.TempDir(), "apimgr")
+	if err := os.MkdirAll(tempRoot, 0755); err != nil {
+		t.Fatal(err)
+	}
+	dbDir, err := os.MkdirTemp(tempRoot, "vidveil-restore-seed-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dbDir); err != nil {
+			t.Errorf("remove temporary database directory: %v", err)
+		}
+	})
+
+	sourceManager, err := database.NewSchemaManager(filepath.Join(dbDir, "archive.db"))
+	if err != nil {
+		t.Fatalf("open archive database: %v", err)
+	}
+	defer sourceManager.Close()
+	if err := sourceManager.EnsureSchema(); err != nil {
+		t.Fatalf("initialize archive schema: %v", err)
+	}
+	if err := sourceManager.GetAppDatabase().Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO settings (key, value, type) VALUES ('site_title', 'Archive title', 'string')`)
+		return err
+	}); err != nil {
+		t.Fatalf("write archived non-secret row: %v", err)
+	}
+
+	targetManager, err := database.NewSchemaManager(filepath.Join(dbDir, "remote.db"))
+	if err != nil {
+		t.Fatalf("open remote database: %v", err)
+	}
+	defer targetManager.Close()
+	if err := targetManager.EnsureSchema(); err != nil {
+		t.Fatalf("initialize remote schema: %v", err)
+	}
+	if err := seedRemoteDatabaseFromSQLite(targetManager.GetAppDatabase(), filepath.Join(dbDir, "archive.db")); err != nil {
+		t.Fatalf("seed remote database: %v", err)
+	}
+	var value string
+	if err := targetManager.GetAppDatabase().Read(context.Background(), func(ctx context.Context, reader dbstore.Reader) error {
+		return reader.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = 'site_title'`).Scan(&value)
+	}); err != nil {
+		t.Fatalf("read seeded non-secret row: %v", err)
+	}
+	if value != "Archive title" {
+		t.Fatalf("seeded setting = %q, want Archive title", value)
+	}
+}
+
+func TestRemoteDatabaseIsEmptyIgnoresReservedSystemOwner(t *testing.T) {
+	tempRoot := filepath.Join(os.TempDir(), "apimgr")
+	if err := os.MkdirAll(tempRoot, 0755); err != nil {
+		t.Fatal(err)
+	}
+	dbDir, err := os.MkdirTemp(tempRoot, "vidveil-restore-empty-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dbDir); err != nil {
+			t.Errorf("remove temporary database directory: %v", err)
+		}
+	})
+	manager, err := database.NewSchemaManager(filepath.Join(dbDir, "remote.db"))
+	if err != nil {
+		t.Fatalf("open remote database: %v", err)
+	}
+	defer manager.Close()
+	if err := manager.EnsureSchema(); err != nil {
+		t.Fatalf("initialize remote schema: %v", err)
+	}
+	if err := manager.GetAppDatabase().Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO app_secrets (key, value) VALUES ('installation_secret', 'generated-live-secret')`)
+		return err
+	}); err != nil {
+		t.Fatalf("write generated application secret: %v", err)
+	}
+	empty, err := remoteDatabaseIsEmpty(manager.GetAppDatabase())
+	if err != nil {
+		t.Fatalf("check initialized empty database: %v", err)
+	}
+	if !empty {
+		t.Fatal("database containing only generated secrets and the reserved system owner was not considered empty")
+	}
+	if err := manager.GetAppDatabase().Write(context.Background(), func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO settings (key, value) VALUES ('site_title', 'Live title')`)
+		return err
+	}); err != nil {
+		t.Fatalf("write live non-secret row: %v", err)
+	}
+	empty, err = remoteDatabaseIsEmpty(manager.GetAppDatabase())
+	if err != nil {
+		t.Fatalf("recheck populated database: %v", err)
+	}
+	if empty {
+		t.Fatal("database with a live non-secret row was considered empty")
+	}
+}
+
 func TestPreserveLiveRestoreKeyMaterialKeepsFilesOutsideArchiveSnapshot(t *testing.T) {
 	tempRoot := filepath.Join(os.TempDir(), "apimgr")
 	if err := os.MkdirAll(tempRoot, 0755); err != nil {

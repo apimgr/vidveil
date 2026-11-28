@@ -11,7 +11,7 @@
     {{template "public/header" .}}
     <main class="favorites-page" id="main-content" role="main">
         <div class="favorites-toolbar">
-            <h1>{{ t "favorites.title" }}</h1>
+            <h1 class="page-title">{{ t "favorites.title" }}</h1>
             <div class="favorites-actions">
                 <span id="favorites-count-label" class="favorites-count">{{tf "favorites.count" "count" (len .Favorites)}}</span>
                 <a class="btn-secondary btn-sm" href="{{ path "/favorites/export" }}">{{ t "favorites.export" }}</a>
@@ -49,7 +49,7 @@
                 <a href="{{.URL}}" rel="noopener noreferrer nofollow" aria-label="{{.Title}} - {{.Source}}">
                     {{if .Thumbnail}}<img src="{{ path $.APIBase }}/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{else}}<img src="{{ path "/static/images/placeholder.svg" }}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{end}}
                     <div class="video-info">
-                        <h3 class="video-title">{{.Title}}</h3>
+                        <h2 class="video-title">{{.Title}}</h2>
                         <p class="video-source">{{.Source}}</p>
                     </div>
                 </a>

@@ -284,11 +284,38 @@ __test_endpoint() {
   fi
 }
 
-__info "Building host-platform server and CLI binaries with make local..."
-make -C "${DOCKER_PROJECT_ROOT}" local \
-  BINDIR="${DOCKER_BIN_DIR}" RELDIR="${DOCKER_TEMP_DIR}/releases" \
-  GO_CACHE="${DOCKER_GO_CACHE}" GO_BUILD="${DOCKER_GO_BUILD}" \
-  DOCKER_MEM="${DOCKER_MEM}" DOCKER_CPUS="${DOCKER_CPUS}" DOCKER_CPU_SHARES="${DOCKER_CPU_SHARES}" DOCKER_TIMEOUT="${DOCKER_TIMEOUT}"
+__info "Building host-platform server and CLI binaries in the toolchain container..."
+DOCKER_BUILD_EPOCH="$(date -u +%s)"
+DOCKER_COMMIT_ID="$(git -C "${DOCKER_PROJECT_ROOT}" rev-parse --short=7 HEAD)"
+DOCKER_VERSION="${VERSION:-$(tr -d '[:space:]' <"${DOCKER_PROJECT_ROOT}/release.txt" 2>/dev/null || true)}"
+DOCKER_VERSION="${DOCKER_VERSION:-${DOCKER_COMMIT_ID}}"
+DOCKER_OFFICIAL_SITE="${OFFICIAL_SITE:-}"
+if [ -f "${DOCKER_PROJECT_ROOT}/site.txt" ]; then
+  DOCKER_OFFICIAL_SITE="$(cat "${DOCKER_PROJECT_ROOT}/site.txt")"
+fi
+DOCKER_BUILD_LDFLAGS="-X main.Version=${DOCKER_VERSION} -X main.CommitID=${DOCKER_COMMIT_ID} -X main.BuildEpoch=${DOCKER_BUILD_EPOCH} -X main.OfficialSite=${DOCKER_OFFICIAL_SITE}"
+DOCKER_CLI_LDFLAGS="-X main.ProjectName=${DOCKER_PROJECT_NAME} -X main.Version=${DOCKER_VERSION} -X main.CommitID=${DOCKER_COMMIT_ID} -X main.BuildEpoch=${DOCKER_BUILD_EPOCH} -X main.OfficialSite=${DOCKER_OFFICIAL_SITE}"
+DOCKER_BUILD_CONTAINER="${DOCKER_PROJECT_NAME}-${DOCKER_TEST_SUFFIX}"
+printf '%s\n' "${DOCKER_BUILD_CONTAINER}" >>"${DOCKER_CONTAINER_REGISTRY}"
+mkdir -p "${DOCKER_BIN_DIR}"
+# ShellCheck does not expand variables that must be evaluated inside the toolchain container.
+# shellcheck disable=SC2016
+timeout -k 30 "${DOCKER_TIMEOUT}" docker run --rm --no-healthcheck \
+  --name "${DOCKER_BUILD_CONTAINER}" \
+  --label "vidveil.test-run=${DOCKER_TEST_SUFFIX}" \
+  --memory="${DOCKER_MEM}" --cpus="${DOCKER_CPUS}" --cpu-shares="${DOCKER_CPU_SHARES}" \
+  --tmpfs "/tmp/apimgr/${DOCKER_INTERNAL_NAME}-${DOCKER_TEST_SUFFIX}:rw,exec,size=2g" \
+  -v "${DOCKER_PROJECT_ROOT}:/app:ro" \
+  -v "${DOCKER_BIN_DIR}:/build" \
+  -v "${DOCKER_GO_CACHE}:/usr/local/share/go/pkg/mod" \
+  -v "${DOCKER_GO_BUILD}:/usr/local/share/go/cache" \
+  -w /app -e CGO_ENABLED=0 -e GOFLAGS=-buildvcs=false \
+  -e TMPDIR="/tmp/apimgr/${DOCKER_INTERNAL_NAME}-${DOCKER_TEST_SUFFIX}" \
+  -e PROJECT_NAME="${DOCKER_PROJECT_NAME}" \
+  -e BUILD_LDFLAGS="${DOCKER_BUILD_LDFLAGS}" -e CLI_LDFLAGS="${DOCKER_CLI_LDFLAGS}" \
+  casjaysdev/go:latest sh -c 'set -eu; go mod download; \
+    go build -buildvcs=false -gcflags "all=-N -l" -ldflags "$BUILD_LDFLAGS" -o "/build/$PROJECT_NAME" ./src; \
+    if [ -d src/client ]; then go build -buildvcs=false -gcflags "all=-N -l" -ldflags "$CLI_LDFLAGS" -o "/build/$PROJECT_NAME-cli" ./src/client; fi'
 if [ ! -f "${DOCKER_BIN_DIR}/${DOCKER_PROJECT_NAME}" ]; then
   echo -e "${DOCKER_RED}x Build failed${DOCKER_NC}"
   exit 1

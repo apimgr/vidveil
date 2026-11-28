@@ -52,10 +52,12 @@ Local builds use the repository Makefile and Docker-backed Go toolchain:
 ```bash
 git clone https://github.com/apimgr/vidveil.git
 cd vidveil
-make local
+make build
 ```
 
-Built binaries are written to `binaries/`.
+Debug server and CLI binaries for all 8 supported OS/architecture pairs are
+written to `binaries/`. For local production artifacts and checksums, run
+`make release`; it does not tag or publish a release.
 
 ## Service Installation
 

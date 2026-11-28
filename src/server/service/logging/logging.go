@@ -472,6 +472,12 @@ func SanitizeLogFields(fields map[string]interface{}) map[string]interface{} {
 			} else {
 				sanitized[k] = "***"
 			}
+		case lowerKey == "token_prefix_sha256":
+			if hash, ok := v.(string); ok && logTokenPrefixHashPattern.MatchString(hash) {
+				sanitized[k] = hash
+			} else {
+				sanitized[k] = "[REDACTED]"
+			}
 		case isSensitiveLogField(lowerKey):
 			sanitized[k] = "[REDACTED]"
 		case lowerKey == "ip" || strings.HasSuffix(lowerKey, "_ip") || lowerKey == "remote_addr":
@@ -490,6 +496,7 @@ func SanitizeLogFields(fields map[string]interface{}) map[string]interface{} {
 var (
 	logCredentialPattern      = regexp.MustCompile(`(?i)\b(password|secret|(?:access_|refresh_|session_)?token|authorization|credential|api[_-]?key|session)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;]+)`)
 	logQueryCredentialPattern = regexp.MustCompile(`(?i)([?&](?:token|session|code|key|password|secret|auth|pwd|api_key|apikey|access_token|refresh_token)=)[^&#\s]*`)
+	logTokenPrefixHashPattern = regexp.MustCompile(`^[0-9a-f]{8}$`)
 )
 
 func isSensitiveLogField(key string) bool {

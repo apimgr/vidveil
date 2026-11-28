@@ -13,20 +13,21 @@ VidVeil uses containerized Go builds. Do **not** run `go build` directly on the 
 ## Build Commands
 
 ```bash
-# Quick local-platform build to a temporary directory
-make dev
-
-# Local-platform binaries in ./binaries/
-make local
-
-# Local-platform server and CLI plus all supported cross-platform binaries
+# Debug server and CLI binaries for all 8 OS/architecture pairs
 make build
 
-# Run unit tests
+# Run lint, vulnerability, unit, coverage, and binary checks
 make test
 
-# Build and check the host-platform container image locally; CI publishes images
+# Create local production artifacts and checksums (does not tag or publish)
+make release
+
+# Build and check the host-platform container image locally
 make docker
+
+# Remove binaries and release artifacts, or list supported targets
+make clean
+make help
 ```
 
 ## Test Commands
@@ -63,7 +64,6 @@ JavaScript disabled, and a full browser with JavaScript enabled.
 
 ## Output Locations
 
-- `make dev` writes a temporary build under your OS temp directory
-- `make local` writes local-platform server and CLI binaries to `./binaries/`
-- `make build` writes local-platform server and CLI binaries plus both binaries for all 8 supported cross-platform targets to `./binaries/`
+- `make build` writes debug server and CLI binaries for all 8 supported OS/architecture pairs to `./binaries/`
+- `make release` writes local production artifacts and checksums; it does not tag or publish a release
 - Docker assets live under `docker/`

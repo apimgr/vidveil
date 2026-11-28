@@ -28,10 +28,7 @@ COMMIT_ID   := $(shell git rev-parse --short=7 HEAD 2>/dev/null || echo "N/A")
 # Sources in priority order: site.txt → OFFICIAL_SITE env → empty
 OFFICIAL_SITE := $(shell [ -f site.txt ] && cat site.txt || echo "$${OFFICIAL_SITE:-}")
 
-# Release tag: add 'v' prefix ONLY to numeric semver VERSION, never to text/timestamp versions
-RELEASE_TAG := $(shell v="$(VERSION)"; case "$$v" in (v*) echo "$$v" ;; ([0-9]*.[0-9]*.[0-9]*) echo "v$$v" ;; (*) echo "$$v" ;; esac)
-
-# go build flags applied to every binary (AI.md PART 7/8: -trimpath is a go build flag, not a linker flag)
+# Production go build flags (AI.md PART 25; debug builds preserve source paths)
 BUILD_FLAGS := -trimpath -buildvcs=false
 
 # Linker flags to embed build info into server binary (AI.md PART 7/25)
@@ -51,11 +48,27 @@ CLI_LDFLAGS := -s -w \
 	-X 'main.BuildEpoch=$(BUILD_EPOCH)' \
 	-X 'main.OfficialSite=$(OFFICIAL_SITE)'
 
+# Debug builds preserve source paths and disable optimization/inlining.
+DEBUG_LDFLAGS := \
+	-X 'main.Version=$(VERSION)' \
+	-X 'main.CommitID=$(COMMIT_ID)' \
+	-X 'main.BuildEpoch=$(BUILD_EPOCH)' \
+	-X 'main.OfficialSite=$(OFFICIAL_SITE)'
+DEBUG_CLI_LDFLAGS := \
+	-X 'main.ProjectName=$(PROJECT_NAME)' \
+	-X 'main.Version=$(VERSION)' \
+	-X 'main.CommitID=$(COMMIT_ID)' \
+	-X 'main.BuildEpoch=$(BUILD_EPOCH)' \
+	-X 'main.OfficialSite=$(OFFICIAL_SITE)'
+DEBUG_GCFLAGS := all=-N -l
+
 # Directories
 BINDIR := binaries
 RELDIR := releases
 BINDIR_IN_CONTAINER := $(if $(filter /%,$(BINDIR)),$(abspath $(BINDIR)),/app/$(BINDIR))
 BINDIR_MOUNT := $(if $(filter /%,$(BINDIR)),-v "$(abspath $(BINDIR)):$(abspath $(BINDIR))")
+RELDIR_IN_CONTAINER := $(if $(filter /%,$(RELDIR)),$(abspath $(RELDIR)),/app/$(RELDIR))
+RELDIR_MOUNT := $(if $(filter /%,$(RELDIR)),-v "$(abspath $(RELDIR)):$(abspath $(RELDIR))")
 
 # Go cache directories (bind-mounted from host for persistence across builds)
 GO_CACHE ?= $(HOME)/go/pkg/mod
@@ -94,7 +107,8 @@ GO_DOCKER_RUN = timeout -k 30 $(DOCKER_TIMEOUT) docker run --rm --no-healthcheck
 # Standard Go Docker command (per AI.md PART 25 — includes image for simple go commands)
 GO_DOCKER = $(GO_DOCKER_RUN) casjaysdev/go:latest
 
-.PHONY: build local release release-check docker test dev clean
+.DEFAULT_GOAL := help
+.PHONY: build test release docker clean help
 
 # =============================================================================
 # CLEAN — Remove build artifacts (AI.md PART 25)
@@ -107,64 +121,36 @@ clean:
 # =============================================================================
 build: clean
 	@mkdir -p $(BINDIR) $(GO_CACHE) $(GO_BUILD)
-	@echo "Building version $(VERSION)..."
-	@$(GO_DOCKER_RUN) $(BINDIR_MOUNT) -e BUILD_LDFLAGS="$(LDFLAGS)" -e CLI_LDFLAGS="$(CLI_LDFLAGS)" casjaysdev/go:latest sh -c 'set -eu; go mod tidy; go mod download; go generate ./src/swagger; \
-		GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build $(BUILD_FLAGS) -ldflags "$$BUILD_LDFLAGS" -o $(BINDIR_IN_CONTAINER)/$(PROJECT_NAME) ./src; \
-		if [ -d src/client ]; then GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build $(BUILD_FLAGS) -ldflags "$$CLI_LDFLAGS" -o $(BINDIR_IN_CONTAINER)/$(PROJECT_NAME)-cli ./src/client; fi; \
+	@echo "Building debug binaries, version $(VERSION)..."
+	@$(GO_DOCKER_RUN) $(BINDIR_MOUNT) -e BUILD_LDFLAGS="$(DEBUG_LDFLAGS)" -e CLI_LDFLAGS="$(DEBUG_CLI_LDFLAGS)" -e BUILD_GCFLAGS="$(DEBUG_GCFLAGS)" casjaysdev/go:latest sh -c 'set -eu; go mod tidy; go mod download; go generate ./src/swagger; \
+		GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build -buildvcs=false -gcflags "$$BUILD_GCFLAGS" -ldflags "$$BUILD_LDFLAGS" -o $(BINDIR_IN_CONTAINER)/$(PROJECT_NAME) ./src; \
+		if [ -d src/client ]; then GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build -buildvcs=false -gcflags "$$BUILD_GCFLAGS" -ldflags "$$CLI_LDFLAGS" -o $(BINDIR_IN_CONTAINER)/$(PROJECT_NAME)-cli ./src/client; fi; \
 		for platform in $$(echo "$(PLATFORMS)" | tr "," " "); do OS=$${platform%/*}; ARCH=$${platform#*/}; EXT=""; \
 			if [ "$$OS" = windows ]; then EXT=.exe; fi; \
-			GOOS=$$OS GOARCH=$$ARCH go build $(BUILD_FLAGS) -ldflags "$$BUILD_LDFLAGS" -o $(BINDIR_IN_CONTAINER)/$(PROJECT_NAME)-$$OS-$$ARCH$$EXT ./src; \
-			if [ -d src/client ]; then GOOS=$$OS GOARCH=$$ARCH go build $(BUILD_FLAGS) -ldflags "$$CLI_LDFLAGS" -o $(BINDIR_IN_CONTAINER)/$(PROJECT_NAME)-cli-$$OS-$$ARCH$$EXT ./src/client; fi; \
+			GOOS=$$OS GOARCH=$$ARCH go build -buildvcs=false -gcflags "$$BUILD_GCFLAGS" -ldflags "$$BUILD_LDFLAGS" -o $(BINDIR_IN_CONTAINER)/$(PROJECT_NAME)-$$OS-$$ARCH$$EXT ./src; \
+			if [ -d src/client ]; then GOOS=$$OS GOARCH=$$ARCH go build -buildvcs=false -gcflags "$$BUILD_GCFLAGS" -ldflags "$$CLI_LDFLAGS" -o $(BINDIR_IN_CONTAINER)/$(PROJECT_NAME)-cli-$$OS-$$ARCH$$EXT ./src/client; fi; \
 		done'
 	@echo "Build complete: $(BINDIR)/"
 
 # =============================================================================
-# LOCAL — Build host-platform binaries only (fast local test builds)
+# RELEASE — Production binaries, source archive and checksums; CI owns publishing
 # =============================================================================
-local: clean
-	@mkdir -p $(BINDIR) $(GO_CACHE) $(GO_BUILD)
-	@echo "Building local binaries version $(VERSION)..."
-	@$(GO_DOCKER_RUN) $(BINDIR_MOUNT) -e BUILD_LDFLAGS="$(LDFLAGS)" -e CLI_LDFLAGS="$(CLI_LDFLAGS)" casjaysdev/go:latest sh -c 'set -eu; go mod tidy; go mod download; go generate ./src/swagger; \
-		GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build $(BUILD_FLAGS) -ldflags "$$BUILD_LDFLAGS" -o $(BINDIR_IN_CONTAINER)/$(PROJECT_NAME) ./src; \
-		if [ -d src/client ]; then GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build $(BUILD_FLAGS) -ldflags "$$CLI_LDFLAGS" -o $(BINDIR_IN_CONTAINER)/$(PROJECT_NAME)-cli ./src/client; fi'
-	@echo "Local build complete: $(BINDIR)/"
-
-# =============================================================================
-# RELEASE — Manual local release build with source archive
-# =============================================================================
-# Stable SemVer only; reject existing immutable tags before build can clean or replace release artifacts.
-release-check:
-	@echo "$(VERSION)" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$$' >/dev/null || { echo "ERROR: make release needs a stable SemVer X.Y.Z in release.txt (got '$(VERSION)')" >&2; exit 78; }
-	@set -eu; tag="refs/tags/v$(VERSION)"; \
-		if git rev-parse -q --verify "$$tag" >/dev/null; then echo "ERROR: tag v$(VERSION) already exists locally; release tags are immutable" >&2; exit 1; fi; \
-		remote_tags=$$(git ls-remote --tags origin "$$tag"); \
-		if [ -n "$$remote_tags" ]; then echo "ERROR: tag v$(VERSION) already exists on origin; release tags are immutable" >&2; exit 1; fi
-
-release: release-check build
-	@mkdir -p $(RELDIR)
-	@echo "Preparing release $(VERSION)..."
+release:
+	@mkdir -p $(RELDIR) $(GO_CACHE) $(GO_BUILD)
+	@rm -rf $(RELDIR)/*
+	@echo "Building production binaries, version $(VERSION)..."
+	@$(GO_DOCKER_RUN) $(RELDIR_MOUNT) -e BUILD_LDFLAGS="$(LDFLAGS)" -e CLI_LDFLAGS="$(CLI_LDFLAGS)" casjaysdev/go:latest sh -c 'set -eu; go mod tidy; go mod download; \
+		for platform in $$(echo "$(PLATFORMS)" | tr "," " "); do OS=$${platform%/*}; ARCH=$${platform#*/}; EXT=""; \
+			if [ "$$OS" = windows ]; then EXT=.exe; fi; \
+			GOOS=$$OS GOARCH=$$ARCH go build $(BUILD_FLAGS) -ldflags "$$BUILD_LDFLAGS" -o $(RELDIR_IN_CONTAINER)/$(PROJECT_NAME)-$$OS-$$ARCH$$EXT ./src; \
+			if [ -d src/client ]; then GOOS=$$OS GOARCH=$$ARCH go build $(BUILD_FLAGS) -ldflags "$$CLI_LDFLAGS" -o $(RELDIR_IN_CONTAINER)/$(PROJECT_NAME)-cli-$$OS-$$ARCH$$EXT ./src/client; fi; \
+		done'
 	@echo "$(VERSION)" > $(RELDIR)/version.txt
-	@for f in $(BINDIR)/$(PROJECT_NAME)-*; do \
-		[ -f "$$f" ] || continue; \
-		strip "$$f" 2>/dev/null || true; \
-		cp "$$f" $(RELDIR)/; \
-	done
 	@tar --exclude='.git' --exclude='.github' --exclude='.gitea' \
 		--exclude='binaries' --exclude='releases' --exclude='*.tar.gz' \
 		-czf $(RELDIR)/$(PROJECT_NAME)-$(VERSION)-source.tar.gz .
-	@echo "Generating checksums..."
-	@cd $(RELDIR) && rm -f sha256.txt sha512.txt && \
-		sha256sum $$(ls | grep -v -e '^sha256.txt$$' -e '^sha512.txt$$') > sha256.txt && \
-		sha512sum $$(ls | grep -v -e '^sha256.txt$$' -e '^sha512.txt$$') > sha512.txt
-	# Stable release tags are immutable; never delete, move, or recreate an existing tag.
-	@if git rev-parse -q --verify "refs/tags/v$(VERSION)" >/dev/null || git ls-remote --exit-code --tags origin "refs/tags/v$(VERSION)" >/dev/null 2>&1; then echo "ERROR: tag v$(VERSION) already exists; release tags are never moved or recreated" >&2; exit 1; fi
-	@git tag "v$(VERSION)"
-	@git push origin "refs/tags/v$(VERSION)"
-	@gh release create "v$(VERSION)" $(RELDIR)/* \
-		--title "v$(VERSION)" \
-		--notes "Release v$(VERSION)" \
-		--latest
-	@echo "Release complete: v$(VERSION)"
+	@cd $(RELDIR) && FILES="$$(ls)" && sha256sum $$FILES > sha256.txt && sha512sum $$FILES > sha512.txt
+	@echo "Release build complete: $(RELDIR)/"
 
 # =============================================================================
 # DOCKER — Build the host-platform container image locally; CI/CD publishes images
@@ -239,7 +225,7 @@ docker:
 		if ! timeout -k 5 10 docker exec "$$container" curl -q -LSsf --connect-timeout 3 --max-time 5 https://check.torproject.org/ -o /dev/null >/dev/null 2>&1; then outbound=false; fi; \
 		tor_status=""; \
 		while [ "$$wait_seconds" -gt 0 ]; do \
-			health_json=$$(timeout -k 5 15 docker exec "$$container" curl -q -LSsf --max-time 10 http://localhost/server/healthz 2>/dev/null || true); \
+			health_json=$$(timeout -k 5 15 docker exec "$$container" curl -q -LSsf --max-time 10 -H 'Accept: application/json' http://localhost/server/healthz 2>/dev/null || true); \
 			tor_status=$$(printf '%s\n' "$$health_json" | awk '/"tor"[[:space:]]*:[[:space:]]*[{]/ { inside=1 } inside && /"status"[[:space:]]*:/ { sub(/^.*"status"[[:space:]]*:[[:space:]]*"/, ""); sub(/".*$$/, ""); print; exit } inside && /[}]/ { inside=0 }'); \
 			if [ "$$tor_status" = healthy ]; then break; fi; \
 			if [ "$$tor_status" = error ]; then echo "ERROR: shipped image reports Tor status error" >&2; exit 1; fi; \
@@ -274,17 +260,13 @@ test:
 	@./tests/run_tests.sh
 
 # =============================================================================
-# DEV — Quick build to a temp dir for rapid iteration (AI.md PART 25)
-# Builds linux/amd64 (container native). Output is isolated per run.
+# HELP — List the six supported Makefile targets
 # =============================================================================
-dev:
-	@mkdir -p $(GO_CACHE) $(GO_BUILD)
-	@mkdir -p "$${TMPDIR:-/tmp}/$(PROJECT_ORG)" && \
-	BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECT_ORG)/$(INTERNAL_NAME)-XXXXXX") && \
-	echo "Quick dev build to $$BUILD_DIR..." && \
-	$(GO_DOCKER_RUN) -v "$$BUILD_DIR:/build" casjaysdev/go:latest sh -c 'set -eu; go mod tidy; go generate ./src/swagger; \
-		go build $(BUILD_FLAGS) -o "/build/$(PROJECT_NAME)" ./src; \
-		if [ -d src/client ]; then go build $(BUILD_FLAGS) -o "/build/$(PROJECT_NAME)-cli" ./src/client; fi' && \
-	echo "Built: $$BUILD_DIR/$(PROJECT_NAME)" && \
-	if [ -f "$$BUILD_DIR/$(PROJECT_NAME)-cli" ]; then echo "Built: $$BUILD_DIR/$(PROJECT_NAME)-cli"; fi && \
-	echo "Test:  docker run --rm -it --name $(PROJECT_NAME)-test -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECT_NAME) --help"
+help:
+	@printf '%s\n' \
+		'build   Build debug server and CLI binaries for all 8 platforms' \
+		'test    Run lint, vulnerability, unit and binary checks' \
+		'release Build production binaries, source archive and checksums locally' \
+		'docker  Build and check the local host-platform container image' \
+		'clean   Remove build and release artifacts' \
+		'help    List these targets'

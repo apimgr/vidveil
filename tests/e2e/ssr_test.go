@@ -60,7 +60,16 @@ func TestServerPageAccessibilityMarkup(t *testing.T) {
 	}
 	for _, pagePath := range paths {
 		t.Run(pagePath, func(t *testing.T) {
-			resp, body := get(t, client, pagePath, map[string]string{"Accept": "text/html", "User-Agent": "Mozilla/5.0"})
+			pageClient := client
+			if pagePath == "/age-verify" {
+				pageClient = &http.Client{
+					Timeout: 30 * time.Second,
+					CheckRedirect: func(*http.Request, []*http.Request) error {
+						return http.ErrUseLastResponse
+					},
+				}
+			}
+			resp, body := get(t, pageClient, pagePath, map[string]string{"Accept": "text/html", "User-Agent": "Mozilla/5.0"})
 			if resp.StatusCode != http.StatusOK {
 				t.Fatalf("GET %s: status=%d body=%s", pagePath, resp.StatusCode, body)
 			}
@@ -70,7 +79,9 @@ func TestServerPageAccessibilityMarkup(t *testing.T) {
 			}
 			labelTargets := make(map[string]bool)
 			var controls []map[string]string
+			var controlNodes []*html.Node
 			var headings []int
+			pageTitleCount := 0
 			walkHTML(doc, func(node *html.Node) {
 				if node.Type != html.ElementNode {
 					return
@@ -88,21 +99,44 @@ func TestServerPageAccessibilityMarkup(t *testing.T) {
 						return
 					}
 					controls = append(controls, attrs)
+					controlNodes = append(controlNodes, node)
 				}
 				if len(node.Data) == 2 && node.Data[0] == 'h' && node.Data[1] >= '1' && node.Data[1] <= '6' {
 					headings = append(headings, int(node.Data[1]-'0'))
+					if node.Data == "h1" && strings.Contains(" "+attrs["class"]+" ", " page-title ") {
+						pageTitleCount++
+					}
 				}
 			})
 			if len(headings) == 0 || headings[0] != 1 {
 				t.Errorf("%s must begin its heading hierarchy with h1, got %v", pagePath, headings)
+			}
+			h1Count := 0
+			for _, level := range headings {
+				if level == 1 {
+					h1Count++
+				}
+			}
+			if h1Count != 1 {
+				t.Errorf("%s must contain exactly one h1, got %d", pagePath, h1Count)
+			}
+			if pageTitleCount != 1 {
+				t.Errorf("%s must contain exactly one h1.page-title, got %d", pagePath, pageTitleCount)
 			}
 			for i := 1; i < len(headings); i++ {
 				if headings[i] > headings[i-1]+1 {
 					t.Errorf("%s skips from h%d to h%d", pagePath, headings[i-1], headings[i])
 				}
 			}
-			for _, control := range controls {
-				if control["aria-label"] == "" && control["aria-labelledby"] == "" && (control["id"] == "" || !labelTargets[control["id"]]) {
+			for i, control := range controls {
+				labeledByAncestor := false
+				for ancestor := controlNodes[i].Parent; ancestor != nil; ancestor = ancestor.Parent {
+					if ancestor.Type == html.ElementNode && ancestor.Data == "label" {
+						labeledByAncestor = true
+						break
+					}
+				}
+				if control["aria-label"] == "" && control["aria-labelledby"] == "" && !labeledByAncestor && (control["id"] == "" || !labelTargets[control["id"]]) {
 					t.Errorf("%s has an unlabelled %s control (id=%q)", pagePath, control["name"], control["id"])
 				}
 			}
@@ -221,13 +255,13 @@ func TestOwnerTokenFavoritesAPI(t *testing.T) {
 	}
 	mcpCall := func(rawToken string) (int, string) {
 		t.Helper()
-		payload := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"listFavorites","arguments":{},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}`
+		payload := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"listFavorites","arguments":{},"_meta":{"io.modelcontextprotocol/clientCapabilities":{"sampling":{}},"io.modelcontextprotocol/protocolVersion":"2026-07-28"}},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}`
 		request, err := http.NewRequest(http.MethodPost, s.localBase+"/api/v1/server/mcp", strings.NewReader(payload))
 		if err != nil {
 			t.Fatal(err)
 		}
 		request.Header.Set("Content-Type", "application/json")
-		request.Header.Set("Accept", "application/json")
+		request.Header.Set("Accept", "application/json, text/event-stream")
 		request.Header.Set("MCP-Protocol-Version", "2026-07-28")
 		request.Header.Set("Mcp-Method", "tools/call")
 		request.Header.Set("Mcp-Name", "listFavorites")
@@ -337,11 +371,11 @@ func TestOwnerTokenFavoritesAPI(t *testing.T) {
 	}
 	expiredDate := time.Now().UTC().Add(-24 * time.Hour).Format("2006-01-02")
 	status, apiBody = callJSON(http.MethodPatch, "/api/v1/server/preferences/tokens/"+linked.Data.ID, rotated.Data.Token, `{"expires_on":"`+expiredDate+`"}`)
-	if status != http.StatusOK {
-		t.Fatalf("linked-token expiry = %d %s", status, apiBody)
+	if status != http.StatusBadRequest {
+		t.Fatalf("past linked-token expiry = %d, want 400: %s", status, apiBody)
 	}
-	if response, body := get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + linkedRotated.Data.Token, "Accept": "application/json"}); response.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("expired linked token = %d %s", response.StatusCode, body)
+	if response, body := get(t, client, "/api/v1/favorites", map[string]string{"Authorization": "Bearer " + linkedRotated.Data.Token, "Accept": "application/json"}); response.StatusCode != http.StatusOK {
+		t.Fatalf("linked token after rejected expiry change = %d %s", response.StatusCode, body)
 	}
 	status, apiBody = callJSON(http.MethodDelete, "/api/v1/server/preferences/tokens/"+linked.Data.ID, rotated.Data.Token, "")
 	if status != http.StatusOK {

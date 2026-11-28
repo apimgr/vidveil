@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/apimgr/vidveil/src/common/version"
@@ -271,7 +272,7 @@ func operations(cfg *config.AppConfig, r *http.Request, operatorAuthorized bool)
 	sort.Strings(pathNames)
 	var result []operation
 	for _, path := range pathNames {
-		if !strings.HasPrefix(path, cfg.APIBasePath()+"/") || strings.Contains(path, "/metrics") || strings.Contains(path, "/server/preferences") || strings.Contains(path, "/server/mcp") {
+		if !strings.HasPrefix(path, cfg.APIBasePath()+"/") || strings.Contains(path, "/metrics") || strings.Contains(path, "/server/preferences") || strings.Contains(path, "/server/mcp") || strings.Contains(path, "/cli/binaries/") {
 			continue
 		}
 		methods, ok := paths[path].(map[string]any)
@@ -414,6 +415,7 @@ func callAPI(ctx context.Context, api http.Handler, incoming *http.Request, op o
 			body = bytes.NewReader(encoded)
 		}
 	}
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, chi.NewRouteContext())
 	ctx = WithInternalDispatch(ctx)
 	apiRequest := httptest.NewRequestWithContext(ctx, op.method, apiPath+queryString(query), body)
 	if op.requestBody {

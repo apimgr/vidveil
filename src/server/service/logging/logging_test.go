@@ -201,6 +201,15 @@ func TestSanitizeLogFields(t *testing.T) {
 			},
 		},
 		{
+			name:  "stable token prefix hash retained",
+			input: map[string]interface{}{"token_prefix_sha256": "1a2b3c4d"},
+			checks: func(t *testing.T, out map[string]interface{}) {
+				if got := out["token_prefix_sha256"]; got != "1a2b3c4d" {
+					t.Errorf("token prefix hash = %q, want stable hash", got)
+				}
+			},
+		},
+		{
 			name:  "api_key redacted",
 			input: map[string]interface{}{"api_key": "abc"},
 			checks: func(t *testing.T, out map[string]interface{}) {

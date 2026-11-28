@@ -321,6 +321,9 @@ type SearchHandler struct {
 	sched             SchedulerHealth
 	recentSearchMu    sync.Mutex
 	recentSearches    []recentSearch
+	cliVersionsMu     sync.Mutex
+	cliVersionsSig    string
+	cliVersionsCache  map[string]cliBinarySnapshot
 }
 
 func (h *SearchHandler) SetMaintenanceStatus(status *maintenance.MaintenanceStatus) {
@@ -475,6 +478,7 @@ func newSearchResultCache(cc config.CacheConfig) (cache.SearchResultCache, bool)
 // SetDataDir sets the data directory (used for thumbnail disk cache)
 func (h *SearchHandler) SetDataDir(dir string) {
 	h.dataDir = dir
+	h.refreshCLIVersions(true)
 }
 
 func (h *SearchHandler) brandingAssetURL(source, asset string) string {
@@ -5681,18 +5685,13 @@ func (h *SearchHandler) ProxyVideo(w http.ResponseWriter, r *http.Request) {
 // Per AI.md PART 14: /api/autodiscover (NON-NEGOTIABLE)
 // This endpoint is NOT versioned because clients need it BEFORE they know the API version
 func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
-	channel := cliUpdateChannel(r.URL.Query().Get("channel"))
-	if channel == "" {
-		SendNegotiatedError(w, r, "BAD_REQUEST", "invalid update channel")
-		return
-	}
 	urls := autodiscoverURLs(r)
 	response := map[string]interface{}{
 		"name": paths.ProjectName, "version": version.GetVersion(),
 		"api":             map[string]string{"current_version": h.appConfig.Server.APIVersion},
 		"urls":            urls,
 		"cli_min_version": h.appConfig.Server.Update.CLIMinVersion,
-		"cli_versions":    map[string]cliVersionMetadata{},
+		"cli_versions":    h.cliVersions(),
 	}
 	if h.appConfig.Server.Tor.Expose && h.appConfig.Server.Tor.OnionAddress != "" {
 		response["onion"] = h.appConfig.Server.Tor.OnionAddress
@@ -5700,10 +5699,6 @@ func (h *SearchHandler) Autodiscover(w http.ResponseWriter, r *http.Request) {
 	if h.appConfig.Server.I2P.Enabled && h.appConfig.Server.I2P.Expose && h.appConfig.Server.I2P.Address != "" {
 		response["i2p"] = h.appConfig.Server.I2P.Address
 	}
-	if release, err := getCLIReleaseMetadata(r.Context(), channel); err == nil {
-		response["cli_versions"] = release.Versions
-	}
-
 	// NEVER include secrets, internal IPs, or sensitive data.
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "data": response})

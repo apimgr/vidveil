@@ -17,6 +17,9 @@ func TestDefaultAppConfig(t *testing.T) {
 	if cfg == nil {
 		t.Fatal("DefaultAppConfig() returned nil")
 	}
+	if cfg.CLI.BinaryDownload.Dir != "{data_dir}/cli" || cfg.CLI.BinaryDownload.RequireAuth {
+		t.Errorf("CLI binary download defaults = %+v, want local data directory and public downloads", cfg.CLI.BinaryDownload)
+	}
 
 	// Check server defaults
 	if cfg.Server.Mode != "production" {

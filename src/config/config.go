@@ -108,7 +108,8 @@ type CLIConfig struct {
 // CLIBinaryDownloadConfig controls whether the server token is required when
 // streaming companion CLI release binaries.
 type CLIBinaryDownloadConfig struct {
-	RequireAuth bool `yaml:"require_auth"`
+	Dir         string `yaml:"dir"`
+	RequireAuth bool   `yaml:"require_auth"`
 }
 
 // EnginesConfig holds engine-specific settings
@@ -1992,6 +1993,7 @@ func DefaultAppConfig() *AppConfig {
 	defaultAPIBase := "/api/" + defaultAPIVersion
 
 	return &AppConfig{
+		CLI: CLIConfig{BinaryDownload: CLIBinaryDownloadConfig{Dir: "{data_dir}/cli"}},
 		Server: ServerSettings{
 			Port:       defaultPort,
 			FQDN:       fqdn,

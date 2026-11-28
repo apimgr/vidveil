@@ -381,7 +381,7 @@ func checkServerHeader(t *testing.T, pagePath string, root *html.Node) {
 		return
 	}
 	children := elementChildren(headers[0])
-	if len(children) != 4 || children[0].Data != "a" || !hasClass(children[0], "site-brand") || children[1].Data != "nav" || !hasClass(children[1], "nav-links") || children[2].Data != "label" || !hasClass(children[2], "nav-toggle") || children[3].Data != "div" || !hasClass(children[3], "header-actions") {
+	if len(children) != 4 || children[0].Data != "a" || !hasClass(children[0], "site-brand") || children[1].Data != "nav" || !hasClass(children[1], "nav-links") || children[2].Data != "label" || !hasClass(children[2], "nav-toggle") || children[3].Data != "div" || !hasClass(children[3], "site-header-actions") {
 		t.Errorf("%s shared header elements are not in the required order", pagePath)
 	}
 	if len(children) > 0 && (attr(children[0], "href") != "/" || strings.TrimSpace(textContent(children[0])) == "") {

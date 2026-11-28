@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/apimgr/vidveil/src/config"
 )
 
@@ -81,6 +83,33 @@ func TestHandlerServesStatelessOpenAPITools(t *testing.T) {
 	}
 	if dispatched.Header.Get("Authorization") != "Bearer test-token" {
 		t.Fatal("tool dispatch did not forward the Bearer token")
+	}
+}
+
+func TestHandlerDispatchesAPIWithFreshChiRouteContext(t *testing.T) {
+	cfg := config.DefaultAppConfig()
+	router := chi.NewRouter()
+	var dispatchedMethod string
+	router.Get("/api/v1/favorites", func(w http.ResponseWriter, r *http.Request) {
+		dispatchedMethod = r.Method
+		w.WriteHeader(http.StatusOK)
+	})
+	router.Post("/api/v1/favorites", func(w http.ResponseWriter, r *http.Request) {
+		dispatchedMethod = r.Method
+		w.WriteHeader(http.StatusOK)
+	})
+	router.Post("/api/v1/server/mcp", Handler(cfg, router, nil, validTestBearer).ServeHTTP)
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"listFavorites","arguments":{}}}`
+	request := httptest.NewRequest(http.MethodPost, "http://api.example.test/api/v1/server/mcp", strings.NewReader(body))
+	setMCPHeaders(request, body)
+	request.Header.Set("Authorization", "Bearer test-token")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("tools/call response = %d %s", response.Code, response.Body.String())
+	}
+	if dispatchedMethod != http.MethodGet {
+		t.Fatalf("nested API dispatch method = %q, want GET", dispatchedMethod)
 	}
 }
 

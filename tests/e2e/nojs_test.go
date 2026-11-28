@@ -4,11 +4,15 @@ package e2e
 
 import (
 	"context"
+	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 )
 
@@ -24,6 +28,42 @@ func noJSTab(t *testing.T) *tab {
 		t.Fatalf("disable script execution: %v", err)
 	}
 	return tb
+}
+
+func submitNoJSForm(t *testing.T, tb *tab, method, path string, actions ...chromedp.Action) {
+	t.Helper()
+	if err := chromedp.Run(tb.ctx, network.Enable(), page.Enable()); err != nil {
+		t.Fatalf("enable browser navigation events: %v", err)
+	}
+	completed := make(chan struct{})
+	var eventMu sync.Mutex
+	waitingForLoad := false
+	chromedp.ListenTarget(tb.ctx, func(event any) {
+		eventMu.Lock()
+		defer eventMu.Unlock()
+		switch event := event.(type) {
+		case *network.EventRequestWillBeSent:
+			requestURL := strings.SplitN(event.Request.URL, "?", 2)[0]
+			if event.Request.Method == method && strings.HasSuffix(requestURL, path) {
+				waitingForLoad = true
+			}
+		case *page.EventLoadEventFired:
+			if waitingForLoad {
+				close(completed)
+				waitingForLoad = false
+			}
+		}
+	})
+	if err := chromedp.Run(tb.ctx, actions...); err != nil {
+		t.Fatalf("submit no-JS form: %v", err)
+	}
+	waitCtx, cancel := context.WithTimeout(tb.ctx, 10*time.Second)
+	defer cancel()
+	select {
+	case <-completed:
+	case <-waitCtx.Done():
+		t.Fatalf("no-JS POST navigation did not finish: %v", waitCtx.Err())
+	}
 }
 
 // dumpOnFail stores the current page HTML when the test has already failed.
@@ -43,15 +83,13 @@ func dumpOnFail(t *testing.T, tb *tab, name string) {
 func TestNoJSSearchFormSubmits(t *testing.T) {
 	tb := noJSTab(t)
 	var url, body string
-	err := chromedp.Run(tb.ctx,
+	submitNoJSForm(t, tb, http.MethodGet, "/search",
 		chromedp.Navigate(s.browserBase+"/"),
 		chromedp.WaitVisible(`form input[name="q"]`, chromedp.ByQuery),
 		chromedp.SetValue(`form.search-form--large input[name="q"]`, "nojs probe", chromedp.ByQuery),
 		chromedp.Click(`form.search-form--large button[type="submit"]`, chromedp.ByQuery),
-		chromedp.Sleep(500*time.Millisecond),
-		chromedp.Location(&url),
-		chromedp.OuterHTML("html", &body, chromedp.ByQuery),
 	)
+	err := chromedp.Run(tb.ctx, chromedp.Location(&url), chromedp.OuterHTML("html", &body, chromedp.ByQuery))
 	if err != nil {
 		t.Fatalf("no-JS search submit: %v", err)
 	}
@@ -86,23 +124,28 @@ func TestNoJSNavigationLinksWork(t *testing.T) {
 
 func TestNoJSPreferencesFormPersists(t *testing.T) {
 	tb := noJSTab(t)
-	var body string
-	err := chromedp.Run(tb.ctx,
+	var body, pageURL string
+	submitNoJSForm(t, tb, http.MethodPost, "/server/preferences",
 		chromedp.Navigate(s.browserBase+"/server/preferences"),
 		chromedp.WaitVisible(`form`, chromedp.ByQuery),
 		chromedp.SetValue(`#preferences-form select[name="vidveil_pref_results_per_page"]`, "50", chromedp.ByQuery),
 		chromedp.Click(`#preferences-form button[type="submit"]`, chromedp.ByQuery),
-		chromedp.WaitReady("body", chromedp.ByQuery),
+	)
+	err := chromedp.Run(tb.ctx,
 		chromedp.Navigate(s.browserBase+"/server/preferences"),
 		chromedp.WaitReady("body", chromedp.ByQuery),
+		chromedp.Location(&pageURL),
 		chromedp.OuterHTML("html", &body, chromedp.ByQuery),
 	)
 	if err != nil {
-		t.Fatalf("no-JS preferences submit: %v", err)
+		t.Fatalf("no-JS preferences reload: %v", err)
 	}
 	if !strings.Contains(body, "50") {
 		saveArtifact(t, "nojs-preferences.html", body)
 		t.Error("results_per_page=50 did not survive a no-JS form POST")
+	}
+	if !strings.Contains(pageURL, "/server/preferences") {
+		t.Errorf("no-JS preferences submission ended at %s", pageURL)
 	}
 }
 

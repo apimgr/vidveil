@@ -887,6 +887,14 @@ func generateEmbeddedSpec(appConfig *config.AppConfig, r *http.Request, includeU
 			delete(paths, path)
 		}
 	}
+	if operations, ok := paths[apiBase+"/cli/binaries/{filename}"].(map[string]interface{}); ok {
+		if operation, ok := operations["get"].(map[string]interface{}); ok {
+			operation["description"] = "Streams a locally provisioned CLI binary after verifying its SHA-256 checksum."
+			if appConfig != nil && appConfig.CLI.BinaryDownload.RequireAuth {
+				operation["security"] = []map[string]interface{}{{"BearerAuth": []string{}}}
+			}
+		}
+	}
 	servers, ok := document["servers"].([]interface{})
 	if ok && len(servers) > 0 {
 		if server, ok := servers[0].(map[string]interface{}); ok {

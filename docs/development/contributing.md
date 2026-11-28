@@ -6,7 +6,7 @@
 2. Create a feature branch
 3. Make your changes using the supported containerized workflow
 4. Run the relevant checks:
-   - `make dev` for a quick local build
+   - `make build` for debug server and CLI binaries across all 8 OS/architecture pairs
    - `make test` for unit tests
    - `./tests/run_tests.sh` for containerized integration tests
 5. Submit a pull request

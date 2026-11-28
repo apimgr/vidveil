@@ -12,6 +12,7 @@
     <main class="results" id="main-content" role="main" aria-label="{{ t "a11y.search_results" }}">
         {{/* Search header with inline search and collapsible filters */}}
         <div class="search-header" id="search-header">
+            <h1 class="page-title">{{ t "search.results" }}</h1>
             <form action="{{ path "/search" }}" method="get" class="search-form search-form--inline" role="search" aria-label="{{ t "a11y.refine_search" }}" data-action="search-submit">
                 <div class="search-wrapper search-wrapper--compact">
                     <input type="text"
@@ -54,7 +55,7 @@
              always renders inside <main>, never near the footer. */}}
         {{if eq .ErrorCode "RATE_LIMITED"}}
         <div class="empty-state search-error" role="alert" aria-live="assertive">
-            <h3 class="empty-state-title">{{ t "search.search_busy" }}</h3>
+            <h2 class="empty-state-title">{{ t "search.search_busy" }}</h2>
         </div>
         {{else if eq (len .Results) 0}}
         <div class="empty-state no-results" id="no-results-message" role="status" aria-live="polite">
@@ -62,7 +63,7 @@
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            <h3 class="empty-state-title">{{ t "search.no_results" }}</h3>
+            <h2 class="empty-state-title">{{ t "search.no_results" }}</h2>
             <p class="empty-state-message">{{ t "search.no_results_hint" }}</p>
         </div>
         {{end}}
@@ -103,7 +104,7 @@
                 <a href="{{.URL}}" {{if $.OpenNewTab}}target="_blank" {{end}}rel="noopener noreferrer nofollow" aria-label="{{.Title}} - {{.Duration}} - {{.Source}}">
                     {{if .Thumbnail}}<img src="{{ path $.APIBase }}/proxy/thumbnails?url={{urlquery .Thumbnail}}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{else}}<img src="{{ path "/static/images/placeholder.svg" }}" alt="{{tf "a11y.thumbnail_for" "title" .Title}}" loading="lazy">{{end}}
                     <div class="video-info">
-                        <h3 class="video-title">{{.Title}}</h3>
+                        <h2 class="video-title">{{.Title}}</h2>
                         <p class="video-meta">
                             <span class="duration">{{.Duration}}</span>
                             {{if .Views}}<span class="views">{{.Views}} {{ t "time.views" }}</span>{{end}}

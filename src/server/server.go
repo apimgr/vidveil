@@ -1504,12 +1504,6 @@ func (s *Server) setupRoutes() {
 		r.Get("/security/report/{tracking_id}", server.SecurityReportStatusPage)
 	})
 
-	if s.appConfig.CLI.BinaryDownload.RequireAuth {
-		s.router.With(s.requireOperatorToken).Get("/cli/binaries/{filename}", h.CLIBinaryDownload)
-	} else {
-		s.router.Get("/cli/binaries/{filename}", h.CLIBinaryDownload)
-	}
-
 	// Every API route is bound and mounted from the shared contract registry.
 	metricsHandler := svcmetrics.ServiceHandler(s.appConfig, s.logger)
 	mcpHandler := mcpserver.OriginMiddleware(s.appConfig, mcpserver.Handler(s.appConfig, s.router, s.isBearerOperatorToken, func(r *http.Request) bool {
@@ -1552,6 +1546,13 @@ func (s *Server) setupRoutes() {
 		"getServerSecurityPolicy": server.APISecurityPolicy, "getServerSecurityThanks": server.APISecurityThanks,
 		"submitDefaultReport": server.ReportsDefault, "submitNetworkErrorReport": server.ReportsNEL, "submitCSPReport": server.ReportsCSP,
 		"proxyThumbnail": h.ProxyThumbnail, "proxyVideo": h.ProxyVideo,
+		"downloadCLIBinary": func(w http.ResponseWriter, r *http.Request) {
+			if s.appConfig.CLI.BinaryDownload.RequireAuth {
+				s.requireOperatorToken(http.HandlerFunc(h.CLIBinaryDownload)).ServeHTTP(w, r)
+				return
+			}
+			h.CLIBinaryDownload(w, r)
+		},
 		"listFavorites": h.FavoritesAPIList, "addFavorite": h.FavoritesAPIAdd,
 		"importFavorites": h.FavoritesImport, "removeFavorite": h.FavoritesAPIRemove,
 		"clearFavorites": h.FavoritesAPIClear,
@@ -1685,6 +1686,7 @@ func (s *Server) sslCertificateInfo() (*ssl.CertInfo, error) {
 func (s *Server) requireOperatorToken(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		cliRequest := strings.HasPrefix(r.UserAgent(), paths.ProjectName+"-cli/")
 		deny := func(code, message, challenge string) {
 			handler.SetBearerChallenge(w, challenge)
 			authpad.Wait(start)
@@ -1692,14 +1694,22 @@ func (s *Server) requireOperatorToken(next http.Handler) http.Handler {
 		}
 		kind := s.bearerTokenKind(r)
 		if kind == "owner" {
+			if cliRequest {
+				s.auditRejectedCLIToken(r)
+				deny(handler.CodeUnauthorized, handler.MsgUnauthorized, "")
+				return
+			}
 			deny(handler.CodeForbidden, handler.MsgForbidden, "insufficient_scope")
 			return
 		}
 		if kind != "operator" {
 			challenge := ""
 			header := strings.TrimSpace(r.Header.Get("Authorization"))
-			if strings.HasPrefix(strings.ToLower(header), "bearer ") && strings.TrimSpace(header[len("Bearer "):]) != "" {
+			if _, ok := bearerToken(header); ok && !cliRequest {
 				challenge = "invalid_token"
+			}
+			if cliRequest {
+				s.auditRejectedCLIToken(r)
 			}
 			deny(handler.CodeUnauthorized, handler.MsgUnauthorized, challenge)
 			return
@@ -1707,6 +1717,23 @@ func (s *Server) requireOperatorToken(next http.Handler) http.Handler {
 		response := authpad.WrapResponse(w, start)
 		next.ServeHTTP(response, r)
 		response.Finish()
+	})
+}
+
+func (s *Server) auditRejectedCLIToken(r *http.Request) {
+	if s.logger == nil {
+		return
+	}
+	tokenPrefixHash := ""
+	if token, ok := bearerToken(strings.TrimSpace(r.Header.Get("Authorization"))); ok {
+		if len(token) > 12 {
+			token = token[:12]
+		}
+		digest := sha256.Sum256([]byte(token))
+		tokenPrefixHash = fmt.Sprintf("%x", digest[:4])
+	}
+	s.logger.Audit("cli.token_rejected", tokenPrefixHash, "cli", urlvar.ResolveClientIP(r), "failure", map[string]interface{}{
+		"token_prefix_sha256": tokenPrefixHash,
 	})
 }
 

@@ -16,7 +16,6 @@ func TestFirstRunEnvironmentIsSeededAndThenIgnored(t *testing.T) {
 	t.Setenv("DATABASE_URL", "libsql://db.invalid?authToken=database-credential")
 	t.Setenv("DATABASE_DRIVER", "libsql")
 	t.Setenv("CACHE_URL", "valkey://cache-user:cache-credential@cache.invalid:6379/0")
-	t.Setenv("VIDVEIL_SERVER_PORT", "64999")
 
 	first, _, err := LoadAppConfig(configDir, dataDir)
 	if err != nil {
@@ -31,10 +30,6 @@ func TestFirstRunEnvironmentIsSeededAndThenIgnored(t *testing.T) {
 	if first.Server.Cache.Type != "valkey" || first.Server.Cache.URL != "valkey://cache-user:cache-credential@cache.invalid:6379/0" {
 		t.Fatal("first-run cache connection was not loaded")
 	}
-	if first.Server.Port == "64999" {
-		t.Fatal("unlisted VIDVEIL_SERVER_PORT override changed server.port")
-	}
-
 	serverData, err := os.ReadFile(filepath.Join(configDir, "server.yml"))
 	if err != nil {
 		t.Fatalf("read server config: %v", err)
@@ -62,6 +57,11 @@ func TestFirstRunEnvironmentIsSeededAndThenIgnored(t *testing.T) {
 	t.Setenv("DATABASE_URL", "libsql://other.invalid?authToken=changed")
 	t.Setenv("DATABASE_DRIVER", "sqlite")
 	t.Setenv("CACHE_URL", "redis://other.invalid:6379/1")
+	portOverride := "64000"
+	if first.Server.Port == portOverride {
+		portOverride = "64001"
+	}
+	t.Setenv("VIDVEIL_SERVER_PORT", portOverride)
 	second, _, err := LoadAppConfig(configDir, dataDir)
 	if err != nil {
 		t.Fatalf("reload persisted config: %v", err)
@@ -74,6 +74,9 @@ func TestFirstRunEnvironmentIsSeededAndThenIgnored(t *testing.T) {
 	}
 	if second.Server.Cache.Type != "valkey" || second.Server.Cache.URL != first.Server.Cache.URL {
 		t.Fatal("init-only cache environment variables replaced persisted values")
+	}
+	if second.Server.Port != first.Server.Port {
+		t.Fatal("unlisted VIDVEIL_SERVER_PORT override changed persisted server.port")
 	}
 }
 
